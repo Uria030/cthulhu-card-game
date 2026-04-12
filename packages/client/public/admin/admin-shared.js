@@ -70,10 +70,47 @@ const CARD_STYLES = {
 };
 
 const CARD_TYPES = {
-  asset:  { zh: '資產', en: 'Asset' },
-  event:  { zh: '事件', en: 'Event' },
-  ally:   { zh: '盟友', en: 'Ally' },
-  skill:  { zh: '技能', en: 'Skill' },
+  asset:      { zh: '資產', en: 'Asset' },
+  event:      { zh: '事件', en: 'Event' },
+  ally:       { zh: '盟友', en: 'Ally' },
+  skill:      { zh: '技能', en: 'Skill' },
+  weakness:   { zh: '弱點', en: 'Weakness' },
+  revelation: { zh: '神啟卡', en: 'Revelation' },
+  signature:  { zh: '簽名卡', en: 'Signature' },
+};
+
+const SLOTS = {
+  hand:      { zh: '手持', en: 'Hand' },
+  body:      { zh: '身體', en: 'Body' },
+  accessory: { zh: '配件', en: 'Accessory' },
+  arcane:    { zh: '神秘', en: 'Arcane' },
+  ally:      { zh: '盟友', en: 'Ally' },
+  none:      { zh: '無',   en: 'None' },
+};
+
+const TRIGGERS = {
+  on_play:          { zh: '打出時',     en: 'On Play' },
+  on_commit:        { zh: '加值投入時', en: 'On Commit' },
+  on_consume:       { zh: '消費時',     en: 'On Consume' },
+  on_enter:         { zh: '進場時',     en: 'On Enter' },
+  on_leave:         { zh: '離場時',     en: 'On Leave' },
+  on_draw:          { zh: '抽到時',     en: 'On Draw' },
+  on_check_success: { zh: '檢定成功時', en: 'On Check Success' },
+  on_check_fail:    { zh: '檢定失敗時', en: 'On Check Fail' },
+  reaction:         { zh: '反應',       en: 'Reaction' },
+  passive:          { zh: '被動',       en: 'Passive' },
+  free_action:      { zh: '免費行動',   en: 'Free Action' },
+};
+
+const CHECK_METHODS = {
+  dice:      { zh: '擲骰', en: 'Dice' },
+  chaos_bag: { zh: '混沌袋', en: 'Chaos Bag' },
+};
+
+const COST_CURRENCIES = {
+  resource:         { zh: '資源', en: 'Resource' },
+  forbidden_insight:{ zh: '禁忌洞察', en: 'Forbidden Insight' },
+  faith:            { zh: '信仰', en: 'Faith' },
 };
 
 /* ── 工具函數 ── */

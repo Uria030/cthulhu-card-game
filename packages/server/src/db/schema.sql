@@ -1,0 +1,2 @@
+-- PostgreSQL Schema — 待設計文件確認後填入
+-- 參照：docs/資料庫結構設計_v0.1.md

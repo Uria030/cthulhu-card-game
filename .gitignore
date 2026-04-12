@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.tsbuildinfo
+.vite/
+__pycache__/
+.claude/settings.local.json

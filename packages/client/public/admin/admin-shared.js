@@ -70,22 +70,33 @@ const CARD_STYLES = {
 };
 
 const CARD_TYPES = {
-  asset:      { zh: '資產', en: 'Asset' },
-  event:      { zh: '事件', en: 'Event' },
-  ally:       { zh: '盟友', en: 'Ally' },
-  skill:      { zh: '技能', en: 'Skill' },
-  weakness:   { zh: '弱點', en: 'Weakness' },
-  revelation: { zh: '神啟卡', en: 'Revelation' },
-  signature:  { zh: '簽名卡', en: 'Signature' },
+  asset: { zh: '資產', en: 'Asset' },
+  event: { zh: '事件', en: 'Event' },
+  ally:  { zh: '盟友', en: 'Ally' },
+  skill: { zh: '技能', en: 'Skill' },
 };
 
 const SLOTS = {
-  hand:      { zh: '手持', en: 'Hand' },
-  body:      { zh: '身體', en: 'Body' },
-  accessory: { zh: '配件', en: 'Accessory' },
-  arcane:    { zh: '神秘', en: 'Arcane' },
-  ally:      { zh: '盟友', en: 'Ally' },
-  none:      { zh: '無',   en: 'None' },
+  one_hand:  { zh: '單手',   en: 'One Hand',  category: 'physical', note: '佔 1 手持格' },
+  two_hand:  { zh: '雙手',   en: 'Two Hand',  category: 'physical', note: '佔滿 2 手持格' },
+  head:      { zh: '帽子',   en: 'Head',      category: 'physical', note: '1 格' },
+  body:      { zh: '身體',   en: 'Body',      category: 'physical', note: '1 格' },
+  accessory: { zh: '配件',   en: 'Accessory', category: 'physical', note: '' },
+  arcane:    { zh: '神秘',   en: 'Arcane',    category: 'physical', note: '2 格（待定）' },
+  talent:    { zh: '天賦',   en: 'Talent',    category: 'non_physical', note: '無限制' },
+  expertise: { zh: '專長',   en: 'Expertise',  category: 'non_physical', note: '無限制' },
+};
+
+const SERIES = {
+  C:  { zh: '核心', en: 'Core' },
+};
+
+const CONSUME_TYPES = {
+  stay:       { zh: '留在場上',     en: 'Stay in Play' },
+  discard:    { zh: '進入棄牌堆',   en: 'Discard' },
+  long_rest:  { zh: '長休息回復',   en: 'Long Rest Recovery' },
+  short_rest: { zh: '短休息回復',   en: 'Short Rest Recovery' },
+  removed:    { zh: '移除出遊戲',   en: 'Remove from Game' },
 };
 
 const TRIGGERS = {

@@ -7,22 +7,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
   <style>
-    /* ── Layout ── */
     .main-layout { display: flex; gap: 1rem; min-height: calc(100vh - 50px); }
     .panel-left { width: 280px; flex-shrink: 0; background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 1rem; overflow-y: auto; max-height: calc(100vh - 50px); }
     .panel-right { flex: 1; padding: 1rem 1.5rem; overflow-y: auto; max-height: calc(100vh - 50px); }
-
-    /* ── Toolbar ── */
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
     .toolbar .spacer { flex: 1; }
-
-    /* ── Search & Filter ── */
     .search-box { width: 100%; margin-bottom: 0.75rem; }
     .search-box input { width: 100%; padding: 0.4rem 0.6rem; font-size: 0.8125rem; }
     .filter-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
     .filter-row select { flex: 1; min-width: 0; padding: 0.3rem 0.4rem; font-size: 0.75rem; }
-
-    /* ── Card List ── */
     .card-list-item { padding: 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 0.4rem; cursor: pointer; transition: border-color 0.15s; font-size: 0.8125rem; }
     .card-list-item:hover { border-color: var(--gold-dim); }
     .card-list-item.active { border-color: var(--gold); background: var(--bg-card); }
@@ -31,8 +24,6 @@
     .card-list-item .item-tags { display: flex; gap: 0.25rem; margin-top: 0.25rem; flex-wrap: wrap; }
     .card-list-item .mini-tag { font-size: 0.625rem; padding: 0 0.3rem; border-radius: 3px; border: 1px solid var(--border); color: var(--text-secondary); }
     .list-stats { font-size: 0.75rem; color: var(--text-tertiary); text-align: center; padding-top: 0.5rem; border-top: 1px solid var(--border); margin-top: 0.5rem; }
-
-    /* ── Form ── */
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
     .form-grid .full { grid-column: 1 / -1; }
     .form-group { display: flex; flex-direction: column; }
@@ -41,36 +32,42 @@
     .form-group textarea { resize: vertical; min-height: 60px; }
     .section-label { font-family: 'Cinzel', serif; font-size: 0.9375rem; color: var(--gold-dim); margin: 1.25rem 0 0.5rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--border); }
     .section-label:first-of-type { margin-top: 0; }
-    .form-group input[type="checkbox"] { width: auto; margin-right: 0.5rem; }
+    .form-group input[type="checkbox"] { width: auto; }
     .check-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; }
     .check-row label { margin-bottom: 0; font-size: 0.8125rem; }
     .hidden { display: none !important; }
-
-    /* ── Effects List ── */
-    .effect-item { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem; position: relative; }
+    .code-display { font-family: 'JetBrains Mono', monospace; font-size: 1.125rem; color: var(--gold); background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; text-align: center; letter-spacing: 0.1em; }
+    .code-display .code-label { font-family: 'Noto Sans TC', sans-serif; font-size: 0.6875rem; color: var(--text-tertiary); display: block; margin-bottom: 0.15rem; letter-spacing: 0; }
+    .slot-note { font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.15rem; }
+    .effect-item { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem; }
     .effect-item .effect-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
     .effect-item .btn-remove { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 0.875rem; padding: 0.2rem 0.4rem; }
-
-    /* ── Preview Card ── */
     .edit-preview-layout { display: grid; grid-template-columns: 1fr 320px; gap: 1.5rem; }
     .preview-card { width: 300px; min-height: 420px; border: 2px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 1rem; position: sticky; top: 60px; font-size: 0.8125rem; display: flex; flex-direction: column; }
-    .preview-card .pv-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; }
-    .preview-card .pv-cost { width: 36px; height: 36px; border-radius: 50%; background: var(--bg-primary); border: 2px solid var(--gold-dim); display: flex; align-items: center; justify-content: center; font-family: 'Cinzel', serif; font-size: 1.125rem; font-weight: 700; color: var(--gold); }
-    .preview-card .pv-faction { font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; padding: 0.15rem 0.5rem; border-radius: 4px; border: 1px solid; }
-    .preview-card .pv-name { text-align: center; margin-bottom: 0.5rem; }
-    .preview-card .pv-name-zh { font-family: 'Cinzel', serif; font-size: 1.125rem; color: var(--text-primary); font-weight: 600; }
-    .preview-card .pv-name-en { font-size: 0.6875rem; color: var(--text-tertiary); }
-    .preview-card .pv-type { text-align: center; font-size: 0.6875rem; color: var(--text-secondary); margin-bottom: 0.75rem; }
-    .preview-card .pv-divider { border: none; border-top: 1px solid var(--border); margin: 0.5rem 0; }
-    .preview-card .pv-uses { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
-    .preview-card .pv-effects { font-size: 0.8125rem; color: var(--text-primary); line-height: 1.5; margin-bottom: 0.5rem; white-space: pre-wrap; flex: 1; }
-    .preview-card .pv-flavor { font-style: italic; font-size: 0.75rem; color: var(--text-tertiary); line-height: 1.4; }
-    .preview-card .pv-bottom { display: flex; justify-content: space-around; padding-top: 0.5rem; border-top: 1px solid var(--border); margin-top: auto; }
-    .preview-card .pv-stat { text-align: center; }
-    .preview-card .pv-stat-val { font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 700; }
-    .preview-card .pv-stat-label { font-size: 0.625rem; color: var(--text-tertiary); }
-
-    /* ── AI Section ── */
+    .pv-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; }
+    .pv-cost { width: 36px; height: 36px; border-radius: 50%; background: var(--bg-primary); border: 2px solid var(--gold-dim); display: flex; align-items: center; justify-content: center; font-family: 'Cinzel', serif; font-size: 1.125rem; font-weight: 700; color: var(--gold); }
+    .pv-faction { font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; padding: 0.15rem 0.5rem; border-radius: 4px; border: 1px solid; }
+    .pv-name { text-align: center; margin-bottom: 0.25rem; }
+    .pv-name-zh { font-family: 'Cinzel', serif; font-size: 1.125rem; color: var(--text-primary); font-weight: 600; }
+    .pv-name-en { font-size: 0.6875rem; color: var(--text-tertiary); }
+    .pv-type { text-align: center; font-size: 0.6875rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+    .pv-badges { display: flex; justify-content: center; gap: 0.25rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+    .pv-badge { font-size: 0.5625rem; padding: 0.1rem 0.4rem; border-radius: 3px; font-weight: 500; }
+    .pv-badge-signature { background: rgba(201,168,76,0.2); color: var(--gold); border: 1px solid var(--gold-dim); }
+    .pv-badge-weakness { background: rgba(184,76,76,0.2); color: var(--danger); border: 1px solid var(--danger); }
+    .pv-badge-revelation { background: rgba(123,78,163,0.2); color: var(--oracle); border: 1px solid var(--oracle); }
+    .pv-badge-consume { font-size: 0.5625rem; padding: 0.1rem 0.4rem; border-radius: 3px; }
+    .pv-badge-long_rest { background: rgba(74,124,155,0.2); color: var(--info); border: 1px solid var(--info); }
+    .pv-badge-short_rest { background: rgba(45,139,111,0.2); color: var(--success); border: 1px solid var(--success); }
+    .pv-badge-removed { background: rgba(184,76,76,0.2); color: var(--danger); border: 1px solid var(--danger); }
+    .pv-divider { border: none; border-top: 1px solid var(--border); margin: 0.5rem 0; }
+    .pv-uses { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+    .pv-effects { font-size: 0.8125rem; color: var(--text-primary); line-height: 1.5; margin-bottom: 0.5rem; white-space: pre-wrap; flex: 1; }
+    .pv-flavor { font-style: italic; font-size: 0.75rem; color: var(--text-tertiary); line-height: 1.4; }
+    .pv-bottom { display: flex; justify-content: space-around; padding-top: 0.5rem; border-top: 1px solid var(--border); margin-top: auto; }
+    .pv-stat { text-align: center; }
+    .pv-stat-val { font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 700; }
+    .pv-stat-label { font-size: 0.625rem; color: var(--text-tertiary); }
     .ai-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
     .ai-section .ai-title { font-family: 'Cinzel', serif; font-size: 0.875rem; color: var(--gold-dim); margin-bottom: 0.5rem; }
     .ai-input-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
@@ -82,24 +79,12 @@
     .ai-status.err { color: var(--danger); }
     .ai-loading { display: inline-block; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Action Buttons ── */
     .action-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-
-    /* ── Responsive ── */
-    @media (max-width: 1100px) {
-      .edit-preview-layout { grid-template-columns: 1fr; }
-      .preview-card { position: static; width: 100%; }
-    }
-    @media (max-width: 768px) {
-      .main-layout { flex-direction: column; }
-      .panel-left { width: 100%; max-height: 300px; border-right: none; border-bottom: 1px solid var(--border); }
-    }
+    @media (max-width: 1100px) { .edit-preview-layout { grid-template-columns: 1fr; } .preview-card { position: static; width: 100%; } }
+    @media (max-width: 768px) { .main-layout { flex-direction: column; } .panel-left { width: 100%; max-height: 300px; border-right: none; border-bottom: 1px solid var(--border); } }
   </style>
 </head>
 <body>
-
-  <!-- Nav -->
   <nav class="admin-nav">
     <a href="index.html" class="nav-back">&larr; 返回首頁</a>
     <span class="nav-title">卡片設計器</span>
@@ -107,7 +92,7 @@
   </nav>
 
   <div class="main-layout">
-    <!-- ===== Left Panel ===== -->
+    <!-- Left Panel -->
     <div class="panel-left">
       <div class="search-box"><input type="text" id="searchInput" placeholder="搜尋名稱或代碼…"></div>
       <div class="filter-row">
@@ -121,9 +106,8 @@
       <div class="list-stats" id="listStats">0 張卡片</div>
     </div>
 
-    <!-- ===== Right Panel ===== -->
+    <!-- Right Panel -->
     <div class="panel-right">
-      <!-- Toolbar -->
       <div class="toolbar">
         <button class="btn btn-primary" onclick="newCard()">+ 新增卡片</button>
         <button class="btn" onclick="showApiKeyDialog()">設定 API Key</button>
@@ -134,7 +118,7 @@
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
       </div>
 
-      <!-- AI Section -->
+      <!-- AI -->
       <div class="ai-section">
         <div class="ai-title">AI 卡片生成</div>
         <div class="ai-input-row">
@@ -156,28 +140,60 @@
       <!-- Edit + Preview -->
       <div class="edit-preview-layout">
         <div class="form-area">
+          <!-- Auto-generated code display -->
+          <div class="code-display">
+            <span class="code-label">自動生成代碼（儲存時確定）</span>
+            <span id="codePreview">—</span>
+          </div>
 
-          <!-- 3.1 Identity -->
+          <!-- Identity -->
           <div class="section-label">身份資訊</div>
           <div class="form-grid">
-            <div class="form-group"><label>代碼 (code)</label><input type="text" id="f_code" placeholder="core_45_automatic"></div>
+            <div class="form-group"><label>系列</label><select id="f_series"></select></div>
             <div class="form-group"><label>等級 (level)</label><input type="number" id="f_level" value="0" min="0"></div>
             <div class="form-group"><label>中文名稱</label><input type="text" id="f_name_zh" placeholder=".45 自動手槍"></div>
             <div class="form-group"><label>英文名稱</label><input type="text" id="f_name_en" placeholder=".45 Automatic"></div>
             <div class="form-group"><label>陣營極</label><select id="f_faction"></select></div>
             <div class="form-group"><label>卡片風格</label><select id="f_style"></select></div>
             <div class="form-group"><label>卡片類別</label><select id="f_type"></select></div>
-            <div class="form-group" id="slotGroup"><label>裝備欄位</label><select id="f_slot"></select></div>
+            <div class="form-group" id="slotGroup"><label>裝備欄位</label><select id="f_slot"></select><div class="slot-note" id="slotNote"></div></div>
             <div class="form-group full">
               <div class="check-row"><input type="checkbox" id="f_is_unique"><label for="f_is_unique">獨特卡（場上只能存在一張）</label></div>
             </div>
           </div>
 
-          <!-- 3.2 Stats -->
+          <!-- Special Identity Tags -->
+          <div class="section-label">特殊身份標記</div>
+          <div class="form-grid">
+            <div class="form-group full">
+              <div class="check-row"><input type="checkbox" id="f_is_signature"><label for="f_is_signature">簽名卡 — 調查員獨有</label></div>
+              <div class="check-row"><input type="checkbox" id="f_is_weakness"><label for="f_is_weakness">弱點 — 負面卡，強制納入牌組</label></div>
+              <div class="check-row"><input type="checkbox" id="f_is_revelation"><label for="f_is_revelation">神啟卡 — 詛咒卡，抽到即觸發</label></div>
+            </div>
+          </div>
+          <!-- Signature sub-fields -->
+          <div id="signatureFields" class="hidden">
+            <div class="form-grid" style="margin-top:0.5rem;">
+              <div class="form-group full"><label>歸屬調查員代碼</label><input type="text" id="f_owner_investigator" placeholder="investigator_code"></div>
+            </div>
+          </div>
+          <!-- Revelation sub-fields -->
+          <div id="revelationFields" class="hidden">
+            <div class="form-grid" style="margin-top:0.5rem;">
+              <div class="form-group full">
+                <div class="check-row"><input type="checkbox" id="f_removable"><label for="f_removable">可移除</label></div>
+                <div class="check-row"><input type="checkbox" id="f_committable"><label for="f_committable">可用作加值</label></div>
+              </div>
+              <div class="form-group"><label>累計觸發致死次數 (0=不致死)</label><input type="number" id="f_lethal_count" value="0" min="0"></div>
+            </div>
+          </div>
+
+          <!-- Stats -->
           <div class="section-label">數值資訊</div>
           <div class="form-grid">
             <div class="form-group"><label>費用 (0-6)</label><input type="number" id="f_cost" value="0" min="0" max="6"></div>
             <div class="form-group"><label>費用貨幣</label><select id="f_cost_currency"></select></div>
+            <div class="form-group"><label>使用後去向</label><select id="f_consume_type"></select></div>
             <div class="form-group"><label>檢定加值 (0-5)</label><input type="number" id="f_skill_value" value="0" min="0" max="5"></div>
             <div class="form-group"><label>傷害 (0-10)</label><input type="number" id="f_damage" value="0" min="0" max="10"></div>
             <div class="form-group"><label>恐懼傷害 (0-10)</label><input type="number" id="f_horror" value="0" min="0" max="10"></div>
@@ -190,41 +206,19 @@
             <div class="form-group"><label>檢定修正 (-3~+5)</label><input type="number" id="f_check_modifier" value="0" min="-3" max="5"></div>
             <div class="form-group"><label>檢定方式</label><select id="f_check_method"></select></div>
             <div class="form-group"><label>手牌上限修改 (-3~0)</label><input type="number" id="f_hand_limit_mod" value="0" min="-3" max="0"></div>
-            <div class="form-group full">
-              <div class="check-row"><input type="checkbox" id="f_is_consumable"><label for="f_is_consumable">消耗品（用完移除出遊戲）</label></div>
-            </div>
           </div>
 
-          <!-- 3.3 Effects -->
+          <!-- Effects -->
           <div class="section-label">效果資訊</div>
           <div id="effectsList"></div>
           <button class="btn" onclick="addEffect()" style="margin-top:0.5rem;">+ 新增效果</button>
 
-          <!-- 3.4 Narrative -->
+          <!-- Narrative -->
           <div class="section-label">敘事資訊</div>
           <div class="form-grid">
             <div class="form-group full"><label>風味文字</label><textarea id="f_flavor_text" placeholder="卡片底部的敘事文字…"></textarea></div>
           </div>
 
-          <!-- 3.5 Special Fields -->
-          <div id="revelationFields" class="hidden">
-            <div class="section-label">神啟卡特殊欄位</div>
-            <div class="form-grid">
-              <div class="form-group full">
-                <div class="check-row"><input type="checkbox" id="f_removable"><label for="f_removable">可移除</label></div>
-                <div class="check-row"><input type="checkbox" id="f_committable"><label for="f_committable">可用作加值</label></div>
-              </div>
-              <div class="form-group"><label>累計觸發致死次數 (0=不致死)</label><input type="number" id="f_lethal_count" value="0" min="0"></div>
-            </div>
-          </div>
-          <div id="signatureFields" class="hidden">
-            <div class="section-label">簽名卡特殊欄位</div>
-            <div class="form-grid">
-              <div class="form-group full"><label>歸屬調查員代碼</label><input type="text" id="f_owner_investigator" placeholder="investigator_code"></div>
-            </div>
-          </div>
-
-          <!-- Action Bar -->
           <div class="action-bar">
             <button class="btn btn-primary" onclick="saveCard()">儲存</button>
             <button class="btn" onclick="saveAsNew()">另存新卡</button>
@@ -245,6 +239,7 @@
               <div class="pv-name-en" id="pvNameEn">Card Name</div>
             </div>
             <div class="pv-type" id="pvType">類別</div>
+            <div class="pv-badges" id="pvBadges"></div>
             <hr class="pv-divider">
             <div class="pv-uses" id="pvUses"></div>
             <div class="pv-effects" id="pvEffects"></div>
@@ -264,16 +259,11 @@
 
   <script src="admin-shared.js"></script>
   <script>
-  /* ====================================
-     Card Designer — MOD-01
-     ==================================== */
-
   const LS_KEY = 'card_definitions';
   const LS_API_KEY = 'gemini_api_key';
   let cards = [];
   let editingId = null;
 
-  /* ── Init ── */
   function init() {
     populateSelects();
     loadCards();
@@ -283,132 +273,154 @@
     clearForm();
   }
 
-  /* ── Populate Selects ── */
   function populateSelects() {
-    const fSel = el('f_faction');
-    fSel.innerHTML = '<option value="neutral">中立</option>';
-    for (const [k, v] of Object.entries(FACTIONS)) {
-      fSel.innerHTML += `<option value="${k}">${v.zh} ${k}</option>`;
-    }
+    // Series
+    const srSel = el('f_series');
+    srSel.innerHTML = '';
+    for (const [k, v] of Object.entries(SERIES)) srSel.innerHTML += `<option value="${k}">${k} ${v.zh}</option>`;
 
+    // Faction
+    const fSel = el('f_faction');
+    fSel.innerHTML = '<option value="neutral">中立 N0</option>';
+    for (const [k, v] of Object.entries(FACTIONS)) fSel.innerHTML += `<option value="${k}">${v.zh} ${k}</option>`;
+
+    // Style
     const sSel = el('f_style');
     sSel.innerHTML = '';
-    for (const [k, v] of Object.entries(CARD_STYLES)) {
-      sSel.innerHTML += `<option value="${k}">${v.zh} (${v.code})</option>`;
-    }
+    for (const [k, v] of Object.entries(CARD_STYLES)) sSel.innerHTML += `<option value="${k}">${v.zh} (${v.code})</option>`;
 
+    // Type (only 4 now)
     const tSel = el('f_type');
     tSel.innerHTML = '';
-    for (const [k, v] of Object.entries(CARD_TYPES)) {
-      tSel.innerHTML += `<option value="${k}">${v.zh}</option>`;
-    }
+    for (const [k, v] of Object.entries(CARD_TYPES)) tSel.innerHTML += `<option value="${k}">${v.zh}</option>`;
 
+    // Slot (new structure)
     const slSel = el('f_slot');
     slSel.innerHTML = '';
-    for (const [k, v] of Object.entries(SLOTS)) {
-      slSel.innerHTML += `<option value="${k}">${v.zh}</option>`;
-    }
+    for (const [k, v] of Object.entries(SLOTS)) slSel.innerHTML += `<option value="${k}">${v.zh} (${v.en})</option>`;
 
+    // Weapon tier
     const wtSel = el('f_weapon_tier');
     wtSel.innerHTML = '<option value="0">無</option>';
-    for (const [k, v] of Object.entries(WEAPON_TIERS)) {
-      wtSel.innerHTML += `<option value="${k}">${v.name} (${v.en}) — 傷害 ${v.damage}</option>`;
-    }
+    for (const [k, v] of Object.entries(WEAPON_TIERS)) wtSel.innerHTML += `<option value="${k}">${v.name} (${v.en}) — 傷害 ${v.damage}</option>`;
 
+    // Check attribute
     const caSel = el('f_check_attribute');
     caSel.innerHTML = '<option value="">無</option>';
-    for (const [k, v] of Object.entries(ATTRIBUTES)) {
-      caSel.innerHTML += `<option value="${k}">${v.zh} (${v.abbr})</option>`;
-    }
+    for (const [k, v] of Object.entries(ATTRIBUTES)) caSel.innerHTML += `<option value="${k}">${v.zh} (${v.abbr})</option>`;
 
+    // Check method
     const cmSel = el('f_check_method');
     cmSel.innerHTML = '';
-    for (const [k, v] of Object.entries(CHECK_METHODS)) {
-      cmSel.innerHTML += `<option value="${k}">${v.zh}</option>`;
-    }
+    for (const [k, v] of Object.entries(CHECK_METHODS)) cmSel.innerHTML += `<option value="${k}">${v.zh}</option>`;
 
+    // Cost currency
     const ccSel = el('f_cost_currency');
     ccSel.innerHTML = '';
-    for (const [k, v] of Object.entries(COST_CURRENCIES)) {
-      ccSel.innerHTML += `<option value="${k}">${v.zh}</option>`;
-    }
+    for (const [k, v] of Object.entries(COST_CURRENCIES)) ccSel.innerHTML += `<option value="${k}">${v.zh}</option>`;
+
+    // Consume type
+    const ctSel = el('f_consume_type');
+    ctSel.innerHTML = '';
+    for (const [k, v] of Object.entries(CONSUME_TYPES)) ctSel.innerHTML += `<option value="${k}">${v.zh}</option>`;
 
     // Filters
     const ff = el('filterFaction');
-    for (const [k, v] of Object.entries(FACTIONS)) {
-      ff.innerHTML += `<option value="${k}">${v.zh} ${k}</option>`;
-    }
+    for (const [k, v] of Object.entries(FACTIONS)) ff.innerHTML += `<option value="${k}">${v.zh} ${k}</option>`;
     ff.innerHTML += '<option value="neutral">中立</option>';
-
     const fs = el('filterStyle');
-    for (const [k, v] of Object.entries(CARD_STYLES)) {
-      fs.innerHTML += `<option value="${k}">${v.zh}</option>`;
-    }
-
+    for (const [k, v] of Object.entries(CARD_STYLES)) fs.innerHTML += `<option value="${k}">${v.zh}</option>`;
     const ft = el('filterType');
-    for (const [k, v] of Object.entries(CARD_TYPES)) {
-      ft.innerHTML += `<option value="${k}">${v.zh}</option>`;
+    for (const [k, v] of Object.entries(CARD_TYPES)) ft.innerHTML += `<option value="${k}">${v.zh}</option>`;
+  }
+
+  function loadCards() { try { cards = JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch { cards = []; } }
+  function saveCards() { localStorage.setItem(LS_KEY, JSON.stringify(cards)); }
+
+  /* ── Auto Code Generation ── */
+  function generateCode(series, faction, style) {
+    const factionCode = faction === 'neutral' ? 'N0' : faction;
+    const prefix = `${series}${factionCode}${style}`;
+    const existing = cards.filter(c => c.code && c.code.startsWith(prefix + '-'));
+    let maxNum = 0;
+    existing.forEach(c => {
+      const match = c.code.match(/-(\d+)$/);
+      if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
+    });
+    const next = String(maxNum + 1).padStart(2, '0');
+    return `${prefix}-${next}`;
+  }
+
+  function updateCodePreview() {
+    const series = el('f_series').value;
+    const faction = el('f_faction').value;
+    const style = el('f_style').value;
+    if (editingId) {
+      const c = cards.find(x => x.id === editingId);
+      el('codePreview').textContent = c?.code || '—';
+    } else {
+      el('codePreview').textContent = generateCode(series, faction, style);
     }
   }
 
-  /* ── localStorage ── */
-  function loadCards() {
-    try { cards = JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch { cards = []; }
-  }
-  function saveCards() {
-    localStorage.setItem(LS_KEY, JSON.stringify(cards));
-  }
-
-  /* ── Render Card List ── */
+  /* ── Card List ── */
   function renderList() {
     const search = el('searchInput').value.toLowerCase();
     const fFac = el('filterFaction').value;
     const fSty = el('filterStyle').value;
     const fTyp = el('filterType').value;
-
     let filtered = cards.filter(c => {
-      if (search && !c.name_zh.toLowerCase().includes(search) && !c.name_en.toLowerCase().includes(search) && !c.code.toLowerCase().includes(search)) return false;
+      if (search && !(c.name_zh||'').toLowerCase().includes(search) && !(c.name_en||'').toLowerCase().includes(search) && !(c.code||'').toLowerCase().includes(search)) return false;
       if (fFac && c.faction !== fFac) return false;
       if (fSty && c.style !== fSty) return false;
       if (fTyp && c.type !== fTyp) return false;
       return true;
     });
-
     const list = el('cardList');
     list.innerHTML = filtered.map(c => {
       const facLabel = c.faction === 'neutral' ? '中立' : (FACTIONS[c.faction]?.zh || c.faction);
       const typeLabel = CARD_TYPES[c.type]?.zh || c.type;
       const isActive = c.id === editingId ? ' active' : '';
+      let badges = '';
+      if (c.is_signature) badges += '<span class="mini-tag" style="border-color:var(--gold);color:var(--gold)">簽名</span>';
+      if (c.is_weakness) badges += '<span class="mini-tag" style="border-color:var(--danger);color:var(--danger)">弱點</span>';
+      if (c.is_revelation) badges += '<span class="mini-tag" style="border-color:var(--oracle);color:var(--oracle)">神啟</span>';
       return `<div class="card-list-item${isActive}" onclick="loadCard('${c.id}')">
         <div class="item-name">${c.name_zh || '(未命名)'}</div>
         <div class="item-code">${c.code || '—'}</div>
         <div class="item-tags">
-          <span class="mini-tag" style="border-color:${FACTIONS[c.faction]?.color || 'var(--border)'}; color:${FACTIONS[c.faction]?.color || 'var(--text-secondary)'}">${facLabel}</span>
-          <span class="mini-tag">${typeLabel}</span>
+          <span class="mini-tag" style="border-color:${FACTIONS[c.faction]?.color || 'var(--border)'};color:${FACTIONS[c.faction]?.color || 'var(--text-secondary)'}">${facLabel}</span>
+          <span class="mini-tag">${typeLabel}</span>${badges}
         </div>
       </div>`;
     }).join('');
-
     el('listStats').textContent = `${filtered.length} / ${cards.length} 張卡片`;
   }
 
-  /* ── Load Card Into Form ── */
+  /* ── Load / Collect / Save ── */
   function loadCard(id) {
     const c = cards.find(x => x.id === id);
     if (!c) return;
     editingId = id;
-
-    el('f_code').value = c.code || '';
+    el('f_series').value = c.series || 'C';
     el('f_name_zh').value = c.name_zh || '';
     el('f_name_en').value = c.name_en || '';
     el('f_faction').value = c.faction || 'neutral';
     el('f_style').value = c.style || 'AH';
     el('f_type').value = c.type || 'asset';
-    el('f_slot').value = c.slot || 'none';
+    el('f_slot').value = c.slot || 'one_hand';
     el('f_is_unique').checked = !!c.is_unique;
     el('f_level').value = c.level || 0;
+    el('f_is_signature').checked = !!c.is_signature;
+    el('f_is_weakness').checked = !!c.is_weakness;
+    el('f_is_revelation').checked = !!c.is_revelation;
+    el('f_owner_investigator').value = c.owner_investigator || '';
+    el('f_removable').checked = !!c.removable;
+    el('f_committable').checked = !!c.committable;
+    el('f_lethal_count').value = c.lethal_count ?? 0;
     el('f_cost').value = c.cost ?? 0;
     el('f_cost_currency').value = c.cost_currency || 'resource';
+    el('f_consume_type').value = c.consume_type || 'discard';
     el('f_skill_value').value = c.skill_value ?? 0;
     el('f_damage').value = c.damage ?? 0;
     el('f_horror').value = c.horror ?? 0;
@@ -417,28 +429,23 @@
     el('f_weapon_tier').value = c.weapon_tier ?? 0;
     el('f_ammo').value = c.ammo ?? 0;
     el('f_uses').value = c.uses ?? 0;
-    el('f_is_consumable').checked = !!c.is_consumable;
     el('f_check_attribute').value = c.check_attribute || '';
     el('f_check_modifier').value = c.check_modifier ?? 0;
     el('f_check_method').value = c.check_method || 'dice';
     el('f_hand_limit_mod').value = c.hand_limit_mod ?? 0;
     el('f_flavor_text').value = c.flavor_text || '';
-    el('f_removable').checked = !!c.removable;
-    el('f_committable').checked = !!c.committable;
-    el('f_lethal_count').value = c.lethal_count ?? 0;
-    el('f_owner_investigator').value = c.owner_investigator || '';
-
     renderEffects(c.effects || []);
     toggleConditionalFields();
+    updateCodePreview();
     updatePreview();
     renderList();
   }
 
-  /* ── Collect Form Data ── */
   function collectForm() {
     return {
       id: editingId || crypto.randomUUID(),
-      code: el('f_code').value.trim(),
+      code: editingId ? (cards.find(c => c.id === editingId)?.code || '') : generateCode(el('f_series').value, el('f_faction').value, el('f_style').value),
+      series: el('f_series').value,
       name_zh: el('f_name_zh').value.trim(),
       name_en: el('f_name_en').value.trim(),
       faction: el('f_faction').value,
@@ -447,8 +454,16 @@
       slot: el('f_slot').value,
       is_unique: el('f_is_unique').checked,
       level: intVal('f_level'),
+      is_signature: el('f_is_signature').checked,
+      is_weakness: el('f_is_weakness').checked,
+      is_revelation: el('f_is_revelation').checked,
+      owner_investigator: el('f_owner_investigator').value.trim() || null,
+      removable: el('f_removable').checked,
+      committable: el('f_committable').checked,
+      lethal_count: intVal('f_lethal_count'),
       cost: intVal('f_cost'),
       cost_currency: el('f_cost_currency').value,
+      consume_type: el('f_consume_type').value,
       skill_value: intVal('f_skill_value'),
       damage: intVal('f_damage'),
       horror: intVal('f_horror'),
@@ -457,156 +472,109 @@
       weapon_tier: intVal('f_weapon_tier'),
       ammo: intVal('f_ammo'),
       uses: intVal('f_uses') || null,
-      is_consumable: el('f_is_consumable').checked,
       check_attribute: el('f_check_attribute').value || null,
       check_modifier: intVal('f_check_modifier'),
       check_method: el('f_check_method').value,
       hand_limit_mod: intVal('f_hand_limit_mod'),
       effects: collectEffects(),
       flavor_text: el('f_flavor_text').value.trim(),
-      removable: el('f_removable').checked,
-      committable: el('f_committable').checked,
-      lethal_count: intVal('f_lethal_count'),
-      owner_investigator: el('f_owner_investigator').value.trim() || null,
       version: 1,
       created_at: editingId ? (cards.find(c => c.id === editingId)?.created_at || new Date().toISOString()) : new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
   }
 
-  /* ── Validate ── */
   function validate(data) {
     const errors = [];
-    if (!data.code) errors.push('代碼為必填');
-    else if (!/^[a-z0-9_]+$/.test(data.code)) errors.push('代碼僅允許小寫英文、數字和底線');
-    else {
-      const dup = cards.find(c => c.code === data.code && c.id !== data.id);
-      if (dup) errors.push('代碼已存在');
-    }
     if (!data.name_zh) errors.push('中文名稱為必填');
     if (!data.name_en) errors.push('英文名稱為必填');
     if (data.cost < 0 || data.cost > 6) errors.push('費用須在 0-6 之間');
     return errors;
   }
 
-  /* ── Save ── */
   function saveCard() {
     const data = collectForm();
     const errors = validate(data);
     if (errors.length) { alert('驗證錯誤：\n' + errors.join('\n')); return; }
-
     const idx = cards.findIndex(c => c.id === data.id);
     if (idx >= 0) cards[idx] = data;
     else cards.push(data);
     editingId = data.id;
     saveCards();
+    updateCodePreview();
     renderList();
-    alert('已儲存');
+    alert('已儲存 — 代碼：' + data.code);
   }
 
   function saveAsNew() {
     editingId = null;
-    el('f_code').value = '';
-    el('f_code').focus();
-    alert('請輸入新的代碼後按儲存');
+    updateCodePreview();
+    alert('已切換為新卡模式，按儲存即可建立');
   }
 
   function deleteCard() {
     if (!editingId) return;
     if (!confirm('確定要刪除這張卡片嗎？')) return;
     cards = cards.filter(c => c.id !== editingId);
-    saveCards();
-    clearForm();
-    renderList();
+    saveCards(); clearForm(); renderList();
   }
 
-  function newCard() {
-    clearForm();
-    el('f_code').focus();
-  }
+  function newCard() { clearForm(); el('f_name_zh').focus(); }
 
   function clearForm() {
     editingId = null;
-    document.querySelectorAll('.form-area input[type="text"], .form-area input[type="number"], .form-area textarea').forEach(i => {
-      if (i.type === 'number') i.value = i.min || 0;
-      else i.value = '';
-    });
+    document.querySelectorAll('.form-area input[type="text"], .form-area input[type="number"], .form-area textarea').forEach(i => { if (i.type === 'number') i.value = i.min || 0; else i.value = ''; });
     document.querySelectorAll('.form-area input[type="checkbox"]').forEach(i => i.checked = false);
+    el('f_series').value = 'C';
     el('f_faction').value = 'neutral';
     el('f_style').value = 'AH';
     el('f_type').value = 'asset';
-    el('f_slot').value = 'none';
+    el('f_slot').value = 'one_hand';
     el('f_cost_currency').value = 'resource';
+    el('f_consume_type').value = 'stay';
     el('f_check_method').value = 'dice';
     el('f_weapon_tier').value = '0';
     renderEffects([]);
     toggleConditionalFields();
+    updateCodePreview();
     updatePreview();
     renderList();
   }
 
   /* ── Effects ── */
-  function renderEffects(effects) {
-    const container = el('effectsList');
-    container.innerHTML = effects.map((e, i) => effectHTML(e, i)).join('');
-  }
-
+  function renderEffects(effects) { el('effectsList').innerHTML = effects.map((e, i) => effectHTML(e, i)).join(''); }
   function effectHTML(e, i) {
-    const triggerOpts = Object.entries(TRIGGERS).map(([k, v]) =>
-      `<option value="${k}" ${e.trigger === k ? 'selected' : ''}>${v.zh}</option>`
-    ).join('');
-    return `<div class="effect-item" data-idx="${i}">
-      <div class="effect-header"><span style="font-size:0.75rem;color:var(--text-tertiary)">效果 #${i + 1}</span><button class="btn-remove" onclick="removeEffect(${i})">&#10005;</button></div>
-      <div class="form-grid">
-        <div class="form-group"><label>觸發時機</label><select class="eff-trigger">${triggerOpts}</select></div>
-        <div class="form-group"><label>效果代碼</label><input type="text" class="eff-code" value="${e.effect_code || ''}" placeholder="deal_damage"></div>
-        <div class="form-group full"><label>效果參數 (JSON)</label><input type="text" class="eff-params" value='${JSON.stringify(e.effect_params || {})}' placeholder='{"amount":3}'></div>
-        <div class="form-group full"><label>中文描述</label><textarea class="eff-desc-zh" rows="2">${e.desc_zh || ''}</textarea></div>
-        <div class="form-group full"><label>英文描述</label><textarea class="eff-desc-en" rows="2">${e.desc_en || ''}</textarea></div>
-      </div>
-    </div>`;
+    const opts = Object.entries(TRIGGERS).map(([k, v]) => `<option value="${k}" ${e.trigger === k ? 'selected' : ''}>${v.zh}</option>`).join('');
+    return `<div class="effect-item" data-idx="${i}"><div class="effect-header"><span style="font-size:0.75rem;color:var(--text-tertiary)">效果 #${i+1}</span><button class="btn-remove" onclick="removeEffect(${i})">&#10005;</button></div><div class="form-grid"><div class="form-group"><label>觸發時機</label><select class="eff-trigger">${opts}</select></div><div class="form-group"><label>效果代碼</label><input type="text" class="eff-code" value="${e.effect_code||''}" placeholder="deal_damage"></div><div class="form-group full"><label>效果參數 (JSON)</label><input type="text" class="eff-params" value='${JSON.stringify(e.effect_params||{})}' placeholder='{"amount":3}'></div><div class="form-group full"><label>中文描述</label><textarea class="eff-desc-zh" rows="2">${e.desc_zh||''}</textarea></div><div class="form-group full"><label>英文描述</label><textarea class="eff-desc-en" rows="2">${e.desc_en||''}</textarea></div></div></div>`;
   }
-
-  function addEffect() {
-    const effects = collectEffects();
-    effects.push({ trigger: 'on_play', effect_code: '', effect_params: {}, desc_zh: '', desc_en: '' });
-    renderEffects(effects);
-  }
-
-  function removeEffect(idx) {
-    const effects = collectEffects();
-    effects.splice(idx, 1);
-    renderEffects(effects);
-  }
-
+  function addEffect() { const e = collectEffects(); e.push({trigger:'on_play',effect_code:'',effect_params:{},desc_zh:'',desc_en:''}); renderEffects(e); }
+  function removeEffect(i) { const e = collectEffects(); e.splice(i,1); renderEffects(e); }
   function collectEffects() {
-    const items = document.querySelectorAll('.effect-item');
-    return Array.from(items).map(item => {
-      let params = {};
-      try { params = JSON.parse(item.querySelector('.eff-params').value); } catch {}
-      return {
-        trigger: item.querySelector('.eff-trigger').value,
-        effect_code: item.querySelector('.eff-code').value.trim(),
-        effect_params: params,
-        desc_zh: item.querySelector('.eff-desc-zh').value.trim(),
-        desc_en: item.querySelector('.eff-desc-en').value.trim(),
-      };
+    return Array.from(document.querySelectorAll('.effect-item')).map(item => {
+      let p = {}; try { p = JSON.parse(item.querySelector('.eff-params').value); } catch {}
+      return { trigger: item.querySelector('.eff-trigger').value, effect_code: item.querySelector('.eff-code').value.trim(), effect_params: p, desc_zh: item.querySelector('.eff-desc-zh').value.trim(), desc_en: item.querySelector('.eff-desc-en').value.trim() };
     });
   }
 
   /* ── Conditional Fields ── */
   function toggleConditionalFields() {
     const type = el('f_type').value;
-    const showSlot = ['asset', 'ally'].includes(type);
-    const showWeapon = type === 'asset';
-    toggle('slotGroup', showSlot);
-    toggle('weaponTierGroup', showWeapon);
-    toggle('ammoGroup', showWeapon);
-    toggle('revelationFields', type === 'revelation');
-    toggle('signatureFields', type === 'signature');
+    toggle('slotGroup', type === 'asset');
+    toggle('weaponTierGroup', type === 'asset');
+    toggle('ammoGroup', type === 'asset');
+    toggle('signatureFields', el('f_is_signature').checked);
+    toggle('revelationFields', el('f_is_revelation').checked);
+    // Slot note
+    const slot = el('f_slot').value;
+    const note = SLOTS[slot]?.note || '';
+    el('slotNote').textContent = note;
+    // Default consume_type based on type
+    if (!editingId) {
+      if (type === 'asset' || type === 'ally') el('f_consume_type').value = 'stay';
+      else if (type === 'event') el('f_consume_type').value = 'discard';
+    }
   }
 
-  /* ── Weapon Tier Auto-Fill ── */
   function onWeaponTierChange() {
     const tier = intVal('f_weapon_tier');
     if (tier > 0 && WEAPON_TIERS[tier]) {
@@ -619,11 +587,14 @@
   /* ── Live Preview ── */
   function bindLivePreview() {
     document.querySelectorAll('.form-area input, .form-area select, .form-area textarea').forEach(input => {
-      input.addEventListener('input', updatePreview);
-      input.addEventListener('change', updatePreview);
+      input.addEventListener('input', () => { updatePreview(); updateCodePreview(); });
+      input.addEventListener('change', () => { updatePreview(); updateCodePreview(); toggleConditionalFields(); });
     });
     el('f_type').addEventListener('change', toggleConditionalFields);
     el('f_weapon_tier').addEventListener('change', onWeaponTierChange);
+    el('f_slot').addEventListener('change', () => { el('slotNote').textContent = SLOTS[el('f_slot').value]?.note || ''; });
+    el('f_is_signature').addEventListener('change', toggleConditionalFields);
+    el('f_is_revelation').addEventListener('change', toggleConditionalFields);
     el('searchInput').addEventListener('input', renderList);
     el('filterFaction').addEventListener('change', renderList);
     el('filterStyle').addEventListener('change', renderList);
@@ -635,38 +606,36 @@
     const facData = FACTIONS[faction];
     const facColor = facData?.color || 'var(--text-secondary)';
     const facLabel = faction === 'neutral' ? '中立' : (facData ? `${facData.zh} ${faction}` : faction);
-
     el('pvCost').textContent = el('f_cost').value || '0';
     const pvF = el('pvFaction');
-    pvF.textContent = facLabel;
-    pvF.style.borderColor = facColor;
-    pvF.style.color = facColor;
-
+    pvF.textContent = facLabel; pvF.style.borderColor = facColor; pvF.style.color = facColor;
     el('pvNameZh').textContent = el('f_name_zh').value || '卡片名稱';
     el('pvNameEn').textContent = el('f_name_en').value || 'Card Name';
-
     const typeVal = el('f_type').value;
     const typeLabel = CARD_TYPES[typeVal]?.zh || typeVal;
     const slotVal = el('f_slot').value;
-    const slotLabel = SLOTS[slotVal]?.zh || '';
-    el('pvType').textContent = typeLabel + (slotLabel && slotLabel !== '無' ? ` · ${slotLabel}` : '');
+    const slotLabel = (typeVal === 'asset' && SLOTS[slotVal]) ? ` · ${SLOTS[slotVal].zh}` : '';
+    el('pvType').textContent = typeLabel + slotLabel;
 
-    const ammo = intVal('f_ammo');
-    const uses = intVal('f_uses');
-    let usesText = '';
-    if (ammo > 0) usesText = `彈藥：${'◆'.repeat(ammo)}`;
-    else if (uses > 0) usesText = `使用次數：${'◆'.repeat(uses)}`;
-    el('pvUses').textContent = usesText;
+    // Badges
+    let badges = '';
+    if (el('f_is_signature').checked) badges += '<span class="pv-badge pv-badge-signature">簽名</span>';
+    if (el('f_is_weakness').checked) badges += '<span class="pv-badge pv-badge-weakness">弱點</span>';
+    if (el('f_is_revelation').checked) badges += '<span class="pv-badge pv-badge-revelation">神啟</span>';
+    const ct = el('f_consume_type').value;
+    if (ct === 'long_rest') badges += '<span class="pv-badge pv-badge-consume pv-badge-long_rest">長休息回復</span>';
+    else if (ct === 'short_rest') badges += '<span class="pv-badge pv-badge-consume pv-badge-short_rest">短休息回復</span>';
+    else if (ct === 'removed') badges += '<span class="pv-badge pv-badge-consume pv-badge-removed">永久消耗</span>';
+    el('pvBadges').innerHTML = badges;
 
+    const ammo = intVal('f_ammo'), uses = intVal('f_uses');
+    el('pvUses').textContent = ammo > 0 ? `彈藥：${'◆'.repeat(ammo)}` : uses > 0 ? `使用次數：${'◆'.repeat(uses)}` : '';
     const effects = collectEffects();
     el('pvEffects').textContent = effects.map(e => e.desc_zh).filter(Boolean).join('\n') || '';
-
     el('pvFlavor').textContent = el('f_flavor_text').value || '';
-
     el('pvSkill').textContent = el('f_skill_value').value || '0';
     el('pvDamage').textContent = el('f_damage').value || '0';
     el('pvHorror').textContent = el('f_horror').value || '0';
-
     el('previewCard').style.borderColor = facColor;
   }
 
@@ -674,75 +643,41 @@
   function exportJSON() {
     if (!cards.length) { alert('沒有卡片可匯出'); return; }
     const blob = new Blob([JSON.stringify(cards, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `card_definitions_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `card_definitions_${new Date().toISOString().slice(0,10)}.json`; a.click();
   }
-
   function importJSON() { el('importFile').click(); }
-
   function handleImport(e) {
-    const file = e.target.files[0];
-    if (!file) return;
+    const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = function(ev) {
       try {
         const data = JSON.parse(ev.target.result);
         if (!Array.isArray(data)) { alert('JSON 格式錯誤：需要是陣列'); return; }
-        const mode = confirm(`匯入 ${data.length} 張卡片。\n\n確定 = 合併（保留現有）\n取消 = 覆蓋（清空現有）`);
-        if (mode) {
-          const existCodes = new Set(cards.map(c => c.code));
-          const newCards = data.filter(c => !existCodes.has(c.code));
-          cards = cards.concat(newCards);
-          alert(`合併完成，新增 ${newCards.length} 張，跳過 ${data.length - newCards.length} 張重複`);
-        } else {
-          cards = data;
-          alert(`已覆蓋，共 ${cards.length} 張卡片`);
-        }
-        saveCards();
-        renderList();
+        const mode = confirm(`匯入 ${data.length} 張卡片。\n\n確定 = 合併\n取消 = 覆蓋`);
+        if (mode) { const exist = new Set(cards.map(c => c.code)); const n = data.filter(c => !exist.has(c.code)); cards = cards.concat(n); alert(`合併完成，新增 ${n.length} 張`); }
+        else { cards = data; alert(`已覆蓋，共 ${cards.length} 張`); }
+        saveCards(); renderList();
       } catch (err) { alert('JSON 解析失敗：' + err.message); }
     };
-    reader.readAsText(file);
-    e.target.value = '';
+    reader.readAsText(file); e.target.value = '';
   }
 
   /* ── Gemini AI ── */
   function showApiKeyDialog() {
-    const current = localStorage.getItem(LS_API_KEY) || '';
-    const key = prompt('請輸入 Gemini API Key：', current);
-    if (key !== null) {
-      localStorage.setItem(LS_API_KEY, key.trim());
-      updateApiKeyStatus();
-    }
+    const cur = localStorage.getItem(LS_API_KEY) || '';
+    const key = prompt('請輸入 Gemini API Key：', cur);
+    if (key !== null) { localStorage.setItem(LS_API_KEY, key.trim()); updateApiKeyStatus(); }
   }
-
   function updateApiKeyStatus() {
     const key = localStorage.getItem(LS_API_KEY);
-    const status = el('apiKeyStatus');
-    const btn = el('aiGenBtn');
-    if (key) {
-      status.textContent = 'API Key 已設定';
-      status.className = 'ai-status ok';
-      btn.disabled = false;
-    } else {
-      status.textContent = '未設定 API Key';
-      status.className = 'ai-status';
-      btn.disabled = true;
-    }
+    el('apiKeyStatus').textContent = key ? 'API Key 已設定' : '未設定 API Key';
+    el('apiKeyStatus').className = key ? 'ai-status ok' : 'ai-status';
+    el('aiGenBtn').disabled = !key;
   }
-
   function aiTemplate(type) {
-    const templates = {
-      weapon: 'S陣營的標準武器，手槍類型，費用3，需要敏捷檢定',
-      spell: 'N陣營的神秘法術，費用4，消耗使用次數，需要智力檢定',
-      heal: 'F陣營的治療事件卡，費用2，恢復HP和SAN',
-      event: 'P陣營的反應事件卡，費用1，可在敵人攻擊時使用',
-      ally: 'E陣營的盟友卡，費用3，提供持續的團隊增益',
-      revelation: '神啟卡，抽到時觸發負面效果，不可移除',
-    };
-    el('aiPrompt').value = templates[type] || '';
+    const t = { weapon:'S陣營的標準武器，手槍類型，費用3，需要敏捷檢定', spell:'N陣營的神秘法術，費用4，消耗使用次數，需要智力檢定', heal:'F陣營的治療事件卡，費用2，恢復HP和SAN', event:'P陣營的反應事件卡，費用1，可在敵人攻擊時使用', ally:'E陣營的盟友卡，費用3，提供持續的團隊增益', revelation:'神啟卡，抽到時觸發負面效果，不可移除' };
+    el('aiPrompt').value = t[type] || '';
   }
 
   async function aiGenerate() {
@@ -750,9 +685,7 @@
     if (!apiKey) { alert('請先設定 Gemini API Key'); return; }
     const userDesc = el('aiPrompt').value.trim();
     if (!userDesc) { alert('請輸入卡片描述'); return; }
-
-    const statusEl = el('aiStatusMsg');
-    const btn = el('aiGenBtn');
+    const statusEl = el('aiStatusMsg'); const btn = el('aiGenBtn');
     btn.disabled = true;
     statusEl.innerHTML = '<span class="ai-loading">&#8635;</span> 生成中…';
     statusEl.className = 'ai-status';
@@ -760,124 +693,62 @@
     const prompt = `你是一個克蘇魯神話卡牌遊戲的卡片設計師。請根據以下規則和使用者需求，生成一張完整的卡片。
 
 ## 遊戲規則
-- 骰子系統：d20
-- 卡片費用範圍：0-6
-- 武器傷害階層：隨身1/基礎2/標準3/進階4/稀有5/傳奇6
-- 檢定加值範圍：0-5
-- 八個陣營極：
-  E 號令（團隊增益、NPC互動）
-  I 深淵（牌組操控、自我增幅）
-  S 鐵證（裝備運用、物理戰鬥）
-  N 天啟（混沌袋操控、預見事件）
-  T 解析（弱點揭露、戰術佈局）
-  F 聖燼（治療、守護、犧牲換效果）
-  J 鐵壁（傷害減免、穩定輸出）
-  P 流影（反應行動、逆境翻盤）
-- 卡片風格：AH直接正面 / AC直接負面 / OH間接正面 / OC間接負面
-- 卡片類別：asset資產 / event事件 / ally盟友 / skill技能 / weakness弱點 / revelation神啟卡 / signature簽名卡
-- 裝備欄位：hand手持 / body身體 / accessory配件 / arcane神秘 / ally盟友 / none無
-- 觸發時機：on_play / on_commit / on_consume / on_enter / on_leave / on_draw / on_check_success / on_check_fail / reaction / passive / free_action
-- 檢定屬性：strength / agility / constitution / intellect / willpower / perception / charisma
-- faction 值：E/I/S/N/T/F/J/P/neutral
+- 骰子系統：d20，卡片費用範圍：0-6，武器傷害階層：隨身1/基礎2/標準3/進階4/稀有5/傳奇6，檢定加值範圍：0-5
+- 八個陣營極：E號令（團隊增益）/I深淵（牌組操控）/S鐵證（裝備運用）/N天啟（混沌袋操控）/T解析（戰術佈局）/F聖燼（治療守護）/J鐵壁（傷害減免）/P流影（反應行動）
+- 卡片風格：AH直接正面/AC直接負面/OH間接正面/OC間接負面
+- 卡片類別：asset資產/event事件/ally盟友/skill技能（只有這四種）
+- 特殊身份（獨立布林，可疊加）：is_signature簽名卡/is_weakness弱點/is_revelation神啟卡
+- 裝備欄位（僅資產）：one_hand單手/two_hand雙手/head帽子/body身體/accessory配件/arcane神秘/talent天賦/expertise專長
+- 使用後去向 consume_type：stay留在場上/discard進棄牌堆/long_rest長休息回復/short_rest短休息回復/removed移除出遊戲
+- 觸發時機：on_play/on_commit/on_consume/on_enter/on_leave/on_draw/on_check_success/on_check_fail/reaction/passive/free_action
 
 ## 使用者需求
 ${userDesc}
 
-## 輸出格式
-回傳一個 JSON 物件，包含以下欄位（嚴格遵守欄位名和值域）：
-{
-  "code": "小寫英文_底線_數字",
-  "name_zh": "中文名稱",
-  "name_en": "English Name",
-  "faction": "E/I/S/N/T/F/J/P/neutral",
-  "style": "AH/AC/OH/OC",
-  "type": "asset/event/ally/skill/weakness/revelation/signature",
-  "slot": "hand/body/accessory/arcane/ally/none",
-  "is_unique": false,
-  "level": 0,
-  "cost": 0,
-  "cost_currency": "resource",
-  "skill_value": 0,
-  "damage": 0,
-  "horror": 0,
-  "health_boost": 0,
-  "sanity_boost": 0,
-  "weapon_tier": 0,
-  "ammo": 0,
-  "uses": 0,
-  "is_consumable": false,
-  "check_attribute": "agility",
-  "check_modifier": 0,
-  "check_method": "dice",
-  "hand_limit_mod": 0,
-  "effects": [{"trigger":"on_play","effect_code":"deal_damage","effect_params":{},"desc_zh":"中文效果描述","desc_en":"English effect description"}],
-  "flavor_text": "風味文字",
-  "removable": false,
-  "committable": false,
-  "lethal_count": 0,
-  "owner_investigator": null
-}`;
+## 輸出格式（嚴格 JSON）
+{"name_zh":"","name_en":"","faction":"E/I/S/N/T/F/J/P/neutral","style":"AH/AC/OH/OC","type":"asset/event/ally/skill","slot":"one_hand","is_unique":false,"level":0,"is_signature":false,"is_weakness":false,"is_revelation":false,"cost":0,"cost_currency":"resource","consume_type":"stay","skill_value":0,"damage":0,"horror":0,"health_boost":0,"sanity_boost":0,"weapon_tier":0,"ammo":0,"uses":0,"check_attribute":"","check_modifier":0,"check_method":"dice","hand_limit_mod":0,"effects":[{"trigger":"on_play","effect_code":"","effect_params":{},"desc_zh":"","desc_en":""}],"flavor_text":"","removable":false,"committable":false,"lethal_count":0,"owner_investigator":null}`;
 
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json', temperature: 0.7 }
-          })
-        }
-      );
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`API 錯誤 ${response.status}: ${errText.slice(0, 200)}`);
-      }
-
-      const result = await response.json();
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.7 } })
+      });
+      if (!res.ok) throw new Error(`API 錯誤 ${res.status}`);
+      const result = await res.json();
       const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!text) throw new Error('API 回應為空');
-
-      const cardData = JSON.parse(text);
-
-      // Clamp values
-      cardData.cost = Math.max(0, Math.min(6, cardData.cost || 0));
-      cardData.damage = Math.max(0, Math.min(10, cardData.damage || 0));
-      cardData.horror = Math.max(0, Math.min(10, cardData.horror || 0));
-      cardData.skill_value = Math.max(0, Math.min(5, cardData.skill_value || 0));
-      cardData.check_modifier = Math.max(-3, Math.min(5, cardData.check_modifier || 0));
-
-      // Check code uniqueness
-      if (cards.find(c => c.code === cardData.code)) {
-        cardData.code = cardData.code + '_' + Date.now().toString(36).slice(-4);
-      }
-
-      fillFormFromData(cardData);
-      statusEl.textContent = '生成完成！請檢查並修改後儲存。';
-      statusEl.className = 'ai-status ok';
-    } catch (err) {
-      statusEl.textContent = '生成失敗：' + err.message;
-      statusEl.className = 'ai-status err';
-    } finally {
-      btn.disabled = false;
-    }
+      const d = JSON.parse(text);
+      d.cost = Math.max(0, Math.min(6, d.cost || 0));
+      d.damage = Math.max(0, Math.min(10, d.damage || 0));
+      d.horror = Math.max(0, Math.min(10, d.horror || 0));
+      d.skill_value = Math.max(0, Math.min(5, d.skill_value || 0));
+      fillFormFromData(d);
+      statusEl.textContent = '生成完成！請檢查並儲存。'; statusEl.className = 'ai-status ok';
+    } catch (err) { statusEl.textContent = '生成失敗：' + err.message; statusEl.className = 'ai-status err'; }
+    finally { btn.disabled = false; }
   }
 
   function fillFormFromData(d) {
     editingId = null;
-    el('f_code').value = d.code || '';
+    el('f_series').value = d.series || 'C';
     el('f_name_zh').value = d.name_zh || '';
     el('f_name_en').value = d.name_en || '';
     el('f_faction').value = d.faction || 'neutral';
     el('f_style').value = d.style || 'AH';
     el('f_type').value = d.type || 'asset';
-    el('f_slot').value = d.slot || 'none';
+    el('f_slot').value = d.slot || 'one_hand';
     el('f_is_unique').checked = !!d.is_unique;
     el('f_level').value = d.level ?? 0;
+    el('f_is_signature').checked = !!d.is_signature;
+    el('f_is_weakness').checked = !!d.is_weakness;
+    el('f_is_revelation').checked = !!d.is_revelation;
+    el('f_owner_investigator').value = d.owner_investigator || '';
+    el('f_removable').checked = !!d.removable;
+    el('f_committable').checked = !!d.committable;
+    el('f_lethal_count').value = d.lethal_count ?? 0;
     el('f_cost').value = d.cost ?? 0;
     el('f_cost_currency').value = d.cost_currency || 'resource';
+    el('f_consume_type').value = d.consume_type || 'discard';
     el('f_skill_value').value = d.skill_value ?? 0;
     el('f_damage').value = d.damage ?? 0;
     el('f_horror').value = d.horror ?? 0;
@@ -886,27 +757,21 @@ ${userDesc}
     el('f_weapon_tier').value = d.weapon_tier ?? 0;
     el('f_ammo').value = d.ammo ?? 0;
     el('f_uses').value = d.uses ?? 0;
-    el('f_is_consumable').checked = !!d.is_consumable;
     el('f_check_attribute').value = d.check_attribute || '';
     el('f_check_modifier').value = d.check_modifier ?? 0;
     el('f_check_method').value = d.check_method || 'dice';
     el('f_hand_limit_mod').value = d.hand_limit_mod ?? 0;
     el('f_flavor_text').value = d.flavor_text || '';
-    el('f_removable').checked = !!d.removable;
-    el('f_committable').checked = !!d.committable;
-    el('f_lethal_count').value = d.lethal_count ?? 0;
-    el('f_owner_investigator').value = d.owner_investigator || '';
     renderEffects(d.effects || []);
     toggleConditionalFields();
+    updateCodePreview();
     updatePreview();
   }
 
-  /* ── Helpers ── */
   function el(id) { return document.getElementById(id); }
   function intVal(id) { return parseInt(el(id).value, 10) || 0; }
   function toggle(id, show) { el(id).classList.toggle('hidden', !show); }
 
-  /* ── Start ── */
   init();
   </script>
 </body>

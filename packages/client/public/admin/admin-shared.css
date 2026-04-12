@@ -1,0 +1,324 @@
+/* ========================================
+   Admin Module — Shared Styles
+   暗黑哥德視覺風格
+   ======================================== */
+
+:root {
+  --bg-primary: #0D0D14;
+  --bg-secondary: #13131F;
+  --bg-card: #1A1A2E;
+  --bg-card-hover: #22223A;
+  --border: #2A2A44;
+  --border-hover: #C9A84C;
+  --gold: #C9A84C;
+  --gold-dim: #8B7535;
+  --gold-glow: rgba(201, 168, 76, 0.15);
+  --text-primary: #E8E4D9;
+  --text-secondary: #8A8778;
+  --text-tertiary: #5A5A52;
+
+  /* 八陣營色 */
+  --herald: #C9A84C;
+  --abyss: #3A5FA0;
+  --witness: #8B5E3C;
+  --oracle: #7B4EA3;
+  --cipher: #4A7C9B;
+  --ember: #B84C4C;
+  --bastion: #6B6B6B;
+  --flux: #2D8B6F;
+
+  /* 語義色 */
+  --danger: #B84C4C;
+  --success: #2D8B6F;
+  --warning: #C9A84C;
+  --info: #4A7C9B;
+}
+
+/* ── Reset & Base ── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Cinzel', serif;
+  color: var(--gold);
+  font-weight: 600;
+}
+
+code, .mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+a {
+  color: var(--gold);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+a:hover {
+  color: var(--text-primary);
+}
+
+/* ── Navigation Bar ── */
+
+.admin-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-back {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  transition: color 0.2s;
+}
+
+.nav-back:hover {
+  color: var(--gold);
+}
+
+.nav-title {
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.nav-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-left: auto;
+}
+
+/* ── Container ── */
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+/* ── Page Header ── */
+
+.page-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.page-header h1 {
+  font-size: 1.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.page-sub {
+  font-family: 'Cinzel', serif;
+  font-size: 0.875rem;
+  color: var(--text-tertiary);
+  margin-bottom: 0.5rem;
+}
+
+.page-desc {
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+}
+
+/* ── Cards ── */
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 0 20px var(--gold-glow);
+}
+
+/* ── Buttons ── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  border-color: var(--gold);
+  background: var(--bg-card-hover);
+}
+
+.btn-primary {
+  background: var(--gold);
+  color: var(--bg-primary);
+  border-color: var(--gold);
+  font-weight: 500;
+}
+
+.btn-primary:hover {
+  background: var(--gold-dim);
+  border-color: var(--gold-dim);
+}
+
+.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn-danger:hover {
+  background: rgba(184, 76, 76, 0.15);
+}
+
+/* ── Form Elements ── */
+
+input, select, textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold-glow);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+label {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+/* ── Tables ── */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  font-family: 'Cinzel', serif;
+  font-size: 0.8125rem;
+  color: var(--gold-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+tr:hover td {
+  background: var(--bg-card);
+}
+
+/* ── Tags ── */
+
+.tag {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.tag-gold { border-color: var(--gold-dim); color: var(--gold); }
+.tag-danger { border-color: var(--danger); color: var(--danger); }
+.tag-success { border-color: var(--success); color: var(--success); }
+.tag-info { border-color: var(--info); color: var(--info); }
+
+/* ── Placeholder (Under Development) ── */
+
+.placeholder-message {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--text-tertiary);
+}
+
+.placeholder-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.placeholder-text {
+  font-family: 'Cinzel', serif;
+  font-size: 1.25rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.placeholder-sub {
+  font-size: 0.875rem;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 768px) {
+  .container {
+    padding: 1.5rem 1rem;
+  }
+
+  .page-header h1 {
+    font-size: 1.375rem;
+  }
+
+  .admin-nav {
+    padding: 0.5rem 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 1rem 0.75rem;
+  }
+
+  .page-header h1 {
+    font-size: 1.125rem;
+  }
+}

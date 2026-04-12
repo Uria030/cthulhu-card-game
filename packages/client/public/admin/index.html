@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>系統管理員後台 — Admin Module</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    .module-card {
+      display: block;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+      text-decoration: none;
+    }
+
+    .module-card:hover {
+      border-color: var(--border-hover);
+      box-shadow: 0 0 24px var(--gold-glow);
+      transform: translateY(-2px);
+    }
+
+    .module-card .card-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.6875rem;
+      color: var(--text-tertiary);
+      margin-bottom: 0.5rem;
+    }
+
+    .module-card .card-title {
+      font-family: 'Cinzel', serif;
+      font-size: 1.0625rem;
+      color: var(--gold);
+      margin-bottom: 0.25rem;
+    }
+
+    .module-card .card-en {
+      font-family: 'Cinzel', serif;
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      margin-bottom: 0.5rem;
+    }
+
+    .module-card .card-desc {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .section-title {
+      font-family: 'Cinzel', serif;
+      font-size: 1.125rem;
+      color: var(--gold-dim);
+      margin-top: 2.5rem;
+      margin-bottom: 0.25rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-title:first-of-type {
+      margin-top: 0;
+    }
+
+    .hero {
+      text-align: center;
+      padding: 2rem 0 1rem;
+    }
+
+    .hero h1 {
+      font-size: 2rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .hero p {
+      color: var(--text-secondary);
+      font-size: 0.9375rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="hero">
+      <h1>Admin Module</h1>
+      <p>克蘇魯卡牌冒險 — 系統管理員後台</p>
+    </div>
+
+    <h2 class="section-title">遊戲設計管理</h2>
+    <div class="module-grid">
+      <a href="admin-card-designer.html" class="module-card">
+        <div class="card-code">MOD-01</div>
+        <div class="card-title">卡片設計器</div>
+        <div class="card-en">Card Designer</div>
+        <div class="card-desc">設計與管理遊戲卡牌，設定效果、費用與陣營歸屬</div>
+      </a>
+      <a href="admin-talent-skill.html" class="module-card">
+        <div class="card-code">MOD-02</div>
+        <div class="card-title">天賦與技能樹管理</div>
+        <div class="card-en">Talent & Skill Tree</div>
+        <div class="card-desc">管理調查員天賦節點與技能樹結構</div>
+      </a>
+      <a href="admin-enemy-designer.html" class="module-card">
+        <div class="card-code">MOD-03</div>
+        <div class="card-title">敵人設計器</div>
+        <div class="card-en">Enemy Designer</div>
+        <div class="card-desc">設計敵人單位，設定階層、屬性與行為模式</div>
+      </a>
+      <a href="admin-team-spirit.html" class="module-card">
+        <div class="card-code">MOD-04</div>
+        <div class="card-title">團隊精神管理</div>
+        <div class="card-en">Team Spirit Manager</div>
+        <div class="card-desc">管理團隊精神系統的加成效果與觸發條件</div>
+      </a>
+      <a href="admin-proficiency.html" class="module-card">
+        <div class="card-code">MOD-05</div>
+        <div class="card-title">戰鬥熟練管理</div>
+        <div class="card-en">Combat Proficiency</div>
+        <div class="card-desc">管理戰鬥熟練度系統與升級曲線</div>
+      </a>
+      <a href="admin-campaign.html" class="module-card">
+        <div class="card-code">MOD-06</div>
+        <div class="card-title">戰役管理</div>
+        <div class="card-en">Campaign Manager</div>
+        <div class="card-desc">管理戰役結構、章節與劇情推進</div>
+      </a>
+      <a href="admin-scenario-editor.html" class="module-card">
+        <div class="card-code">MOD-07</div>
+        <div class="card-title">場景編輯器</div>
+        <div class="card-en">Scenario Editor</div>
+        <div class="card-desc">編輯遊戲場景、地圖節點與事件觸發</div>
+      </a>
+      <a href="admin-chaos-bag.html" class="module-card">
+        <div class="card-code">MOD-08</div>
+        <div class="card-title">混沌袋設計器</div>
+        <div class="card-en">Chaos Bag Designer</div>
+        <div class="card-desc">設計混沌袋組成與機率分佈</div>
+      </a>
+    </div>
+
+    <h2 class="section-title">數值模擬工具</h2>
+    <div class="module-grid">
+      <a href="sim-dice-probability.html" class="module-card">
+        <div class="card-code">SIM-01</div>
+        <div class="card-title">骰子機率分析器</div>
+        <div class="card-en">Dice Probability Analyzer</div>
+        <div class="card-desc">分析 d20 骰子在各屬性修正與 DC 下的成功機率</div>
+      </a>
+      <a href="sim-boss-combat.html" class="module-card">
+        <div class="card-code">SIM-02</div>
+        <div class="card-title">Boss 戰鬥模擬器</div>
+        <div class="card-en">Boss Combat Simulator</div>
+        <div class="card-desc">模擬 Boss 戰鬥流程，驗證數值平衡</div>
+      </a>
+      <a href="sim-character-creation.html" class="module-card">
+        <div class="card-code">SIM-03</div>
+        <div class="card-title">創角點數模擬器</div>
+        <div class="card-en">Character Creation Simulator</div>
+        <div class="card-desc">模擬 21 點分配的各種組合與能力影響</div>
+      </a>
+      <a href="sim-enemy-tier.html" class="module-card">
+        <div class="card-code">SIM-04</div>
+        <div class="card-title">敵人階層設計器</div>
+        <div class="card-en">Enemy Tier Designer</div>
+        <div class="card-desc">設計與驗證五階層敵人的數值曲線</div>
+      </a>
+      <a href="sim-damage-curve.html" class="module-card">
+        <div class="card-code">SIM-05</div>
+        <div class="card-title">傷害曲線推算器</div>
+        <div class="card-en">Damage Curve Calculator</div>
+        <div class="card-desc">推算武器傷害、屬性修正與敵人 HP 的交叉曲線</div>
+      </a>
+      <a href="sim-card-economy.html" class="module-card">
+        <div class="card-code">SIM-06</div>
+        <div class="card-title">卡牌經濟模擬器</div>
+        <div class="card-en">Card Economy Simulator</div>
+        <div class="card-desc">模擬卡牌抽取、資源消耗與手牌經濟循環</div>
+      </a>
+    </div>
+  </div>
+
+  <script src="admin-shared.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "framework": "vite",
+  "buildCommand": "cd ../.. && pnpm install && pnpm --filter client build",
+  "outputDirectory": "dist",
+  "installCommand": "corepack enable && pnpm install"
+}

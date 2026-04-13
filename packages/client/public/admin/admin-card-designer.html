@@ -120,6 +120,7 @@
       </div>
       <div class="filter-row">
         <select id="filterType"><option value="">全部類別</option></select>
+        <select id="filterCombatStyle"><option value="">全部風格</option></select>
       </div>
       <div id="cardList"></div>
       <div class="list-stats" id="listStats">0 張卡片</div>
@@ -221,10 +222,34 @@
             <div class="form-group" id="weaponTierGroup"><label>武器階層</label><select id="f_weapon_tier"><option value="0">無</option></select></div>
             <div class="form-group" id="ammoGroup"><label>彈藥</label><input type="number" id="f_ammo" value="0" min="0"></div>
             <div class="form-group"><label>使用次數</label><input type="number" id="f_uses" value="0" min="0"></div>
-            <div class="form-group"><label>檢定屬性</label><select id="f_check_attribute"><option value="">無</option></select></div>
-            <div class="form-group"><label>檢定修正 (-3~+5)</label><input type="number" id="f_check_modifier" value="0" min="-3" max="5"></div>
-            <div class="form-group"><label>檢定方式</label><select id="f_check_method"></select></div>
+            <div class="form-group" id="combatStyleGroup"><label>戰鬥風格</label><select id="f_combat_style"><option value="">無</option></select></div>
             <div class="form-group"><label>手牌上限修改 (-3~0)</label><input type="number" id="f_hand_limit_mod" value="0" min="-3" max="0"></div>
+          </div>
+
+          <!-- Attribute Modifiers (weapon only) -->
+          <div id="attrModGroup" class="hidden">
+            <div class="section-label">屬性修正</div>
+            <div style="margin-bottom:0.5rem;">
+              <label style="font-size:0.75rem;margin-right:0.75rem;"><input type="radio" name="attrModMode" value="single" checked onchange="switchAttrModMode()"> 單一屬性</label>
+              <label style="font-size:0.75rem;margin-right:0.75rem;"><input type="radio" name="attrModMode" value="multi" onchange="switchAttrModMode()"> 多屬性</label>
+              <label style="font-size:0.75rem;"><input type="radio" name="attrModMode" value="all" onchange="switchAttrModMode()"> 全屬性</label>
+            </div>
+            <div id="attrModSingle" class="form-grid">
+              <div class="form-group"><label>屬性</label><select id="f_attrmod_single_attr"></select></div>
+              <div class="form-group"><label>修正值</label><input type="number" id="f_attrmod_single_val" value="0" min="-5" max="5"></div>
+            </div>
+            <div id="attrModMulti" class="form-grid hidden">
+              <div class="form-group"><label>力量</label><input type="number" id="f_am_strength" value="" min="-5" max="5" placeholder="—"></div>
+              <div class="form-group"><label>敏捷</label><input type="number" id="f_am_agility" value="" min="-5" max="5" placeholder="—"></div>
+              <div class="form-group"><label>體質</label><input type="number" id="f_am_constitution" value="" min="-5" max="5" placeholder="—"></div>
+              <div class="form-group"><label>智力</label><input type="number" id="f_am_intellect" value="" min="-5" max="5" placeholder="—"></div>
+              <div class="form-group"><label>意志</label><input type="number" id="f_am_willpower" value="" min="-5" max="5" placeholder="—"></div>
+              <div class="form-group"><label>感知</label><input type="number" id="f_am_perception" value="" min="-5" max="5" placeholder="—"></div>
+              <div class="form-group"><label>魅力</label><input type="number" id="f_am_charisma" value="" min="-5" max="5" placeholder="—"></div>
+            </div>
+            <div id="attrModAll" class="form-grid hidden">
+              <div class="form-group"><label>所有檢定修正</label><input type="number" id="f_am_all" value="0" min="-5" max="5"></div>
+            </div>
           </div>
 
           <!-- Effects -->
@@ -265,6 +290,8 @@
             <hr class="pv-divider">
             <div class="pv-flavor" id="pvFlavor"></div>
             <hr class="pv-divider">
+            <div id="pvCombatStyle" style="font-size:0.6875rem;color:var(--text-secondary);margin-bottom:0.25rem;"></div>
+            <div id="pvAttrMods" style="font-size:0.6875rem;margin-bottom:0.25rem;"></div>
             <div class="pv-bottom">
               <div class="pv-stat"><div class="pv-stat-val" id="pvSkill">0</div><div class="pv-stat-label">加值</div></div>
               <div class="pv-stat"><div class="pv-stat-val" id="pvDamage">0</div><div class="pv-stat-label">傷害</div></div>
@@ -323,15 +350,15 @@
     wtSel.innerHTML = '<option value="0">無</option>';
     for (const [k, v] of Object.entries(WEAPON_TIERS)) wtSel.innerHTML += `<option value="${k}">${v.name} (${v.en}) — 傷害 ${v.damage}</option>`;
 
-    // Check attribute
-    const caSel = el('f_check_attribute');
-    caSel.innerHTML = '<option value="">無</option>';
-    for (const [k, v] of Object.entries(ATTRIBUTES)) caSel.innerHTML += `<option value="${k}">${v.zh} (${v.abbr})</option>`;
+    // Combat style
+    const csSel = el('f_combat_style');
+    csSel.innerHTML = '<option value="">無</option>';
+    for (const [k, v] of Object.entries(COMBAT_STYLES)) csSel.innerHTML += `<option value="${k}">${v.zh} (${v.en})</option>`;
 
-    // Check method
-    const cmSel = el('f_check_method');
-    cmSel.innerHTML = '';
-    for (const [k, v] of Object.entries(CHECK_METHODS)) cmSel.innerHTML += `<option value="${k}">${v.zh}</option>`;
+    // Attribute modifier single-attr select
+    const amSel = el('f_attrmod_single_attr');
+    amSel.innerHTML = '';
+    for (const [k, v] of Object.entries(ATTRIBUTES)) amSel.innerHTML += `<option value="${k}">${v.zh}</option>`;
 
     // Cost currency
     const ccSel = el('f_cost_currency');
@@ -351,6 +378,8 @@
     for (const [k, v] of Object.entries(CARD_STYLES)) fs.innerHTML += `<option value="${k}">${v.zh}</option>`;
     const ft = el('filterType');
     for (const [k, v] of Object.entries(CARD_TYPES)) ft.innerHTML += `<option value="${k}">${v.zh}</option>`;
+    const fcs = el('filterCombatStyle');
+    for (const [k, v] of Object.entries(COMBAT_STYLES)) fcs.innerHTML += `<option value="${k}">${v.zh}</option>`;
   }
 
   async function loadCards() {
@@ -425,11 +454,13 @@
     const fFac = el('filterFaction').value;
     const fSty = el('filterStyle').value;
     const fTyp = el('filterType').value;
+    const fCS = el('filterCombatStyle').value;
     let filtered = cards.filter(c => {
       if (search && !(c.name_zh||'').toLowerCase().includes(search) && !(c.name_en||'').toLowerCase().includes(search) && !(c.code||'').toLowerCase().includes(search)) return false;
       if (fFac && c.faction !== fFac) return false;
       if (fSty && c.style !== fSty) return false;
       if (fTyp && c.type !== fTyp) return false;
+      if (fCS && c.combat_style !== fCS) return false;
       return true;
     });
     const list = el('cardList');
@@ -485,9 +516,8 @@
     el('f_weapon_tier').value = c.weapon_tier ?? 0;
     el('f_ammo').value = c.ammo ?? 0;
     el('f_uses').value = c.uses ?? 0;
-    el('f_check_attribute').value = c.check_attribute || '';
-    el('f_check_modifier').value = c.check_modifier ?? 0;
-    el('f_check_method').value = c.check_method || 'dice';
+    el('f_combat_style').value = c.combat_style || '';
+    loadAttrModifiers(c.attribute_modifiers || {});
     el('f_hand_limit_mod').value = c.hand_limit_mod ?? 0;
     el('f_flavor_text').value = c.flavor_text || '';
     // Migrate old effect format if needed
@@ -536,9 +566,8 @@
       weapon_tier: intVal('f_weapon_tier'),
       ammo: intVal('f_ammo'),
       uses: intVal('f_uses') || null,
-      check_attribute: el('f_check_attribute').value || null,
-      check_modifier: intVal('f_check_modifier'),
-      check_method: el('f_check_method').value,
+      combat_style: el('f_combat_style').value || null,
+      attribute_modifiers: collectAttrModifiers(),
       hand_limit_mod: intVal('f_hand_limit_mod'),
       subtypes: [],
       effects: collectEffects(),
@@ -638,8 +667,9 @@
     el('f_slot').value = 'one_hand';
     el('f_cost_currency').value = 'resource';
     el('f_consume_type').value = 'stay';
-    el('f_check_method').value = 'dice';
+    el('f_combat_style').value = '';
     el('f_weapon_tier').value = '0';
+    loadAttrModifiers({});
     renderEffects([]);
     toggleConditionalFields();
     updateCodePreview();
@@ -1126,6 +1156,8 @@
     toggle('slotGroup', type === 'asset');
     toggle('weaponTierGroup', type === 'asset');
     toggle('ammoGroup', type === 'asset');
+    toggle('combatStyleGroup', type === 'asset');
+    toggle('attrModGroup', type === 'asset');
     toggle('signatureFields', el('f_is_signature').checked);
     toggle('revelationFields', el('f_is_revelation').checked);
     // Slot note
@@ -1148,6 +1180,63 @@
     }
   }
 
+  /* ── Attribute Modifiers ── */
+  function switchAttrModMode() {
+    const mode = document.querySelector('input[name="attrModMode"]:checked')?.value || 'single';
+    toggle('attrModSingle', mode === 'single');
+    toggle('attrModMulti', mode === 'multi');
+    toggle('attrModAll', mode === 'all');
+  }
+
+  function loadAttrModifiers(mods) {
+    if (!mods || typeof mods !== 'object') mods = {};
+    // Clear all
+    el('f_attrmod_single_val').value = 0;
+    el('f_am_all').value = 0;
+    ['strength','agility','constitution','intellect','willpower','perception','charisma'].forEach(a => { const inp = el('f_am_' + a); if (inp) inp.value = ''; });
+
+    if (mods.all !== undefined) {
+      document.querySelector('input[name="attrModMode"][value="all"]').checked = true;
+      el('f_am_all').value = mods.all;
+    } else {
+      const keys = Object.keys(mods);
+      if (keys.length <= 1) {
+        document.querySelector('input[name="attrModMode"][value="single"]').checked = true;
+        if (keys.length === 1) {
+          el('f_attrmod_single_attr').value = keys[0];
+          el('f_attrmod_single_val').value = mods[keys[0]];
+        }
+      } else {
+        document.querySelector('input[name="attrModMode"][value="multi"]').checked = true;
+        for (const [k, v] of Object.entries(mods)) {
+          const inp = el('f_am_' + k);
+          if (inp) inp.value = v;
+        }
+      }
+    }
+    switchAttrModMode();
+  }
+
+  function collectAttrModifiers() {
+    const mode = document.querySelector('input[name="attrModMode"]:checked')?.value || 'single';
+    if (mode === 'all') {
+      const v = parseInt(el('f_am_all').value) || 0;
+      return v ? { all: v } : {};
+    }
+    if (mode === 'multi') {
+      const result = {};
+      ['strength','agility','constitution','intellect','willpower','perception','charisma'].forEach(a => {
+        const inp = el('f_am_' + a);
+        if (inp && inp.value !== '') result[a] = parseInt(inp.value) || 0;
+      });
+      return result;
+    }
+    // single
+    const attr = el('f_attrmod_single_attr').value;
+    const val = parseInt(el('f_attrmod_single_val').value) || 0;
+    return attr && val ? { [attr]: val } : {};
+  }
+
   /* ── Live Preview ── */
   function bindLivePreview() {
     document.querySelectorAll('.form-area input, .form-area select, .form-area textarea').forEach(input => {
@@ -1163,6 +1252,7 @@
     el('filterFaction').addEventListener('change', renderList);
     el('filterStyle').addEventListener('change', renderList);
     el('filterType').addEventListener('change', renderList);
+    el('filterCombatStyle').addEventListener('change', renderList);
   }
 
   function updatePreview() {
@@ -1200,6 +1290,17 @@
     el('pvSkill').textContent = el('f_skill_value').value || '0';
     el('pvDamage').textContent = el('f_damage').value || '0';
     el('pvHorror').textContent = el('f_horror').value || '0';
+    // Combat style
+    const cs = el('f_combat_style').value;
+    el('pvCombatStyle').textContent = cs && COMBAT_STYLES[cs] ? `戰鬥風格：${COMBAT_STYLES[cs].zh}` : '';
+    // Attribute modifiers
+    const am = collectAttrModifiers();
+    const amParts = [];
+    for (const [k, v] of Object.entries(am)) {
+      if (k === 'all') { amParts.push(`<span style="color:${v > 0 ? 'var(--success)' : 'var(--danger)'}">ALL${v > 0 ? '+' : ''}${v}</span>`); }
+      else { const abbr = ATTRIBUTES[k]?.abbr || k; amParts.push(`<span style="color:${v > 0 ? 'var(--success)' : v < 0 ? 'var(--danger)' : 'var(--text-tertiary)'}">${abbr}${v > 0 ? '+' : ''}${v}</span>`); }
+    }
+    el('pvAttrMods').innerHTML = amParts.length ? amParts.join(' ') : '';
     el('previewCard').style.borderColor = facColor;
   }
 
@@ -1265,7 +1366,7 @@
 
 ### 骰子與檢定
 - 骰子系統：d20
-- 檢定公式：d20 + 屬性修正(0~5) + 熟練/專精(0~3) + 裝備/卡牌加值(0~4)
+- 檢定公式：d20 + 屬性修正(0~5) + 熟練/專精修正(0~3) + 武器屬性修正(依風格卡決定)
 - 自然 20：爆擊，2 倍傷害
 - 自然 1：大失敗，可能傷害隊友
 
@@ -1288,7 +1389,25 @@
 3. 敵人階段（城主行動 + 神話卡 + Agenda 毀滅標記）
 4. 回合結束階段（每人抽 1 張、+1 資源、橫置卡轉正）
 
-## 三、八陣營極定義
+## 三、戰鬥風格卡系統
+
+攻擊時，攻擊方抽取一張戰鬥風格卡，決定本次使用哪個屬性檢定。
+武器上的屬性修正只在對應屬性被抽到時生效。
+
+### 八種戰鬥風格
+shooting（槍枝射擊）、archery（弓術）、sidearm（隨身武器）、military（軍用武器）、brawl（搏擊）、arcane（施法）、engineer（工兵）、assassin（暗殺）
+
+### 武器屬性修正格式
+武器不再固定指定檢定屬性，而是記錄對各屬性的修正值：
+- 基礎武器（等級 0）通常只有一個屬性修正，例如 {"strength": 1}
+- 升級武器可有多屬性修正，例如 {"strength": 2, "willpower": -1}
+- 廣度路線使用 {"all": 1} 表示所有檢定 +1
+- 負面修正不出現在基礎卡（等級 0）上
+
+### 施法類例外
+施法類武器的攻擊使用混沌袋而非擲骰。
+
+## 四、八陣營極定義
 | 極 | 名稱 | 機制關鍵字 |
 |----|------|-----------|
 | E | 號令 | 團隊增益、共享資源、NPC 互動、領導光環 |
@@ -1328,7 +1447,7 @@ stay, discard, long_rest, short_rest, removed
 每個效果必須包含六大要素：
 
 ### 5.1 觸發時機 (trigger)
-on_play, on_commit, on_consume, on_enter_play, on_leave_play, on_draw, on_success, on_failure, on_critical, on_fumble, on_take_damage, on_take_horror, on_engage, on_disengage, on_move, on_enter_location, on_enemy_spawn, on_enemy_defeat, on_ally_downed, on_turn_start, on_turn_end, on_enemy_phase, reaction, passive, free_action
+on_play, on_commit, on_consume, on_enter_play, on_leave_play, on_draw, on_success, on_failure, on_critical, on_fumble, on_take_damage, on_take_horror, before_take_damage, before_take_horror, before_downed, on_engage, on_disengage, on_move, on_enter_location, on_enemy_spawn, on_enemy_defeat, on_ally_downed, on_turn_start, on_turn_end, on_enemy_phase, reaction, passive, free_action
 
 ### 5.2 條件限制 (condition) — 可為 null
 while_engaged, while_not_engaged, ally_engaged, hp_below_half, hp_below_x, san_below_half, san_below_x, in_darkness, in_light, in_fire, daytime, nighttime, hand_empty, hand_full, deck_empty, has_weapon, has_ally, has_item, has_arcane_item, has_weakness, at_location_with_clue, at_location_with_enemy, alone_at_location
@@ -1374,7 +1493,8 @@ ${userDescription}
   "skill_value": 0, "damage": 0, "horror": 0,
   "health_boost": 0, "sanity_boost": 0,
   "weapon_tier": 0, "ammo": 0, "uses": 0,
-  "check_attribute": "", "check_modifier": 0, "check_method": "dice",
+  "combat_style": "shooting/archery/sidearm/military/brawl/arcane/engineer/assassin/null",
+  "attribute_modifiers": {},
   "hand_limit_mod": 0,
   "subtypes": ["weapon", "item"],
   "effects": [{
@@ -1392,7 +1512,12 @@ ${userDescription}
 1. effect_code 必須從上面的清單中選擇，不要發明新的
 2. effects 是陣列，一張卡可以有多個效果
 3. 數值要合理：費用 0-6、傷害符合武器階層、檢定加值 0-5
-4. 風格要符合陣營的風格偏重`;
+4. combat_style 只有武器卡才需要填寫，非武器卡填 null
+5. attribute_modifiers 只有武器卡才需要填寫，非武器卡填 {}
+6. 基礎武器（level 0）的 attribute_modifiers 通常只有一個屬性，不含負值
+7. 數值要合理：費用 0-6、傷害符合武器階層
+8. 風格要符合陣營：參考陣營的風格偏重
+9. 武器不再指定固定的檢定屬性，檢定屬性由戰鬥風格卡決定`;
   }
 
   const VALID_EFFECT_CODES = new Set([
@@ -1414,9 +1539,37 @@ ${userDescription}
     d.damage = Math.max(0, Math.min(10, d.damage || 0));
     d.horror = Math.max(0, Math.min(10, d.horror || 0));
     d.skill_value = Math.max(0, Math.min(5, d.skill_value || 0));
+
+    // Migrate old check_attribute/check_modifier → attribute_modifiers
+    if (d.check_attribute && !d.attribute_modifiers) {
+      d.attribute_modifiers = { [d.check_attribute]: d.check_modifier || 0 };
+    }
+    delete d.check_attribute; delete d.check_modifier; delete d.check_method;
+
+    // Validate combat_style
+    const validStyles = ['shooting','archery','sidearm','military','brawl','arcane','engineer','assassin'];
+    if (d.combat_style && !validStyles.includes(d.combat_style)) {
+      console.warn('Invalid combat_style:', d.combat_style);
+      d.combat_style = null;
+    }
+
+    // Validate attribute_modifiers
+    if (d.attribute_modifiers && typeof d.attribute_modifiers === 'object') {
+      const validKeys = ['strength','agility','constitution','intellect','willpower','perception','charisma','all'];
+      for (const key of Object.keys(d.attribute_modifiers)) {
+        if (!validKeys.includes(key)) { delete d.attribute_modifiers[key]; continue; }
+        const val = d.attribute_modifiers[key];
+        if (typeof val !== 'number' || val < -5 || val > 5) {
+          d.attribute_modifiers[key] = Math.max(-5, Math.min(5, Math.round(val || 0)));
+        }
+      }
+      if (d.attribute_modifiers.all !== undefined && Object.keys(d.attribute_modifiers).length > 1) {
+        d.attribute_modifiers = { all: d.attribute_modifiers.all };
+      }
+    }
+
     if (d.effects) {
       for (const eff of d.effects) {
-        // Migrate old format
         if (eff.effect_params && !eff.params) { eff.params = eff.effect_params; delete eff.effect_params; }
         if (!VALID_EFFECT_CODES.has(eff.effect_code)) {
           console.warn('Invalid effect_code from AI:', eff.effect_code);
@@ -1485,9 +1638,8 @@ ${userDescription}
     el('f_weapon_tier').value = d.weapon_tier ?? 0;
     el('f_ammo').value = d.ammo ?? 0;
     el('f_uses').value = d.uses ?? 0;
-    el('f_check_attribute').value = d.check_attribute || '';
-    el('f_check_modifier').value = d.check_modifier ?? 0;
-    el('f_check_method').value = d.check_method || 'dice';
+    el('f_combat_style').value = d.combat_style || '';
+    loadAttrModifiers(d.attribute_modifiers || {});
     el('f_hand_limit_mod').value = d.hand_limit_mod ?? 0;
     el('f_flavor_text').value = d.flavor_text || '';
     // Migrate old effect format if needed

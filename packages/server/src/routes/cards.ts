@@ -7,10 +7,10 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', requireAuth);
 
   // ── GET /api/cards ── list with filters
-  app.get<{ Querystring: { faction?: string; style?: string; type?: string; search?: string; series?: string } }>(
+  app.get<{ Querystring: { faction?: string; style?: string; type?: string; search?: string; series?: string; combat_style?: string } }>(
     '/api/cards',
     async (request, reply) => {
-      const { faction, style, type, search, series } = request.query;
+      const { faction, style, type, search, series, combat_style } = request.query;
       let query = `
         SELECT c.*,
           COALESCE(json_agg(e.* ORDER BY e.sort_order) FILTER (WHERE e.id IS NOT NULL), '[]') AS effects
@@ -24,6 +24,7 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
       if (style) { conditions.push(`c.style = $${pi++}`); params.push(style); }
       if (type) { conditions.push(`c.card_type = $${pi++}`); params.push(type); }
       if (series) { conditions.push(`c.series = $${pi++}`); params.push(series); }
+      if (combat_style) { conditions.push(`c.combat_style = $${pi++}`); params.push(combat_style); }
       if (search) { conditions.push(`(c.name_zh ILIKE $${pi} OR c.name_en ILIKE $${pi} OR c.code ILIKE $${pi})`); params.push(`%${search}%`); pi++; }
       if (conditions.length) query += ` WHERE ${conditions.join(' AND ')}`;
       query += ` GROUP BY c.id ORDER BY c.code ASC`;
@@ -122,12 +123,12 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
           is_unique, is_signature, is_weakness, is_revelation,
           level, cost, cost_currency, skill_value, damage, horror,
           health_boost, sanity_boost, weapon_tier, ammo, uses, consume_type,
-          check_attribute, check_modifier, check_method, hand_limit_mod,
+          combat_style, attribute_modifiers, hand_limit_mod,
           ally_hp, ally_san, subtypes,
           flavor_text, removable, committable, lethal_count, owner_investigator
         ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-          $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36
+          $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35
         ) RETURNING *`;
 
       const vals = [
@@ -135,7 +136,7 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
         b.is_unique || false, b.is_signature || false, b.is_weakness || false, b.is_revelation || false,
         b.level || 0, b.cost || 0, b.cost_currency || 'resource', b.skill_value || 0, b.damage || 0, b.horror || 0,
         b.health_boost || 0, b.sanity_boost || 0, b.weapon_tier || null, b.ammo || null, b.uses || null, b.consume_type || 'discard',
-        b.check_attribute || null, b.check_modifier || 0, b.check_method || 'dice', b.hand_limit_mod || 0,
+        b.combat_style || null, JSON.stringify(b.attribute_modifiers || {}), b.hand_limit_mod || 0,
         b.ally_hp || null, b.ally_san || null, b.subtypes || [],
         b.flavor_text || null, b.removable !== false, b.committable !== false, b.lethal_count || 0, b.owner_investigator || null
       ];
@@ -173,11 +174,11 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
           level=$8, cost=$9, cost_currency=$10, skill_value=$11,
           damage=$12, horror=$13, health_boost=$14, sanity_boost=$15,
           weapon_tier=$16, ammo=$17, uses=$18, consume_type=$19,
-          check_attribute=$20, check_modifier=$21, check_method=$22, hand_limit_mod=$23,
-          ally_hp=$24, ally_san=$25, subtypes=$26,
-          flavor_text=$27, removable=$28, committable=$29, lethal_count=$30, owner_investigator=$31,
+          combat_style=$20, attribute_modifiers=$21, hand_limit_mod=$22,
+          ally_hp=$23, ally_san=$24, subtypes=$25,
+          flavor_text=$26, removable=$27, committable=$28, lethal_count=$29, owner_investigator=$30,
           version = version + 1, updated_at = NOW()
-        WHERE id = $32 RETURNING *`;
+        WHERE id = $31 RETURNING *`;
 
       const vals = [
         b.name_zh, b.name_en, b.slot || 'none',
@@ -185,7 +186,7 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
         b.level || 0, b.cost || 0, b.cost_currency || 'resource', b.skill_value || 0,
         b.damage || 0, b.horror || 0, b.health_boost || 0, b.sanity_boost || 0,
         b.weapon_tier || null, b.ammo || null, b.uses || null, b.consume_type || 'discard',
-        b.check_attribute || null, b.check_modifier || 0, b.check_method || 'dice', b.hand_limit_mod || 0,
+        b.combat_style || null, JSON.stringify(b.attribute_modifiers || {}), b.hand_limit_mod || 0,
         b.ally_hp || null, b.ally_san || null, b.subtypes || [],
         b.flavor_text || null, b.removable !== false, b.committable !== false, b.lethal_count || 0, b.owner_investigator || null,
         id
@@ -244,20 +245,26 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
         if (maxRes.rows.length > 0) nextNum = parseInt(maxRes.rows[0].code.split('-')[1], 10) + 1;
         const code = `${prefix}-${String(nextNum).padStart(2, '0')}`;
 
+        // Auto-migrate old format: check_attribute + check_modifier → attribute_modifiers
+        let attrMods = card.attribute_modifiers || {};
+        if (!Object.keys(attrMods).length && card.check_attribute) {
+          attrMods = { [card.check_attribute]: card.check_modifier || 0 };
+        }
+
         const insertRes = await client.query(`
           INSERT INTO card_definitions (
             code,series,name_zh,name_en,faction,style,card_type,slot,
             is_unique,is_signature,is_weakness,is_revelation,
             level,cost,cost_currency,skill_value,damage,horror,
             health_boost,sanity_boost,weapon_tier,ammo,uses,consume_type,
-            check_attribute,check_modifier,check_method,hand_limit_mod,
+            combat_style,attribute_modifiers,hand_limit_mod,
             ally_hp,ally_san,subtypes,flavor_text,removable,committable,lethal_count,owner_investigator
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36) RETURNING id`,
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35) RETURNING id`,
           [code,seriesCode,card.name_zh,card.name_en,card.faction,card.style,card.card_type||card.type,card.slot||'none',
            card.is_unique||false,card.is_signature||false,card.is_weakness||false,card.is_revelation||false,
            card.level||0,card.cost||0,card.cost_currency||'resource',card.skill_value||0,card.damage||0,card.horror||0,
            card.health_boost||0,card.sanity_boost||0,card.weapon_tier||null,card.ammo||null,card.uses||null,card.consume_type||'discard',
-           card.check_attribute||null,card.check_modifier||0,card.check_method||'dice',card.hand_limit_mod||0,
+           card.combat_style||null,JSON.stringify(attrMods),card.hand_limit_mod||0,
            card.ally_hp||null,card.ally_san||null,card.subtypes||[],card.flavor_text||null,
            card.removable!==false,card.committable!==false,card.lethal_count||0,card.owner_investigator||null]
         );

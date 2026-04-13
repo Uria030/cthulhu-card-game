@@ -119,11 +119,47 @@ CREATE INDEX IF NOT EXISTS idx_admin_sessions_user ON admin_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);
 `;
 
+const MIGRATION_002_SQL = `
+-- ============================================
+-- Migration 002: Combat style & attribute modifiers
+-- ============================================
+
+-- Add new columns (idempotent)
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN combat_style VARCHAR(32);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN attribute_modifiers JSONB NOT NULL DEFAULT '{}';
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- Migrate old check_attribute/check_modifier data if columns exist
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='card_definitions' AND column_name='check_attribute') THEN
+    UPDATE card_definitions
+    SET attribute_modifiers = jsonb_build_object(check_attribute, COALESCE(check_modifier, 0))
+    WHERE check_attribute IS NOT NULL AND check_attribute != ''
+      AND (attribute_modifiers IS NULL OR attribute_modifiers = '{}'::jsonb);
+  END IF;
+END $$;
+
+-- Drop old columns if they exist
+ALTER TABLE card_definitions DROP COLUMN IF EXISTS check_attribute;
+ALTER TABLE card_definitions DROP COLUMN IF EXISTS check_modifier;
+ALTER TABLE card_definitions DROP COLUMN IF EXISTS check_method;
+
+-- Index
+CREATE INDEX IF NOT EXISTS idx_cards_combat_style ON card_definitions(combat_style);
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
     console.log('Running database migrations...');
     await client.query(MIGRATION_SQL);
+    await client.query(MIGRATION_002_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

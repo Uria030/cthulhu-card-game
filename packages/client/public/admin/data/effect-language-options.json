@@ -16,7 +16,10 @@
     ],
     "傷害相關": [
       { "code": "on_take_damage", "zh": "受到傷害時", "en": "On Take Damage" },
-      { "code": "on_take_horror", "zh": "受到恐懼時", "en": "On Take Horror" }
+      { "code": "on_take_horror", "zh": "受到恐懼時", "en": "On Take Horror" },
+      { "code": "before_take_damage", "zh": "將要受到傷害時", "en": "Before Take Damage" },
+      { "code": "before_take_horror", "zh": "將要受到恐懼時", "en": "Before Take Horror" },
+      { "code": "before_downed", "zh": "將要倒地時", "en": "Before Downed" }
     ],
     "交戰與移動": [
       { "code": "on_engage", "zh": "進入交戰時", "en": "On Engage" },

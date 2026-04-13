@@ -178,6 +178,60 @@ const COST_CURRENCIES = {
   faith:            { zh: '信仰', en: 'Faith' },
 };
 
+const COMBAT_STYLES = {
+  shooting:  { code: 'shooting',  zh: '槍枝射擊', en: 'Shooting' },
+  archery:   { code: 'archery',   zh: '弓術',     en: 'Archery' },
+  sidearm:   { code: 'sidearm',   zh: '隨身武器', en: 'Sidearm' },
+  military:  { code: 'military',  zh: '軍用武器', en: 'Military Weapons' },
+  brawl:     { code: 'brawl',     zh: '搏擊',     en: 'Brawl' },
+  arcane:    { code: 'arcane',    zh: '施法',     en: 'Arcane' },
+  engineer:  { code: 'engineer',  zh: '工兵',     en: 'Engineer' },
+  assassin:  { code: 'assassin',  zh: '暗殺',     en: 'Assassination' },
+};
+
+const COMBAT_SPECIALIZATIONS = {
+  shooting_rifle:   { code: 'shooting_rifle',   parent: 'shooting', zh: '步槍專精',     en: 'Rifle' },
+  shooting_smg:     { code: 'shooting_smg',     parent: 'shooting', zh: '衝鋒槍專精',   en: 'Submachine Gun' },
+  shooting_dual:    { code: 'shooting_dual',    parent: 'shooting', zh: '雙槍專精',     en: 'Dual Wielding' },
+  shooting_pistol:  { code: 'shooting_pistol',  parent: 'shooting', zh: '手槍專精',     en: 'Pistol' },
+  archery_hunter:   { code: 'archery_hunter',   parent: 'archery',  zh: '獵手',         en: 'Hunter' },
+  archery_rapid:    { code: 'archery_rapid',    parent: 'archery',  zh: '連射',         en: 'Rapid Fire' },
+  archery_poison:   { code: 'archery_poison',   parent: 'archery',  zh: '毒箭',         en: 'Poison Arrow' },
+  archery_silent:   { code: 'archery_silent',   parent: 'archery',  zh: '無聲射手',     en: 'Silent Shooter' },
+  sidearm_dagger:   { code: 'sidearm_dagger',   parent: 'sidearm',  zh: '匕首術',       en: 'Dagger' },
+  sidearm_parry:    { code: 'sidearm_parry',    parent: 'sidearm',  zh: '護身格擋',     en: 'Parry' },
+  sidearm_blunt:    { code: 'sidearm_blunt',    parent: 'sidearm',  zh: '鈍擊',         en: 'Blunt Strike' },
+  sidearm_street:   { code: 'sidearm_street',   parent: 'sidearm',  zh: '街頭格鬥',     en: 'Street Fighting' },
+  military_twohanded: { code: 'military_twohanded', parent: 'military', zh: '雙手武器專精', en: 'Two-Handed' },
+  military_defense:   { code: 'military_defense',   parent: 'military', zh: '防禦架式',     en: 'Defensive Stance' },
+  military_dual:      { code: 'military_dual',      parent: 'military', zh: '雙持專精',     en: 'Dual Wielding' },
+  military_polearm:   { code: 'military_polearm',   parent: 'military', zh: '長柄武器',     en: 'Polearm' },
+  brawl_tavern:     { code: 'brawl_tavern',     parent: 'brawl',    zh: '酒館鬥毆者',   en: 'Tavern Brawler' },
+  brawl_wrestler:   { code: 'brawl_wrestler',   parent: 'brawl',    zh: '摔角大師',     en: 'Wrestler' },
+  brawl_karate:     { code: 'brawl_karate',     parent: 'brawl',    zh: '空手道',       en: 'Karate' },
+  arcane_ritual:      { code: 'arcane_ritual',      parent: 'arcane', zh: '儀式',   en: 'Ritual' },
+  arcane_incantation: { code: 'arcane_incantation', parent: 'arcane', zh: '咒語',   en: 'Incantation' },
+  arcane_channeling:  { code: 'arcane_channeling',  parent: 'arcane', zh: '引導',   en: 'Channeling' },
+  arcane_meditation:  { code: 'arcane_meditation',  parent: 'arcane', zh: '冥想',   en: 'Meditation' },
+  arcane_alchemy:     { code: 'arcane_alchemy',     parent: 'arcane', zh: '煉金',   en: 'Alchemy' },
+  engineer_demolition: { code: 'engineer_demolition', parent: 'engineer', zh: '爆破', en: 'Demolition' },
+  engineer_trap:       { code: 'engineer_trap',       parent: 'engineer', zh: '陷阱', en: 'Trap' },
+  engineer_mechanic:   { code: 'engineer_mechanic',   parent: 'engineer', zh: '機械', en: 'Mechanic' },
+  assassin_execute:  { code: 'assassin_execute',  parent: 'assassin', zh: '無聲處決',   en: 'Silent Execution' },
+  assassin_ambush:   { code: 'assassin_ambush',   parent: 'assassin', zh: '伏擊戰術',   en: 'Ambush' },
+  assassin_hidden:   { code: 'assassin_hidden',   parent: 'assassin', zh: '暗器',       en: 'Hidden Weapon' },
+};
+
+const ENEMY_PREFERENCES = {
+  nearest:      { code: 'nearest',      zh: '最近',     en: 'Nearest' },
+  lowest_hp:    { code: 'lowest_hp',    zh: '血量最低', en: 'Lowest HP' },
+  lowest_san:   { code: 'lowest_san',   zh: '理智最低', en: 'Lowest SAN' },
+  most_clues:   { code: 'most_clues',   zh: '線索最多', en: 'Most Clues' },
+  last_attacker:{ code: 'last_attacker',zh: '仇恨',     en: 'Last Attacker' },
+  lowest_attr:  { code: 'lowest_attr',  zh: '屬性最低', en: 'Lowest Attribute' },
+  random:       { code: 'random',       zh: '隨機',     en: 'Random' },
+};
+
 /* ── 工具函數 ── */
 
 /**

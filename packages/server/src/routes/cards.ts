@@ -123,12 +123,12 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
           is_unique, is_signature, is_weakness, is_revelation,
           level, cost, cost_currency, skill_value, damage, horror,
           health_boost, sanity_boost, weapon_tier, ammo, uses, consume_type,
-          combat_style, attribute_modifiers, hand_limit_mod,
-          ally_hp, ally_san, subtypes,
+          combat_style, attribute_modifiers, spell_type, spell_casting, hand_limit_mod,
+          ally_hp, ally_san, xp_cost, subtypes,
           flavor_text, removable, committable, lethal_count, owner_investigator
         ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-          $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35
+          $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38
         ) RETURNING *`;
 
       const vals = [
@@ -136,8 +136,8 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
         b.is_unique || false, b.is_signature || false, b.is_weakness || false, b.is_revelation || false,
         b.level || 0, b.cost || 0, b.cost_currency || 'resource', b.skill_value || 0, b.damage || 0, b.horror || 0,
         b.health_boost || 0, b.sanity_boost || 0, b.weapon_tier || null, b.ammo || null, b.uses || null, b.consume_type || 'discard',
-        b.combat_style || null, JSON.stringify(b.attribute_modifiers || {}), b.hand_limit_mod || 0,
-        b.ally_hp || null, b.ally_san || null, b.subtypes || [],
+        b.combat_style || null, JSON.stringify(b.attribute_modifiers || {}), b.spell_type || null, b.spell_casting || null, b.hand_limit_mod || 0,
+        b.ally_hp || null, b.ally_san || null, b.xp_cost || 0, b.subtypes || [],
         b.flavor_text || null, b.removable !== false, b.committable !== false, b.lethal_count || 0, b.owner_investigator || null
       ];
 
@@ -174,11 +174,11 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
           level=$8, cost=$9, cost_currency=$10, skill_value=$11,
           damage=$12, horror=$13, health_boost=$14, sanity_boost=$15,
           weapon_tier=$16, ammo=$17, uses=$18, consume_type=$19,
-          combat_style=$20, attribute_modifiers=$21, hand_limit_mod=$22,
-          ally_hp=$23, ally_san=$24, subtypes=$25,
-          flavor_text=$26, removable=$27, committable=$28, lethal_count=$29, owner_investigator=$30,
+          combat_style=$20, attribute_modifiers=$21, spell_type=$22, spell_casting=$23, hand_limit_mod=$24,
+          ally_hp=$25, ally_san=$26, xp_cost=$27, subtypes=$28,
+          flavor_text=$29, removable=$30, committable=$31, lethal_count=$32, owner_investigator=$33,
           version = version + 1, updated_at = NOW()
-        WHERE id = $31 RETURNING *`;
+        WHERE id = $34 RETURNING *`;
 
       const vals = [
         b.name_zh, b.name_en, b.slot || 'none',
@@ -186,8 +186,8 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
         b.level || 0, b.cost || 0, b.cost_currency || 'resource', b.skill_value || 0,
         b.damage || 0, b.horror || 0, b.health_boost || 0, b.sanity_boost || 0,
         b.weapon_tier || null, b.ammo || null, b.uses || null, b.consume_type || 'discard',
-        b.combat_style || null, JSON.stringify(b.attribute_modifiers || {}), b.hand_limit_mod || 0,
-        b.ally_hp || null, b.ally_san || null, b.subtypes || [],
+        b.combat_style || null, JSON.stringify(b.attribute_modifiers || {}), b.spell_type || null, b.spell_casting || null, b.hand_limit_mod || 0,
+        b.ally_hp || null, b.ally_san || null, b.xp_cost || 0, b.subtypes || [],
         b.flavor_text || null, b.removable !== false, b.committable !== false, b.lethal_count || 0, b.owner_investigator || null,
         id
       ];
@@ -257,15 +257,15 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
             is_unique,is_signature,is_weakness,is_revelation,
             level,cost,cost_currency,skill_value,damage,horror,
             health_boost,sanity_boost,weapon_tier,ammo,uses,consume_type,
-            combat_style,attribute_modifiers,hand_limit_mod,
-            ally_hp,ally_san,subtypes,flavor_text,removable,committable,lethal_count,owner_investigator
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35) RETURNING id`,
+            combat_style,attribute_modifiers,spell_type,spell_casting,hand_limit_mod,
+            ally_hp,ally_san,xp_cost,subtypes,flavor_text,removable,committable,lethal_count,owner_investigator
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38) RETURNING id`,
           [code,seriesCode,card.name_zh,card.name_en,card.faction,card.style,card.card_type||card.type,card.slot||'none',
            card.is_unique||false,card.is_signature||false,card.is_weakness||false,card.is_revelation||false,
            card.level||0,card.cost||0,card.cost_currency||'resource',card.skill_value||0,card.damage||0,card.horror||0,
            card.health_boost||0,card.sanity_boost||0,card.weapon_tier||null,card.ammo||null,card.uses||null,card.consume_type||'discard',
-           card.combat_style||null,JSON.stringify(attrMods),card.hand_limit_mod||0,
-           card.ally_hp||null,card.ally_san||null,card.subtypes||[],card.flavor_text||null,
+           card.combat_style||null,JSON.stringify(attrMods),card.spell_type||null,card.spell_casting||null,card.hand_limit_mod||0,
+           card.ally_hp||null,card.ally_san||null,card.xp_cost||0,card.subtypes||[],card.flavor_text||null,
            card.removable!==false,card.committable!==false,card.lethal_count||0,card.owner_investigator||null]
         );
         await insertEffects(client, insertRes.rows[0].id, card.effects);

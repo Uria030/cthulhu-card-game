@@ -62,7 +62,7 @@ const GAME_RULES = {
   ATTRIBUTE_MIN: 1,
   ATTRIBUTE_MAX: 10,
   ATTRIBUTE_CREATION_MAX: 5,
-  CREATION_TOTAL_POINTS: 21,
+  CREATION_TOTAL_POINTS: 18,  // 18 at creation + 5 via talent tree = 23 effective
   ATTRIBUTE_COUNT: 7,
   HP_BASE: 5,
   SAN_BASE: 5,
@@ -74,7 +74,7 @@ const GAME_RULES = {
   CARDS_DRAWN_PER_TURN: 1,
   STARTING_RESOURCES: 5,
   RESOURCE_PER_TURN: 1,
-  CARD_COST_MIN: 1,
+  CARD_COST_MIN: 0,  // Skill cards cost 0
   CARD_COST_MAX: 6,
 };
 
@@ -230,6 +230,23 @@ const ENEMY_PREFERENCES = {
   last_attacker:{ code: 'last_attacker',zh: '仇恨',     en: 'Last Attacker' },
   lowest_attr:  { code: 'lowest_attr',  zh: '屬性最低', en: 'Lowest Attribute' },
   random:       { code: 'random',       zh: '隨機',     en: 'Random' },
+};
+
+const SPELL_TYPES = {
+  combat_destruction:    { code: 'combat_destruction',    zh: '戰鬥與毀滅', en: 'Combat & Destruction' },
+  investigation_prophecy:{ code: 'investigation_prophecy',zh: '調查與預言', en: 'Investigation & Prophecy' },
+  protection_evasion:    { code: 'protection_evasion',    zh: '防護與迴避', en: 'Protection & Evasion' },
+  spacetime_planar:      { code: 'spacetime_planar',      zh: '時空與位面', en: 'Spacetime & Planar' },
+  summoning_binding:     { code: 'summoning_binding',     zh: '召喚與束縛', en: 'Summoning & Binding' },
+  healing_purification:  { code: 'healing_purification',  zh: '治療與淨化', en: 'Healing & Purification' },
+};
+
+const SPELL_CASTINGS = {
+  ritual:       { code: 'ritual',       zh: '儀式', en: 'Ritual',       note: '+1費用, -1充能, ×1.5效果, 需額外行動點' },
+  incantation:  { code: 'incantation',  zh: '咒語', en: 'Incantation',  note: '標準施法' },
+  channeling:   { code: 'channeling',   zh: '引導', en: 'Channeling',   note: '持續施法, 需橫置維持' },
+  meditation:   { code: 'meditation',   zh: '冥想', en: 'Meditation',   note: '-1費用, +1充能, ×0.8效果' },
+  alchemy:      { code: 'alchemy',      zh: '煉金', en: 'Alchemy',      note: '產出消耗品形式法術效果' },
 };
 
 /* ── 工具函數 ── */

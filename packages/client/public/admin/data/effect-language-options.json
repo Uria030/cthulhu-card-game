@@ -660,7 +660,10 @@
     { "code": "weapon_ranged", "zh": "遠程武器", "en": "Ranged Weapon" },
     { "code": "weapon_arcane", "zh": "法術武器", "en": "Arcane Weapon" },
     { "code": "consumable", "zh": "消耗品", "en": "Consumable" },
-    { "code": "light_source", "zh": "光源", "en": "Light Source" }
+    { "code": "light_source", "zh": "光源", "en": "Light Source" },
+    { "code": "ammo", "zh": "彈藥", "en": "Ammunition" },
+    { "code": "arrow", "zh": "箭矢", "en": "Arrow" },
+    { "code": "spell", "zh": "法術", "en": "Spell" }
   ],
 
   "resource_types": [

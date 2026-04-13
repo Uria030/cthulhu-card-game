@@ -180,6 +180,10 @@
             <div class="form-group full">
               <div class="check-row"><input type="checkbox" id="f_is_unique"><label for="f_is_unique">獨特卡（場上只能存在一張）</label></div>
             </div>
+            <div class="form-group"><label>經驗值花費 (xp_cost)</label><input type="number" id="f_xp_cost" value="0" min="0" max="30"></div>
+            <div class="form-group full"><label>物品子類型 (subtypes)</label>
+              <div id="subtypesCheckboxes" style="display:flex;flex-wrap:wrap;gap:0.25rem 0.5rem;"></div>
+            </div>
           </div>
 
           <!-- Special Identity Tags -->
@@ -222,7 +226,11 @@
             <div class="form-group" id="weaponTierGroup"><label>武器階層</label><select id="f_weapon_tier"><option value="0">無</option></select></div>
             <div class="form-group" id="ammoGroup"><label>彈藥</label><input type="number" id="f_ammo" value="0" min="0"></div>
             <div class="form-group"><label>使用次數</label><input type="number" id="f_uses" value="0" min="0"></div>
+            <div class="form-group" id="allyHpGroup" class="hidden"><label>盟友 HP</label><input type="number" id="f_ally_hp" value="0" min="0" max="5"></div>
+            <div class="form-group" id="allySanGroup" class="hidden"><label>盟友 SAN</label><input type="number" id="f_ally_san" value="0" min="0" max="5"></div>
             <div class="form-group" id="combatStyleGroup"><label>戰鬥風格</label><select id="f_combat_style"><option value="">無</option></select></div>
+            <div class="form-group" id="spellTypeGroup" class="hidden"><label>法術類型</label><select id="f_spell_type"><option value="">無</option></select></div>
+            <div class="form-group" id="spellCastingGroup" class="hidden"><label>施法方式</label><select id="f_spell_casting"><option value="">無</option></select></div>
             <div class="form-group"><label>手牌上限修改 (-3~0)</label><input type="number" id="f_hand_limit_mod" value="0" min="-3" max="0"></div>
           </div>
 
@@ -359,6 +367,22 @@
     const amSel = el('f_attrmod_single_attr');
     amSel.innerHTML = '';
     for (const [k, v] of Object.entries(ATTRIBUTES)) amSel.innerHTML += `<option value="${k}">${v.zh}</option>`;
+
+    // Spell type
+    const stSel = el('f_spell_type');
+    stSel.innerHTML = '<option value="">無</option>';
+    for (const [k, v] of Object.entries(SPELL_TYPES)) stSel.innerHTML += `<option value="${k}">${v.zh} (${v.en})</option>`;
+
+    // Spell casting
+    const scSel = el('f_spell_casting');
+    scSel.innerHTML = '<option value="">無</option>';
+    for (const [k, v] of Object.entries(SPELL_CASTINGS)) scSel.innerHTML += `<option value="${k}">${v.zh} — ${v.note}</option>`;
+
+    // Subtypes checkboxes
+    if (EL && EL.subtypes) {
+      const stBox = el('subtypesCheckboxes');
+      stBox.innerHTML = EL.subtypes.map(s => `<label style="font-size:0.75rem;"><input type="checkbox" class="subtype-cb" value="${s.code}"> ${s.zh}</label>`).join('');
+    }
 
     // Cost currency
     const ccSel = el('f_cost_currency');
@@ -518,7 +542,13 @@
     el('f_uses').value = c.uses ?? 0;
     el('f_combat_style').value = c.combat_style || '';
     loadAttrModifiers(c.attribute_modifiers || {});
+    el('f_spell_type').value = c.spell_type || '';
+    el('f_spell_casting').value = c.spell_casting || '';
     el('f_hand_limit_mod').value = c.hand_limit_mod ?? 0;
+    el('f_ally_hp').value = c.ally_hp ?? 0;
+    el('f_ally_san').value = c.ally_san ?? 0;
+    el('f_xp_cost').value = c.xp_cost ?? 0;
+    loadSubtypes(c.subtypes || []);
     el('f_flavor_text').value = c.flavor_text || '';
     // Migrate old effect format if needed
     const effects = (c.effects || []).map(e => {
@@ -568,8 +598,13 @@
       uses: intVal('f_uses') || null,
       combat_style: el('f_combat_style').value || null,
       attribute_modifiers: collectAttrModifiers(),
+      spell_type: el('f_spell_type').value || null,
+      spell_casting: el('f_spell_casting').value || null,
       hand_limit_mod: intVal('f_hand_limit_mod'),
-      subtypes: [],
+      ally_hp: intVal('f_ally_hp') || null,
+      ally_san: intVal('f_ally_san') || null,
+      xp_cost: intVal('f_xp_cost'),
+      subtypes: collectSubtypes(),
       effects: collectEffects(),
       flavor_text: el('f_flavor_text').value.trim(),
       version: 1,
@@ -668,8 +703,14 @@
     el('f_cost_currency').value = 'resource';
     el('f_consume_type').value = 'stay';
     el('f_combat_style').value = '';
+    el('f_spell_type').value = '';
+    el('f_spell_casting').value = '';
     el('f_weapon_tier').value = '0';
+    el('f_ally_hp').value = 0;
+    el('f_ally_san').value = 0;
+    el('f_xp_cost').value = 0;
     loadAttrModifiers({});
+    loadSubtypes([]);
     renderEffects([]);
     toggleConditionalFields();
     updateCodePreview();
@@ -1153,11 +1194,19 @@
   /* ── Conditional Fields ── */
   function toggleConditionalFields() {
     const type = el('f_type').value;
-    toggle('slotGroup', type === 'asset');
-    toggle('weaponTierGroup', type === 'asset');
-    toggle('ammoGroup', type === 'asset');
-    toggle('combatStyleGroup', type === 'asset');
-    toggle('attrModGroup', type === 'asset');
+    const isAsset = type === 'asset';
+    const isAlly = type === 'ally';
+    const cs = el('f_combat_style')?.value;
+    const isArcane = cs === 'arcane';
+    toggle('slotGroup', isAsset);
+    toggle('weaponTierGroup', isAsset);
+    toggle('ammoGroup', isAsset);
+    toggle('combatStyleGroup', isAsset);
+    toggle('attrModGroup', isAsset);
+    toggle('allyHpGroup', isAlly);
+    toggle('allySanGroup', isAlly);
+    toggle('spellTypeGroup', isArcane || isAsset);
+    toggle('spellCastingGroup', isArcane || isAsset);
     toggle('signatureFields', el('f_is_signature').checked);
     toggle('revelationFields', el('f_is_revelation').checked);
     // Slot note
@@ -1237,6 +1286,14 @@
     return attr && val ? { [attr]: val } : {};
   }
 
+  /* ── Subtypes ── */
+  function loadSubtypes(arr) {
+    document.querySelectorAll('.subtype-cb').forEach(cb => { cb.checked = arr.includes(cb.value); });
+  }
+  function collectSubtypes() {
+    return Array.from(document.querySelectorAll('.subtype-cb:checked')).map(cb => cb.value);
+  }
+
   /* ── Live Preview ── */
   function bindLivePreview() {
     document.querySelectorAll('.form-area input, .form-area select, .form-area textarea').forEach(input => {
@@ -1251,6 +1308,7 @@
     el('searchInput').addEventListener('input', renderList);
     el('filterFaction').addEventListener('change', renderList);
     el('filterStyle').addEventListener('change', renderList);
+    el('f_combat_style').addEventListener('change', toggleConditionalFields);
     el('filterType').addEventListener('change', renderList);
     el('filterCombatStyle').addEventListener('change', renderList);
   }
@@ -1290,9 +1348,20 @@
     el('pvSkill').textContent = el('f_skill_value').value || '0';
     el('pvDamage').textContent = el('f_damage').value || '0';
     el('pvHorror').textContent = el('f_horror').value || '0';
+    // Spell type
+    const spType = el('f_spell_type').value;
+    const spCast = el('f_spell_casting').value;
+    let spellLabel = '';
+    if (spType && SPELL_TYPES[spType]) spellLabel += SPELL_TYPES[spType].zh;
+    if (spCast && SPELL_CASTINGS[spCast]) spellLabel += (spellLabel ? ' · ' : '') + SPELL_CASTINGS[spCast].zh;
+    // Show ally stats in uses area
+    const allyHp = intVal('f_ally_hp'), allySan = intVal('f_ally_san');
+    if (typeVal === 'ally' && (allyHp || allySan)) {
+      el('pvUses').textContent = `盟友 HP:${allyHp} SAN:${allySan}`;
+    }
     // Combat style
     const cs = el('f_combat_style').value;
-    el('pvCombatStyle').textContent = cs && COMBAT_STYLES[cs] ? `戰鬥風格：${COMBAT_STYLES[cs].zh}` : '';
+    el('pvCombatStyle').textContent = (cs && COMBAT_STYLES[cs] ? `戰鬥風格：${COMBAT_STYLES[cs].zh}` : '') + (spellLabel ? `  ${spellLabel}` : '');
     // Attribute modifiers
     const am = collectAttrModifiers();
     const amParts = [];
@@ -1407,6 +1476,39 @@ shooting（槍枝射擊）、archery（弓術）、sidearm（隨身武器）、m
 ### 施法類例外
 施法類武器的攻擊使用混沌袋而非擲骰。
 
+## 三之二、法術卡規格
+- 法術永遠命中，不擲骰，抽混沌袋決定副作用
+- 法術充能（uses）遠少於武器彈藥（ammo）：Tier 1=3-4, Tier 2=3, Tier 3=3, Tier 4-5=2-3, Tier 6=1-2
+- 法術傷害低於同階物理武器，但 100% 命中率補償
+- 神秘（arcane）元素最強：沒有怪物抗 arcane
+- 六種法術類型 spell_type: combat_destruction / investigation_prophecy / protection_evasion / spacetime_planar / summoning_binding / healing_purification
+- 五種施法方式 spell_casting: ritual（+1費-1充能×1.5效果）/ incantation（標準）/ channeling（持續需橫置）/ meditation（-1費+1充能×0.8效果）/ alchemy（產出消耗品）
+- 法術卡 combat_style 固定為 arcane，slot 固定為 arcane
+
+## 三之三、卡片設計規範摘要
+### 費用=價值原則
+高費卡做不同的事而非更強版本。事件卡比同效資產卡便宜 1-2。條件效果 -1 費。有負面副作用 -1~-2 費。
+
+### 盟友卡規格
+- 費用 2-5，每位調查員場上限 1 盟友
+- HP+SAN 預算：費用 2-3 時 ≤5，費用 4-5 時 ≤7
+- 盟友攻擊自動命中但傷害 1-3（不超過同費武器）
+- 五種類型：坦克(3-4HP/1SAN)、輔助(1HP/3-4SAN)、均衡(2HP/2SAN)、戰鬥(2-3HP/1-2SAN)、工具(1HP/1SAN)
+
+### 技能卡規格
+- 費用固定 0，手牌投入檢定加值，用後進棄牌堆
+- 加值範圍 +1~+3 單屬性
+
+### 消耗品三級制
+- short_rest：短休息回復，標準費用
+- discard：進棄牌堆，費用 -1
+- removed：永久移除，費用 -2，效果最強
+
+### 弓箭特殊彈藥
+- 火箭(費1,3次,火元素,施加燃燒1)、冰箭(費1,3次,冰元素,施加冷凍1)
+- 電箭(費2,3次,電元素,對潮濕+2)、毒箭(費1,3次,物理,施加中毒1)
+- 銀箭(費2,2次,神秘元素,穿透物理抗性)
+
 ## 四、八陣營極定義
 | 極 | 名稱 | 機制關鍵字 |
 |----|------|-----------|
@@ -1495,7 +1597,11 @@ ${userDescription}
   "weapon_tier": 0, "ammo": 0, "uses": 0,
   "combat_style": "shooting/archery/sidearm/military/brawl/arcane/engineer/assassin/null",
   "attribute_modifiers": {},
+  "spell_type": "combat_destruction/investigation_prophecy/protection_evasion/spacetime_planar/summoning_binding/healing_purification/null",
+  "spell_casting": "ritual/incantation/channeling/meditation/alchemy/null",
   "hand_limit_mod": 0,
+  "ally_hp": null, "ally_san": null,
+  "xp_cost": 0,
   "subtypes": ["weapon", "item"],
   "effects": [{
     "trigger": "free_action", "condition": null,
@@ -1517,7 +1623,12 @@ ${userDescription}
 6. 基礎武器（level 0）的 attribute_modifiers 通常只有一個屬性，不含負值
 7. 數值要合理：費用 0-6、傷害符合武器階層
 8. 風格要符合陣營：參考陣營的風格偏重
-9. 武器不再指定固定的檢定屬性，檢定屬性由戰鬥風格卡決定`;
+9. 武器不再指定固定的檢定屬性，檢定屬性由戰鬥風格卡決定
+10. spell_type 和 spell_casting 只有法術卡（combat_style=arcane）才需要填寫
+11. 法術卡 slot 固定為 arcane，combat_style 固定為 arcane
+12. 盟友卡需填 ally_hp 和 ally_san，HP+SAN 預算不超過 5（低費）或 7（高費）
+13. 技能卡費用固定為 0，skill_value 為 +1~+3
+14. subtypes 要正確標記（weapon/weapon_melee/weapon_ranged/weapon_arcane/item/arcane_item/consumable/ammo/arrow/spell/light_source）`;
   }
 
   const VALID_EFFECT_CODES = new Set([
@@ -1640,7 +1751,13 @@ ${userDescription}
     el('f_uses').value = d.uses ?? 0;
     el('f_combat_style').value = d.combat_style || '';
     loadAttrModifiers(d.attribute_modifiers || {});
+    el('f_spell_type').value = d.spell_type || '';
+    el('f_spell_casting').value = d.spell_casting || '';
     el('f_hand_limit_mod').value = d.hand_limit_mod ?? 0;
+    el('f_ally_hp').value = d.ally_hp ?? 0;
+    el('f_ally_san').value = d.ally_san ?? 0;
+    el('f_xp_cost').value = d.xp_cost ?? 0;
+    loadSubtypes(d.subtypes || []);
     el('f_flavor_text').value = d.flavor_text || '';
     // Migrate old effect format if needed
     const effects = (d.effects || []).map(e => {

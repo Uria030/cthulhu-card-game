@@ -154,12 +154,34 @@ ALTER TABLE card_definitions DROP COLUMN IF EXISTS check_method;
 CREATE INDEX IF NOT EXISTS idx_cards_combat_style ON card_definitions(combat_style);
 `;
 
+const MIGRATION_003_SQL = `
+-- ============================================
+-- Migration 003: Spell system + XP cost fields
+-- ============================================
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN spell_type VARCHAR(32);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN spell_casting VARCHAR(32);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN xp_cost INTEGER NOT NULL DEFAULT 0;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
     console.log('Running database migrations...');
     await client.query(MIGRATION_SQL);
     await client.query(MIGRATION_002_SQL);
+    await client.query(MIGRATION_003_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

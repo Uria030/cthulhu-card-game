@@ -1,20 +1,27 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { healthRoutes } from './routes/health.js';
+import { authRoutes } from './routes/auth.js';
+import { cardRoutes } from './routes/cards.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
 
-  const allowedOrigins = [
-    'http://localhost:5173',
-    ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : []),
-  ];
-
   await app.register(cors, {
-    origin: allowedOrigins,
+    origin: (origin, cb) => {
+      const allowed = (process.env.CORS_ORIGIN || process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+      if (!origin || allowed.includes(origin) || (origin && origin.includes('localhost'))) {
+        cb(null, true);
+      } else {
+        cb(null, true); // Allow all for now during development
+      }
+    },
+    credentials: true,
   });
 
   await app.register(healthRoutes);
+  await app.register(authRoutes);
+  await app.register(cardRoutes);
 
   return app;
 }

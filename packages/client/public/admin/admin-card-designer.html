@@ -278,7 +278,6 @@
 
   <script src="admin-shared.js"></script>
   <script>
-  const LS_KEY = 'card_definitions';
   const LS_API_KEY = 'gemini_api_key';
   let cards = [];
   let editingId = null;
@@ -286,7 +285,7 @@
   async function init() {
     await loadEffectLanguageOptions();
     populateSelects();
-    loadCards();
+    await loadCards();
     renderList();
     bindLivePreview();
     updateApiKeyStatus();
@@ -354,8 +353,38 @@
     for (const [k, v] of Object.entries(CARD_TYPES)) ft.innerHTML += `<option value="${k}">${v.zh}</option>`;
   }
 
-  function loadCards() { try { cards = JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch { cards = []; } }
-  function saveCards() { localStorage.setItem(LS_KEY, JSON.stringify(cards)); }
+  async function loadCards() {
+    try {
+      const res = await adminFetch('/api/cards');
+      const data = await res.json();
+      if (data.success) {
+        cards = data.data.map(c => mapCardFromApi(c));
+      } else { cards = []; }
+    } catch (err) {
+      console.error('Failed to load cards:', err);
+      cards = [];
+    }
+  }
+
+  function mapCardFromApi(c) {
+    // Map DB fields to frontend fields
+    return {
+      ...c,
+      type: c.card_type || c.type,
+      effects: (typeof c.effects === 'string' ? JSON.parse(c.effects) : c.effects || []).map(e => ({
+        trigger: e.trigger_type || e.trigger || '',
+        condition: e.condition,
+        cost: e.cost,
+        target: e.target || '',
+        effect_code: e.effect_code || '',
+        params: e.effect_params || e.params || {},
+        duration: e.duration || 'instant',
+        scope: e.scope || '',
+        desc_zh: e.description_zh || e.desc_zh || '',
+        desc_en: e.description_en || e.desc_en || '',
+      }))
+    };
+  }
 
   /* ── Auto Code Generation ── */
   function generateCode(series, faction, style) {
@@ -371,14 +400,21 @@
     return `${prefix}-${next}`;
   }
 
-  function updateCodePreview() {
-    const series = el('f_series').value;
-    const faction = el('f_faction').value;
-    const style = el('f_style').value;
+  async function updateCodePreview() {
     if (editingId) {
       const c = cards.find(x => x.id === editingId);
       el('codePreview').textContent = c?.code || '—';
-    } else {
+      return;
+    }
+    const series = el('f_series').value;
+    const faction = el('f_faction').value;
+    const style = el('f_style').value;
+    try {
+      const res = await adminFetch(`/api/cards/next-code?series=${series}&faction=${faction}&style=${style}`);
+      const data = await res.json();
+      if (data.success) el('codePreview').textContent = data.data.nextCode;
+      else el('codePreview').textContent = generateCode(series, faction, style);
+    } catch {
       el('codePreview').textContent = generateCode(series, faction, style);
     }
   }
@@ -471,14 +507,14 @@
 
   function collectForm() {
     return {
-      id: editingId || crypto.randomUUID(),
-      code: editingId ? (cards.find(c => c.id === editingId)?.code || '') : generateCode(el('f_series').value, el('f_faction').value, el('f_style').value),
+      id: editingId || null,
       series: el('f_series').value,
       name_zh: el('f_name_zh').value.trim(),
       name_en: el('f_name_en').value.trim(),
       faction: el('f_faction').value,
       style: el('f_style').value,
       type: el('f_type').value,
+      card_type: el('f_type').value,
       slot: el('f_slot').value,
       is_unique: el('f_is_unique').checked,
       level: intVal('f_level'),
@@ -521,18 +557,47 @@
     return errors;
   }
 
-  function saveCard() {
+  async function saveCard() {
     const data = collectForm();
     const errors = validate(data);
     if (errors.length) { alert('驗證錯誤：\n' + errors.join('\n')); return; }
-    const idx = cards.findIndex(c => c.id === data.id);
-    if (idx >= 0) cards[idx] = data;
-    else cards.push(data);
-    editingId = data.id;
-    saveCards();
-    updateCodePreview();
-    renderList();
-    alert('已儲存 — 代碼：' + data.code);
+
+    // Map effects to API format
+    const apiEffects = (data.effects || []).map((e, i) => ({
+      trigger_type: e.trigger,
+      condition: e.condition,
+      cost: e.cost,
+      target: e.target,
+      effect_code: e.effect_code,
+      effect_params: e.params || {},
+      duration: e.duration,
+      scope: e.scope,
+      description_zh: e.desc_zh,
+      description_en: e.desc_en,
+      sort_order: i
+    }));
+
+    const body = { ...data, effects: apiEffects };
+
+    try {
+      const isNew = !editingId;
+      const res = await adminFetch(
+        isNew ? '/api/cards' : `/api/cards/${editingId}`,
+        { method: isNew ? 'POST' : 'PUT', body: JSON.stringify(body) }
+      );
+      const result = await res.json();
+      if (result.success) {
+        editingId = result.data.id;
+        await loadCards();
+        renderList();
+        updateCodePreview();
+        alert('已儲存 — 代碼：' + result.data.code);
+      } else {
+        alert('儲存失敗：' + (result.error || '未知錯誤'));
+      }
+    } catch (err) {
+      alert('儲存失敗：' + err.message);
+    }
   }
 
   function saveAsNew() {
@@ -541,11 +606,23 @@
     alert('已切換為新卡模式，按儲存即可建立');
   }
 
-  function deleteCard() {
+  async function deleteCard() {
     if (!editingId) return;
     if (!confirm('確定要刪除這張卡片嗎？')) return;
-    cards = cards.filter(c => c.id !== editingId);
-    saveCards(); clearForm(); renderList();
+    try {
+      const res = await adminFetch(`/api/cards/${editingId}`, { method: 'DELETE' });
+      const result = await res.json();
+      if (result.success) {
+        await loadCards();
+        clearForm();
+        renderList();
+        alert('已刪除');
+      } else {
+        alert('刪除失敗：' + result.error);
+      }
+    } catch (err) {
+      alert('刪除失敗：' + err.message);
+    }
   }
 
   function newCard() { clearForm(); el('f_name_zh').focus(); }
@@ -1127,24 +1204,38 @@
   }
 
   /* ── Import / Export ── */
-  function exportJSON() {
-    if (!cards.length) { alert('沒有卡片可匯出'); return; }
-    const blob = new Blob([JSON.stringify(cards, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `card_definitions_${new Date().toISOString().slice(0,10)}.json`; a.click();
+  async function exportJSON() {
+    try {
+      const res = await adminFetch('/api/cards/export');
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = `card_definitions_${new Date().toISOString().slice(0,10)}.json`; a.click();
+    } catch (err) { alert('匯出失敗：' + err.message); }
   }
   function importJSON() { el('importFile').click(); }
-  function handleImport(e) {
+  async function handleImport(e) {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(ev) {
+    reader.onload = async function(ev) {
       try {
-        const data = JSON.parse(ev.target.result);
+        let data = JSON.parse(ev.target.result);
+        // Support both array format and {cards:[...]} format
+        if (data.cards && Array.isArray(data.cards)) data = data.cards;
         if (!Array.isArray(data)) { alert('JSON 格式錯誤：需要是陣列'); return; }
-        const mode = confirm(`匯入 ${data.length} 張卡片。\n\n確定 = 合併\n取消 = 覆蓋`);
-        if (mode) { const exist = new Set(cards.map(c => c.code)); const n = data.filter(c => !exist.has(c.code)); cards = cards.concat(n); alert(`合併完成，新增 ${n.length} 張`); }
-        else { cards = data; alert(`已覆蓋，共 ${cards.length} 張`); }
-        saveCards(); renderList();
+
+        const res = await adminFetch('/api/cards/import', {
+          method: 'POST',
+          body: JSON.stringify({ cards: data })
+        });
+        const result = await res.json();
+        if (result.success) {
+          alert(`匯入完成：成功 ${result.data.success} 張，失敗 ${result.data.failed} 張${result.data.errors.length ? '\n' + result.data.errors.join('\n') : ''}`);
+          await loadCards();
+          renderList();
+        } else {
+          alert('匯入失敗：' + result.error);
+        }
       } catch (err) { alert('JSON 解析失敗：' + err.message); }
     };
     reader.readAsText(file); e.target.value = '';

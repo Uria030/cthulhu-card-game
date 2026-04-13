@@ -89,6 +89,13 @@
 </head>
 <body>
 
+  <nav class="admin-nav">
+    <span class="nav-title">管理後台</span>
+    <span style="flex:1"></span>
+    <span id="nav-user" style="font-size:0.8125rem;color:var(--text-secondary);margin-right:0.75rem;"></span>
+    <button onclick="adminLogout()" class="btn" style="font-size:0.75rem;padding:0.3rem 0.75rem;">登出</button>
+  </nav>
+
   <div class="container">
     <div class="hero">
       <h1>Admin Module</h1>
@@ -189,5 +196,9 @@
   </div>
 
   <script src="admin-shared.js"></script>
+  <script>
+    const user = JSON.parse(localStorage.getItem('admin_user') || '{}');
+    document.getElementById('nav-user').textContent = user.displayName || user.username || '';
+  </script>
 </body>
 </html>

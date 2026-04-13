@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理員登入 — Admin Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    body { display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .login-container { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 3rem; width: 100%; max-width: 400px; }
+    .login-title { font-family: 'Cinzel', serif; font-size: 1.75rem; color: var(--gold); text-align: center; margin-bottom: 0.5rem; }
+    .login-subtitle { color: var(--text-secondary); text-align: center; margin-bottom: 2rem; font-size: 0.875rem; }
+    .form-group { margin-bottom: 1.5rem; }
+    .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-secondary); }
+    .form-group input { width: 100%; padding: 0.75rem 1rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 1rem; box-sizing: border-box; }
+    .form-group input:focus { outline: none; border-color: var(--gold); }
+    .login-btn { width: 100%; padding: 1rem; background: var(--gold); color: var(--bg-primary); border: none; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .login-btn:hover { background: var(--gold-dim); }
+    .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .error-message { background: rgba(184,76,76,0.2); border: 1px solid var(--danger); color: var(--danger); padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1.5rem; display: none; font-size: 0.875rem; }
+    .error-message.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <h1 class="login-title">管理員登入</h1>
+    <p class="login-subtitle">Admin Login</p>
+    <div id="error-message" class="error-message"></div>
+    <form id="login-form">
+      <div class="form-group">
+        <label for="username">帳號 Username</label>
+        <input type="text" id="username" name="username" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label for="password">密碼 Password</label>
+        <input type="password" id="password" name="password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="login-btn" id="login-btn">登入 Login</button>
+    </form>
+  </div>
+
+  <script src="admin-shared.js"></script>
+  <script>
+    // Check if already logged in
+    (async () => {
+      const token = localStorage.getItem('admin_token');
+      if (token) {
+        try {
+          const res = await fetch(`${ADMIN_API_BASE}/api/auth/me`, { headers: { 'Authorization': `Bearer ${token}` } });
+          if (res.ok) { window.location.href = 'index.html'; return; }
+        } catch {}
+        localStorage.removeItem('admin_token');
+      }
+    })();
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('login-btn');
+      const errorDiv = document.getElementById('error-message');
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      btn.disabled = true;
+      btn.textContent = '登入中...';
+      errorDiv.classList.remove('show');
+
+      try {
+        const res = await fetch(`${ADMIN_API_BASE}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (data.success) {
+          localStorage.setItem('admin_token', data.data.token);
+          localStorage.setItem('admin_user', JSON.stringify(data.data.user));
+          window.location.href = 'index.html';
+        } else {
+          errorDiv.textContent = data.error || '登入失敗';
+          errorDiv.classList.add('show');
+        }
+      } catch {
+        errorDiv.textContent = '無法連接伺服器';
+        errorDiv.classList.add('show');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '登入 Login';
+      }
+    });
+  </script>
+</body>
+</html>

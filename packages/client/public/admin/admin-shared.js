@@ -3,6 +3,60 @@
    遊戲規則常數 & 工具函數
    ======================================== */
 
+// ============================================
+// API 設定
+// ============================================
+const ADMIN_API_BASE = (() => {
+  if (window.location.hostname === 'localhost') return 'http://localhost:3001';
+  return 'https://server-production-fc4f.up.railway.app';
+})();
+window.ADMIN_API_BASE = ADMIN_API_BASE;
+
+// ============================================
+// 認證檢查（在非登入頁面執行）
+// ============================================
+function checkAdminAuth() {
+  if (window.location.pathname.includes('login.html')) return;
+  const token = localStorage.getItem('admin_token');
+  if (!token) { window.location.href = 'login.html'; return; }
+  fetch(`${ADMIN_API_BASE}/api/auth/me`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  }).then(res => { if (!res.ok) throw new Error(); }).catch(() => {
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
+    window.location.href = 'login.html';
+  });
+}
+document.addEventListener('DOMContentLoaded', checkAdminAuth);
+
+// ============================================
+// API 請求輔助函數（自動帶 token）
+// ============================================
+async function adminFetch(url, options = {}) {
+  const token = localStorage.getItem('admin_token');
+  const headers = { 'Content-Type': 'application/json', ...options.headers };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const response = await fetch(`${ADMIN_API_BASE}${url}`, { ...options, headers });
+  if (response.status === 401) {
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
+    window.location.href = 'login.html';
+    throw new Error('Unauthorized');
+  }
+  return response;
+}
+window.adminFetch = adminFetch;
+
+// ============================================
+// 登出函數
+// ============================================
+function adminLogout() {
+  localStorage.removeItem('admin_token');
+  localStorage.removeItem('admin_user');
+  window.location.href = 'login.html';
+}
+window.adminLogout = adminLogout;
+
 const GAME_RULES = {
   DICE_SIDES: 20,
   ATTRIBUTE_MIN: 1,

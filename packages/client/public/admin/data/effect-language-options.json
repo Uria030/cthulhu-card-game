@@ -1,0 +1,696 @@
+{
+  "triggers": {
+    "卡片生命週期": [
+      { "code": "on_play", "zh": "打出時", "en": "On Play" },
+      { "code": "on_commit", "zh": "加值投入時", "en": "On Commit" },
+      { "code": "on_consume", "zh": "消費時", "en": "On Consume" },
+      { "code": "on_enter_play", "zh": "進場時", "en": "On Enter Play" },
+      { "code": "on_leave_play", "zh": "離場時", "en": "On Leave Play" },
+      { "code": "on_draw", "zh": "被抽到時", "en": "On Draw" }
+    ],
+    "檢定相關": [
+      { "code": "on_success", "zh": "檢定成功時", "en": "On Success" },
+      { "code": "on_failure", "zh": "檢定失敗時", "en": "On Failure" },
+      { "code": "on_critical", "zh": "大成功時", "en": "On Critical" },
+      { "code": "on_fumble", "zh": "大失敗時", "en": "On Fumble" }
+    ],
+    "傷害相關": [
+      { "code": "on_take_damage", "zh": "受到傷害時", "en": "On Take Damage" },
+      { "code": "on_take_horror", "zh": "受到恐懼時", "en": "On Take Horror" }
+    ],
+    "交戰與移動": [
+      { "code": "on_engage", "zh": "進入交戰時", "en": "On Engage" },
+      { "code": "on_disengage", "zh": "脫離交戰時", "en": "On Disengage" },
+      { "code": "on_move", "zh": "移動時", "en": "On Move" },
+      { "code": "on_enter_location", "zh": "進入板塊時", "en": "On Enter Location" }
+    ],
+    "敵人相關": [
+      { "code": "on_enemy_spawn", "zh": "敵人出現時", "en": "On Enemy Spawn" },
+      { "code": "on_enemy_defeat", "zh": "敵人被擊敗時", "en": "On Enemy Defeat" },
+      { "code": "on_ally_downed", "zh": "隊友倒地時", "en": "On Ally Downed" }
+    ],
+    "回合節奏": [
+      { "code": "on_turn_start", "zh": "回合開始時", "en": "On Turn Start" },
+      { "code": "on_turn_end", "zh": "回合結束時", "en": "On Turn End" },
+      { "code": "on_enemy_phase", "zh": "敵人階段時", "en": "On Enemy Phase" }
+    ],
+    "行動模式": [
+      { "code": "reaction", "zh": "反應", "en": "Reaction" },
+      { "code": "passive", "zh": "被動", "en": "Passive" },
+      { "code": "free_action", "zh": "免費行動", "en": "Free Action" }
+    ]
+  },
+
+  "conditions": {
+    "交戰相關": [
+      { "code": "while_engaged", "zh": "交戰中", "en": "While Engaged" },
+      { "code": "while_not_engaged", "zh": "未交戰", "en": "While Not Engaged" },
+      { "code": "ally_engaged", "zh": "隊友交戰中", "en": "Ally Engaged" }
+    ],
+    "血量相關": [
+      { "code": "hp_below_half", "zh": "HP 低於一半", "en": "HP Below Half" },
+      { "code": "hp_below_x", "zh": "HP 低於 X", "en": "HP Below X", "has_param": true, "param_type": "number", "param_label_zh": "HP 門檻", "param_label_en": "HP Threshold" },
+      { "code": "san_below_half", "zh": "SAN 低於一半", "en": "SAN Below Half" },
+      { "code": "san_below_x", "zh": "SAN 低於 X", "en": "SAN Below X", "has_param": true, "param_type": "number", "param_label_zh": "SAN 門檻", "param_label_en": "SAN Threshold" }
+    ],
+    "光照相關": [
+      { "code": "in_darkness", "zh": "黑暗中", "en": "In Darkness" },
+      { "code": "in_light", "zh": "光照中", "en": "In Light" },
+      { "code": "in_fire", "zh": "失火中", "en": "In Fire" }
+    ],
+    "時間相關": [
+      { "code": "daytime", "zh": "白天", "en": "Daytime" },
+      { "code": "nighttime", "zh": "夜間", "en": "Nighttime" }
+    ],
+    "卡牌相關": [
+      { "code": "hand_empty", "zh": "手牌為零", "en": "Hand Empty" },
+      { "code": "hand_full", "zh": "手牌達上限", "en": "Hand Full" },
+      { "code": "deck_empty", "zh": "牌庫為空", "en": "Deck Empty" },
+      { "code": "has_weapon", "zh": "有武器", "en": "Has Weapon" },
+      { "code": "has_ally", "zh": "有盟友", "en": "Has Ally" },
+      { "code": "has_item", "zh": "有一般物品", "en": "Has Item" },
+      { "code": "has_arcane_item", "zh": "有魔法物品", "en": "Has Arcane Item" },
+      { "code": "has_weakness", "zh": "有弱點", "en": "Has Weakness" }
+    ],
+    "位置相關": [
+      { "code": "at_location_with_clue", "zh": "板塊有線索", "en": "At Location With Clue" },
+      { "code": "at_location_with_enemy", "zh": "板塊有敵人", "en": "At Location With Enemy" },
+      { "code": "alone_at_location", "zh": "獨自在板塊", "en": "Alone At Location" },
+      { "code": "at_location_with_hidden_clue", "zh": "板塊有隱藏線索", "en": "At Location With Hidden Clue" },
+      { "code": "at_location_with_hidden_info", "zh": "板塊有隱藏資訊", "en": "At Location With Hidden Info" }
+    ]
+  },
+
+  "costs": [
+    { "code": "resource", "zh": "資源", "en": "Resource", "has_amount": true },
+    { "code": "forbidden_insight", "zh": "禁忌洞察", "en": "Forbidden Insight", "has_amount": true },
+    { "code": "faith", "zh": "信仰", "en": "Faith", "has_amount": true },
+    { "code": "elder_sign", "zh": "遠古印記", "en": "Elder Sign", "has_amount": true },
+    { "code": "hp", "zh": "生命值", "en": "HP", "has_amount": true },
+    { "code": "san", "zh": "理智值", "en": "SAN", "has_amount": true },
+    { "code": "discard_hand", "zh": "棄手牌", "en": "Discard Hand", "has_amount": true },
+    { "code": "discard_specific", "zh": "棄指定牌", "en": "Discard Specific", "has_amount": false },
+    { "code": "exhaust_self", "zh": "橫置此卡", "en": "Exhaust Self", "has_amount": false },
+    { "code": "exhaust_other", "zh": "橫置其他卡", "en": "Exhaust Other", "has_amount": false },
+    { "code": "ammo", "zh": "彈藥", "en": "Ammo", "has_amount": true },
+    { "code": "uses", "zh": "使用次數", "en": "Uses", "has_amount": true },
+    { "code": "clue", "zh": "線索", "en": "Clue", "has_amount": true },
+    { "code": "action_point", "zh": "行動點", "en": "Action Point", "has_amount": true },
+    { "code": "doom", "zh": "毀滅標記", "en": "Doom", "has_amount": true }
+  ],
+
+  "targets": {
+    "調查員目標": [
+      { "code": "self", "zh": "自己", "en": "Self" },
+      { "code": "ally_one", "zh": "一位隊友", "en": "One Ally" },
+      { "code": "ally_all", "zh": "同板塊所有隊友", "en": "All Allies at Location" },
+      { "code": "investigator_any", "zh": "任一調查員", "en": "Any Investigator" },
+      { "code": "investigator_all", "zh": "所有調查員", "en": "All Investigators" }
+    ],
+    "敵人目標": [
+      { "code": "enemy_one", "zh": "一個敵人", "en": "One Enemy" },
+      { "code": "enemy_all_location", "zh": "同板塊所有敵人", "en": "All Enemies at Location" },
+      { "code": "enemy_engaged", "zh": "交戰中的敵人", "en": "Engaged Enemy" },
+      { "code": "enemy_non_elite", "zh": "精英以下敵人", "en": "Non-Elite Enemy" },
+      { "code": "enemy_normal", "zh": "普通敵人", "en": "Normal Enemy" },
+      { "code": "enemy_elite", "zh": "精英以上敵人", "en": "Elite Enemy" }
+    ],
+    "卡片與場景目標": [
+      { "code": "ally_card", "zh": "盟友卡", "en": "Ally Card" },
+      { "code": "asset_card", "zh": "資產卡", "en": "Asset Card" },
+      { "code": "location", "zh": "地圖板塊", "en": "Location" }
+    ]
+  },
+
+  "effect_codes": {
+    "傷害類": [
+      { "code": "deal_damage", "zh": "造成傷害", "en": "Deal Damage" },
+      { "code": "deal_horror", "zh": "造成恐懼", "en": "Deal Horror" }
+    ],
+    "恢復類": [
+      { "code": "heal_hp", "zh": "恢復 HP", "en": "Heal HP" },
+      { "code": "heal_san", "zh": "恢復 SAN", "en": "Heal SAN" },
+      { "code": "restore_hp_max", "zh": "恢復 HP 上限", "en": "Restore HP Max" },
+      { "code": "restore_san_max", "zh": "恢復 SAN 上限", "en": "Restore SAN Max" },
+      { "code": "transfer_damage", "zh": "轉移傷害", "en": "Transfer Damage" },
+      { "code": "transfer_horror", "zh": "轉移恐懼", "en": "Transfer Horror" }
+    ],
+    "卡牌操作類": [
+      { "code": "draw_card", "zh": "抽牌", "en": "Draw Card" },
+      { "code": "reveal_top", "zh": "翻開牌庫頂", "en": "Reveal Top" },
+      { "code": "search_deck", "zh": "搜尋牌庫", "en": "Search Deck" },
+      { "code": "retrieve_card", "zh": "回收卡片", "en": "Retrieve Card" },
+      { "code": "return_to_deck", "zh": "洗回牌庫", "en": "Return to Deck" },
+      { "code": "discard_card", "zh": "棄牌", "en": "Discard Card" },
+      { "code": "shuffle_deck", "zh": "洗牌庫", "en": "Shuffle Deck" },
+      { "code": "remove_from_game", "zh": "移除出遊戲", "en": "Remove from Game" }
+    ],
+    "資源類": [
+      { "code": "gain_resource", "zh": "獲得資源", "en": "Gain Resource" },
+      { "code": "spend_resource", "zh": "花費資源", "en": "Spend Resource" },
+      { "code": "steal_resource", "zh": "偷取資源", "en": "Steal Resource" },
+      { "code": "transfer_resource", "zh": "轉移資源", "en": "Transfer Resource" }
+    ],
+    "移動類": [
+      { "code": "move_investigator", "zh": "移動調查員", "en": "Move Investigator" },
+      { "code": "move_enemy", "zh": "移動敵人", "en": "Move Enemy" },
+      { "code": "swap_position", "zh": "交換位置", "en": "Swap Position" },
+      { "code": "place_enemy", "zh": "放置敵人", "en": "Place Enemy" },
+      { "code": "jump", "zh": "跳躍移動", "en": "Jump" }
+    ],
+    "狀態類": [
+      { "code": "engage_enemy", "zh": "進入交戰", "en": "Engage Enemy" },
+      { "code": "disengage_enemy", "zh": "脫離交戰", "en": "Disengage Enemy" },
+      { "code": "exhaust_card", "zh": "橫置卡片", "en": "Exhaust Card" },
+      { "code": "ready_card", "zh": "轉正卡片", "en": "Ready Card" },
+      { "code": "stun_enemy", "zh": "絆倒敵人", "en": "Stun Enemy" },
+      { "code": "add_status", "zh": "添加狀態", "en": "Add Status" },
+      { "code": "remove_status", "zh": "移除狀態", "en": "Remove Status" }
+    ],
+    "檢定類": [
+      { "code": "make_test", "zh": "進行檢定", "en": "Make Test" },
+      { "code": "modify_test", "zh": "修改檢定值", "en": "Modify Test" },
+      { "code": "reroll", "zh": "重擲", "en": "Reroll" },
+      { "code": "auto_success", "zh": "自動成功", "en": "Auto Success" },
+      { "code": "auto_fail", "zh": "自動失敗", "en": "Auto Fail" }
+    ],
+    "戰鬥類": [
+      { "code": "attack", "zh": "攻擊", "en": "Attack" },
+      { "code": "evade", "zh": "閃避", "en": "Evade" },
+      { "code": "taunt", "zh": "嘲諷", "en": "Taunt" },
+      { "code": "counterattack", "zh": "反擊", "en": "Counterattack" },
+      { "code": "extra_attack", "zh": "額外攻擊", "en": "Extra Attack" }
+    ],
+    "環境類": [
+      { "code": "place_clue", "zh": "放置線索", "en": "Place Clue" },
+      { "code": "discover_clue", "zh": "發現線索", "en": "Discover Clue" },
+      { "code": "place_doom", "zh": "放置毀滅標記", "en": "Place Doom" },
+      { "code": "remove_doom", "zh": "移除毀滅標記", "en": "Remove Doom" },
+      { "code": "seal_gate", "zh": "封印次元門", "en": "Seal Gate" },
+      { "code": "spawn_enemy", "zh": "生成敵人", "en": "Spawn Enemy" },
+      { "code": "remove_enemy", "zh": "移除敵人", "en": "Remove Enemy" },
+      { "code": "execute_enemy", "zh": "斬殺敵人", "en": "Execute Enemy" },
+      { "code": "reveal_tile", "zh": "翻開板塊", "en": "Reveal Tile" },
+      { "code": "place_tile", "zh": "放置板塊", "en": "Place Tile" },
+      { "code": "remove_tile", "zh": "移除板塊", "en": "Remove Tile" },
+      { "code": "place_haunting", "zh": "放置鬧鬼", "en": "Place Haunting" },
+      { "code": "remove_haunting", "zh": "移除鬧鬼", "en": "Remove Haunting" },
+      { "code": "advance_act", "zh": "推進行動牌堆", "en": "Advance Act" },
+      { "code": "advance_agenda", "zh": "推進議程牌堆", "en": "Advance Agenda" },
+      { "code": "connect_tiles", "zh": "建立連接", "en": "Connect Tiles" },
+      { "code": "disconnect_tiles", "zh": "斷開連接", "en": "Disconnect Tiles" }
+    ],
+    "光照類": [
+      { "code": "create_light", "zh": "創造光源", "en": "Create Light" },
+      { "code": "extinguish_light", "zh": "熄滅光源", "en": "Extinguish Light" },
+      { "code": "create_darkness", "zh": "製造黑暗", "en": "Create Darkness" },
+      { "code": "remove_darkness", "zh": "移除黑暗", "en": "Remove Darkness" },
+      { "code": "create_fire", "zh": "引發火災", "en": "Create Fire" },
+      { "code": "extinguish_fire", "zh": "撲滅火災", "en": "Extinguish Fire" }
+    ],
+    "特殊類": [
+      { "code": "add_keyword", "zh": "添加詞綴", "en": "Add Keyword" },
+      { "code": "remove_keyword", "zh": "移除詞綴", "en": "Remove Keyword" },
+      { "code": "add_bless", "zh": "放入祝福", "en": "Add Bless" },
+      { "code": "add_curse", "zh": "放入詛咒", "en": "Add Curse" },
+      { "code": "remove_bless", "zh": "移除祝福", "en": "Remove Bless" },
+      { "code": "remove_curse", "zh": "移除詛咒", "en": "Remove Curse" },
+      { "code": "look_chaos_bag", "zh": "窺探混沌袋", "en": "Look Chaos Bag" },
+      { "code": "manipulate_chaos_bag", "zh": "操控混沌袋", "en": "Manipulate Chaos Bag" }
+    ]
+  },
+
+  "effect_params": {
+    "deal_damage": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "傷害數值", "en": "Damage Amount", "min": 1, "max": 10 },
+        { "key": "element", "type": "select", "zh": "元素屬性", "en": "Element", "options_ref": "elements" }
+      ],
+      "optional": [
+        { "key": "direct", "type": "checkbox", "zh": "直擊（不可分配給盟友）", "en": "Direct (cannot assign to allies)" },
+        { "key": "area", "type": "number", "zh": "廣域傷害值", "en": "Area Damage", "min": 1, "max": 10 }
+      ]
+    },
+    "deal_horror": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "恐懼數值", "en": "Horror Amount", "min": 1, "max": 10 }
+      ],
+      "optional": [
+        { "key": "direct", "type": "checkbox", "zh": "直擊", "en": "Direct" },
+        { "key": "area", "type": "number", "zh": "廣域恐懼值", "en": "Area Horror", "min": 1, "max": 10 }
+      ]
+    },
+    "heal_hp": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "恢復數值", "en": "Heal Amount", "min": 1, "max": 10 }
+      ]
+    },
+    "heal_san": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "恢復數值", "en": "Heal Amount", "min": 1, "max": 10 }
+      ]
+    },
+    "restore_hp_max": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "恢復上限數值", "en": "Restore Amount", "min": 1, "max": 5 }
+      ]
+    },
+    "restore_san_max": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "恢復上限數值", "en": "Restore Amount", "min": 1, "max": 5 }
+      ]
+    },
+    "transfer_damage": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "轉移數值", "en": "Transfer Amount", "min": 1, "max": 10 },
+        { "key": "from", "type": "select", "zh": "來源", "en": "From", "options_ref": "targets_flat" },
+        { "key": "to", "type": "select", "zh": "目標", "en": "To", "options_ref": "targets_flat" }
+      ]
+    },
+    "transfer_horror": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "轉移數值", "en": "Transfer Amount", "min": 1, "max": 10 },
+        { "key": "from", "type": "select", "zh": "來源", "en": "From", "options_ref": "targets_flat" },
+        { "key": "to", "type": "select", "zh": "目標", "en": "To", "options_ref": "targets_flat" }
+      ]
+    },
+    "draw_card": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "抽牌數", "en": "Draw Count", "min": 1, "max": 5 }
+      ]
+    },
+    "reveal_top": {
+      "required": [
+        { "key": "count", "type": "number", "zh": "翻開張數", "en": "Reveal Count", "min": 1, "max": 5 }
+      ]
+    },
+    "search_deck": {
+      "required": [
+        { "key": "count", "type": "number", "zh": "搜尋張數", "en": "Search Count", "min": 1, "max": 10 },
+        { "key": "on_found", "type": "select", "zh": "找到後", "en": "On Found", "options": [
+          { "value": "to_hand", "zh": "加入手牌", "en": "To Hand" },
+          { "value": "to_play", "zh": "直接進場", "en": "To Play" },
+          { "value": "to_engaged", "zh": "放入交戰區", "en": "To Engaged" }
+        ]},
+        { "key": "on_remaining", "type": "select", "zh": "剩餘處理", "en": "On Remaining", "options": [
+          { "value": "shuffle_back", "zh": "洗回牌庫", "en": "Shuffle Back" },
+          { "value": "to_bottom", "zh": "放到牌庫底", "en": "To Bottom" },
+          { "value": "to_discard", "zh": "棄到棄牌堆", "en": "To Discard" }
+        ]}
+      ],
+      "optional": [
+        { "key": "filter.keyword", "type": "text", "zh": "篩選-關鍵字", "en": "Filter Keyword" },
+        { "key": "filter.card_type", "type": "select", "zh": "篩選-卡片類型", "en": "Filter Card Type", "options": [
+          { "value": "asset", "zh": "資產", "en": "Asset" },
+          { "value": "event", "zh": "事件", "en": "Event" },
+          { "value": "ally", "zh": "盟友", "en": "Ally" },
+          { "value": "skill", "zh": "技能", "en": "Skill" }
+        ]},
+        { "key": "filter.faction", "type": "select", "zh": "篩選-陣營", "en": "Filter Faction", "options_ref": "factions" },
+        { "key": "filter.cost_max", "type": "number", "zh": "篩選-費用上限", "en": "Filter Cost Max", "min": 0, "max": 6 }
+      ]
+    },
+    "retrieve_card": {
+      "required": [
+        { "key": "from", "type": "select", "zh": "來源", "en": "From", "options": [
+          { "value": "discard", "zh": "棄牌堆", "en": "Discard Pile" },
+          { "value": "removed", "zh": "移除區", "en": "Removed" }
+        ]}
+      ],
+      "optional": [
+        { "key": "filter.keyword", "type": "text", "zh": "篩選-關鍵字", "en": "Filter Keyword" },
+        { "key": "filter.card_type", "type": "select", "zh": "篩選-卡片類型", "en": "Filter Card Type", "options": [
+          { "value": "asset", "zh": "資產", "en": "Asset" },
+          { "value": "event", "zh": "事件", "en": "Event" },
+          { "value": "ally", "zh": "盟友", "en": "Ally" },
+          { "value": "skill", "zh": "技能", "en": "Skill" }
+        ]}
+      ]
+    },
+    "return_to_deck": {
+      "required": [
+        { "key": "count", "type": "number", "zh": "洗回張數", "en": "Return Count", "min": 1, "max": 5 }
+      ]
+    },
+    "discard_card": {
+      "required": [
+        { "key": "count", "type": "number", "zh": "棄牌數", "en": "Discard Count", "min": 1, "max": 5 }
+      ],
+      "optional": [
+        { "key": "random", "type": "checkbox", "zh": "隨機棄牌", "en": "Random Discard" }
+      ]
+    },
+    "shuffle_deck": {},
+    "remove_from_game": {},
+    "gain_resource": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "數量", "en": "Amount", "min": 1, "max": 10 },
+        { "key": "type", "type": "select", "zh": "資源類型", "en": "Resource Type", "options_ref": "resource_types" }
+      ]
+    },
+    "spend_resource": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "數量", "en": "Amount", "min": 1, "max": 10 },
+        { "key": "type", "type": "select", "zh": "資源類型", "en": "Resource Type", "options_ref": "resource_types" }
+      ]
+    },
+    "steal_resource": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "數量", "en": "Amount", "min": 1, "max": 10 },
+        { "key": "type", "type": "select", "zh": "資源類型", "en": "Resource Type", "options_ref": "resource_types" }
+      ]
+    },
+    "transfer_resource": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "數量", "en": "Amount", "min": 1, "max": 10 },
+        { "key": "type", "type": "select", "zh": "資源類型", "en": "Resource Type", "options_ref": "resource_types" }
+      ]
+    },
+    "move_investigator": {
+      "required": [
+        { "key": "distance", "type": "number", "zh": "移動距離", "en": "Distance", "min": 1, "max": 5 }
+      ],
+      "optional": [
+        { "key": "ignore_enemy", "type": "checkbox", "zh": "無視交戰", "en": "Ignore Enemy" }
+      ]
+    },
+    "move_enemy": {
+      "required": [
+        { "key": "distance", "type": "number", "zh": "移動距離", "en": "Distance", "min": 1, "max": 5 },
+        { "key": "direction", "type": "select", "zh": "方向", "en": "Direction", "options": [
+          { "value": "away", "zh": "遠離", "en": "Away" },
+          { "value": "toward", "zh": "靠近", "en": "Toward" }
+        ]}
+      ]
+    },
+    "swap_position": {},
+    "place_enemy": {
+      "required": [
+        { "key": "enemy_id", "type": "text", "zh": "敵人 ID", "en": "Enemy ID" }
+      ]
+    },
+    "jump": {
+      "required": [
+        { "key": "distance", "type": "number", "zh": "跳躍距離", "en": "Jump Distance", "min": 1, "max": 5 }
+      ]
+    },
+    "engage_enemy": {},
+    "disengage_enemy": {},
+    "exhaust_card": {},
+    "ready_card": {},
+    "stun_enemy": {},
+    "add_status": {
+      "required": [
+        { "key": "status", "type": "select", "zh": "狀態類型", "en": "Status Type", "options_ref": "statuses" },
+        { "key": "value", "type": "number", "zh": "狀態數值", "en": "Status Value", "min": 1, "max": 10 }
+      ]
+    },
+    "remove_status": {
+      "required": [
+        { "key": "status", "type": "select", "zh": "狀態類型", "en": "Status Type", "options_ref": "statuses" }
+      ]
+    },
+    "make_test": {
+      "required": [
+        { "key": "attribute", "type": "select", "zh": "檢定屬性", "en": "Test Attribute", "options_ref": "attributes" },
+        { "key": "difficulty", "type": "number", "zh": "難度 (DC)", "en": "Difficulty (DC)", "min": 1, "max": 30 }
+      ],
+      "optional": [
+        { "key": "modifier", "type": "number", "zh": "修正值", "en": "Modifier", "min": -5, "max": 5 }
+      ]
+    },
+    "modify_test": {
+      "required": [
+        { "key": "modifier", "type": "number", "zh": "修正值", "en": "Modifier", "min": -5, "max": 5 }
+      ],
+      "optional": [
+        { "key": "attribute", "type": "select", "zh": "限定屬性", "en": "Attribute Filter", "options_ref": "attributes" }
+      ]
+    },
+    "reroll": {
+      "optional": [
+        { "key": "keep_better", "type": "checkbox", "zh": "保留較佳結果", "en": "Keep Better" }
+      ]
+    },
+    "auto_success": {},
+    "auto_fail": {},
+    "attack": {
+      "optional": [
+        { "key": "check_attribute", "type": "select", "zh": "檢定屬性", "en": "Check Attribute", "options_ref": "attributes" },
+        { "key": "check_modifier", "type": "number", "zh": "檢定修正", "en": "Check Modifier", "min": -5, "max": 5 }
+      ]
+    },
+    "evade": {
+      "optional": [
+        { "key": "check_modifier", "type": "number", "zh": "檢定修正", "en": "Check Modifier", "min": -5, "max": 5 }
+      ]
+    },
+    "taunt": {},
+    "counterattack": {
+      "required": [
+        { "key": "damage", "type": "number", "zh": "反擊傷害", "en": "Counter Damage", "min": 1, "max": 10 }
+      ],
+      "optional": [
+        { "key": "element", "type": "select", "zh": "元素屬性", "en": "Element", "options_ref": "elements" }
+      ]
+    },
+    "extra_attack": {},
+    "place_clue": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "線索數", "en": "Clue Count", "min": 1, "max": 5 }
+      ]
+    },
+    "discover_clue": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "線索數", "en": "Clue Count", "min": 1, "max": 5 }
+      ]
+    },
+    "place_doom": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "毀滅標記數", "en": "Doom Count", "min": 1, "max": 5 }
+      ]
+    },
+    "remove_doom": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "移除數", "en": "Remove Count", "min": 1, "max": 5 }
+      ]
+    },
+    "seal_gate": {},
+    "spawn_enemy": {
+      "required": [
+        { "key": "enemy_id", "type": "text", "zh": "敵人 ID", "en": "Enemy ID" }
+      ],
+      "optional": [
+        { "key": "location", "type": "text", "zh": "板塊位置", "en": "Location" }
+      ]
+    },
+    "remove_enemy": {},
+    "execute_enemy": {
+      "optional": [
+        { "key": "hp_threshold", "type": "number", "zh": "HP 門檻（低於才能斬殺）", "en": "HP Threshold", "min": 1, "max": 20 }
+      ]
+    },
+    "reveal_tile": {},
+    "place_tile": {
+      "required": [
+        { "key": "tile_id", "type": "text", "zh": "板塊 ID", "en": "Tile ID" }
+      ]
+    },
+    "remove_tile": {},
+    "place_haunting": {
+      "required": [
+        { "key": "enemy_id", "type": "text", "zh": "鬧鬼敵人 ID", "en": "Haunting Enemy ID" }
+      ]
+    },
+    "remove_haunting": {},
+    "advance_act": {},
+    "advance_agenda": {},
+    "connect_tiles": {
+      "required": [
+        { "key": "tile_a", "type": "text", "zh": "板塊 A", "en": "Tile A" },
+        { "key": "tile_b", "type": "text", "zh": "板塊 B", "en": "Tile B" }
+      ]
+    },
+    "disconnect_tiles": {
+      "required": [
+        { "key": "tile_a", "type": "text", "zh": "板塊 A", "en": "Tile A" },
+        { "key": "tile_b", "type": "text", "zh": "板塊 B", "en": "Tile B" }
+      ]
+    },
+    "create_light": {
+      "required": [
+        { "key": "radius", "type": "number", "zh": "照明半徑", "en": "Light Radius", "min": 1, "max": 5 }
+      ],
+      "optional": [
+        { "key": "duration", "type": "number", "zh": "持續回合數", "en": "Duration Rounds", "min": 1, "max": 10 }
+      ]
+    },
+    "extinguish_light": {},
+    "create_darkness": {},
+    "remove_darkness": {},
+    "create_fire": {},
+    "extinguish_fire": {},
+    "add_keyword": {
+      "required": [
+        { "key": "keyword", "type": "text", "zh": "詞綴名稱", "en": "Keyword" }
+      ]
+    },
+    "remove_keyword": {
+      "required": [
+        { "key": "keyword", "type": "text", "zh": "詞綴名稱", "en": "Keyword" }
+      ]
+    },
+    "add_bless": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "祝福數", "en": "Bless Count", "min": 1, "max": 5 }
+      ]
+    },
+    "add_curse": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "詛咒數", "en": "Curse Count", "min": 1, "max": 5 }
+      ]
+    },
+    "remove_bless": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "移除數", "en": "Remove Count", "min": 1, "max": 5 }
+      ]
+    },
+    "remove_curse": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "移除數", "en": "Remove Count", "min": 1, "max": 5 }
+      ]
+    },
+    "look_chaos_bag": {
+      "required": [
+        { "key": "count", "type": "number", "zh": "窺探數", "en": "Look Count", "min": 1, "max": 5 }
+      ]
+    },
+    "manipulate_chaos_bag": {
+      "required": [
+        { "key": "action", "type": "select", "zh": "操作方式", "en": "Action", "options": [
+          { "value": "remove", "zh": "移除", "en": "Remove" },
+          { "value": "replace", "zh": "替換", "en": "Replace" },
+          { "value": "reorder", "zh": "重排", "en": "Reorder" }
+        ]}
+      ],
+      "optional": [
+        { "key": "token_type", "type": "text", "zh": "標記類型", "en": "Token Type" }
+      ]
+    }
+  },
+
+  "durations": {
+    "即時": [
+      { "code": "instant", "zh": "即時", "en": "Instant" }
+    ],
+    "回合內": [
+      { "code": "until_end_of_turn", "zh": "到回合結束", "en": "Until End of Turn" },
+      { "code": "until_end_of_round", "zh": "到輪結束", "en": "Until End of Round" },
+      { "code": "until_next_turn", "zh": "到下回合開始", "en": "Until Next Turn" }
+    ],
+    "場景內": [
+      { "code": "until_end_of_scenario", "zh": "到場景結束", "en": "Until End of Scenario" },
+      { "code": "x_rounds", "zh": "X 回合", "en": "X Rounds", "has_param": true, "param_type": "number", "param_label_zh": "回合數", "param_label_en": "Rounds" },
+      { "code": "until_triggered", "zh": "到條件觸發", "en": "Until Triggered" }
+    ],
+    "持續性": [
+      { "code": "permanent", "zh": "永久", "en": "Permanent" },
+      { "code": "while_in_play", "zh": "在場期間", "en": "While In Play" }
+    ],
+    "使用限制": [
+      { "code": "once_per_turn", "zh": "每回合一次", "en": "Once Per Turn", "has_scope": true },
+      { "code": "once_per_round", "zh": "每輪一次", "en": "Once Per Round", "has_scope": true },
+      { "code": "once_per_scenario", "zh": "每場景一次", "en": "Once Per Scenario", "has_scope": true }
+    ],
+    "休息相關": [
+      { "code": "until_short_rest", "zh": "到短休息", "en": "Until Short Rest" },
+      { "code": "until_long_rest", "zh": "到長休息", "en": "Until Long Rest" }
+    ]
+  },
+
+  "scopes": [
+    { "code": "per_investigator", "zh": "每位調查員", "en": "Per Investigator" },
+    { "code": "per_team", "zh": "全團隊", "en": "Per Team" }
+  ],
+
+  "elements": [
+    { "code": "physical", "zh": "物理", "en": "Physical" },
+    { "code": "fire", "zh": "火", "en": "Fire" },
+    { "code": "ice", "zh": "冰", "en": "Ice" },
+    { "code": "lightning", "zh": "電", "en": "Lightning" },
+    { "code": "arcane", "zh": "神秘", "en": "Arcane" }
+  ],
+
+  "statuses": {
+    "負面狀態": [
+      { "code": "poison", "zh": "中毒", "en": "Poison" },
+      { "code": "bleed", "zh": "流血", "en": "Bleed" },
+      { "code": "burning", "zh": "燃燒", "en": "Burning" },
+      { "code": "frozen", "zh": "冷凍", "en": "Frozen" },
+      { "code": "darkness", "zh": "黑暗", "en": "Darkness" },
+      { "code": "disarm", "zh": "繳械", "en": "Disarm" },
+      { "code": "doom_status", "zh": "毀滅", "en": "Doom" },
+      { "code": "fatigue", "zh": "疲勞", "en": "Fatigue" },
+      { "code": "madness", "zh": "發瘋", "en": "Madness" },
+      { "code": "marked", "zh": "標記", "en": "Marked" },
+      { "code": "vulnerable", "zh": "脆弱", "en": "Vulnerable" },
+      { "code": "silence", "zh": "沈默", "en": "Silence" },
+      { "code": "weakness_status", "zh": "無力", "en": "Weakness" },
+      { "code": "wet", "zh": "潮濕", "en": "Wet" },
+      { "code": "weakened", "zh": "弱化", "en": "Weakened" }
+    ],
+    "正面狀態": [
+      { "code": "empowered", "zh": "強化", "en": "Empowered" },
+      { "code": "armor", "zh": "護甲", "en": "Armor" },
+      { "code": "ward", "zh": "護盾", "en": "Ward" },
+      { "code": "stealth", "zh": "隱蔽", "en": "Stealth" },
+      { "code": "haste", "zh": "加速", "en": "Haste" },
+      { "code": "regeneration", "zh": "再生", "en": "Regeneration" }
+    ]
+  },
+
+  "subtypes": [
+    { "code": "item", "zh": "一般物品", "en": "Item" },
+    { "code": "arcane_item", "zh": "魔法物品", "en": "Arcane Item" },
+    { "code": "weapon", "zh": "武器", "en": "Weapon" },
+    { "code": "weapon_melee", "zh": "近戰武器", "en": "Melee Weapon" },
+    { "code": "weapon_ranged", "zh": "遠程武器", "en": "Ranged Weapon" },
+    { "code": "weapon_arcane", "zh": "法術武器", "en": "Arcane Weapon" },
+    { "code": "consumable", "zh": "消耗品", "en": "Consumable" },
+    { "code": "light_source", "zh": "光源", "en": "Light Source" }
+  ],
+
+  "resource_types": [
+    { "code": "resource", "zh": "資源", "en": "Resource" },
+    { "code": "forbidden_insight", "zh": "禁忌洞察", "en": "Forbidden Insight" },
+    { "code": "faith", "zh": "信仰", "en": "Faith" },
+    { "code": "elder_sign", "zh": "遠古印記", "en": "Elder Sign" }
+  ],
+
+  "factions": [
+    { "code": "E", "zh": "號令", "en": "Herald" },
+    { "code": "I", "zh": "深淵", "en": "Abyss" },
+    { "code": "S", "zh": "鐵證", "en": "Witness" },
+    { "code": "N", "zh": "天啟", "en": "Oracle" },
+    { "code": "T", "zh": "解析", "en": "Cipher" },
+    { "code": "F", "zh": "聖燼", "en": "Ember" },
+    { "code": "J", "zh": "鐵壁", "en": "Bastion" },
+    { "code": "P", "zh": "流影", "en": "Flux" },
+    { "code": "neutral", "zh": "中立", "en": "Neutral" }
+  ],
+
+  "attributes": [
+    { "code": "strength", "zh": "力量", "en": "Strength" },
+    { "code": "agility", "zh": "敏捷", "en": "Agility" },
+    { "code": "constitution", "zh": "體質", "en": "Constitution" },
+    { "code": "intellect", "zh": "智力", "en": "Intellect" },
+    { "code": "willpower", "zh": "意志", "en": "Willpower" },
+    { "code": "perception", "zh": "感知", "en": "Perception" },
+    { "code": "charisma", "zh": "魅力", "en": "Charisma" }
+  ],
+
+  "damage_keywords": [
+    { "code": "direct", "zh": "直擊", "en": "Direct" },
+    { "code": "area", "zh": "廣域", "en": "Area" }
+  ]
+}

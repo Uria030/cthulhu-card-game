@@ -141,7 +141,7 @@
       </div>
       <div class="filter-row">
         <select id="filterType"><option value="">全部類別</option></select>
-        <select id="filterCombatStyle"><option value="">全部風格</option></select>
+        <select id="filterCombatStyle"><option value="">全部戰鬥風格</option></select>
       </div>
       <div id="cardList"></div>
       <div class="list-stats" id="listStats">0 張卡片</div>
@@ -246,10 +246,42 @@
             <div class="form-group"><label>手牌上限修改 (-3~0)</label><input type="number" id="f_hand_limit_mod" value="0" min="-3" max="0"></div>
             <div class="form-group"><label>傷害 (0-10)</label><input type="number" id="f_damage" value="0" min="0" max="10"></div>
             <div class="form-group"><label>恐懼傷害 (0-10)</label><input type="number" id="f_horror" value="0" min="0" max="10"></div>
-            <div class="form-group"><label>治療 HP (0-10)</label><input type="number" id="f_health_boost" value="0" min="0" max="10"></div>
-            <div class="form-group"><label>治療 SAN (0-10)</label><input type="number" id="f_sanity_boost" value="0" min="0" max="10"></div>
-            <div class="form-group" id="allyHpGroup" class="hidden"><label>盟友 HP</label><input type="number" id="f_ally_hp" value="0" min="0" max="5"></div>
-            <div class="form-group" id="allySanGroup" class="hidden"><label>盟友 SAN</label><input type="number" id="f_ally_san" value="0" min="0" max="5"></div>
+            <input type="hidden" id="f_health_boost" value="0">
+            <input type="hidden" id="f_sanity_boost" value="0">
+            <div class="form-group hidden" id="allyHpGroup"><label>盟友 HP</label><input type="number" id="f_ally_hp" value="0" min="0" max="5"></div>
+            <div class="form-group hidden" id="allySanGroup"><label>盟友 SAN</label><input type="number" id="f_ally_san" value="0" min="0" max="5"></div>
+            <div class="form-group hidden" id="weaponTierGroup"><label>武器階層</label><select id="f_weapon_tier"><option value="0">無</option></select></div>
+            <div class="form-group hidden" id="combatStyleGroup"><label>戰鬥風格</label><select id="f_combat_style"><option value="">無</option></select></div>
+            <div class="form-group hidden" id="ammoGroup"><label>彈藥</label><input type="number" id="f_ammo" value="0" min="0"></div>
+            <div class="form-group hidden" id="usesGroup"><label>使用次數</label><input type="number" id="f_uses" value="0" min="0"></div>
+            <div class="form-group hidden" id="spellTypeGroup"><label>法術類型</label><select id="f_spell_type"><option value="">無</option></select></div>
+            <div class="form-group hidden" id="spellCastingGroup"><label>施法方式</label><select id="f_spell_casting"><option value="">無</option></select></div>
+          </div>
+
+          <!-- Attribute Modifiers (inside play section) -->
+          <div id="attrModGroup" class="hidden">
+            <div style="font-size:0.75rem;color:var(--text-tertiary);margin-top:0.5rem;margin-bottom:0.35rem;">武器屬性修正（戰鬥風格卡抽到對應屬性時生效）</div>
+            <div style="margin-bottom:0.5rem;">
+              <label style="font-size:0.75rem;margin-right:0.75rem;"><input type="radio" name="attrModMode" value="single" checked onchange="switchAttrModMode()"> 單一屬性</label>
+              <label style="font-size:0.75rem;margin-right:0.75rem;"><input type="radio" name="attrModMode" value="multi" onchange="switchAttrModMode()"> 多屬性</label>
+              <label style="font-size:0.75rem;"><input type="radio" name="attrModMode" value="all" onchange="switchAttrModMode()"> 全屬性</label>
+            </div>
+            <div id="attrModSingle" class="form-grid">
+              <div class="form-group"><label>屬性</label><select id="f_attrmod_single_attr"></select></div>
+              <div class="form-group"><label>修正值</label><input type="number" id="f_attrmod_single_val" value="0" min="-5" max="5"></div>
+            </div>
+            <div id="attrModMulti" class="form-grid hidden">
+              <div class="form-group"><label>力量</label><input type="number" id="f_am_strength" value="" min="-5" max="5" placeholder="—"></div>
+              <div class="form-group"><label>敏捷</label><input type="number" id="f_am_agility" value="" min="-5" max="5" placeholder="—"></div>
+              <div class="form-group"><label>體質</label><input type="number" id="f_am_constitution" value="" min="-5" max="5" placeholder="—"></div>
+              <div class="form-group"><label>智力</label><input type="number" id="f_am_intellect" value="" min="-5" max="5" placeholder="—"></div>
+              <div class="form-group"><label>意志</label><input type="number" id="f_am_willpower" value="" min="-5" max="5" placeholder="—"></div>
+              <div class="form-group"><label>感知</label><input type="number" id="f_am_perception" value="" min="-5" max="5" placeholder="—"></div>
+              <div class="form-group"><label>魅力</label><input type="number" id="f_am_charisma" value="" min="-5" max="5" placeholder="—"></div>
+            </div>
+            <div id="attrModAll" class="form-grid hidden">
+              <div class="form-group"><label>所有檢定修正</label><input type="number" id="f_am_all" value="0" min="-5" max="5"></div>
+            </div>
           </div>
 
           </div><!-- /secPlay -->
@@ -288,17 +320,7 @@
           <!-- Stats: 消費功能 (Consume) -->
           <div class="section-label collapsible open" id="secConsumeHead" onclick="toggleSection('secConsume')">消費功能<span class="eff-value-tag" id="consumeTotalTag">—</span></div>
           <div class="section-content" id="secConsume">
-            <!-- Weapon/spell fields -->
-            <div class="form-grid">
-              <div class="form-group" id="ammoGroup"><label>彈藥</label><input type="number" id="f_ammo" value="0" min="0"></div>
-              <div class="form-group"><label>使用次數</label><input type="number" id="f_uses" value="0" min="0"></div>
-              <div class="form-group" id="weaponTierGroup"><label>武器階層</label><select id="f_weapon_tier"><option value="0">無</option></select></div>
-              <div class="form-group" id="combatStyleGroup"><label>戰鬥風格</label><select id="f_combat_style"><option value="">無</option></select></div>
-              <div class="form-group" id="spellTypeGroup" class="hidden"><label>法術類型</label><select id="f_spell_type"><option value="">無</option></select></div>
-              <div class="form-group" id="spellCastingGroup" class="hidden"><label>施法方式</label><select id="f_spell_casting"><option value="">無</option></select></div>
-            </div>
-            <!-- Consume effect (triple-use) -->
-            <div style="margin-top:0.75rem;padding-top:0.5rem;border-top:1px solid var(--border);">
+            <div>
               <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.35rem;">手牌消費效果（花 1 行動點棄掉，觸發輔助效果）</div>
               <div class="check-row"><input type="checkbox" id="f_consume_enabled" onchange="toggleConsumeEffect()"><label for="f_consume_enabled">啟用消費功能</label></div>
               <div id="consumeEffectFields" class="hidden" style="margin-top:0.35rem;">
@@ -328,32 +350,6 @@
             </div>
 
           </div><!-- /secConsume -->
-
-          <!-- Attribute Modifiers (weapon only) -->
-          <div id="attrModGroup" class="hidden">
-            <div class="section-label">屬性修正</div>
-            <div style="margin-bottom:0.5rem;">
-              <label style="font-size:0.75rem;margin-right:0.75rem;"><input type="radio" name="attrModMode" value="single" checked onchange="switchAttrModMode()"> 單一屬性</label>
-              <label style="font-size:0.75rem;margin-right:0.75rem;"><input type="radio" name="attrModMode" value="multi" onchange="switchAttrModMode()"> 多屬性</label>
-              <label style="font-size:0.75rem;"><input type="radio" name="attrModMode" value="all" onchange="switchAttrModMode()"> 全屬性</label>
-            </div>
-            <div id="attrModSingle" class="form-grid">
-              <div class="form-group"><label>屬性</label><select id="f_attrmod_single_attr"></select></div>
-              <div class="form-group"><label>修正值</label><input type="number" id="f_attrmod_single_val" value="0" min="-5" max="5"></div>
-            </div>
-            <div id="attrModMulti" class="form-grid hidden">
-              <div class="form-group"><label>力量</label><input type="number" id="f_am_strength" value="" min="-5" max="5" placeholder="—"></div>
-              <div class="form-group"><label>敏捷</label><input type="number" id="f_am_agility" value="" min="-5" max="5" placeholder="—"></div>
-              <div class="form-group"><label>體質</label><input type="number" id="f_am_constitution" value="" min="-5" max="5" placeholder="—"></div>
-              <div class="form-group"><label>智力</label><input type="number" id="f_am_intellect" value="" min="-5" max="5" placeholder="—"></div>
-              <div class="form-group"><label>意志</label><input type="number" id="f_am_willpower" value="" min="-5" max="5" placeholder="—"></div>
-              <div class="form-group"><label>感知</label><input type="number" id="f_am_perception" value="" min="-5" max="5" placeholder="—"></div>
-              <div class="form-group"><label>魅力</label><input type="number" id="f_am_charisma" value="" min="-5" max="5" placeholder="—"></div>
-            </div>
-            <div id="attrModAll" class="form-grid hidden">
-              <div class="form-group"><label>所有檢定修正</label><input type="number" id="f_am_all" value="0" min="-5" max="5"></div>
-            </div>
-          </div>
 
           <!-- Effects -->
           <div class="section-label">效果資訊</div>
@@ -413,11 +409,7 @@
             <hr class="pv-divider">
             <div id="pvCombatStyle" style="font-size:0.6875rem;color:var(--text-secondary);margin-bottom:0.25rem;"></div>
             <div id="pvAttrMods" style="font-size:0.6875rem;margin-bottom:0.25rem;"></div>
-            <div class="pv-bottom">
-              <div class="pv-stat"><div class="pv-stat-val" id="pvSkill">0</div><div class="pv-stat-label">加值</div></div>
-              <div class="pv-stat"><div class="pv-stat-val" id="pvDamage">0</div><div class="pv-stat-label">傷害</div></div>
-              <div class="pv-stat"><div class="pv-stat-val" id="pvHorror">0</div><div class="pv-stat-label">恐懼</div></div>
-            </div>
+            <div class="pv-bottom" id="pvBottom"></div>
           </div>
         </div>
       </div>
@@ -534,7 +526,7 @@
     { name: '傳奇', en: 'Legendary', discount: 5, max: 5 },
   ];
 
-  const CONSUME_TYPE_MODS = { stay: -1, discard: 0, short_rest: -1, long_rest: -2, removed: -3 };
+  const AFTER_PLAY_MODS = { stay: -1, discard: 0, short_rest: -1, long_rest: -2, removed: -3 };
 
   const SKILL_VALUE_RANGES = {
     0: [2.5, 3], 1: [2.5, 3], 2: [5, 6], 3: [7, 8], 4: [8, 9], 5: [9, 10]
@@ -721,7 +713,8 @@
       const ok = val <= range[1];
       html += `<div style="color:${ok ? 'var(--text-secondary)' : 'var(--danger)'}">LV${level} 上限 ${range[1]}V — ${ok ? '✓' : '✗ 超標'}</div>`;
     } else {
-      const rarityName = el('rarityDisplay')?.textContent || '—';
+      const balInfo = calcBalanceInfo();
+      const rarityName = balInfo.rarity?.name || balInfo.rarity || '—';
       const range = RARITY_CONSUME_RANGES[rarityName];
       if (range) {
         const ok = val <= range[1];
@@ -777,7 +770,7 @@
     const level = intVal('f_level');
     const cost = intVal('f_cost');
     const consumeType = el('f_consume_type').value;
-    const consumeMod = CONSUME_TYPE_MODS[consumeType] ?? 0;
+    const consumeMod = AFTER_PLAY_MODS[consumeType] ?? 0;
     const levelDisc = level; // level N = -NV
     const effectsValue = calcAllEffectsValue();
     const isWeapon = cardType === 'asset' && intVal('f_damage') > 0 && intVal('f_ammo') > 0;
@@ -1788,25 +1781,25 @@
     toggle('signatureFields', el('f_is_signature').checked);
     toggle('revelationFields', el('f_is_revelation').checked);
 
-    // Play section fields
+    // Play section fields — weapon/combat only when relevant
     toggle('allyHpGroup', isAlly);
     toggle('allySanGroup', isAlly);
-
-    // Consume section fields
+    const hasWeaponIntent = isAsset && (intVal('f_damage') > 0 || intVal('f_ammo') > 0 || el('f_combat_style').value || intVal('f_weapon_tier') > 0);
     toggle('weaponTierGroup', isAsset);
-    toggle('ammoGroup', isAsset);
     toggle('combatStyleGroup', isAsset);
-    toggle('spellTypeGroup', isArcane || isAsset);
-    toggle('spellCastingGroup', isArcane || isAsset);
-    toggle('attrModGroup', isAsset);
+    toggle('ammoGroup', isAsset && (hasWeaponIntent || intVal('f_uses') > 0));
+    toggle('usesGroup', isAsset);
+    toggle('spellTypeGroup', isArcane);
+    toggle('spellCastingGroup', isArcane);
+    toggle('attrModGroup', isAsset && hasWeaponIntent);
 
     // Section visibility by type (三區塊顯示邏輯)
     // 打出效果: hide for skill cards (cost fixed 0)
     toggle('secPlayHead', !isSkill);
     toggle('secPlay', !isSkill);
     // 加值數據: always show
-    // 消費功能: hide for event, ally, skill
-    const showConsume = isAsset;
+    // 消費功能（三合一）: 所有非技能卡都可設定
+    const showConsume = !isSkill;
     toggle('secConsumeHead', showConsume);
     toggle('secConsume', showConsume);
 
@@ -1957,20 +1950,28 @@
     const effects = collectEffects();
     el('pvEffects').textContent = effects.map(e => e.desc_zh).filter(Boolean).join('\n') || '';
     el('pvFlavor').textContent = el('f_flavor_text').value || '';
-    el('pvSkill').textContent = el('f_skill_value').value || '0';
-    el('pvDamage').textContent = el('f_damage').value || '0';
-    el('pvHorror').textContent = el('f_horror').value || '0';
+    // Dynamic bottom stats based on card type
+    const pvBottomStats = [];
+    if (typeVal === 'skill') {
+      pvBottomStats.push({ val: el('f_skill_value').value || '0', label: '加值' });
+    }
+    const dmgVal = intVal('f_damage'), horVal = intVal('f_horror');
+    if (dmgVal > 0) pvBottomStats.push({ val: dmgVal, label: '傷害' });
+    if (horVal > 0) pvBottomStats.push({ val: horVal, label: '恐懼' });
+    if (typeVal === 'ally') {
+      pvBottomStats.push({ val: intVal('f_ally_hp'), label: '盟友HP' });
+      pvBottomStats.push({ val: intVal('f_ally_san'), label: '盟友SAN' });
+    }
+    el('pvBottom').innerHTML = pvBottomStats.length
+      ? pvBottomStats.map(s => `<div class="pv-stat"><div class="pv-stat-val">${s.val}</div><div class="pv-stat-label">${s.label}</div></div>`).join('')
+      : '';
     // Spell type
     const spType = el('f_spell_type').value;
     const spCast = el('f_spell_casting').value;
     let spellLabel = '';
     if (spType && SPELL_TYPES[spType]) spellLabel += SPELL_TYPES[spType].zh;
     if (spCast && SPELL_CASTINGS[spCast]) spellLabel += (spellLabel ? ' · ' : '') + SPELL_CASTINGS[spCast].zh;
-    // Show ally stats in uses area
-    const allyHp = intVal('f_ally_hp'), allySan = intVal('f_ally_san');
-    if (typeVal === 'ally' && (allyHp || allySan)) {
-      el('pvUses').textContent = `盟友 HP:${allyHp} SAN:${allySan}`;
-    }
+    // Ally stats now shown in pvBottom, no longer in pvUses
     // Combat style
     const cs = el('f_combat_style').value;
     el('pvCombatStyle').textContent = (cs && COMBAT_STYLES[cs] ? `戰鬥風格：${COMBAT_STYLES[cs].zh}` : '') + (spellLabel ? `  ${spellLabel}` : '');

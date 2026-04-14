@@ -8,7 +8,7 @@ export const GAME_RULES = {
   ATTRIBUTE_MIN: 1,
   ATTRIBUTE_MAX: 10,
   ATTRIBUTE_CREATION_MAX: 5,
-  CREATION_TOTAL_POINTS: 21,
+  CREATION_TOTAL_POINTS: 18,  // 基礎7 + 主陣營+3 + 副陣營+3 + 自由5 (支柱五 v0.1)
   ATTRIBUTE_COUNT: 7,
 
   // 修正值

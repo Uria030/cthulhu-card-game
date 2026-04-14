@@ -8,9 +8,11 @@
   <link rel="stylesheet" href="admin-shared.css">
   <style>
     .main-layout { display: flex; gap: 0; min-height: calc(100vh - 50px); }
-    .panel-left { width: 280px; flex-shrink: 0; background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 1rem; overflow-y: auto; max-height: calc(100vh - 50px); transition: width 0.2s, padding 0.2s, opacity 0.2s; }
-    .panel-left.collapsed { width: 0; padding: 0; overflow: hidden; border-right: none; opacity: 0; }
-    .panel-toggle { flex-shrink: 0; width: 24px; background: var(--bg-secondary); border: none; border-right: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 0.75rem; padding: 0; }
+    /* Left panel: fixed overlay, does NOT push content */
+    .panel-left { position: fixed; top: 50px; left: 0; width: 280px; height: calc(100vh - 50px); background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 1rem; overflow-y: auto; z-index: 100; transition: transform 0.25s ease; transform: translateX(0); }
+    .panel-left.collapsed { transform: translateX(-100%); }
+    .panel-toggle { position: fixed; top: 50%; left: 280px; z-index: 101; width: 28px; height: 72px; background: var(--bg-secondary); border: 1px solid var(--border); border-left: none; border-radius: 0 6px 6px 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 0.75rem; padding: 0; transform: translateY(-50%); transition: left 0.25s ease; }
+    .panel-toggle.shifted { left: 0; }
     .panel-toggle:hover { color: var(--gold); background: var(--bg-card); }
     .panel-right { flex: 1; padding: 1rem 1.5rem; overflow-y: auto; max-height: calc(100vh - 50px); }
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
@@ -123,15 +125,14 @@
     /* Effect value tags */
     .eff-value-tag { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; color: var(--gold); background: rgba(201,168,76,0.1); border: 1px solid var(--gold-dim); border-radius: 3px; padding: 0.1rem 0.35rem; margin-left: 0.5rem; }
     .effects-total-value { text-align: right; font-size: 0.8125rem; color: var(--gold); font-family: 'JetBrains Mono', monospace; padding: 0.35rem 0; margin-top: 0.25rem; border-top: 1px solid var(--border); }
-    /* Right drawer panel */
-    .panel-right-drawer { position: fixed; top: 50px; right: 0; width: 340px; height: calc(100vh - 50px); background: var(--bg-secondary); border-left: 1px solid var(--border); overflow-y: auto; padding: 1rem; z-index: 100; transition: transform 0.25s ease; transform: translateX(0); }
-    .panel-right-drawer.collapsed { transform: translateX(100%); }
-    .panel-right-toggle { position: fixed; top: 50%; right: 340px; z-index: 101; width: 28px; height: 72px; background: var(--bg-secondary); border: 1px solid var(--border); border-right: none; border-radius: 6px 0 0 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--gold-dim); font-size: 0.6875rem; padding: 0; transform: translateY(-50%); transition: right 0.25s ease; writing-mode: vertical-rl; letter-spacing: 0.15em; }
+    /* Right panel: in flex flow, pushes content when open */
+    .panel-right-drawer { width: 340px; flex-shrink: 0; background: var(--bg-secondary); border-left: 1px solid var(--border); padding: 1rem; overflow-y: auto; max-height: calc(100vh - 50px); transition: width 0.2s, padding 0.2s, opacity 0.2s; }
+    .panel-right-drawer.collapsed { width: 0; padding: 0; overflow: hidden; border-left: none; opacity: 0; }
+    .panel-right-toggle { flex-shrink: 0; width: 24px; background: var(--bg-secondary); border: none; border-left: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--gold-dim); font-size: 0.6875rem; padding: 0; writing-mode: vertical-rl; letter-spacing: 0.15em; }
     .panel-right-toggle:hover { color: var(--gold); background: var(--bg-card); }
-    .panel-right-toggle.shifted { right: 0; }
     .panel-right-drawer .preview-card { width: 100%; transform: scale(0.7); transform-origin: top center; margin-bottom: -30%; }
     .panel-right-drawer .balance-panel { width: 100%; }
-    @media (max-width: 768px) { .main-layout { flex-direction: column; } .panel-left:not(.collapsed) { width: 100%; max-height: 300px; border-right: none; border-bottom: 1px solid var(--border); } .panel-toggle { width: 100%; height: 28px; border-right: none; border-bottom: 1px solid var(--border); } .panel-right-drawer { width: 300px; } .panel-right-toggle { right: 300px; } .panel-right-toggle.shifted { right: 0; } }
+    @media (max-width: 768px) { .main-layout { flex-direction: column; } .panel-left { width: 260px; } .panel-right-drawer { width: 300px; } }
   </style>
 </head>
 <body>
@@ -387,11 +388,8 @@
 
       </div>
     </div>
-  </div>
-
-  <!-- Right Drawer: Balance + Preview -->
-  <button class="panel-right-toggle" id="panelRightToggle" onclick="toggleRightPanel()" title="展開平衡/預覽面板">平衡 預覽</button>
-  <div class="panel-right-drawer collapsed" id="panelRightDrawer">
+    <button class="panel-right-toggle" id="panelRightToggle" onclick="toggleRightPanel()" title="展開平衡/預覽面板">平衡 預覽</button>
+    <div class="panel-right-drawer collapsed" id="panelRightDrawer">
     <div class="balance-panel" id="balancePanel">
       <div class="balance-title">平衡計算</div>
       <div id="balanceContent">
@@ -431,6 +429,7 @@
       <div id="pvAttrMods" style="font-size:0.6875rem;margin-bottom:0.25rem;"></div>
       <div class="pv-bottom" id="pvBottom"></div>
     </div>
+  </div>
   </div>
 
   <script src="admin-shared.js"></script>
@@ -1786,6 +1785,7 @@
     const panel = el('panelLeft');
     const btn = el('panelToggle');
     const collapsed = panel.classList.toggle('collapsed');
+    btn.classList.toggle('shifted', collapsed);
     btn.innerHTML = collapsed ? '&#9654;' : '&#9664;';
     btn.title = collapsed ? '展開卡片列表' : '收合卡片列表';
   }
@@ -1793,10 +1793,8 @@
   /* ── Right Panel Toggle ── */
   function toggleRightPanel() {
     const drawer = el('panelRightDrawer');
-    const btn = el('panelRightToggle');
     const collapsed = drawer.classList.toggle('collapsed');
-    btn.classList.toggle('shifted', collapsed);
-    btn.title = collapsed ? '展開平衡/預覽面板' : '收合平衡/預覽面板';
+    el('panelRightToggle').title = collapsed ? '展開平衡/預覽面板' : '收合平衡/預覽面板';
   }
 
   /* ── Section Collapse ── */

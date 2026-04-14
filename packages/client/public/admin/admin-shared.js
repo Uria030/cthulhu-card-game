@@ -4,6 +4,11 @@
    ======================================== */
 
 // ============================================
+// 版本號
+// ============================================
+const ADMIN_VERSION = '0.1.1';
+
+// ============================================
 // API 設定
 // ============================================
 const ADMIN_API_BASE = (() => {
@@ -27,7 +32,18 @@ function checkAdminAuth() {
     window.location.href = 'login.html';
   });
 }
-document.addEventListener('DOMContentLoaded', checkAdminAuth);
+document.addEventListener('DOMContentLoaded', () => {
+  checkAdminAuth();
+  // 在 nav 標題列注入版本號
+  const nav = document.querySelector('.admin-nav');
+  if (nav && !nav.querySelector('.nav-version')) {
+    const ver = document.createElement('span');
+    ver.className = 'nav-version';
+    ver.textContent = 'v' + ADMIN_VERSION;
+    ver.style.cssText = 'font-family:"JetBrains Mono",monospace;font-size:0.625rem;color:var(--text-tertiary);margin-left:auto;opacity:0.6;';
+    nav.appendChild(ver);
+  }
+});
 
 // ============================================
 // API 請求輔助函數（自動帶 token）

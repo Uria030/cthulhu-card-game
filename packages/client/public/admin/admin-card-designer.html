@@ -143,7 +143,10 @@
         <div class="ai-title">AI 卡片生成</div>
         <div class="ai-input-row">
           <textarea id="aiPrompt" placeholder="輸入你想要的卡片描述…&#10;例如：S陣營的進階武器，獵槍，費用4"></textarea>
-          <button class="btn btn-primary" id="aiGenBtn" onclick="aiGenerate()">生成</button>
+          <div style="display:flex;flex-direction:column;gap:0.25rem;">
+            <button class="btn btn-primary" id="aiGenBtn" onclick="aiGenerate()">生成</button>
+            <button class="btn" onclick="el('aiPrompt').value=''" style="font-size:0.75rem;">清除</button>
+          </div>
         </div>
         <div class="ai-templates">
           <span style="font-size:0.6875rem;color:var(--text-tertiary);margin-right:0.25rem;">快速模板：</span>
@@ -172,7 +175,7 @@
             <div class="form-group"><label>系列</label><select id="f_series"></select></div>
             <div class="form-group"><label>等級 (level)</label><input type="number" id="f_level" value="0" min="0"></div>
             <div class="form-group"><label>中文名稱</label><input type="text" id="f_name_zh" placeholder=".45 自動手槍"></div>
-            <div class="form-group"><label>英文名稱</label><input type="text" id="f_name_en" placeholder=".45 Automatic"></div>
+            <div class="form-group"><label>英文名稱</label><div style="display:flex;gap:0.25rem;"><input type="text" id="f_name_en" placeholder=".45 Automatic" style="flex:1;"><button class="btn" type="button" onclick="aiTranslateName()" style="font-size:0.6875rem;white-space:nowrap;">生成英文</button></div></div>
             <div class="form-group"><label>陣營極</label><select id="f_faction"></select></div>
             <div class="form-group"><label>卡片風格</label><select id="f_style"></select></div>
             <div class="form-group"><label>卡片類別</label><select id="f_type"></select></div>
@@ -212,26 +215,40 @@
             </div>
           </div>
 
-          <!-- Stats -->
-          <div class="section-label">數值資訊</div>
+          <!-- Stats: 打出效果 -->
+          <div class="section-label">&#9656; 打出效果</div>
           <div class="form-grid">
             <div class="form-group"><label>費用 (0-6)</label><input type="number" id="f_cost" value="0" min="0" max="6"></div>
             <div class="form-group"><label>費用貨幣</label><select id="f_cost_currency"></select></div>
             <div class="form-group"><label>使用後去向</label><select id="f_consume_type"></select></div>
-            <div class="form-group"><label>檢定加值 (0-5)</label><input type="number" id="f_skill_value" value="0" min="0" max="5"></div>
+            <div class="form-group"><label>手牌上限修改 (-3~0)</label><input type="number" id="f_hand_limit_mod" value="0" min="-3" max="0"></div>
             <div class="form-group"><label>傷害 (0-10)</label><input type="number" id="f_damage" value="0" min="0" max="10"></div>
             <div class="form-group"><label>恐懼傷害 (0-10)</label><input type="number" id="f_horror" value="0" min="0" max="10"></div>
             <div class="form-group"><label>治療 HP (0-10)</label><input type="number" id="f_health_boost" value="0" min="0" max="10"></div>
             <div class="form-group"><label>治療 SAN (0-10)</label><input type="number" id="f_sanity_boost" value="0" min="0" max="10"></div>
-            <div class="form-group" id="weaponTierGroup"><label>武器階層</label><select id="f_weapon_tier"><option value="0">無</option></select></div>
-            <div class="form-group" id="ammoGroup"><label>彈藥</label><input type="number" id="f_ammo" value="0" min="0"></div>
-            <div class="form-group"><label>使用次數</label><input type="number" id="f_uses" value="0" min="0"></div>
             <div class="form-group" id="allyHpGroup" class="hidden"><label>盟友 HP</label><input type="number" id="f_ally_hp" value="0" min="0" max="5"></div>
             <div class="form-group" id="allySanGroup" class="hidden"><label>盟友 SAN</label><input type="number" id="f_ally_san" value="0" min="0" max="5"></div>
+          </div>
+
+          <!-- Stats: 加值數據 -->
+          <div class="section-label">&#9656; 加值數據</div>
+          <div class="form-grid">
+            <div class="form-group"><label>檢定加值 (0-5)</label><input type="number" id="f_skill_value" value="0" min="0" max="5"></div>
+            <div class="form-group full"><label>加值屬性（可多選）</label>
+              <div id="commitAttrCheckboxes" style="display:flex;flex-wrap:wrap;gap:0.25rem 0.5rem;"></div>
+            </div>
+            <div class="form-group full"><label>加值附加效果（選填）</label><input type="text" id="f_commit_bonus" placeholder="例如：檢定成功時抽 1 張牌"></div>
+          </div>
+
+          <!-- Stats: 消費功能 -->
+          <div class="section-label">&#9656; 消費功能</div>
+          <div class="form-grid">
+            <div class="form-group" id="ammoGroup"><label>彈藥</label><input type="number" id="f_ammo" value="0" min="0"></div>
+            <div class="form-group"><label>使用次數</label><input type="number" id="f_uses" value="0" min="0"></div>
+            <div class="form-group" id="weaponTierGroup"><label>武器階層</label><select id="f_weapon_tier"><option value="0">無</option></select></div>
             <div class="form-group" id="combatStyleGroup"><label>戰鬥風格</label><select id="f_combat_style"><option value="">無</option></select></div>
             <div class="form-group" id="spellTypeGroup" class="hidden"><label>法術類型</label><select id="f_spell_type"><option value="">無</option></select></div>
             <div class="form-group" id="spellCastingGroup" class="hidden"><label>施法方式</label><select id="f_spell_casting"><option value="">無</option></select></div>
-            <div class="form-group"><label>手牌上限修改 (-3~0)</label><input type="number" id="f_hand_limit_mod" value="0" min="-3" max="0"></div>
           </div>
 
           <!-- Attribute Modifiers (weapon only) -->
@@ -382,6 +399,17 @@
     if (EL && EL.subtypes) {
       const stBox = el('subtypesCheckboxes');
       stBox.innerHTML = EL.subtypes.map(s => `<label style="font-size:0.75rem;"><input type="checkbox" class="subtype-cb" value="${s.code}"> ${s.zh}</label>`).join('');
+    }
+
+    // Commit attribute checkboxes
+    const caBox = el('commitAttrCheckboxes');
+    if (caBox) {
+      const commitAttrs = [
+        { code: 'strength', zh: '力量' }, { code: 'agility', zh: '敏捷' }, { code: 'constitution', zh: '體質' },
+        { code: 'intellect', zh: '智力' }, { code: 'willpower', zh: '意志' }, { code: 'perception', zh: '感知' },
+        { code: 'charisma', zh: '魅力' }, { code: 'wild', zh: '萬能' }
+      ];
+      caBox.innerHTML = commitAttrs.map(a => `<label style="font-size:0.75rem;"><input type="checkbox" class="commit-attr-cb" value="${a.code}"> ${a.zh}</label>`).join('');
     }
 
     // Cost currency
@@ -549,10 +577,16 @@
     el('f_ally_san').value = c.ally_san ?? 0;
     el('f_xp_cost').value = c.xp_cost ?? 0;
     loadSubtypes(c.subtypes || []);
+    loadCommitAttrs(c.commit_attributes || []);
+    el('f_commit_bonus').value = c.commit_bonus || '';
     el('f_flavor_text').value = c.flavor_text || '';
     // Migrate old effect format if needed
     const effects = (c.effects || []).map(e => {
       if (e.effect_params && !e.params) { e.params = e.effect_params; delete e.effect_params; }
+      // Migrate value → stacks for add_status
+      if (e.effect_code === 'add_status' && e.params?.value !== undefined && e.params?.stacks === undefined) {
+        e.params.stacks = e.params.value; delete e.params.value;
+      }
       if (!e.duration) e.duration = 'instant';
       if (!e.target) e.target = '';
       if (!e.cost) e.cost = {};
@@ -604,6 +638,8 @@
       ally_hp: intVal('f_ally_hp') || null,
       ally_san: intVal('f_ally_san') || null,
       xp_cost: intVal('f_xp_cost'),
+      commit_attributes: Array.from(document.querySelectorAll('.commit-attr-cb:checked')).map(cb => cb.value),
+      commit_bonus: el('f_commit_bonus').value.trim() || null,
       subtypes: collectSubtypes(),
       effects: collectEffects(),
       flavor_text: el('f_flavor_text').value.trim(),
@@ -711,6 +747,8 @@
     el('f_xp_cost').value = 0;
     loadAttrModifiers({});
     loadSubtypes([]);
+    loadCommitAttrs([]);
+    el('f_commit_bonus').value = '';
     renderEffects([]);
     toggleConditionalFields();
     updateCodePreview();
@@ -849,7 +887,7 @@
           <div class="form-group full"><label style="font-size:0.6875rem">中文描述</label><textarea class="eff-desc-zh" rows="2">${descZh}</textarea></div>
           <div class="form-group full"><label style="font-size:0.6875rem">英文描述</label><textarea class="eff-desc-en" rows="2">${descEn}</textarea></div>
         </div>
-        <div class="eff-desc-actions"><button class="btn" type="button" onclick="autoGenerateDesc(${i})">🔄 重新生成描述</button></div>
+        <div class="eff-desc-actions"><button class="btn" type="button" onclick="autoGenerateDesc(${i})">自動生成中文</button><button class="btn" type="button" onclick="aiTranslateEffectDesc(${i})">生成英文描述</button></div>
       </div>
     </div>`;
   }
@@ -1038,7 +1076,9 @@
     if (!item || !EL) return;
     const eff = collectSingleEffect(item);
     item.querySelector('.eff-desc-zh').value = generateDescZh(eff);
-    item.querySelector('.eff-desc-en').value = generateDescEn(eff);
+    // Only auto-fill English if it's empty (don't overwrite AI-translated text)
+    const enField = item.querySelector('.eff-desc-en');
+    if (!enField.value.trim()) enField.value = generateDescEn(eff);
   }
 
   function generateDescZh(eff) {
@@ -1111,7 +1151,7 @@
       case 'gain_resource': return `獲得 ${p.amount || '?'} 資源`;
       case 'move_investigator': return `移動最多 ${p.distance || '?'} 個板塊${p.ignore_enemy ? '（無視交戰）' : ''}`;
       case 'move_enemy': return `${t}移動 ${p.distance || '?'} 個板塊（${p.direction === 'away' ? '遠離' : '靠近'}）`;
-      case 'add_status': return `${t}施加${statusZh[p.status] || p.status || '?'}${p.value ? ` ${p.value}` : ''}`;
+      case 'add_status': return `${t}施加${statusZh[p.status] || p.status || '?'}${p.stacks ? ` ${p.stacks} 層` : ''}`;
       case 'remove_status': return `${t}移除${statusZh[p.status] || p.status || '?'}`;
       case 'attack': return `${t}進行攻擊${p.check_attribute ? `（${attrZh[p.check_attribute] || p.check_attribute}${p.check_modifier ? ` +${p.check_modifier}` : ''}）` : ''}`;
       case 'evade': return `進行閃避檢定${p.check_modifier ? `（+${p.check_modifier}）` : ''}`;
@@ -1180,7 +1220,7 @@
       case 'gain_resource': return `Gain ${p.amount || '?'} resource(s)`;
       case 'attack': return `Attack${t}${p.check_modifier ? ` (+${p.check_modifier})` : ''}`;
       case 'evade': return `Evade${p.check_modifier ? ` (+${p.check_modifier})` : ''}`;
-      case 'add_status': return `Apply ${p.status || '?'}${p.value ? ` ${p.value}` : ''}${t}`;
+      case 'add_status': return `Apply ${p.stacks || '?'} stack(s) of ${p.status || '?'}${t}`;
       case 'move_investigator': return `Move up to ${p.distance || '?'} location(s)`;
       case 'jump': return `Jump ${p.distance || '?'} location(s)`;
       default: {
@@ -1292,6 +1332,10 @@
   }
   function collectSubtypes() {
     return Array.from(document.querySelectorAll('.subtype-cb:checked')).map(cb => cb.value);
+  }
+
+  function loadCommitAttrs(arr) {
+    document.querySelectorAll('.commit-attr-cb').forEach(cb => { cb.checked = arr.includes(cb.value); });
   }
 
   /* ── Live Preview ── */
@@ -1566,7 +1610,7 @@ deal_damage, deal_horror, heal_hp, heal_san, restore_hp_max, restore_san_max, tr
 
 ### 5.6 效果參數 (params)
 deal_damage: { amount, element: physical/fire/ice/lightning/arcane, direct?, area? }
-add_status: { status, value }
+add_status: { status, stacks }
 search_deck: { count, on_found, on_remaining, filter? }
 attack: { check_attribute?, check_modifier? }
 
@@ -1577,8 +1621,14 @@ instant, until_end_of_turn, until_end_of_round, until_next_turn, until_end_of_sc
 physical, fire, ice, lightning, arcane
 
 ## 七、狀態效果
-負面：poison, bleed, burning, frozen, darkness, disarm, doom_status, fatigue, madness, marked, vulnerable, silence, weakness_status, wet, weakened
-正面：empowered, armor, ward, stealth, haste, regeneration
+核心規則：所有狀態皆可堆疊。狀態在經歷完整一回合後，於該回合結束階段減少 1 層。
+分為兩種：數值型（層數=效果強度）、開關型（效果固定，層數=持續回合數）。
+add_status 使用 stacks 欄位表示層數：{ "status": "burning", "stacks": 1 }
+
+數值型負面：poison, bleed, burning, frozen, doom_status, madness, marked, vulnerable, weakness_status, wet, weakened
+開關型負面：darkness, disarm, fatigue, silence
+數值型正面：empowered, armor, ward, haste, regeneration
+特殊型正面：stealth（移動或攻擊後全部移除）
 
 ## 八、使用者需求
 ${userDescription}
@@ -1720,6 +1770,46 @@ ${userDescription}
     finally { btn.disabled = false; }
   }
 
+  async function aiTranslate(zhText) {
+    const apiKey = localStorage.getItem(LS_API_KEY);
+    if (!apiKey) { alert('請先設定 Gemini API Key'); return null; }
+    if (!zhText?.trim()) { alert('請先填寫中文內容'); return null; }
+    const prompt = `你是克蘇魯神話卡牌遊戲的翻譯專家。請將以下繁體中文翻譯成英文。
+保持卡牌遊戲的專業術語風格，簡潔有力。
+
+中文：${zhText.trim()}
+
+請只回傳英文翻譯，不要加任何解釋。`;
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3 } })
+    });
+    if (!res.ok) throw new Error(`API 錯誤 ${res.status}`);
+    const result = await res.json();
+    return result.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+  }
+
+  async function aiTranslateName() {
+    const zh = el('f_name_zh').value.trim();
+    try {
+      const en = await aiTranslate(zh);
+      if (en) el('f_name_en').value = en;
+      updatePreview();
+    } catch (err) { alert('翻譯失敗：' + err.message); }
+  }
+
+  async function aiTranslateEffectDesc(idx) {
+    const item = document.querySelectorAll('.effect-item')[idx];
+    if (!item) return;
+    const zhField = item.querySelector('.eff-desc-zh');
+    const enField = item.querySelector('.eff-desc-en');
+    const zh = zhField?.value?.trim();
+    try {
+      const en = await aiTranslate(zh);
+      if (en) { enField.value = en; updatePreview(); }
+    } catch (err) { alert('翻譯失敗：' + err.message); }
+  }
+
   function fillFormFromData(d) {
     editingId = null;
     el('f_series').value = d.series || 'C';
@@ -1758,10 +1848,16 @@ ${userDescription}
     el('f_ally_san').value = d.ally_san ?? 0;
     el('f_xp_cost').value = d.xp_cost ?? 0;
     loadSubtypes(d.subtypes || []);
+    loadCommitAttrs(d.commit_attributes || []);
+    el('f_commit_bonus').value = d.commit_bonus || '';
     el('f_flavor_text').value = d.flavor_text || '';
     // Migrate old effect format if needed
     const effects = (d.effects || []).map(e => {
       if (e.effect_params && !e.params) { e.params = e.effect_params; delete e.effect_params; }
+      // Migrate value → stacks for add_status
+      if (e.effect_code === 'add_status' && e.params?.value !== undefined && e.params?.stacks === undefined) {
+        e.params.stacks = e.params.value; delete e.params.value;
+      }
       if (!e.duration) e.duration = 'instant';
       if (!e.target) e.target = '';
       if (!e.cost) e.cost = {};

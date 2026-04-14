@@ -405,7 +405,7 @@
     "add_status": {
       "required": [
         { "key": "status", "type": "select", "zh": "狀態類型", "en": "Status Type", "options_ref": "statuses" },
-        { "key": "value", "type": "number", "zh": "狀態數值", "en": "Status Value", "min": 1, "max": 10 }
+        { "key": "stacks", "type": "number", "zh": "狀態層數", "en": "Status Stacks", "min": 1, "max": 10 }
       ]
     },
     "remove_status": {
@@ -625,30 +625,34 @@
   ],
 
   "statuses": {
-    "負面狀態": [
-      { "code": "poison", "zh": "中毒", "en": "Poison" },
-      { "code": "bleed", "zh": "流血", "en": "Bleed" },
-      { "code": "burning", "zh": "燃燒", "en": "Burning" },
-      { "code": "frozen", "zh": "冷凍", "en": "Frozen" },
-      { "code": "darkness", "zh": "黑暗", "en": "Darkness" },
-      { "code": "disarm", "zh": "繳械", "en": "Disarm" },
-      { "code": "doom_status", "zh": "毀滅", "en": "Doom" },
-      { "code": "fatigue", "zh": "疲勞", "en": "Fatigue" },
-      { "code": "madness", "zh": "發瘋", "en": "Madness" },
-      { "code": "marked", "zh": "標記", "en": "Marked" },
-      { "code": "vulnerable", "zh": "脆弱", "en": "Vulnerable" },
-      { "code": "silence", "zh": "沈默", "en": "Silence" },
-      { "code": "weakness_status", "zh": "無力", "en": "Weakness" },
-      { "code": "wet", "zh": "潮濕", "en": "Wet" },
-      { "code": "weakened", "zh": "弱化", "en": "Weakened" }
+    "數值型負面狀態": [
+      { "code": "poison", "zh": "中毒", "en": "Poison", "status_type": "scaling", "desc": "受到的傷害 +X" },
+      { "code": "bleed", "zh": "流血", "en": "Bleed", "status_type": "scaling", "desc": "回合結束時扣 X 點 HP" },
+      { "code": "burning", "zh": "燃燒", "en": "Burning", "status_type": "scaling", "desc": "回合開始扣 X HP，火屬性增傷 +X，移除潮濕" },
+      { "code": "frozen", "zh": "冷凍", "en": "Frozen", "status_type": "scaling", "desc": "移動花費 2 行動點，冰屬性增傷 +X" },
+      { "code": "doom_status", "zh": "毀滅", "en": "Doom", "status_type": "scaling", "desc": "回合結束時受 X 點傷害" },
+      { "code": "madness", "zh": "發瘋", "en": "Madness", "status_type": "scaling", "desc": "受到的恐懼 +X" },
+      { "code": "marked", "zh": "標記", "en": "Marked", "status_type": "scaling", "desc": "受到的傷害和恐懼 +X" },
+      { "code": "vulnerable", "zh": "脆弱", "en": "Vulnerable", "status_type": "scaling", "desc": "受到的物理傷害 +X" },
+      { "code": "weakness_status", "zh": "無力", "en": "Weakness", "status_type": "scaling", "desc": "近戰傷害降低 X 點" },
+      { "code": "wet", "zh": "潮濕", "en": "Wet", "status_type": "scaling", "desc": "被電擊攻擊時傷害 +X" },
+      { "code": "weakened", "zh": "弱化", "en": "Weakened", "status_type": "scaling", "desc": "擲骰取差的，擲骰後減 1 層" }
     ],
-    "正面狀態": [
-      { "code": "empowered", "zh": "強化", "en": "Empowered" },
-      { "code": "armor", "zh": "護甲", "en": "Armor" },
-      { "code": "ward", "zh": "護盾", "en": "Ward" },
-      { "code": "stealth", "zh": "隱蔽", "en": "Stealth" },
-      { "code": "haste", "zh": "加速", "en": "Haste" },
-      { "code": "regeneration", "zh": "再生", "en": "Regeneration" }
+    "開關型負面狀態": [
+      { "code": "darkness", "zh": "黑暗", "en": "Darkness", "status_type": "toggle", "desc": "攻擊命中檢定 -2" },
+      { "code": "disarm", "zh": "繳械", "en": "Disarm", "status_type": "toggle", "desc": "不能用資產進行攻擊" },
+      { "code": "fatigue", "zh": "疲勞", "en": "Fatigue", "status_type": "toggle", "desc": "結束階段不能抽牌和獲得資源" },
+      { "code": "silence", "zh": "沈默", "en": "Silence", "status_type": "toggle", "desc": "無法施法" }
+    ],
+    "數值型正面狀態": [
+      { "code": "empowered", "zh": "強化", "en": "Empowered", "status_type": "scaling", "desc": "擲骰取好的，擲骰後減 1 層" },
+      { "code": "armor", "zh": "護甲", "en": "Armor", "status_type": "scaling", "desc": "降低 X 點物理傷害" },
+      { "code": "ward", "zh": "護盾", "en": "Ward", "status_type": "scaling", "desc": "降低 X 點恐懼傷害" },
+      { "code": "haste", "zh": "加速", "en": "Haste", "status_type": "scaling", "desc": "獲得 +X 行動點" },
+      { "code": "regeneration", "zh": "再生", "en": "Regeneration", "status_type": "scaling", "desc": "回合開始恢復 X 點 HP" }
+    ],
+    "特殊型正面狀態": [
+      { "code": "stealth", "zh": "隱蔽", "en": "Stealth", "status_type": "special", "desc": "不觸發藉機攻擊，攻擊增傷 +X，移動或攻擊後全部移除" }
     ]
   },
 

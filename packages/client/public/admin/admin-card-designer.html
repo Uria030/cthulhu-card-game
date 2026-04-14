@@ -254,28 +254,78 @@
 
           </div><!-- /secPlay -->
 
-          <!-- Stats: 加值數據 -->
-          <div class="section-label collapsible open" id="secCommitHead" onclick="toggleSection('secCommit')">加值數據</div>
-          <div class="section-content" id="secCommit"><div class="form-grid">
-            <div class="form-group"><label>檢定加值 (0-5)</label><input type="number" id="f_skill_value" value="0" min="0" max="5"></div>
-            <div class="form-group full"><label>加值屬性（可多選）</label>
-              <div id="commitAttrCheckboxes" style="display:flex;flex-wrap:wrap;gap:0.25rem 0.5rem;"></div>
+          <!-- Stats: 加值數據 (Commit) -->
+          <div class="section-label collapsible open" id="secCommitHead" onclick="toggleSection('secCommit')">加值數據（Commit）<span class="eff-value-tag" id="commitTotalTag">0V</span></div>
+          <div class="section-content" id="secCommit">
+            <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.5rem;">屬性圖示 — 從手牌投入檢定時提供的加值</div>
+            <div class="form-group full" style="margin-bottom:0.5rem;">
+              <div class="check-row"><input type="checkbox" id="f_commit_wild" onchange="toggleCommitWild()"><label for="f_commit_wild">萬能加值</label></div>
             </div>
-            <div class="form-group full"><label>加值附加效果（選填）</label><input type="text" id="f_commit_bonus" placeholder="例如：檢定成功時抽 1 張牌"></div>
-          </div>
-
+            <div id="commitIconsGrid" style="display:grid;gap:0.35rem;">
+              <div class="commit-attr-row" data-attr="strength"><span style="font-size:0.75rem;width:80px;display:inline-block;">力量 (STR)</span><button type="button" class="btn" onclick="stepCommitAttr('strength',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_strength">0</span><button type="button" class="btn" onclick="stepCommitAttr('strength',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_strength">0V</span></div>
+              <div class="commit-attr-row" data-attr="agility"><span style="font-size:0.75rem;width:80px;display:inline-block;">敏捷 (AGI)</span><button type="button" class="btn" onclick="stepCommitAttr('agility',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_agility">0</span><button type="button" class="btn" onclick="stepCommitAttr('agility',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_agility">0V</span></div>
+              <div class="commit-attr-row" data-attr="constitution"><span style="font-size:0.75rem;width:80px;display:inline-block;">體質 (CON)</span><button type="button" class="btn" onclick="stepCommitAttr('constitution',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_constitution">0</span><button type="button" class="btn" onclick="stepCommitAttr('constitution',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_constitution">0V</span></div>
+              <div class="commit-attr-row" data-attr="intellect"><span style="font-size:0.75rem;width:80px;display:inline-block;">智力 (INT)</span><button type="button" class="btn" onclick="stepCommitAttr('intellect',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_intellect">0</span><button type="button" class="btn" onclick="stepCommitAttr('intellect',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_intellect">0V</span></div>
+              <div class="commit-attr-row" data-attr="willpower"><span style="font-size:0.75rem;width:80px;display:inline-block;">意志 (WIL)</span><button type="button" class="btn" onclick="stepCommitAttr('willpower',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_willpower">0</span><button type="button" class="btn" onclick="stepCommitAttr('willpower',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_willpower">0V</span></div>
+              <div class="commit-attr-row" data-attr="perception"><span style="font-size:0.75rem;width:80px;display:inline-block;">感知 (PER)</span><button type="button" class="btn" onclick="stepCommitAttr('perception',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_perception">0</span><button type="button" class="btn" onclick="stepCommitAttr('perception',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_perception">0V</span></div>
+              <div class="commit-attr-row" data-attr="charisma"><span style="font-size:0.75rem;width:80px;display:inline-block;">魅力 (CHA)</span><button type="button" class="btn" onclick="stepCommitAttr('charisma',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_charisma">0</span><button type="button" class="btn" onclick="stepCommitAttr('charisma',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_charisma">0V</span></div>
+            </div>
+            <div id="commitWildRow" class="hidden" style="margin-top:0.35rem;">
+              <span style="font-size:0.75rem;width:80px;display:inline-block;">萬能</span><button type="button" class="btn" onclick="stepCommitAttr('all',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_all">0</span><button type="button" class="btn" onclick="stepCommitAttr('all',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag" id="civ_all">0V</span>
+            </div>
+            <!-- Skill card bonus effects -->
+            <div id="skillBonusSection" class="hidden" style="margin-top:0.75rem;padding-top:0.5rem;border-top:1px solid var(--border);">
+              <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.35rem;">附贈效果（技能卡專用）</div>
+              <div class="form-grid">
+                <div class="form-group"><label>檢定加值 (0-5)</label><input type="number" id="f_skill_value" value="0" min="0" max="5"></div>
+                <div class="form-group"><label>附加效果描述</label><input type="text" id="f_commit_bonus" placeholder="例如：成功時 +1 傷害"></div>
+              </div>
+            </div>
+            <!-- Commit validation panel -->
+            <div style="margin-top:0.5rem;padding:0.4rem;background:var(--bg-primary);border-radius:4px;border:1px solid var(--border);font-size:0.75rem;" id="commitValidation"></div>
           </div><!-- /secCommit -->
 
-          <!-- Stats: 消費功能 -->
-          <div class="section-label collapsible open" id="secConsumeHead" onclick="toggleSection('secConsume')">消費功能</div>
-          <div class="section-content" id="secConsume"><div class="form-grid">
-            <div class="form-group" id="ammoGroup"><label>彈藥</label><input type="number" id="f_ammo" value="0" min="0"></div>
-            <div class="form-group"><label>使用次數</label><input type="number" id="f_uses" value="0" min="0"></div>
-            <div class="form-group" id="weaponTierGroup"><label>武器階層</label><select id="f_weapon_tier"><option value="0">無</option></select></div>
-            <div class="form-group" id="combatStyleGroup"><label>戰鬥風格</label><select id="f_combat_style"><option value="">無</option></select></div>
-            <div class="form-group" id="spellTypeGroup" class="hidden"><label>法術類型</label><select id="f_spell_type"><option value="">無</option></select></div>
-            <div class="form-group" id="spellCastingGroup" class="hidden"><label>施法方式</label><select id="f_spell_casting"><option value="">無</option></select></div>
-          </div>
+          <!-- Stats: 消費功能 (Consume) -->
+          <div class="section-label collapsible open" id="secConsumeHead" onclick="toggleSection('secConsume')">消費功能<span class="eff-value-tag" id="consumeTotalTag">—</span></div>
+          <div class="section-content" id="secConsume">
+            <!-- Weapon/spell fields -->
+            <div class="form-grid">
+              <div class="form-group" id="ammoGroup"><label>彈藥</label><input type="number" id="f_ammo" value="0" min="0"></div>
+              <div class="form-group"><label>使用次數</label><input type="number" id="f_uses" value="0" min="0"></div>
+              <div class="form-group" id="weaponTierGroup"><label>武器階層</label><select id="f_weapon_tier"><option value="0">無</option></select></div>
+              <div class="form-group" id="combatStyleGroup"><label>戰鬥風格</label><select id="f_combat_style"><option value="">無</option></select></div>
+              <div class="form-group" id="spellTypeGroup" class="hidden"><label>法術類型</label><select id="f_spell_type"><option value="">無</option></select></div>
+              <div class="form-group" id="spellCastingGroup" class="hidden"><label>施法方式</label><select id="f_spell_casting"><option value="">無</option></select></div>
+            </div>
+            <!-- Consume effect (triple-use) -->
+            <div style="margin-top:0.75rem;padding-top:0.5rem;border-top:1px solid var(--border);">
+              <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.35rem;">手牌消費效果（花 1 行動點棄掉，觸發輔助效果）</div>
+              <div class="check-row"><input type="checkbox" id="f_consume_enabled" onchange="toggleConsumeEffect()"><label for="f_consume_enabled">啟用消費功能</label></div>
+              <div id="consumeEffectFields" class="hidden" style="margin-top:0.35rem;">
+                <div class="form-grid">
+                  <div class="form-group"><label>效果類型</label>
+                    <select id="f_consume_effect_type" onchange="onConsumeTypeChange()">
+                      <option value="">— 選擇 —</option>
+                      <option value="gain_resource">獲得資源 (1V/個)</option>
+                      <option value="gain_ammo">補充彈藥 (0.5V/個)</option>
+                      <option value="gain_charges">補充充能 (0.5V/個)</option>
+                      <option value="heal_hp">回復 HP (1.5V/點)</option>
+                      <option value="heal_san">回復 SAN (1.5V/點)</option>
+                      <option value="draw_card">抽牌 (1V/張)</option>
+                      <option value="add_status">獲得正面狀態</option>
+                      <option value="remove_status">移除負面狀態</option>
+                      <option value="cancel_damage">取消傷害 (0.5V/點)</option>
+                      <option value="cancel_horror">取消恐懼 (0.5V/點)</option>
+                    </select>
+                  </div>
+                  <div class="form-group" id="consumeAmountGroup"><label>數量</label><input type="number" id="f_consume_amount" value="2" min="1" max="10" onchange="updateConsumeValue()"></div>
+                  <div class="form-group hidden" id="consumeStatusGroup"><label>狀態</label><select id="f_consume_status" onchange="updateConsumeValue()"></select></div>
+                  <div class="form-group hidden" id="consumeLayersGroup"><label>層數</label><input type="number" id="f_consume_layers" value="1" min="1" max="5" onchange="updateConsumeValue()"></div>
+                </div>
+                <!-- Consume validation panel -->
+                <div style="margin-top:0.35rem;padding:0.4rem;background:var(--bg-primary);border-radius:4px;border:1px solid var(--border);font-size:0.75rem;" id="consumeValidation"></div>
+              </div>
+            </div>
 
           </div><!-- /secConsume -->
 
@@ -490,6 +540,214 @@
     0: [2.5, 3], 1: [2.5, 3], 2: [5, 6], 3: [7, 8], 4: [8, 9], 5: [9, 10]
   };
 
+  /* ── Commit Icons (attribute icon system) ── */
+  const SINGLE_ATTR_VALUE = { 0:0, 1:0.5, 2:1.5, 3:3, 4:5, 5:7.5, 6:10 };
+  const WILD_ATTR_VALUE = { 0:0, 1:1, 2:3, 3:6 };
+  const COMMIT_ATTRS = ['strength','agility','constitution','intellect','willpower','perception','charisma'];
+
+  function getCommitIcons() {
+    if (el('f_commit_wild')?.checked) {
+      const v = parseInt(el('ci_all')?.textContent) || 0;
+      return v > 0 ? { all: v } : {};
+    }
+    const icons = {};
+    for (const a of COMMIT_ATTRS) {
+      const v = parseInt(el('ci_' + a)?.textContent) || 0;
+      if (v > 0) icons[a] = v;
+    }
+    return icons;
+  }
+
+  function calculateCommitValue(icons) {
+    if (!icons || !Object.keys(icons).length) return 0;
+    if (icons.all) return WILD_ATTR_VALUE[icons.all] || 0;
+    let total = 0;
+    for (const v of Object.values(icons)) total += SINGLE_ATTR_VALUE[v] || 0;
+    return total;
+  }
+
+  function stepCommitAttr(attr, delta) {
+    const span = el('ci_' + attr);
+    if (!span) return;
+    const maxVal = attr === 'all' ? 3 : 6;
+    let v = Math.max(0, Math.min(maxVal, (parseInt(span.textContent) || 0) + delta));
+    span.textContent = v;
+    updateCommitAttrValue(attr, v);
+    updateCommitTotal();
+    updatePreview();
+  }
+
+  function updateCommitAttrValue(attr, v) {
+    const vSpan = el('civ_' + attr);
+    if (!vSpan) return;
+    const val = attr === 'all' ? (WILD_ATTR_VALUE[v] || 0) : (SINGLE_ATTR_VALUE[v] || 0);
+    vSpan.textContent = val.toFixed(1) + 'V';
+  }
+
+  function updateCommitTotal() {
+    const icons = getCommitIcons();
+    const val = calculateCommitValue(icons);
+    el('commitTotalTag').textContent = val.toFixed(1) + 'V';
+
+    // Validation panel
+    const isSkill = el('f_type').value === 'skill';
+    const sv = intVal('f_skill_value');
+    const skillAttrVal = sv === 1 ? 0.5 : sv === 2 ? 1.5 : sv === 3 ? 3 : sv === 4 ? 5 : sv === 5 ? 7.5 : 0;
+    const totalCommit = isSkill ? val + skillAttrVal : val;
+    const panel = el('commitValidation');
+    if (!panel) return;
+
+    if (isSkill) {
+      const level = intVal('f_level');
+      const range = SKILL_VALUE_RANGES[level] || [0, 99];
+      const ok = totalCommit >= range[0] && totalCommit <= range[1];
+      panel.innerHTML = `<div>屬性圖示：${val.toFixed(1)}V + 加值：${skillAttrVal}V = <b>${totalCommit.toFixed(1)}V</b></div>` +
+        `<div>LV${level} 區間：${range[0]}-${range[1]}V — <span style="color:${ok ? 'var(--success)' : 'var(--danger)'}">${ok ? '✓ 合格' : '✗ 超出區間'}</span></div>`;
+    } else {
+      panel.innerHTML = `<div>屬性圖示總價值：<b>${val.toFixed(1)}V</b></div>` +
+        `<div style="color:var(--text-tertiary)">非技能卡，僅供參考</div>`;
+    }
+  }
+
+  function toggleCommitWild() {
+    const isWild = el('f_commit_wild').checked;
+    el('commitIconsGrid').classList.toggle('hidden', isWild);
+    el('commitWildRow').classList.toggle('hidden', !isWild);
+    updateCommitTotal();
+    updatePreview();
+  }
+
+  function loadCommitIcons(icons) {
+    if (!icons || typeof icons !== 'object') icons = {};
+    const isWild = icons.all !== undefined;
+    el('f_commit_wild').checked = isWild;
+    toggleCommitWild();
+    if (isWild) {
+      el('ci_all').textContent = icons.all || 0;
+      updateCommitAttrValue('all', icons.all || 0);
+    } else {
+      for (const a of COMMIT_ATTRS) {
+        const v = icons[a] || 0;
+        el('ci_' + a).textContent = v;
+        updateCommitAttrValue(a, v);
+      }
+    }
+    updateCommitTotal();
+  }
+
+  /* ── Consume Effect (triple-use) ── */
+  const CONSUME_CALC = {
+    gain_resource: (n) => n * 1,
+    gain_ammo: (n) => n * 0.5,
+    gain_charges: (n) => n * 0.5,
+    heal_hp: (n) => n * 1.5,
+    heal_san: (n) => n * 1.5,
+    draw_card: (n) => n * 1,
+    cancel_damage: (n) => n * 0.5,
+    cancel_horror: (n) => n * 0.5,
+  };
+  const STATUS_VAL = {
+    empowered:3, armor:3, ward:6, haste:4, regeneration:6, stealth:6,
+    poison:3, bleed:2, burning:3, frozen:3, wet:1, madness:6,
+    marked:6, vulnerable:2, weakness_status:2, weakened:3,
+    darkness:2, disarm:4, fatigue:4, silence:4, doom_status:2
+  };
+  const CONSUME_MINIMUM = 1.5;
+  const RARITY_CONSUME_RANGES = {
+    '隨身':[2.5,3], '基礎':[2.5,3], '標準':[5,6], '進階':[7,8], '稀有':[8,9], '傳奇':[9,10]
+  };
+
+  function getConsumeEffect() {
+    if (!el('f_consume_enabled')?.checked) return null;
+    const et = el('f_consume_effect_type')?.value;
+    if (!et) return null;
+    const eff = { effect_type: et };
+    if (et === 'add_status' || et === 'remove_status') {
+      eff.status = el('f_consume_status')?.value || '';
+      eff.layers = parseInt(el('f_consume_layers')?.value) || 1;
+      eff.value = (STATUS_VAL[eff.status] || 0) * eff.layers;
+    } else {
+      eff.amount = parseInt(el('f_consume_amount')?.value) || 0;
+      eff.value = CONSUME_CALC[et] ? CONSUME_CALC[et](eff.amount) : 0;
+    }
+    return eff;
+  }
+
+  function toggleConsumeEffect() {
+    const on = el('f_consume_enabled').checked;
+    el('consumeEffectFields').classList.toggle('hidden', !on);
+    updateConsumeValue();
+    updatePreview();
+  }
+
+  function onConsumeTypeChange() {
+    const et = el('f_consume_effect_type').value;
+    const isStatus = et === 'add_status' || et === 'remove_status';
+    el('consumeAmountGroup').classList.toggle('hidden', isStatus);
+    el('consumeStatusGroup').classList.toggle('hidden', !isStatus);
+    el('consumeLayersGroup').classList.toggle('hidden', !isStatus);
+    // Populate status dropdown
+    if (isStatus && EL) {
+      const sel = el('f_consume_status');
+      const statuses = et === 'add_status'
+        ? [...(EL.statuses['數值型正面狀態']||[]), ...(EL.statuses['特殊型正面狀態']||[])]
+        : Object.values(EL.statuses).flat();
+      sel.innerHTML = statuses.map(s => `<option value="${s.code}">${s.zh} (${STATUS_VAL[s.code]||0}V)</option>`).join('');
+    }
+    updateConsumeValue();
+  }
+
+  function updateConsumeValue() {
+    const eff = getConsumeEffect();
+    const val = eff?.value || 0;
+    el('consumeTotalTag').textContent = eff ? val.toFixed(1) + 'V' : '—';
+
+    const panel = el('consumeValidation');
+    if (!panel) return;
+    if (!eff) { panel.innerHTML = ''; return; }
+
+    let html = `<div>消費效果價值：<b>${val.toFixed(1)}V</b></div>`;
+    // Check > 1.5V
+    if (val <= CONSUME_MINIMUM) {
+      html += `<div style="color:var(--gold)">⚠ 價值 ${val.toFixed(1)}V ≤ ${CONSUME_MINIMUM}V，玩家可能不會使用</div>`;
+    } else {
+      html += `<div style="color:var(--success)">✓ 值得消費（${val.toFixed(1)}V > ${CONSUME_MINIMUM}V）</div>`;
+    }
+    // Check rarity/level cap
+    const isSkill = el('f_type').value === 'skill';
+    if (isSkill) {
+      const level = intVal('f_level');
+      const range = SKILL_VALUE_RANGES[level] || [0, 99];
+      const ok = val <= range[1];
+      html += `<div style="color:${ok ? 'var(--text-secondary)' : 'var(--danger)'}">LV${level} 上限 ${range[1]}V — ${ok ? '✓' : '✗ 超標'}</div>`;
+    } else {
+      const rarityName = el('rarityDisplay')?.textContent || '—';
+      const range = RARITY_CONSUME_RANGES[rarityName];
+      if (range) {
+        const ok = val <= range[1];
+        html += `<div style="color:${ok ? 'var(--text-secondary)' : 'var(--danger)'}">稀有度「${rarityName}」上限 ${range[1]}V — ${ok ? '✓' : '✗ 超標'}</div>`;
+      }
+    }
+    panel.innerHTML = html;
+    updatePreview();
+  }
+
+  function loadConsumeEffect(enabled, eff) {
+    el('f_consume_enabled').checked = !!enabled;
+    toggleConsumeEffect();
+    if (eff && typeof eff === 'object') {
+      el('f_consume_effect_type').value = eff.effect_type || '';
+      onConsumeTypeChange();
+      if (eff.effect_type === 'add_status' || eff.effect_type === 'remove_status') {
+        el('f_consume_status').value = eff.status || '';
+        el('f_consume_layers').value = eff.layers || 1;
+      } else {
+        el('f_consume_amount').value = eff.amount || 0;
+      }
+      updateConsumeValue();
+    }
+  }
+
   function calcEffectValue(eff) {
     const fn = VALUE_TABLE[eff.effect_code];
     if (!fn) return 0;
@@ -679,17 +937,6 @@
       stBox.innerHTML = EL.subtypes.map(s => `<label style="font-size:0.75rem;"><input type="checkbox" class="subtype-cb" value="${s.code}"> ${s.zh}</label>`).join('');
     }
 
-    // Commit attribute checkboxes
-    const caBox = el('commitAttrCheckboxes');
-    if (caBox) {
-      const commitAttrs = [
-        { code: 'strength', zh: '力量' }, { code: 'agility', zh: '敏捷' }, { code: 'constitution', zh: '體質' },
-        { code: 'intellect', zh: '智力' }, { code: 'willpower', zh: '意志' }, { code: 'perception', zh: '感知' },
-        { code: 'charisma', zh: '魅力' }, { code: 'wild', zh: '萬能' }
-      ];
-      caBox.innerHTML = commitAttrs.map(a => `<label style="font-size:0.75rem;"><input type="checkbox" class="commit-attr-cb" value="${a.code}"> ${a.zh}</label>`).join('');
-    }
-
     // Cost currency
     const ccSel = el('f_cost_currency');
     ccSel.innerHTML = '';
@@ -855,8 +1102,9 @@
     el('f_ally_san').value = c.ally_san ?? 0;
     el('f_xp_cost').value = c.xp_cost ?? 0;
     loadSubtypes(c.subtypes || []);
-    loadCommitAttrs(c.commit_attributes || []);
+    loadCommitIcons(c.commit_icons || {});
     el('f_commit_bonus').value = c.commit_bonus || '';
+    loadConsumeEffect(c.consume_enabled, c.consume_effect);
     el('f_flavor_text').value = c.flavor_text || '';
     // Migrate old effect format if needed
     const effects = (c.effects || []).map(e => {
@@ -916,8 +1164,10 @@
       ally_hp: intVal('f_ally_hp') || null,
       ally_san: intVal('f_ally_san') || null,
       xp_cost: intVal('f_xp_cost'),
-      commit_attributes: Array.from(document.querySelectorAll('.commit-attr-cb:checked')).map(cb => cb.value),
+      commit_icons: getCommitIcons(),
       commit_bonus: el('f_commit_bonus').value.trim() || null,
+      consume_enabled: el('f_consume_enabled')?.checked || false,
+      consume_effect: getConsumeEffect(),
       subtypes: collectSubtypes(),
       effects: collectEffects(),
       flavor_text: el('f_flavor_text').value.trim(),
@@ -1025,8 +1275,9 @@
     el('f_xp_cost').value = 0;
     loadAttrModifiers({});
     loadSubtypes([]);
-    loadCommitAttrs([]);
+    loadCommitIcons({});
     el('f_commit_bonus').value = '';
+    loadConsumeEffect(false, null);
     renderEffects([]);
     toggleConditionalFields();
     updateCodePreview();
@@ -1559,9 +1810,11 @@
     toggle('secConsumeHead', showConsume);
     toggle('secConsume', showConsume);
 
-    // Skill card: fix cost to 0
+    // Skill card: fix cost to 0, show bonus section
     if (isSkill) { el('f_cost').value = 0; el('f_cost').disabled = true; }
     else { el('f_cost').disabled = false; }
+    toggle('skillBonusSection', isSkill);
+    updateCommitTotal();
 
     // Slot note
     const slot = el('f_slot').value;
@@ -1651,9 +1904,7 @@
     return Array.from(document.querySelectorAll('.subtype-cb:checked')).map(cb => cb.value);
   }
 
-  function loadCommitAttrs(arr) {
-    document.querySelectorAll('.commit-attr-cb').forEach(cb => { cb.checked = arr.includes(cb.value); });
-  }
+  // loadCommitAttrs removed — replaced by loadCommitIcons in triple-use system
 
   /* ── Live Preview ── */
   function bindLivePreview() {
@@ -1731,6 +1982,23 @@
       else { const abbr = ATTRIBUTES[k]?.abbr || k; amParts.push(`<span style="color:${v > 0 ? 'var(--success)' : v < 0 ? 'var(--danger)' : 'var(--text-tertiary)'}">${abbr}${v > 0 ? '+' : ''}${v}</span>`); }
     }
     el('pvAttrMods').innerHTML = amParts.length ? amParts.join(' ') : '';
+    // Commit icons preview
+    const ci = getCommitIcons();
+    const ciParts = [];
+    const attrAbbr = { strength:'力', agility:'敏', constitution:'體', intellect:'智', willpower:'意', perception:'感', charisma:'魅', all:'萬能' };
+    for (const [k, v] of Object.entries(ci)) {
+      if (v > 0) ciParts.push(`[${attrAbbr[k]||k}]×${v}`);
+    }
+    // Consume effect preview
+    const ce = getConsumeEffect();
+    const consumeLabel = { gain_resource:'獲得資源', gain_ammo:'補充彈藥', gain_charges:'補充充能', heal_hp:'回復HP', heal_san:'回復SAN', draw_card:'抽牌', add_status:'獲得狀態', remove_status:'移除狀態', cancel_damage:'取消傷害', cancel_horror:'取消恐懼' };
+    let pvExtra = '';
+    if (ciParts.length) pvExtra += `<div style="font-size:0.625rem;color:var(--text-secondary);margin-top:0.25rem;">加值：${ciParts.join(' ')}</div>`;
+    if (ce) {
+      const ceText = (consumeLabel[ce.effect_type]||ce.effect_type) + (ce.amount ? ` ${ce.amount}` : '') + (ce.status ? ` ${ce.status} ${ce.layers}層` : '');
+      pvExtra += `<div style="font-size:0.625rem;color:var(--text-secondary);margin-top:0.15rem;">消費：${ceText}</div>`;
+    }
+    el('pvAttrMods').innerHTML += pvExtra;
     el('previewCard').style.borderColor = facColor;
     updateBalancePanel();
   }
@@ -1964,6 +2232,15 @@ instant, until_end_of_turn, until_end_of_round, until_next_turn, until_end_of_sc
 ## 六、元素屬性
 physical, fire, ice, lightning, arcane
 
+## 六之二、三合一系統
+每張卡片有三種互斥用途：
+1. 打出（Play）— 花費資源放到場上或發動效果
+2. 加值（Commit）— 檢定前從手牌投入，提供屬性加值，自動進棄牌堆
+3. 消費（Consume）— 花 1 行動點棄掉，獲得一次性輔助效果
+
+加值：為卡片設計適合主題的屬性圖示（七大屬性各 0-5），價值不計入打出費用。
+消費：從以下合法效果中選一：獲得資源、補充彈藥/充能、回復HP、回復SAN、抽牌、獲得正面狀態、移除負面狀態、取消傷害/恐懼。消費不能是移動、攻擊、調查等基本動作。
+
 ## 七、狀態效果
 核心規則：所有狀態皆可堆疊。狀態在經歷完整一回合後，於該回合結束階段減少 1 層。
 分為兩種：數值型（層數=效果強度）、開關型（效果固定，層數=持續回合數）。
@@ -2005,6 +2282,9 @@ ${userDescription}
     "duration": "instant",
     "desc_zh": "中文效果描述", "desc_en": "English effect description"
   }],
+  "commit_icons": { "agility": 1 },
+  "consume_enabled": true,
+  "consume_effect": { "effect_type": "gain_resource", "amount": 2, "value": 2.0 },
   "flavor_text": "",
   "value_calculation": {
     "effects": [{"name": "效果描述", "value": 3}],
@@ -2200,8 +2480,9 @@ ${userDescription}
     el('f_ally_san').value = d.ally_san ?? 0;
     el('f_xp_cost').value = d.xp_cost ?? 0;
     loadSubtypes(d.subtypes || []);
-    loadCommitAttrs(d.commit_attributes || []);
+    loadCommitIcons(d.commit_icons || {});
     el('f_commit_bonus').value = d.commit_bonus || '';
+    loadConsumeEffect(d.consume_enabled, d.consume_effect);
     el('f_flavor_text').value = d.flavor_text || '';
     // Migrate old effect format if needed
     const effects = (d.effects || []).map(e => {

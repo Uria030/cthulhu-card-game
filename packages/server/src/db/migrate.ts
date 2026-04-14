@@ -175,6 +175,27 @@ EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 `;
 
+const MIGRATION_004_SQL = `
+-- ============================================
+-- Migration 004: Triple-use system (commit icons + consume effects)
+-- ============================================
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN commit_icons JSONB NOT NULL DEFAULT '{}';
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN consume_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN consume_effect JSONB;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -182,6 +203,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_SQL);
     await client.query(MIGRATION_002_SQL);
     await client.query(MIGRATION_003_SQL);
+    await client.query(MIGRATION_004_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

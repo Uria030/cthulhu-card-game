@@ -125,10 +125,12 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
           health_boost, sanity_boost, weapon_tier, ammo, uses, consume_type,
           combat_style, attribute_modifiers, spell_type, spell_casting, hand_limit_mod,
           ally_hp, ally_san, xp_cost, subtypes,
-          flavor_text, removable, committable, lethal_count, owner_investigator
+          flavor_text, removable, committable, lethal_count, owner_investigator,
+          commit_icons, consume_enabled, consume_effect
         ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-          $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38
+          $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,
+          $39,$40,$41
         ) RETURNING *`;
 
       const vals = [
@@ -138,7 +140,8 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
         b.health_boost || 0, b.sanity_boost || 0, b.weapon_tier || null, b.ammo || null, b.uses || null, b.consume_type || 'discard',
         b.combat_style || null, JSON.stringify(b.attribute_modifiers || {}), b.spell_type || null, b.spell_casting || null, b.hand_limit_mod || 0,
         b.ally_hp || null, b.ally_san || null, b.xp_cost || 0, b.subtypes || [],
-        b.flavor_text || null, b.removable !== false, b.committable !== false, b.lethal_count || 0, b.owner_investigator || null
+        b.flavor_text || null, b.removable !== false, b.committable !== false, b.lethal_count || 0, b.owner_investigator || null,
+        JSON.stringify(b.commit_icons || {}), b.consume_enabled || false, b.consume_effect ? JSON.stringify(b.consume_effect) : null
       ];
 
       const cardResult = await client.query(insertSQL, vals);
@@ -177,8 +180,9 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
           combat_style=$20, attribute_modifiers=$21, spell_type=$22, spell_casting=$23, hand_limit_mod=$24,
           ally_hp=$25, ally_san=$26, xp_cost=$27, subtypes=$28,
           flavor_text=$29, removable=$30, committable=$31, lethal_count=$32, owner_investigator=$33,
+          commit_icons=$34, consume_enabled=$35, consume_effect=$36,
           version = version + 1, updated_at = NOW()
-        WHERE id = $34 RETURNING *`;
+        WHERE id = $37 RETURNING *`;
 
       const vals = [
         b.name_zh, b.name_en, b.slot || 'none',
@@ -189,6 +193,7 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
         b.combat_style || null, JSON.stringify(b.attribute_modifiers || {}), b.spell_type || null, b.spell_casting || null, b.hand_limit_mod || 0,
         b.ally_hp || null, b.ally_san || null, b.xp_cost || 0, b.subtypes || [],
         b.flavor_text || null, b.removable !== false, b.committable !== false, b.lethal_count || 0, b.owner_investigator || null,
+        JSON.stringify(b.commit_icons || {}), b.consume_enabled || false, b.consume_effect ? JSON.stringify(b.consume_effect) : null,
         id
       ];
 
@@ -258,15 +263,17 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
             level,cost,cost_currency,skill_value,damage,horror,
             health_boost,sanity_boost,weapon_tier,ammo,uses,consume_type,
             combat_style,attribute_modifiers,spell_type,spell_casting,hand_limit_mod,
-            ally_hp,ally_san,xp_cost,subtypes,flavor_text,removable,committable,lethal_count,owner_investigator
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38) RETURNING id`,
+            ally_hp,ally_san,xp_cost,subtypes,flavor_text,removable,committable,lethal_count,owner_investigator,
+            commit_icons,consume_enabled,consume_effect
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41) RETURNING id`,
           [code,seriesCode,card.name_zh,card.name_en,card.faction,card.style,card.card_type||card.type,card.slot||'none',
            card.is_unique||false,card.is_signature||false,card.is_weakness||false,card.is_revelation||false,
            card.level||0,card.cost||0,card.cost_currency||'resource',card.skill_value||0,card.damage||0,card.horror||0,
            card.health_boost||0,card.sanity_boost||0,card.weapon_tier||null,card.ammo||null,card.uses||null,card.consume_type||'discard',
            card.combat_style||null,JSON.stringify(attrMods),card.spell_type||null,card.spell_casting||null,card.hand_limit_mod||0,
            card.ally_hp||null,card.ally_san||null,card.xp_cost||0,card.subtypes||[],card.flavor_text||null,
-           card.removable!==false,card.committable!==false,card.lethal_count||0,card.owner_investigator||null]
+           card.removable!==false,card.committable!==false,card.lethal_count||0,card.owner_investigator||null,
+           JSON.stringify(card.commit_icons||{}),card.consume_enabled||false,card.consume_effect?JSON.stringify(card.consume_effect):null]
         );
         await insertEffects(client, insertRes.rows[0].id, card.effects);
         await client.query('COMMIT');

@@ -6,7 +6,10 @@
 // ============================================
 // API 設定
 // ============================================
-const ADMIN_API_BASE = 'https://server-production-fc4f.up.railway.app';
+const ADMIN_API_BASE = (() => {
+  if (window.location.hostname === 'localhost') return 'http://localhost:3001';
+  return 'https://server-production-fc4f.up.railway.app';
+})();
 window.ADMIN_API_BASE = ADMIN_API_BASE;
 
 // ============================================

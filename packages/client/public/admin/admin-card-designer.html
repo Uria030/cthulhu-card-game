@@ -121,7 +121,8 @@
     .eff-value-tag { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; color: var(--gold); background: rgba(201,168,76,0.1); border: 1px solid var(--gold-dim); border-radius: 3px; padding: 0.1rem 0.35rem; margin-left: 0.5rem; }
     .effects-total-value { text-align: right; font-size: 0.8125rem; color: var(--gold); font-family: 'JetBrains Mono', monospace; padding: 0.35rem 0; margin-top: 0.25rem; border-top: 1px solid var(--border); }
     .right-sticky-col { position: sticky; top: 60px; max-height: calc(100vh - 70px); overflow-y: auto; }
-    @media (max-width: 1100px) { .edit-preview-layout { grid-template-columns: 1fr; } .right-sticky-col { position: static; max-height: none; } .preview-card, .balance-panel { width: 100%; } }
+    @media (max-width: 1440px) { .edit-preview-layout { grid-template-columns: 1fr; } .right-sticky-col { position: static; max-height: none; display: grid; grid-template-columns: 1fr 320px; gap: 1rem; align-items: start; } .preview-card { width: 300px; } .balance-panel { width: 100%; } }
+    @media (max-width: 900px) { .right-sticky-col { grid-template-columns: 1fr; } .preview-card, .balance-panel { width: 100%; } }
     @media (max-width: 768px) { .main-layout { flex-direction: column; } .panel-left { width: 100%; max-height: 300px; border-right: none; border-bottom: 1px solid var(--border); } }
   </style>
 </head>
@@ -319,12 +320,15 @@
           </div><!-- /secCommit -->
 
           <!-- Stats: 消費功能 (Consume) -->
-          <div class="section-label collapsible open" id="secConsumeHead" onclick="toggleSection('secConsume')">消費功能<span class="eff-value-tag" id="consumeTotalTag">—</span></div>
-          <div class="section-content" id="secConsume">
+          <div class="section-label" id="secConsumeHead" style="display:flex;align-items:center;gap:0.5rem;">
+            <span>消費功能</span>
+            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.75rem;font-family:'Noto Sans TC',sans-serif;color:var(--text-secondary);cursor:pointer;margin-left:auto;"><input type="checkbox" id="f_consume_enabled" onchange="toggleConsumeEffect()">啟用</label>
+            <span class="eff-value-tag" id="consumeTotalTag" style="display:none;"></span>
+          </div>
+          <div id="secConsume" style="display:none;">
             <div>
               <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.35rem;">手牌消費效果（花 1 行動點棄掉，觸發輔助效果）</div>
-              <div class="check-row"><input type="checkbox" id="f_consume_enabled" onchange="toggleConsumeEffect()"><label for="f_consume_enabled">啟用消費功能</label></div>
-              <div id="consumeEffectFields" class="hidden" style="margin-top:0.35rem;">
+              <div id="consumeEffectFields" style="margin-top:0.35rem;">
                 <div class="form-grid">
                   <div class="form-group"><label>效果類型</label>
                     <select id="f_consume_effect_type" onchange="onConsumeTypeChange()">
@@ -668,7 +672,7 @@
 
   function toggleConsumeEffect() {
     const on = el('f_consume_enabled').checked;
-    el('consumeEffectFields').classList.toggle('hidden', !on);
+    el('secConsume').style.display = on ? '' : 'none';
     updateConsumeValue();
     updatePreview();
   }
@@ -693,7 +697,9 @@
   function updateConsumeValue() {
     const eff = getConsumeEffect();
     const val = eff?.value || 0;
-    el('consumeTotalTag').textContent = eff ? val.toFixed(1) + 'V' : '—';
+    const tag = el('consumeTotalTag');
+    if (eff) { tag.textContent = val.toFixed(1) + 'V'; tag.style.display = ''; }
+    else { tag.textContent = ''; tag.style.display = 'none'; }
 
     const panel = el('consumeValidation');
     if (!panel) return;
@@ -1802,7 +1808,8 @@
     // 消費功能（三合一）: 所有非技能卡都可設定
     const showConsume = !isSkill;
     toggle('secConsumeHead', showConsume);
-    toggle('secConsume', showConsume);
+    if (showConsume) { el('secConsume').style.display = el('f_consume_enabled').checked ? '' : 'none'; }
+    else { el('secConsume').style.display = 'none'; }
 
     // Skill card: fix cost to 0, show bonus section
     if (isSkill) { el('f_cost').value = 0; el('f_cost').disabled = true; }

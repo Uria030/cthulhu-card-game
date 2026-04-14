@@ -62,7 +62,7 @@
     .eff-desc-actions { display: flex; gap: 0.25rem; margin-top: 0.25rem; }
     .eff-desc-actions button { font-size: 0.625rem; padding: 0.15rem 0.4rem; }
     .edit-preview-layout { display: grid; grid-template-columns: 1fr 320px; gap: 1.5rem; }
-    .preview-card { width: 300px; min-height: 420px; border: 2px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 1rem; position: sticky; top: 60px; font-size: 0.8125rem; display: flex; flex-direction: column; }
+    .preview-card { width: 300px; min-height: 420px; border: 2px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 1rem; font-size: 0.8125rem; display: flex; flex-direction: column; }
     .pv-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; }
     .pv-cost { width: 36px; height: 36px; border-radius: 50%; background: var(--bg-primary); border: 2px solid var(--gold-dim); display: flex; align-items: center; justify-content: center; font-family: 'Cinzel', serif; font-size: 1.125rem; font-weight: 700; color: var(--gold); }
     .pv-faction { font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; padding: 0.15rem 0.5rem; border-radius: 4px; border: 1px solid; }
@@ -100,7 +100,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .action-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
     /* Balance panel */
-    .balance-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem; position: sticky; top: 60px; }
+    .balance-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem; }
     .balance-title { font-family: 'Cinzel', serif; font-size: 0.875rem; color: var(--gold-dim); margin-bottom: 0.5rem; }
     .balance-row { display: flex; justify-content: space-between; font-size: 0.75rem; padding: 0.15rem 0; }
     .balance-row .bal-label { color: var(--text-secondary); }
@@ -120,7 +120,8 @@
     /* Effect value tags */
     .eff-value-tag { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; color: var(--gold); background: rgba(201,168,76,0.1); border: 1px solid var(--gold-dim); border-radius: 3px; padding: 0.1rem 0.35rem; margin-left: 0.5rem; }
     .effects-total-value { text-align: right; font-size: 0.8125rem; color: var(--gold); font-family: 'JetBrains Mono', monospace; padding: 0.35rem 0; margin-top: 0.25rem; border-top: 1px solid var(--border); }
-    @media (max-width: 1100px) { .edit-preview-layout { grid-template-columns: 1fr; } .preview-card, .balance-panel { position: static; width: 100%; } }
+    .right-sticky-col { position: sticky; top: 60px; max-height: calc(100vh - 70px); overflow-y: auto; }
+    @media (max-width: 1100px) { .edit-preview-layout { grid-template-columns: 1fr; } .right-sticky-col { position: static; max-height: none; } .preview-card, .balance-panel { width: 100%; } }
     @media (max-width: 768px) { .main-layout { flex-direction: column; } .panel-left { width: 100%; max-height: 300px; border-right: none; border-bottom: 1px solid var(--border); } }
   </style>
 </head>
@@ -372,7 +373,7 @@
         </div>
 
         <!-- Balance + Preview -->
-        <div>
+        <div class="right-sticky-col">
           <div class="balance-panel" id="balancePanel">
             <div class="balance-title">平衡計算</div>
             <div id="balanceContent">

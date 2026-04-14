@@ -99,7 +99,28 @@
     .ai-loading { display: inline-block; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .action-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-    @media (max-width: 1100px) { .edit-preview-layout { grid-template-columns: 1fr; } .preview-card { position: static; width: 100%; } }
+    /* Balance panel */
+    .balance-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem; position: sticky; top: 60px; }
+    .balance-title { font-family: 'Cinzel', serif; font-size: 0.875rem; color: var(--gold-dim); margin-bottom: 0.5rem; }
+    .balance-row { display: flex; justify-content: space-between; font-size: 0.75rem; padding: 0.15rem 0; }
+    .balance-row .bal-label { color: var(--text-secondary); }
+    .balance-row .bal-val { font-family: 'JetBrains Mono', monospace; color: var(--text-primary); }
+    .balance-divider { border: none; border-top: 1px solid var(--border); margin: 0.35rem 0; }
+    .balance-result { text-align: center; padding: 0.5rem; margin-top: 0.35rem; border-radius: 6px; font-size: 0.8125rem; font-weight: 500; }
+    .balance-result.ok { background: rgba(45,139,111,0.15); color: var(--success); border: 1px solid var(--success); }
+    .balance-result.warn { background: rgba(201,168,76,0.15); color: var(--gold); border: 1px solid var(--gold-dim); }
+    .balance-result.err { background: rgba(184,76,76,0.15); color: var(--danger); border: 1px solid var(--danger); }
+    .rarity-display { font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; text-align: center; padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--gold); margin-top: 0.25rem; }
+    /* Collapsible sections */
+    .section-label.collapsible { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.35rem; }
+    .section-label.collapsible::before { content: ''; display: inline-block; width: 0; height: 0; border-left: 5px solid var(--gold-dim); border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform 0.15s; }
+    .section-label.collapsible.open::before { transform: rotate(90deg); }
+    .section-content { overflow: hidden; transition: max-height 0.2s ease; }
+    .section-content.collapsed { max-height: 0 !important; overflow: hidden; padding: 0; margin: 0; }
+    /* Effect value tags */
+    .eff-value-tag { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; color: var(--gold); background: rgba(201,168,76,0.1); border: 1px solid var(--gold-dim); border-radius: 3px; padding: 0.1rem 0.35rem; margin-left: 0.5rem; }
+    .effects-total-value { text-align: right; font-size: 0.8125rem; color: var(--gold); font-family: 'JetBrains Mono', monospace; padding: 0.35rem 0; margin-top: 0.25rem; border-top: 1px solid var(--border); }
+    @media (max-width: 1100px) { .edit-preview-layout { grid-template-columns: 1fr; } .preview-card, .balance-panel { position: static; width: 100%; } }
     @media (max-width: 768px) { .main-layout { flex-direction: column; } .panel-left { width: 100%; max-height: 300px; border-right: none; border-bottom: 1px solid var(--border); } }
   </style>
 </head>
@@ -184,6 +205,7 @@
               <div class="check-row"><input type="checkbox" id="f_is_unique"><label for="f_is_unique">獨特卡（場上只能存在一張）</label></div>
             </div>
             <div class="form-group"><label>經驗值花費 (xp_cost)</label><input type="number" id="f_xp_cost" value="0" min="0" max="30"></div>
+            <div class="form-group"><label>稀有度（系統反推）</label><div class="rarity-display" id="rarityDisplay">—</div></div>
             <div class="form-group full"><label>物品子類型 (subtypes)</label>
               <div id="subtypesCheckboxes" style="display:flex;flex-wrap:wrap;gap:0.25rem 0.5rem;"></div>
             </div>
@@ -216,8 +238,8 @@
           </div>
 
           <!-- Stats: 打出效果 -->
-          <div class="section-label">&#9656; 打出效果</div>
-          <div class="form-grid">
+          <div class="section-label collapsible open" id="secPlayHead" onclick="toggleSection('secPlay')">打出效果</div>
+          <div class="section-content" id="secPlay"><div class="form-grid">
             <div class="form-group"><label>費用 (0-6)</label><input type="number" id="f_cost" value="0" min="0" max="6"></div>
             <div class="form-group"><label>費用貨幣</label><select id="f_cost_currency"></select></div>
             <div class="form-group"><label>使用後去向</label><select id="f_consume_type"></select></div>
@@ -230,9 +252,11 @@
             <div class="form-group" id="allySanGroup" class="hidden"><label>盟友 SAN</label><input type="number" id="f_ally_san" value="0" min="0" max="5"></div>
           </div>
 
+          </div><!-- /secPlay -->
+
           <!-- Stats: 加值數據 -->
-          <div class="section-label">&#9656; 加值數據</div>
-          <div class="form-grid">
+          <div class="section-label collapsible open" id="secCommitHead" onclick="toggleSection('secCommit')">加值數據</div>
+          <div class="section-content" id="secCommit"><div class="form-grid">
             <div class="form-group"><label>檢定加值 (0-5)</label><input type="number" id="f_skill_value" value="0" min="0" max="5"></div>
             <div class="form-group full"><label>加值屬性（可多選）</label>
               <div id="commitAttrCheckboxes" style="display:flex;flex-wrap:wrap;gap:0.25rem 0.5rem;"></div>
@@ -240,9 +264,11 @@
             <div class="form-group full"><label>加值附加效果（選填）</label><input type="text" id="f_commit_bonus" placeholder="例如：檢定成功時抽 1 張牌"></div>
           </div>
 
+          </div><!-- /secCommit -->
+
           <!-- Stats: 消費功能 -->
-          <div class="section-label">&#9656; 消費功能</div>
-          <div class="form-grid">
+          <div class="section-label collapsible open" id="secConsumeHead" onclick="toggleSection('secConsume')">消費功能</div>
+          <div class="section-content" id="secConsume"><div class="form-grid">
             <div class="form-group" id="ammoGroup"><label>彈藥</label><input type="number" id="f_ammo" value="0" min="0"></div>
             <div class="form-group"><label>使用次數</label><input type="number" id="f_uses" value="0" min="0"></div>
             <div class="form-group" id="weaponTierGroup"><label>武器階層</label><select id="f_weapon_tier"><option value="0">無</option></select></div>
@@ -250,6 +276,8 @@
             <div class="form-group" id="spellTypeGroup" class="hidden"><label>法術類型</label><select id="f_spell_type"><option value="">無</option></select></div>
             <div class="form-group" id="spellCastingGroup" class="hidden"><label>施法方式</label><select id="f_spell_casting"><option value="">無</option></select></div>
           </div>
+
+          </div><!-- /secConsume -->
 
           <!-- Attribute Modifiers (weapon only) -->
           <div id="attrModGroup" class="hidden">
@@ -280,6 +308,7 @@
           <!-- Effects -->
           <div class="section-label">效果資訊</div>
           <div id="effectsList"></div>
+          <div class="effects-total-value" id="effectsTotalValue"></div>
           <button class="btn" onclick="addEffect()" style="margin-top:0.5rem;">+ 新增效果</button>
 
           <!-- Narrative -->
@@ -296,8 +325,25 @@
           </div>
         </div>
 
-        <!-- Preview -->
+        <!-- Balance + Preview -->
         <div>
+          <div class="balance-panel" id="balancePanel">
+            <div class="balance-title">平衡計算</div>
+            <div id="balanceContent">
+              <div class="balance-row"><span class="bal-label">效果總價值</span><span class="bal-val" id="balTotalVal">0V</span></div>
+              <hr class="balance-divider">
+              <div class="balance-row"><span class="bal-label">等級抵扣</span><span class="bal-val" id="balLevelDisc">0</span></div>
+              <div class="balance-row"><span class="bal-label">消耗類型修正</span><span class="bal-val" id="balConsumeMod">0</span></div>
+              <div class="balance-row"><span class="bal-label">留場修正</span><span class="bal-val" id="balStayMod">0</span></div>
+              <hr class="balance-divider">
+              <div class="balance-row"><span class="bal-label">小計</span><span class="bal-val" id="balSubtotal">0V</span></div>
+              <div class="balance-row"><span class="bal-label">費用設定</span><span class="bal-val" id="balCost">0</span></div>
+              <div class="balance-row"><span class="bal-label">換算比例</span><span class="bal-val" id="balRatio">1:1</span></div>
+              <hr class="balance-divider">
+              <div class="balance-row"><span class="bal-label">需要稀有度抵扣</span><span class="bal-val" id="balRarityDisc">0V</span></div>
+              <div class="balance-result ok" id="balResult">—</div>
+            </div>
+          </div>
           <div class="preview-card" id="previewCard">
             <div class="pv-top">
               <div class="pv-cost" id="pvCost">0</div>
@@ -333,6 +379,238 @@
   const LS_API_KEY = 'gemini_api_key';
   let cards = [];
   let editingId = null;
+
+  /* ══ Value Calculation Engine ══ */
+  const VALUE_TABLE = {
+    // Damage & Healing
+    deal_damage: (p) => (p.amount || 0) * 1,
+    deal_horror: (p) => (p.amount || 0) * 3,
+    heal_hp: (p) => (p.amount || 0) * 1.5,
+    heal_san: (p) => (p.amount || 0) * 1.5,
+    restore_hp_max: (p) => (p.amount || 0) * 6,
+    restore_san_max: (p) => (p.amount || 0) * 6,
+    // Card ops
+    draw_card: (p) => (p.amount || 0) * 1,
+    search_deck: () => 6,
+    retrieve_card: () => 1.5,
+    reveal_top: (p) => (p.count || 0) * 0.5,
+    discard_card: (p) => (p.count || 0) * -0.5,
+    return_to_deck: () => 0,
+    shuffle_deck: () => 0,
+    remove_from_game: () => 0,
+    // Resources
+    gain_resource: (p) => (p.amount || 0) * 1,
+    spend_resource: () => 0,
+    steal_resource: (p) => (p.amount || 0) * 1,
+    transfer_resource: () => 0,
+    // Movement
+    move_investigator: (p) => (p.distance || 0) * 1,
+    move_enemy: (p) => (p.distance || 0) * 1,
+    swap_position: () => 1,
+    place_enemy: () => 0,
+    jump: (p) => (p.distance || 0) * 2,
+    // Status effects
+    add_status: (p) => {
+      const sv = {
+        poison:3, bleed:2, burning:3, frozen:3, doom_status:2, madness:6,
+        marked:6, vulnerable:2, weakness_status:2, wet:1, weakened:3,
+        darkness:2, disarm:4, fatigue:4, silence:4,
+        empowered:3, armor:3, ward:6, haste:4, regeneration:6, stealth:6
+      };
+      return (sv[p.status] || 0) * (p.stacks || p.value || 1);
+    },
+    remove_status: () => 1,
+    // Combat control
+    engage_enemy: () => 0,
+    disengage_enemy: () => 1,
+    exhaust_card: () => 0,
+    ready_card: () => 1,
+    stun_enemy: () => 2,
+    attack: () => 0,
+    evade: () => 0,
+    taunt: () => 0.5,
+    counterattack: (p) => (p.damage || 0) * 1,
+    extra_attack: () => 1.5,
+    // Tests
+    make_test: () => 0,
+    modify_test: () => 0,
+    reroll: () => 1,
+    auto_success: () => 4,
+    auto_fail: () => 0,
+    // Environment
+    place_clue: () => 0,
+    discover_clue: (p) => (p.amount || 0) * 2,
+    place_doom: (p) => (p.amount || 0) * -4,
+    remove_doom: (p) => (p.amount || 0) * 4,
+    seal_gate: () => 4,
+    spawn_enemy: () => 0,
+    remove_enemy: () => 2,
+    execute_enemy: () => 3,
+    // Light
+    create_light: () => 1,
+    extinguish_light: () => 0,
+    create_darkness: () => 1,
+    remove_darkness: () => 1,
+    create_fire: () => 1,
+    extinguish_fire: () => 1,
+    // Special
+    add_bless: (p) => (p.amount || 0) * 1,
+    add_curse: (p) => (p.amount || 0) * 1,
+    remove_bless: () => 0,
+    remove_curse: () => 0,
+    look_chaos_bag: () => 0.5,
+    manipulate_chaos_bag: () => 1,
+    add_keyword: () => 0,
+    remove_keyword: () => 0,
+    reveal_tile: () => 0,
+    place_tile: () => 0,
+    remove_tile: () => 0,
+    place_haunting: () => 0,
+    remove_haunting: () => 1,
+    advance_act: () => 2,
+    advance_agenda: () => -4,
+    connect_tiles: () => 0,
+    disconnect_tiles: () => 0,
+    transfer_damage: () => 0,
+    transfer_horror: () => 0,
+  };
+
+  const RARITY_LEVELS = [
+    { name: '隨身', en: 'Sidearm', discount: 0, max: 0 },
+    { name: '基礎', en: 'Basic', discount: 1, max: 1 },
+    { name: '標準', en: 'Standard', discount: 2, max: 2 },
+    { name: '進階', en: 'Advanced', discount: 3, max: 3 },
+    { name: '稀有', en: 'Rare', discount: 4, max: 4 },
+    { name: '傳奇', en: 'Legendary', discount: 5, max: 5 },
+  ];
+
+  const CONSUME_TYPE_MODS = { stay: -1, discard: 0, short_rest: -1, long_rest: -2, removed: -3 };
+
+  const SKILL_VALUE_RANGES = {
+    0: [2.5, 3], 1: [2.5, 3], 2: [5, 6], 3: [7, 8], 4: [8, 9], 5: [9, 10]
+  };
+
+  function calcEffectValue(eff) {
+    const fn = VALUE_TABLE[eff.effect_code];
+    if (!fn) return 0;
+    return fn(eff.params || {});
+  }
+
+  function calcAllEffectsValue() {
+    const effs = collectEffects();
+    return effs.reduce((sum, e) => sum + calcEffectValue(e), 0);
+  }
+
+  function calcWeaponOutputValue() {
+    const dmg = intVal('f_damage');
+    const ammo = intVal('f_ammo');
+    if (dmg > 0 && ammo > 0) return dmg * ammo;
+    return 0;
+  }
+
+  function calcAllyBaseValue() {
+    const hp = intVal('f_ally_hp');
+    const san = intVal('f_ally_san');
+    return hp * 0.5 + san * 0.5 + 2; // +2V stay value
+  }
+
+  function calcBalanceInfo() {
+    const cardType = el('f_type').value;
+    const level = intVal('f_level');
+    const cost = intVal('f_cost');
+    const consumeType = el('f_consume_type').value;
+    const consumeMod = CONSUME_TYPE_MODS[consumeType] ?? 0;
+    const levelDisc = level; // level N = -NV
+    const effectsValue = calcAllEffectsValue();
+    const isWeapon = cardType === 'asset' && intVal('f_damage') > 0 && intVal('f_ammo') > 0;
+    const isAlly = cardType === 'ally';
+    const isSkill = cardType === 'skill';
+
+    let totalValue, stayMod, ratio, rarityDisc, rarity, status, msg;
+
+    if (isSkill) {
+      // Skill cards: check value range
+      const sv = intVal('f_skill_value');
+      const skillAttrValue = sv === 1 ? 0.5 : sv === 2 ? 1.5 : sv === 3 ? 3 : sv === 4 ? 5 : sv === 5 ? 7.5 : 0;
+      totalValue = skillAttrValue + effectsValue;
+      const range = SKILL_VALUE_RANGES[level] || [0, 99];
+      ratio = '—';
+      stayMod = 0;
+      rarityDisc = 0;
+      rarity = '—';
+      if (totalValue >= range[0] && totalValue <= range[1]) {
+        status = 'ok'; msg = `LV${level} 區間 ${range[0]}-${range[1]}V 內`;
+      } else if (totalValue < range[0]) {
+        status = 'warn'; msg = `${totalValue}V 低於 LV${level} 下限 ${range[0]}V`;
+      } else {
+        status = 'warn'; msg = `${totalValue}V 高於 LV${level} 上限 ${range[1]}V`;
+      }
+    } else if (isAlly) {
+      totalValue = calcAllyBaseValue() + effectsValue;
+      stayMod = 0; // already included in calcAllyBaseValue
+      ratio = '1:1';
+      rarityDisc = totalValue - levelDisc - cost;
+      rarity = rarityFromDiscount(rarityDisc);
+      status = rarity.status; msg = rarity.msg;
+    } else if (isWeapon) {
+      const weaponOut = calcWeaponOutputValue();
+      totalValue = weaponOut + effectsValue;
+      stayMod = -1;
+      ratio = '2:1';
+      rarityDisc = totalValue + stayMod + consumeMod - levelDisc - (cost * 2);
+      rarity = rarityFromDiscount(rarityDisc);
+      status = rarity.status; msg = rarity.msg;
+    } else if (cardType === 'asset') {
+      // Non-weapon asset
+      const uses = intVal('f_uses');
+      totalValue = uses > 0 ? effectsValue * uses : effectsValue;
+      stayMod = -1;
+      ratio = '2:1';
+      rarityDisc = totalValue + stayMod + consumeMod - levelDisc - (cost * 2);
+      rarity = rarityFromDiscount(rarityDisc);
+      status = rarity.status; msg = rarity.msg;
+    } else {
+      // Event card
+      totalValue = effectsValue;
+      stayMod = 0;
+      ratio = '1:1';
+      rarityDisc = totalValue - levelDisc - cost;
+      rarity = rarityFromDiscount(rarityDisc);
+      status = rarity.status; msg = rarity.msg;
+    }
+
+    return { totalValue, levelDisc, consumeMod, stayMod, ratio, cost, rarityDisc, rarity: rarity.name || rarity, status, msg, isSkill, effectsValue };
+  }
+
+  function rarityFromDiscount(disc) {
+    if (disc > 5) return { name: '超出範圍', status: 'err', msg: '效果過強或費用過低，需調整' };
+    if (disc <= 0) return { name: '隨身', status: 'ok', msg: '隨身（0V）' };
+    if (disc <= 1) return { name: '基礎', status: 'ok', msg: `基礎（-1V）${disc === 1 ? '' : ' 有餘裕'}` };
+    if (disc <= 2) return { name: '標準', status: 'ok', msg: `標準（-2V）${disc === 2 ? '' : ' 有餘裕'}` };
+    if (disc <= 3) return { name: '進階', status: 'ok', msg: `進階（-3V）${disc === 3 ? '' : ' 有餘裕'}` };
+    if (disc <= 4) return { name: '稀有', status: 'ok', msg: `稀有（-4V）${disc === 4 ? '' : ' 有餘裕'}` };
+    return { name: '傳奇', status: 'ok', msg: `傳奇（-5V）${disc === 5 ? '' : ' 有餘裕'}` };
+  }
+
+  function updateBalancePanel() {
+    const b = calcBalanceInfo();
+    el('balTotalVal').textContent = b.totalValue.toFixed(1) + 'V';
+    el('balLevelDisc').textContent = b.levelDisc > 0 ? `-${b.levelDisc}V` : '0';
+    el('balConsumeMod').textContent = b.consumeMod !== 0 ? `${b.consumeMod}V` : '0';
+    el('balStayMod').textContent = b.stayMod !== 0 ? `${b.stayMod}V` : '0';
+    const subtotal = b.totalValue + (b.stayMod || 0) + (b.consumeMod || 0) - b.levelDisc;
+    el('balSubtotal').textContent = subtotal.toFixed(1) + 'V';
+    el('balCost').textContent = b.cost;
+    el('balRatio').textContent = b.ratio;
+    el('balRarityDisc').textContent = b.isSkill ? '—' : b.rarityDisc.toFixed(1) + 'V';
+    const resEl = el('balResult');
+    resEl.textContent = b.isSkill ? b.msg : `${b.rarity} ${b.status === 'ok' ? '✓' : b.status === 'warn' ? '⚠' : '✗'}`;
+    resEl.className = 'balance-result ' + b.status;
+    // Update rarity display in form
+    el('rarityDisplay').textContent = b.isSkill ? '—' : (b.rarity || '—');
+    // Update effects total value display
+    el('effectsTotalValue').textContent = b.effectsValue > 0 ? `效果總價值：${b.effectsValue.toFixed(1)}V` : '';
+  }
 
   async function init() {
     await loadEffectLanguageOptions();
@@ -858,8 +1136,11 @@
     const showScope = durationDef?.has_scope;
     const showDurationParam = durationDef?.has_param;
 
+    // Pre-calculate value for this effect
+    const effVal = calcEffectValue({ effect_code: effectCode, params });
+
     return `<div class="effect-item" data-idx="${i}">
-      <div class="effect-header"><span style="font-size:0.75rem;color:var(--text-tertiary)">效果 #${i+1}</span><button class="btn-remove" onclick="removeEffect(${i})">&#10005;</button></div>
+      <div class="effect-header"><span style="font-size:0.75rem;color:var(--text-tertiary)">效果 #${i+1}</span><span class="eff-value-tag">${effVal.toFixed(1)}V</span><button class="btn-remove" onclick="removeEffect(${i})">&#10005;</button></div>
 
       <div class="eff-section"><div class="eff-section-label"><span class="eff-num">1</span> 觸發時機</div>
         <select class="eff-trigger" style="width:100%;">${triggerSelect}</select></div>
@@ -1231,33 +1512,69 @@
     }
   }
 
+  /* ── Section Collapse ── */
+  function toggleSection(id) {
+    const content = el(id);
+    const head = el(id + 'Head');
+    if (!content || !head) return;
+    content.classList.toggle('collapsed');
+    head.classList.toggle('open');
+  }
+
   /* ── Conditional Fields ── */
   function toggleConditionalFields() {
     const type = el('f_type').value;
     const isAsset = type === 'asset';
     const isAlly = type === 'ally';
+    const isSkill = type === 'skill';
+    const isEvent = type === 'event';
     const cs = el('f_combat_style')?.value;
     const isArcane = cs === 'arcane';
+    const isWeapon = isAsset && (intVal('f_damage') > 0 || intVal('f_ammo') > 0 || el('f_combat_style').value);
+
+    // Identity fields
     toggle('slotGroup', isAsset);
+    toggle('signatureFields', el('f_is_signature').checked);
+    toggle('revelationFields', el('f_is_revelation').checked);
+
+    // Play section fields
+    toggle('allyHpGroup', isAlly);
+    toggle('allySanGroup', isAlly);
+
+    // Consume section fields
     toggle('weaponTierGroup', isAsset);
     toggle('ammoGroup', isAsset);
     toggle('combatStyleGroup', isAsset);
-    toggle('attrModGroup', isAsset);
-    toggle('allyHpGroup', isAlly);
-    toggle('allySanGroup', isAlly);
     toggle('spellTypeGroup', isArcane || isAsset);
     toggle('spellCastingGroup', isArcane || isAsset);
-    toggle('signatureFields', el('f_is_signature').checked);
-    toggle('revelationFields', el('f_is_revelation').checked);
+    toggle('attrModGroup', isAsset);
+
+    // Section visibility by type (三區塊顯示邏輯)
+    // 打出效果: hide for skill cards (cost fixed 0)
+    toggle('secPlayHead', !isSkill);
+    toggle('secPlay', !isSkill);
+    // 加值數據: always show
+    // 消費功能: hide for event, ally, skill
+    const showConsume = isAsset;
+    toggle('secConsumeHead', showConsume);
+    toggle('secConsume', showConsume);
+
+    // Skill card: fix cost to 0
+    if (isSkill) { el('f_cost').value = 0; el('f_cost').disabled = true; }
+    else { el('f_cost').disabled = false; }
+
     // Slot note
     const slot = el('f_slot').value;
     const note = SLOTS[slot]?.note || '';
     el('slotNote').textContent = note;
+
     // Default consume_type based on type
     if (!editingId) {
-      if (type === 'asset' || type === 'ally') el('f_consume_type').value = 'stay';
-      else if (type === 'event') el('f_consume_type').value = 'discard';
+      if (isAsset || isAlly) el('f_consume_type').value = 'stay';
+      else if (isEvent) el('f_consume_type').value = 'discard';
     }
+
+    updateBalancePanel();
   }
 
   function onWeaponTierChange() {
@@ -1415,6 +1732,7 @@
     }
     el('pvAttrMods').innerHTML = amParts.length ? amParts.join(' ') : '';
     el('previewCard').style.borderColor = facColor;
+    updateBalancePanel();
   }
 
   /* ── Import / Export ── */
@@ -1473,7 +1791,33 @@
   }
 
   function buildGeminiPrompt(userDescription) {
-    return `你是一個克蘇魯神話卡牌遊戲的卡片設計師。請根據以下完整規則和使用者需求，生成一張完全符合規範的卡片。
+    return `你是一個克蘇魯神話卡牌遊戲的卡片設計師。請根據以下完整規則和使用者需求，生成一張**數值平衡**的卡片。
+
+## 零、價值計算系統（最重要）
+
+基礎單位：1V = 1 行動點 = 1 資源 = 抽 1 張牌 = 造成 1 點傷害
+
+### 效果價值表（摘要）
+- 直接傷害：1V/點、恐懼傷害：3V/點
+- 恢復 HP/SAN：1.5V/點
+- 抽牌：1V/張、搜尋牌庫找特定卡：6V
+- 移動：1V/格、跳躍：2V/格
+- 施加燃燒/冷凍/中毒：3V/層、施加標記/發瘋/隱蔽/護盾/再生：6V/層
+- 強化/護甲：3V/層、加速：4V/層
+- 快速（不用行動點）：+1V、可指定其他調查員：+2V
+
+### 稀有度反推公式
+稀有度由效果價值、等級、費用反推：
+- 事件卡(1:1)：稀有度抵扣 = 效果總價值 - 等級抵扣 - 費用
+- 資產卡(2:1)：稀有度抵扣 = 總輸出價值 - 1V(留場) - 消耗修正 - 等級抵扣 - (費用×2)
+- 盟友卡(1:1)：稀有度抵扣 = HP×0.5V + SAN×0.5V + 2V + 能力價值 - 等級抵扣 - 費用
+- 技能卡：費用=0，不計稀有度，檢驗價值區間(LV0:2.5-3V, LV2:5-6V, LV3:7-8V, LV5:9-10V)
+
+### 抵扣值對照表（向上進位）
+≤0：隨身, 0.1~1：基礎, 1.1~2：標準, 2.1~3：進階, 3.1~4：稀有, 4.1~5：傳奇, >5：超出範圍
+
+### 等級抵扣：0級=0, 1級=-1V, 2級=-2V, 3級=-3V, 4級=-4V, 5級=-5V
+### 消耗類型修正：留場=-1V, 棄牌=0, 短休息=-1V, 長休息=-2V, 移除=-3V
 
 ## 一、遊戲基礎規則
 
@@ -1634,7 +1978,7 @@ add_status 使用 stacks 欄位表示層數：{ "status": "burning", "stacks": 1
 ${userDescription}
 
 ## 九、輸出格式
-請回傳完全符合以下 JSON 結構的卡片資料，不要回傳任何其他文字：
+請先計算效果總價值，再設定費用，最後反推稀有度。回傳完全符合以下 JSON 結構的卡片資料，不要回傳任何其他文字：
 {
   "name_zh": "", "name_en": "",
   "faction": "E/I/S/N/T/F/J/P/neutral", "style": "AH/AC/OH/OC",
@@ -1661,7 +2005,15 @@ ${userDescription}
     "duration": "instant",
     "desc_zh": "中文效果描述", "desc_en": "English effect description"
   }],
-  "flavor_text": ""
+  "flavor_text": "",
+  "value_calculation": {
+    "effects": [{"name": "效果描述", "value": 3}],
+    "total_effect_value": 6,
+    "level_discount": -2,
+    "cost": 2,
+    "required_rarity_discount": 2,
+    "calculated_rarity": "標準"
+  }
 }
 
 ## 十、重要提醒
@@ -1871,7 +2223,20 @@ ${userDescription}
 
   function el(id) { return document.getElementById(id); }
   function intVal(id) { return parseInt(el(id).value, 10) || 0; }
-  function toggle(id, show) { el(id).classList.toggle('hidden', !show); }
+  function toggle(id, show) { const e = el(id); if (e) e.classList.toggle('hidden', !show); }
+
+  /* ── Keyboard Shortcuts ── */
+  document.addEventListener('keydown', (e) => {
+    // Don't intercept when typing in input/textarea
+    const tag = e.target.tagName;
+    const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+    if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveCard(); }
+    else if (e.ctrlKey && e.key === 'n') { e.preventDefault(); newCard(); }
+    else if (e.ctrlKey && e.key === 'd') { e.preventDefault(); saveAsNew(); }
+    else if (e.ctrlKey && e.key === 'g') { e.preventDefault(); aiGenerate(); }
+    else if (e.key === 'Escape' && !isInput) { clearForm(); }
+  });
 
   init();
   </script>

@@ -6,11 +6,375 @@
   <title>Boss 戰鬥模擬器 — Admin Module</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    /* ── Page-specific Layout ── */
+    .sim-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .sim-full {
+      grid-column: 1 / -1;
+    }
+
+    .section-title {
+      font-family: 'Cinzel', serif;
+      font-size: 1.1rem;
+      color: var(--gold);
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Investigator Cards ── */
+    .team-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+
+    .inv-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .inv-card h4 {
+      font-size: 0.85rem;
+      margin-bottom: 0.75rem;
+      color: var(--gold-dim);
+    }
+
+    .inv-card .field {
+      margin-bottom: 0.6rem;
+    }
+
+    .inv-card label {
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      margin-bottom: 0.15rem;
+    }
+
+    .inv-card input,
+    .inv-card select {
+      font-size: 0.8rem;
+      padding: 0.35rem 0.5rem;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1;
+      padding: 0;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      accent-color: var(--gold);
+    }
+
+    .slider-row input[type="range"]:focus {
+      box-shadow: none;
+    }
+
+    .slider-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--gold);
+      min-width: 2.5rem;
+      text-align: center;
+    }
+
+    /* ── Preset Buttons ── */
+    .preset-bar {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    .preset-bar .btn {
+      font-size: 0.8rem;
+      padding: 0.35rem 0.75rem;
+    }
+
+    /* ── Enemy Setup ── */
+    .enemy-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
+
+    .enemy-stats-grid label {
+      font-size: 0.75rem;
+    }
+
+    .enemy-stats-grid input {
+      font-family: 'JetBrains Mono', monospace;
+      text-align: center;
+    }
+
+    /* ── Controls ── */
+    .controls-bar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .batch-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .batch-group input {
+      width: 80px;
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .speed-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-left: auto;
+    }
+
+    .speed-group label {
+      margin: 0;
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+
+    .speed-group input[type="range"] {
+      width: 100px;
+      padding: 0;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      accent-color: var(--gold);
+    }
+
+    .speed-group input[type="range"]:focus {
+      box-shadow: none;
+    }
+
+    /* ── Battle Log ── */
+    .battle-log {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-height: 500px;
+      overflow-y: auto;
+      padding: 1rem;
+      font-size: 0.825rem;
+      line-height: 1.7;
+    }
+
+    .log-turn {
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .log-turn:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+
+    .turn-header {
+      font-family: 'Cinzel', serif;
+      font-size: 0.9rem;
+      color: var(--gold-dim);
+      margin-bottom: 0.35rem;
+    }
+
+    .log-hit {
+      color: var(--success);
+    }
+
+    .log-miss {
+      color: var(--danger);
+    }
+
+    .log-heal {
+      color: var(--info);
+    }
+
+    .log-down {
+      color: var(--danger);
+      font-weight: 700;
+    }
+
+    .log-enemy {
+      color: var(--ember);
+    }
+
+    .log-result {
+      font-family: 'Cinzel', serif;
+      font-size: 1rem;
+      padding: 0.5rem;
+      text-align: center;
+      border-radius: 6px;
+      margin-top: 0.5rem;
+    }
+
+    .log-result.win {
+      color: var(--success);
+      border: 1px solid var(--success);
+      background: rgba(45, 139, 111, 0.1);
+    }
+
+    .log-result.lose {
+      color: var(--danger);
+      border: 1px solid var(--danger);
+      background: rgba(184, 76, 76, 0.1);
+    }
+
+    .log-result.draw {
+      color: var(--warning);
+      border: 1px solid var(--warning);
+      background: rgba(201, 168, 76, 0.1);
+    }
+
+    /* ── HP Bars ── */
+    .hp-status {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.4rem;
+    }
+
+    .hp-bar-wrap {
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .hp-bar-label {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.15rem;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .hp-bar-track {
+      height: 8px;
+      background: var(--bg-secondary);
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .hp-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+
+    .hp-bar-fill.ally {
+      background: var(--success);
+    }
+
+    .hp-bar-fill.enemy {
+      background: var(--danger);
+    }
+
+    .hp-bar-fill.down {
+      background: var(--text-tertiary);
+    }
+
+    /* ── Statistics Panel ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+
+    .stat-box {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .stat-box .stat-label {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-box .stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--gold);
+    }
+
+    .stat-box .stat-bar-track {
+      height: 10px;
+      background: var(--bg-secondary);
+      border-radius: 5px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+      border: 1px solid var(--border);
+    }
+
+    .stat-box .stat-bar-fill {
+      height: 100%;
+      border-radius: 5px;
+      transition: width 0.4s;
+    }
+
+    .stat-box.win-rate .stat-bar-fill { background: var(--success); }
+    .stat-box.wipe-rate .stat-bar-fill { background: var(--danger); }
+    .stat-box.avg-turns .stat-bar-fill { background: var(--info); }
+    .stat-box.avg-down .stat-bar-fill { background: var(--warning); }
+
+    .hidden { display: none !important; }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .team-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .sim-grid {
+        grid-template-columns: 1fr;
+      }
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .enemy-stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 560px) {
+      .team-grid {
+        grid-template-columns: 1fr;
+      }
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      .enemy-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
 </head>
 <body>
 
   <nav class="admin-nav">
-    <a href="index.html" class="nav-back">← 返回首頁</a>
+    <a href="index.html" class="nav-back">&larr; 返回首頁</a>
     <span class="nav-title">Boss 戰鬥模擬器</span>
     <span class="nav-code">SIM-02</span>
   </nav>
@@ -19,16 +383,508 @@
     <div class="page-header">
       <h1>Boss 戰鬥模擬器</h1>
       <p class="page-sub">Boss Combat Simulator</p>
-      <p class="page-desc">模擬 Boss 戰鬥流程，驗證數值平衡</p>
+      <p class="page-desc">模擬 4 人調查員小隊 vs Boss 戰鬥流程，驗證數值平衡與勝率</p>
     </div>
 
-    <div class="placeholder-message">
-      <div class="placeholder-icon">🔧</div>
-      <div class="placeholder-text">此模組尚在開發中</div>
-      <div class="placeholder-sub">Module under development</div>
+    <!-- ======== Team Setup ======== -->
+    <div class="card sim-full" style="margin-bottom:1.25rem;">
+      <div class="section-title">調查員隊伍設置</div>
+      <div class="preset-bar">
+        <span style="font-size:0.8rem;color:var(--text-secondary);line-height:2;">快速預設：</span>
+        <button class="btn" onclick="applyPreset('early')">初期隊伍 (Ch.1)</button>
+        <button class="btn" onclick="applyPreset('mid')">中期隊伍 (Ch.5)</button>
+        <button class="btn" onclick="applyPreset('late')">後期隊伍 (Ch.8)</button>
+        <button class="btn" onclick="applyPreset('peak')">巔峰隊伍 (Ch.10)</button>
+      </div>
+      <div class="team-grid" id="teamGrid"></div>
     </div>
-  </div>
+
+    <div class="sim-grid">
+      <!-- ======== Enemy Setup ======== -->
+      <div class="card">
+        <div class="section-title">敵人設置</div>
+        <div class="field">
+          <label>敵人階級</label>
+          <select id="enemyTier" onchange="onEnemyTierChange()">
+            <!-- filled by JS -->
+          </select>
+        </div>
+        <div class="enemy-stats-grid">
+          <div class="field">
+            <label>DC</label>
+            <input type="number" id="enemyDC" min="1" max="30">
+          </div>
+          <div class="field">
+            <label>HP</label>
+            <input type="number" id="enemyHP" min="1" max="999">
+          </div>
+          <div class="field">
+            <label>傷害 (最小)</label>
+            <input type="number" id="enemyDmgMin" min="0" max="99">
+          </div>
+          <div class="field">
+            <label>傷害 (最大)</label>
+            <input type="number" id="enemyDmgMax" min="0" max="99">
+          </div>
+          <div class="field">
+            <label>回血/回合</label>
+            <input type="number" id="enemyRegen" min="0" max="99" value="0">
+          </div>
+        </div>
+      </div>
+
+      <!-- ======== Controls ======== -->
+      <div class="card">
+        <div class="section-title">模擬控制</div>
+        <div class="controls-bar" style="margin-bottom:1rem;">
+          <button class="btn btn-primary" id="btnSingle" onclick="runSingle()">模擬一場</button>
+          <div class="batch-group">
+            <button class="btn" id="btnBatch" onclick="runBatch()">批量模擬</button>
+            <input type="number" id="batchCount" value="1000" min="1" max="100000" step="100">
+            <span style="font-size:0.75rem;color:var(--text-tertiary);">場</span>
+          </div>
+        </div>
+        <div class="speed-group" style="justify-content:flex-start;">
+          <label>動畫速度</label>
+          <input type="range" id="speedSlider" min="0" max="200" value="50">
+          <span class="slider-val" id="speedVal">50ms</span>
+        </div>
+        <div style="margin-top:0.75rem;font-size:0.75rem;color:var(--text-tertiary);">
+          規則：每回合 4 名調查員攻擊 → 敵人攻擊隨機目標 → 敵人回血。HP 歸零的調查員無法行動。全滅或超過 30 回合 = 失敗。
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== Statistics Panel ======== -->
+    <div class="card sim-full hidden" id="statsPanel" style="margin-bottom:1.25rem;">
+      <div class="section-title">批量模擬統計</div>
+      <div class="stats-grid">
+        <div class="stat-box win-rate">
+          <div class="stat-label">勝率</div>
+          <div class="stat-value" id="statWinRate">—</div>
+          <div class="stat-bar-track"><div class="stat-bar-fill" id="statWinBar" style="width:0%"></div></div>
+        </div>
+        <div class="stat-box avg-turns">
+          <div class="stat-label">平均回合數</div>
+          <div class="stat-value" id="statAvgTurns">—</div>
+          <div class="stat-bar-track"><div class="stat-bar-fill" id="statTurnsBar" style="width:0%"></div></div>
+        </div>
+        <div class="stat-box avg-down">
+          <div class="stat-label">平均倒地人數</div>
+          <div class="stat-value" id="statAvgDown">—</div>
+          <div class="stat-bar-track"><div class="stat-bar-fill" id="statDownBar" style="width:0%"></div></div>
+        </div>
+        <div class="stat-box wipe-rate">
+          <div class="stat-label">全滅率</div>
+          <div class="stat-value" id="statWipeRate">—</div>
+          <div class="stat-bar-track"><div class="stat-bar-fill" id="statWipeBar" style="width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== Battle Log ======== -->
+    <div class="card sim-full hidden" id="logPanel">
+      <div class="section-title">戰鬥日誌</div>
+      <div class="battle-log" id="battleLog">
+        <span style="color:var(--text-tertiary);">點擊「模擬一場」開始...</span>
+      </div>
+    </div>
+
+  </div><!-- /container -->
 
   <script src="admin-shared.js"></script>
+  <script>
+    /* ============================================
+       State & Constants
+       ============================================ */
+    const MAX_TURNS = 30;
+    const TEAM_SIZE = 4;
+    const DEFAULT_NAMES = ['調查員 A', '調查員 B', '調查員 C', '調查員 D'];
+
+    const PRESETS = {
+      early: { label: '初期 Ch.1', modifier: 4,  weapon: 1, con: 3 },
+      mid:   { label: '中期 Ch.5', modifier: 6,  weapon: 3, con: 5 },
+      late:  { label: '後期 Ch.8', modifier: 9,  weapon: 5, con: 7 },
+      peak:  { label: '巔峰 Ch.10', modifier: 12, weapon: 6, con: 10 },
+    };
+
+    /* ============================================
+       Init: Build Team UI
+       ============================================ */
+    function buildTeamUI() {
+      const grid = document.getElementById('teamGrid');
+      grid.innerHTML = '';
+      for (let i = 0; i < TEAM_SIZE; i++) {
+        const card = document.createElement('div');
+        card.className = 'inv-card';
+        card.innerHTML = `
+          <h4>調查員 ${i + 1}</h4>
+          <div class="field">
+            <label>名稱</label>
+            <input type="text" id="invName${i}" value="${DEFAULT_NAMES[i]}">
+          </div>
+          <div class="field">
+            <label>總修正值</label>
+            <div class="slider-row">
+              <input type="range" id="invMod${i}" min="3" max="12" value="5"
+                     oninput="document.getElementById('invModVal${i}').textContent='+'+this.value">
+              <span class="slider-val" id="invModVal${i}">+5</span>
+            </div>
+          </div>
+          <div class="field">
+            <label>武器階級</label>
+            <select id="invWeapon${i}"></select>
+          </div>
+          <div class="field">
+            <label>HP</label>
+            <input type="number" id="invHP${i}" min="1" max="99" value="${GAME_RULES.getMaxHP(3)}">
+          </div>
+        `;
+        grid.appendChild(card);
+
+        // fill weapon dropdown
+        const sel = card.querySelector(`#invWeapon${i}`);
+        for (const [tier, w] of Object.entries(WEAPON_TIERS)) {
+          const opt = document.createElement('option');
+          opt.value = tier;
+          opt.textContent = `T${tier} ${w.name} (${w.en}) — ${w.damage} 傷害`;
+          sel.appendChild(opt);
+        }
+        sel.value = '1';
+      }
+    }
+
+    /* ============================================
+       Init: Build Enemy Tier Dropdown
+       ============================================ */
+    function buildEnemyUI() {
+      const sel = document.getElementById('enemyTier');
+      for (const [tier, e] of Object.entries(ENEMY_TIERS)) {
+        const opt = document.createElement('option');
+        opt.value = tier;
+        opt.textContent = `T${tier} ${e.name} (${e.en}) — DC ${e.dc}`;
+        sel.appendChild(opt);
+      }
+      sel.value = '4'; // default Boss
+      onEnemyTierChange();
+    }
+
+    function onEnemyTierChange() {
+      const t = ENEMY_TIERS[document.getElementById('enemyTier').value];
+      if (!t) return;
+      document.getElementById('enemyDC').value = t.dc;
+      document.getElementById('enemyHP').value = Math.round((t.hpRange[0] + t.hpRange[1]) / 2);
+      document.getElementById('enemyDmgMin').value = t.dmgRange[0];
+      document.getElementById('enemyDmgMax').value = t.dmgRange[1];
+      // Regen: roughly tier-based
+      const regenMap = { 1: 0, 2: 0, 3: 1, 4: 2, 5: 3 };
+      document.getElementById('enemyRegen').value = regenMap[document.getElementById('enemyTier').value] || 0;
+    }
+
+    /* ============================================
+       Presets
+       ============================================ */
+    function applyPreset(key) {
+      const p = PRESETS[key];
+      for (let i = 0; i < TEAM_SIZE; i++) {
+        document.getElementById(`invMod${i}`).value = p.modifier;
+        document.getElementById(`invModVal${i}`).textContent = '+' + p.modifier;
+        document.getElementById(`invWeapon${i}`).value = p.weapon;
+        document.getElementById(`invHP${i}`).value = GAME_RULES.getMaxHP(p.con);
+      }
+    }
+
+    /* ============================================
+       Read current form state
+       ============================================ */
+    function readTeam() {
+      const team = [];
+      for (let i = 0; i < TEAM_SIZE; i++) {
+        team.push({
+          name: document.getElementById(`invName${i}`).value || DEFAULT_NAMES[i],
+          modifier: parseInt(document.getElementById(`invMod${i}`).value),
+          weaponDmg: WEAPON_TIERS[document.getElementById(`invWeapon${i}`).value].damage,
+          maxHP: parseInt(document.getElementById(`invHP${i}`).value),
+          hp: parseInt(document.getElementById(`invHP${i}`).value),
+        });
+      }
+      return team;
+    }
+
+    function readEnemy() {
+      return {
+        name: ENEMY_TIERS[document.getElementById('enemyTier').value]?.name || '敵人',
+        dc: parseInt(document.getElementById('enemyDC').value),
+        maxHP: parseInt(document.getElementById('enemyHP').value),
+        hp: parseInt(document.getElementById('enemyHP').value),
+        dmgMin: parseInt(document.getElementById('enemyDmgMin').value),
+        dmgMax: parseInt(document.getElementById('enemyDmgMax').value),
+        regen: parseInt(document.getElementById('enemyRegen').value) || 0,
+      };
+    }
+
+    /* ============================================
+       Core Battle Simulation (returns log + result)
+       ============================================ */
+    function simulateBattle(team, enemy) {
+      // deep clone
+      const inv = team.map(t => ({ ...t }));
+      const boss = { ...enemy };
+      const log = [];
+      let result = 'lose'; // default
+      let turns = 0;
+
+      for (let turn = 1; turn <= MAX_TURNS; turn++) {
+        turns = turn;
+        const turnLog = { turn, events: [], hpSnap: null };
+
+        // Boss regen at start of turn (except turn 1)
+        if (turn > 1 && boss.regen > 0) {
+          const before = boss.hp;
+          boss.hp = Math.min(boss.maxHP, boss.hp + boss.regen);
+          if (boss.hp > before) {
+            turnLog.events.push({ type: 'heal', text: `${boss.name} 回復 ${boss.hp - before} HP (${before} → ${boss.hp})` });
+          }
+        }
+
+        // Investigators attack
+        for (let i = 0; i < inv.length; i++) {
+          const a = inv[i];
+          if (a.hp <= 0) {
+            turnLog.events.push({ type: 'down', text: `${a.name} 已倒地，無法行動` });
+            continue;
+          }
+          const roll = rollD20();
+          const total = roll + a.modifier;
+          const hit = total >= boss.dc;
+          if (hit) {
+            boss.hp = Math.max(0, boss.hp - a.weaponDmg);
+            turnLog.events.push({
+              type: 'hit',
+              text: `${a.name} 攻擊 → d20(${roll}) + ${a.modifier} = ${total} >= DC${boss.dc} — 命中！造成 ${a.weaponDmg} 傷害 (Boss HP: ${boss.hp}/${boss.maxHP})`
+            });
+          } else {
+            turnLog.events.push({
+              type: 'miss',
+              text: `${a.name} 攻擊 → d20(${roll}) + ${a.modifier} = ${total} < DC${boss.dc} — 未命中`
+            });
+          }
+
+          if (boss.hp <= 0) break;
+        }
+
+        // Check boss dead
+        if (boss.hp <= 0) {
+          result = 'win';
+          turnLog.hpSnap = makeSnap(inv, boss);
+          log.push(turnLog);
+          break;
+        }
+
+        // Boss attacks random alive investigator
+        const alive = inv.filter(a => a.hp > 0);
+        if (alive.length > 0) {
+          const target = alive[randInt(0, alive.length - 1)];
+          const dmg = randInt(boss.dmgMin, boss.dmgMax);
+          target.hp = Math.max(0, target.hp - dmg);
+          const downText = target.hp <= 0 ? ' — 倒地！' : '';
+          turnLog.events.push({
+            type: 'enemy',
+            text: `${boss.name} 攻擊 ${target.name} 造成 ${dmg} 傷害 (HP: ${target.hp}/${target.maxHP})${downText}`
+          });
+        }
+
+        // Check all down
+        if (inv.every(a => a.hp <= 0)) {
+          result = 'lose';
+          turnLog.hpSnap = makeSnap(inv, boss);
+          log.push(turnLog);
+          break;
+        }
+
+        turnLog.hpSnap = makeSnap(inv, boss);
+        log.push(turnLog);
+      }
+
+      // If we exhausted 30 turns without resolution
+      if (turns >= MAX_TURNS && result !== 'win') {
+        result = 'draw';
+      }
+
+      const downCount = inv.filter(a => a.hp <= 0).length;
+      return { result, turns, log, downCount };
+    }
+
+    function makeSnap(inv, boss) {
+      return {
+        inv: inv.map(a => ({ name: a.name, hp: a.hp, maxHP: a.maxHP })),
+        boss: { name: boss.name, hp: boss.hp, maxHP: boss.maxHP },
+      };
+    }
+
+    /* ============================================
+       Render Battle Log (single sim, with animation)
+       ============================================ */
+    async function runSingle() {
+      const btn = document.getElementById('btnSingle');
+      const btnBatch = document.getElementById('btnBatch');
+      btn.disabled = true;
+      btnBatch.disabled = true;
+
+      const team = readTeam();
+      const enemy = readEnemy();
+      const { result, turns, log, downCount } = simulateBattle(team, enemy);
+
+      // Show log panel, hide stats
+      document.getElementById('logPanel').classList.remove('hidden');
+      document.getElementById('statsPanel').classList.add('hidden');
+
+      const el = document.getElementById('battleLog');
+      el.innerHTML = '';
+
+      const speed = parseInt(document.getElementById('speedSlider').value);
+
+      for (const turnData of log) {
+        const turnDiv = document.createElement('div');
+        turnDiv.className = 'log-turn';
+
+        const header = document.createElement('div');
+        header.className = 'turn-header';
+        header.textContent = `— 回合 ${turnData.turn} —`;
+        turnDiv.appendChild(header);
+
+        for (const ev of turnData.events) {
+          const line = document.createElement('div');
+          line.className = 'log-' + ev.type;
+          line.textContent = ev.text;
+          turnDiv.appendChild(line);
+        }
+
+        // HP bars
+        if (turnData.hpSnap) {
+          const hpDiv = document.createElement('div');
+          hpDiv.className = 'hp-status';
+          for (const a of turnData.hpSnap.inv) {
+            hpDiv.appendChild(makeHPBar(a.name, a.hp, a.maxHP, 'ally'));
+          }
+          hpDiv.appendChild(makeHPBar(turnData.hpSnap.boss.name, turnData.hpSnap.boss.hp, turnData.hpSnap.boss.maxHP, 'enemy'));
+          turnDiv.appendChild(hpDiv);
+        }
+
+        el.appendChild(turnDiv);
+        el.scrollTop = el.scrollHeight;
+
+        if (speed > 0) {
+          await delay(speed);
+        }
+      }
+
+      // Result banner
+      const resultDiv = document.createElement('div');
+      resultDiv.className = 'log-result ' + result;
+      const resultText = { win: '勝利', lose: '失敗（全滅）', draw: '平手（超過 30 回合）' };
+      resultDiv.textContent = `${resultText[result]} — 共 ${turns} 回合，${downCount} 人倒地`;
+      el.appendChild(resultDiv);
+      el.scrollTop = el.scrollHeight;
+
+      btn.disabled = false;
+      btnBatch.disabled = false;
+    }
+
+    function makeHPBar(name, hp, maxHP, type) {
+      const wrap = document.createElement('div');
+      wrap.className = 'hp-bar-wrap';
+      const pct = Math.max(0, (hp / maxHP) * 100);
+      const fillClass = hp <= 0 ? 'down' : type;
+      wrap.innerHTML = `
+        <div class="hp-bar-label">
+          <span>${name}</span>
+          <span class="mono">${hp}/${maxHP}</span>
+        </div>
+        <div class="hp-bar-track">
+          <div class="hp-bar-fill ${fillClass}" style="width:${pct}%"></div>
+        </div>
+      `;
+      return wrap;
+    }
+
+    function delay(ms) {
+      return new Promise(r => setTimeout(r, ms));
+    }
+
+    /* ============================================
+       Batch Simulation
+       ============================================ */
+    async function runBatch() {
+      const btn = document.getElementById('btnBatch');
+      const btnSingle = document.getElementById('btnSingle');
+      btn.disabled = true;
+      btnSingle.disabled = true;
+
+      const count = Math.min(100000, Math.max(1, parseInt(document.getElementById('batchCount').value) || 1000));
+
+      // Hide log, show stats
+      document.getElementById('logPanel').classList.add('hidden');
+      document.getElementById('statsPanel').classList.remove('hidden');
+
+      // Show running state
+      document.getElementById('statWinRate').textContent = '...';
+      document.getElementById('statAvgTurns').textContent = '...';
+      document.getElementById('statAvgDown').textContent = '...';
+      document.getElementById('statWipeRate').textContent = '...';
+
+      // Yield to UI, then run
+      await delay(20);
+
+      let wins = 0, totalTurns = 0, totalDown = 0, wipes = 0;
+
+      for (let i = 0; i < count; i++) {
+        const team = readTeam();
+        const enemy = readEnemy();
+        const r = simulateBattle(team, enemy);
+        if (r.result === 'win') wins++;
+        if (r.result === 'lose') wipes++;
+        totalTurns += r.turns;
+        totalDown += r.downCount;
+
+        // Yield every 500 iterations to keep UI responsive
+        if (i % 500 === 499) await delay(0);
+      }
+
+      const winRate = wins / count;
+      const avgTurns = totalTurns / count;
+      const avgDown = totalDown / count;
+      const wipeRate = wipes / count;
+
+      document.getElementById('statWinRate').textContent = fmtPercent(winRate);
+      document.getElementById('statWinBar').style.width = (winRate * 100) + '%';
+
+      document.getElementById('statAvgTurns').textContent = avgTurns.toFixed(1);
+      document.getElementById('statTurnsBar').style.width = ((avgTurns / MAX_TURNS) * 100) + '%';
+
+      document.getElementById('statAvgDown').textContent = avgDown.toFixed(2);
+      document.getElementById('statDownBar').style.width = ((avgDown / 4) * 100) + '%';
+
+      document.getElementById('statWipeRate').textContent = fmtPercent(wipeRate);
+      document.getElementById('statWipeBar').style.width = (wipeRate * 100) + '%';
+
+      btn.disabled = false;
+      btnSingle.disabled = false;
+    }
+
+    /* ============================================
+       Speed slider display
+       ============================================ */
+    document.getElementById('speedSlider').addEventListener('input', function() {
+      document.getElementById('speedVal').textContent = this.value + 'ms';
+    });
+
+    /* ============================================
+       Boot
+       ============================================ */
+    buildTeamUI();
+    buildEnemyUI();
+    applyPreset('mid'); // default: mid-game team
+  </script>
 </body>
 </html>

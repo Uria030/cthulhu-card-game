@@ -6,11 +6,368 @@
   <title>骰子機率分析器 — Admin Module</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    /* ── Controls Section ── */
+    .controls-section {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .control-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+    }
+
+    .control-card label {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      border: none;
+      padding: 0;
+    }
+
+    .slider-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--gold);
+      cursor: pointer;
+      border: 2px solid var(--bg-primary);
+    }
+
+    .slider-row input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--gold);
+      cursor: pointer;
+      border: 2px solid var(--bg-primary);
+    }
+
+    .slider-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.25rem;
+      color: var(--gold);
+      min-width: 2ch;
+      text-align: right;
+    }
+
+    .control-card input[type="number"] {
+      width: 100%;
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1rem;
+    }
+
+    .total-modifier-card {
+      border-color: var(--gold-dim);
+      background: rgba(201, 168, 76, 0.08);
+    }
+
+    .total-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 2rem;
+      color: var(--gold);
+      text-align: center;
+      padding: 0.25rem 0;
+    }
+
+    .total-breakdown {
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── Section Headers ── */
+    .section-title {
+      font-family: 'Cinzel', serif;
+      font-size: 1.125rem;
+      color: var(--gold);
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Hit Rate Matrix ── */
+    .matrix-section {
+      margin-bottom: 2.5rem;
+    }
+
+    .matrix-table-wrap {
+      overflow-x: auto;
+    }
+
+    .matrix-table {
+      min-width: 700px;
+    }
+
+    .matrix-table th {
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .matrix-table td {
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9375rem;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .matrix-table td.stage-label {
+      text-align: left;
+      font-family: 'Noto Sans TC', sans-serif;
+      font-weight: 400;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .matrix-table td.stage-label .stage-mod {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--gold-dim);
+      margin-left: 0.5rem;
+    }
+
+    .rate-high { color: #4ade80; }
+    .rate-mid  { color: var(--gold); }
+    .rate-low  { color: #ef4444; }
+
+    /* ── Custom Calculator ── */
+    .calc-section {
+      margin-bottom: 2.5rem;
+    }
+
+    .calc-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .calc-field {
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .calc-field label {
+      margin-bottom: 0.25rem;
+    }
+
+    .calc-result {
+      flex: 1;
+      min-width: 200px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      text-align: center;
+    }
+
+    .calc-result-label {
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      margin-bottom: 0.25rem;
+    }
+
+    .calc-result-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+
+    .calc-result-detail {
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      margin-top: 0.25rem;
+    }
+
+    /* ── d20 Roll Simulator ── */
+    .roll-section {
+      margin-bottom: 2rem;
+    }
+
+    .roll-area {
+      display: flex;
+      gap: 2rem;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .roll-left {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .dice-display {
+      width: 100px;
+      height: 100px;
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--text-tertiary);
+      transition: all 0.3s ease;
+    }
+
+    .dice-display.rolling {
+      animation: diceShake 0.1s infinite;
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .dice-display.result-nat20 {
+      border-color: #4ade80;
+      color: #4ade80;
+      box-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
+    }
+
+    .dice-display.result-nat1 {
+      border-color: #ef4444;
+      color: #ef4444;
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+    }
+
+    .dice-display.result-normal {
+      border-color: var(--gold);
+      color: var(--text-primary);
+    }
+
+    @keyframes diceShake {
+      0%   { transform: translate(0, 0) rotate(0deg); }
+      25%  { transform: translate(-2px, 1px) rotate(-3deg); }
+      50%  { transform: translate(2px, -1px) rotate(3deg); }
+      75%  { transform: translate(-1px, -2px) rotate(-1deg); }
+      100% { transform: translate(1px, 2px) rotate(1deg); }
+    }
+
+    .roll-stats {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    .roll-stats span {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-primary);
+    }
+
+    /* ── Bar Chart ── */
+    .roll-chart {
+      flex: 1;
+      min-width: 280px;
+    }
+
+    .chart-title {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.75rem;
+    }
+
+    .chart-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 120px;
+      padding: 0 4px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .chart-bar-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      justify-content: flex-end;
+    }
+
+    .chart-bar {
+      width: 100%;
+      max-width: 24px;
+      background: var(--gold-dim);
+      border-radius: 2px 2px 0 0;
+      min-height: 0;
+      transition: height 0.3s ease, background 0.2s;
+    }
+
+    .chart-bar.bar-nat20 { background: #4ade80; }
+    .chart-bar.bar-nat1  { background: #ef4444; }
+    .chart-bar.bar-latest { background: var(--gold); }
+
+    .chart-labels {
+      display: flex;
+      gap: 3px;
+      padding: 0 4px;
+    }
+
+    .chart-label {
+      flex: 1;
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.625rem;
+      color: var(--text-tertiary);
+      padding-top: 0.25rem;
+      max-width: 24px;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .controls-section {
+        grid-template-columns: 1fr 1fr;
+      }
+      .roll-area {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .roll-left {
+        flex-direction: row;
+        justify-content: center;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .controls-section {
+        grid-template-columns: 1fr;
+      }
+      .calc-row {
+        flex-direction: column;
+      }
+    }
+  </style>
 </head>
 <body>
 
   <nav class="admin-nav">
-    <a href="index.html" class="nav-back">← 返回首頁</a>
+    <a href="index.html" class="nav-back">&larr; 返回首頁</a>
     <span class="nav-title">骰子機率分析器</span>
     <span class="nav-code">SIM-01</span>
   </nav>
@@ -19,16 +376,284 @@
     <div class="page-header">
       <h1>骰子機率分析器</h1>
       <p class="page-sub">Dice Probability Analyzer</p>
-      <p class="page-desc">分析 d20 骰子在各屬性修正與 DC 下的成功機率</p>
+      <p class="page-desc">分析 d20 骰子在各屬性修正、熟練加值、裝備加值與 DC 下的成功機率，並可模擬擲骰。</p>
     </div>
 
-    <div class="placeholder-message">
-      <div class="placeholder-icon">🔧</div>
-      <div class="placeholder-text">此模組尚在開發中</div>
-      <div class="placeholder-sub">Module under development</div>
+    <!-- ═══════ Controls ═══════ -->
+    <div class="controls-section">
+      <div class="control-card">
+        <label>屬性值 (Attribute)</label>
+        <div class="slider-row">
+          <input type="range" id="attrSlider" min="1" max="10" value="5">
+          <span class="slider-value" id="attrValue">5</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-tertiary);margin-top:0.25rem;font-family:'JetBrains Mono',monospace;">
+          修正值 = <span id="attrModifier">+2</span>
+        </div>
+      </div>
+
+      <div class="control-card">
+        <label>熟練加值 (Proficiency)</label>
+        <input type="number" id="proficiency" min="0" max="3" value="0">
+      </div>
+
+      <div class="control-card">
+        <label>裝備加值 (Equipment)</label>
+        <input type="number" id="equipment" min="0" max="4" value="0">
+      </div>
+
+      <div class="control-card total-modifier-card">
+        <label>總修正值 (Total Modifier)</label>
+        <div class="total-value" id="totalModifier">+2</div>
+        <div class="total-breakdown" id="totalBreakdown">2 + 0 + 0</div>
+      </div>
     </div>
+
+    <!-- ═══════ Hit Rate Matrix ═══════ -->
+    <div class="matrix-section">
+      <h2 class="section-title">命中率矩陣 Hit Rate Matrix</h2>
+      <div class="matrix-table-wrap">
+        <table class="matrix-table">
+          <thead>
+            <tr>
+              <th>遊戲階段</th>
+              <th>雜兵<br><span class="mono" style="font-size:0.6875rem;color:var(--text-tertiary);">DC 8</span></th>
+              <th>威脅<br><span class="mono" style="font-size:0.6875rem;color:var(--text-tertiary);">DC 12</span></th>
+              <th>精英<br><span class="mono" style="font-size:0.6875rem;color:var(--text-tertiary);">DC 16</span></th>
+              <th>頭目<br><span class="mono" style="font-size:0.6875rem;color:var(--text-tertiary);">DC 20</span></th>
+              <th>巨頭<br><span class="mono" style="font-size:0.6875rem;color:var(--text-tertiary);">DC 24</span></th>
+            </tr>
+          </thead>
+          <tbody id="matrixBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════ Custom Calculator ═══════ -->
+    <div class="calc-section">
+      <h2 class="section-title">自訂計算器 Custom Calculator</h2>
+      <div class="calc-row">
+        <div class="calc-field">
+          <label>自訂修正值</label>
+          <input type="number" id="customMod" min="-10" max="30" value="3">
+        </div>
+        <div class="calc-field">
+          <label>自訂 DC</label>
+          <input type="number" id="customDC" min="1" max="40" value="12">
+        </div>
+        <div class="calc-result">
+          <div class="calc-result-label">命中機率</div>
+          <div class="calc-result-value" id="customRate">—</div>
+          <div class="calc-result-detail" id="customDetail"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ d20 Roll Simulator ═══════ -->
+    <div class="roll-section">
+      <h2 class="section-title">d20 擲骰模擬器 Roll Simulator</h2>
+      <div class="roll-area">
+        <div class="roll-left">
+          <div class="dice-display" id="diceDisplay">?</div>
+          <button class="btn btn-primary" id="rollBtn">擲骰 Roll d20</button>
+          <div class="roll-stats">
+            已擲 <span id="rollCount">0</span> 次 &middot; 平均 <span id="rollAvg">—</span>
+          </div>
+        </div>
+        <div class="roll-chart">
+          <div class="chart-title">最近 20 次擲骰結果</div>
+          <div class="chart-bars" id="chartBars"></div>
+          <div class="chart-labels" id="chartLabels"></div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script src="admin-shared.js"></script>
+  <script>
+    /* ============================================
+       SIM-01: 骰子機率分析器
+       ============================================ */
+
+    // ── DOM refs ──
+    const attrSlider   = document.getElementById('attrSlider');
+    const attrValueEl  = document.getElementById('attrValue');
+    const attrModEl    = document.getElementById('attrModifier');
+    const profInput    = document.getElementById('proficiency');
+    const equipInput   = document.getElementById('equipment');
+    const totalModEl   = document.getElementById('totalModifier');
+    const breakdownEl  = document.getElementById('totalBreakdown');
+    const matrixBody   = document.getElementById('matrixBody');
+    const customModIn  = document.getElementById('customMod');
+    const customDCIn   = document.getElementById('customDC');
+    const customRateEl = document.getElementById('customRate');
+    const customDetEl  = document.getElementById('customDetail');
+    const diceDisplay  = document.getElementById('diceDisplay');
+    const rollBtn      = document.getElementById('rollBtn');
+    const rollCountEl  = document.getElementById('rollCount');
+    const rollAvgEl    = document.getElementById('rollAvg');
+    const chartBars    = document.getElementById('chartBars');
+    const chartLabels  = document.getElementById('chartLabels');
+
+    // ── Game stages (chapter progression with typical total modifier) ──
+    const GAME_STAGES = [
+      { label: 'Ch.1  初始',  totalMod: 3  },
+      { label: 'Ch.5  中期',  totalMod: 6  },
+      { label: 'Ch.8  後期',  totalMod: 9  },
+      { label: 'Ch.10 終盤', totalMod: 12 },
+    ];
+
+    const TIER_DCS = [8, 12, 16, 20, 24];
+
+    // ── Roll history ──
+    let rollHistory = [];
+    let rollTotal = 0;
+
+    // ============================================
+    // Update controls & matrix
+    // ============================================
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    function getTotalModifier() {
+      const attr = parseInt(attrSlider.value) || 1;
+      const mod  = GAME_RULES.getModifier(attr);
+      const prof = clamp(parseInt(profInput.value) || 0, 0, 3);
+      const equip = clamp(parseInt(equipInput.value) || 0, 0, 4);
+      return { mod, prof, equip, total: mod + prof + equip };
+    }
+
+    function rateClass(rate) {
+      if (rate >= 0.70) return 'rate-high';
+      if (rate >= 0.40) return 'rate-mid';
+      return 'rate-low';
+    }
+
+    function updateControls() {
+      const attr = parseInt(attrSlider.value) || 1;
+      const { mod, prof, equip, total } = getTotalModifier();
+
+      attrValueEl.textContent = attr;
+      attrModEl.textContent = '+' + mod;
+      totalModEl.textContent = (total >= 0 ? '+' : '') + total;
+      breakdownEl.textContent = mod + ' + ' + prof + ' + ' + equip;
+
+      // Rebuild matrix
+      let html = '';
+      GAME_STAGES.forEach(stage => {
+        html += '<tr>';
+        html += '<td class="stage-label">' + stage.label + '<span class="stage-mod">+' + stage.totalMod + '</span></td>';
+        TIER_DCS.forEach(dc => {
+          const rate = hitRate(stage.totalMod, dc);
+          html += '<td class="' + rateClass(rate) + '">' + fmtPercent(rate) + '</td>';
+        });
+        html += '</tr>';
+      });
+
+      // Extra row: current user modifier
+      html += '<tr style="border-top:2px solid var(--gold-dim);">';
+      html += '<td class="stage-label" style="color:var(--gold);">目前設定<span class="stage-mod">+' + total + '</span></td>';
+      TIER_DCS.forEach(dc => {
+        const rate = hitRate(total, dc);
+        html += '<td class="' + rateClass(rate) + '" style="font-weight:700;">' + fmtPercent(rate) + '</td>';
+      });
+      html += '</tr>';
+
+      matrixBody.innerHTML = html;
+    }
+
+    // ============================================
+    // Custom calculator
+    // ============================================
+    function updateCustomCalc() {
+      const mod = parseInt(customModIn.value) || 0;
+      const dc  = parseInt(customDCIn.value) || 1;
+      const rate = hitRate(mod, dc);
+      const need = dc - mod;
+
+      customRateEl.textContent = fmtPercent(rate);
+      customRateEl.className = 'calc-result-value ' + rateClass(rate);
+
+      if (need <= 1) {
+        customDetEl.textContent = '自動成功 (need \u2264 1)';
+      } else if (need > 20) {
+        customDetEl.textContent = '不可能 (need > 20)';
+      } else {
+        customDetEl.textContent = 'need ' + need + '+ on d20 \u2192 ' + (20 - need + 1) + '/20';
+      }
+    }
+
+    // ============================================
+    // d20 Roll Simulator
+    // ============================================
+    function renderChart() {
+      const last20 = rollHistory.slice(-20);
+      let barsHtml = '';
+      let labelsHtml = '';
+      const maxH = 120; // matches CSS height
+
+      last20.forEach((val, i) => {
+        const h = (val / 20) * maxH;
+        let extraClass = '';
+        if (val === 20) extraClass = 'bar-nat20';
+        else if (val === 1) extraClass = 'bar-nat1';
+        if (i === last20.length - 1) extraClass += ' bar-latest';
+
+        barsHtml += '<div class="chart-bar-col"><div class="chart-bar ' + extraClass + '" style="height:' + h + 'px;" title="' + val + '"></div></div>';
+        labelsHtml += '<div class="chart-label">' + val + '</div>';
+      });
+
+      chartBars.innerHTML = barsHtml;
+      chartLabels.innerHTML = labelsHtml;
+    }
+
+    function doRoll() {
+      rollBtn.disabled = true;
+      diceDisplay.className = 'dice-display rolling';
+
+      let ticks = 0;
+      const maxTicks = 12;
+      const interval = setInterval(() => {
+        diceDisplay.textContent = randInt(1, 20);
+        ticks++;
+        if (ticks >= maxTicks) {
+          clearInterval(interval);
+
+          const result = rollD20();
+          rollHistory.push(result);
+          rollTotal += result;
+
+          diceDisplay.textContent = result;
+          if (result === 20) {
+            diceDisplay.className = 'dice-display result-nat20';
+          } else if (result === 1) {
+            diceDisplay.className = 'dice-display result-nat1';
+          } else {
+            diceDisplay.className = 'dice-display result-normal';
+          }
+
+          rollCountEl.textContent = rollHistory.length;
+          rollAvgEl.textContent = (rollTotal / rollHistory.length).toFixed(1);
+
+          renderChart();
+          rollBtn.disabled = false;
+        }
+      }, 60);
+    }
+
+    // ============================================
+    // Event listeners
+    // ============================================
+    attrSlider.addEventListener('input', updateControls);
+    profInput.addEventListener('input', updateControls);
+    equipInput.addEventListener('input', updateControls);
+    customModIn.addEventListener('input', updateCustomCalc);
+    customDCIn.addEventListener('input', updateCustomCalc);
+    rollBtn.addEventListener('click', doRoll);
+
+    // ── Init ──
+    updateControls();
+    updateCustomCalc();
+  </script>
 </body>
 </html>

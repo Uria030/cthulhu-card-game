@@ -6,11 +6,263 @@
   <title>傷害曲線推算器 — Admin Module</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    /* ── Section Cards ── */
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .section-card h2 {
+      font-size: 1.25rem;
+      margin-bottom: 0.25rem;
+    }
+    .section-card .section-sub {
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      margin-bottom: 1.25rem;
+    }
+
+    /* ── DPR Matrix ── */
+    .matrix-wrap {
+      overflow-x: auto;
+      margin-top: 1rem;
+    }
+    .matrix-table {
+      min-width: 700px;
+      font-size: 0.8125rem;
+    }
+    .matrix-table th,
+    .matrix-table td {
+      text-align: center;
+      padding: 0.5rem 0.4rem;
+      white-space: nowrap;
+    }
+    .matrix-table thead th {
+      position: sticky;
+      top: 0;
+      background: var(--bg-card);
+      z-index: 2;
+    }
+    .matrix-table .row-header {
+      text-align: left;
+      font-weight: 500;
+      color: var(--text-primary);
+      min-width: 100px;
+    }
+    .matrix-table .stage-header {
+      color: var(--gold);
+      border-bottom: 2px solid var(--gold-dim);
+      font-size: 0.75rem;
+      letter-spacing: 0.04em;
+    }
+
+    /* DPR cell colors */
+    .dpr-high   { color: #5AE47F; font-weight: 500; }
+    .dpr-mid    { color: var(--gold); }
+    .dpr-low    { color: #E47F5A; }
+    .dpr-zero   { color: var(--text-tertiary); }
+
+    /* ── Turns-to-Kill ── */
+    .ttk-cell {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
+      font-weight: 500;
+    }
+    .ttk-fast  { color: #5AE47F; }
+    .ttk-ok    { color: var(--gold); }
+    .ttk-slow  { color: #E47F5A; }
+    .ttk-impossible {
+      color: var(--danger);
+      font-weight: 700;
+      font-style: italic;
+    }
+
+    /* ── Chart Area ── */
+    .chart-controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .chart-controls label {
+      display: inline;
+      margin-bottom: 0;
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+    }
+    .chart-controls select {
+      width: auto;
+      min-width: 140px;
+    }
+    .chart-canvas-wrap {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      position: relative;
+    }
+    canvas#curveChart {
+      width: 100%;
+      height: 400px;
+      display: block;
+    }
+    .chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .legend-swatch {
+      width: 14px;
+      height: 3px;
+      border-radius: 1px;
+    }
+
+    /* ── Custom Calculator ── */
+    .calc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .calc-grid .field label {
+      font-size: 0.75rem;
+    }
+    .calc-grid .field input,
+    .calc-grid .field select {
+      width: 100%;
+    }
+    .calc-results {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 0.75rem;
+    }
+    .result-box {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+    }
+    .result-box .result-label {
+      font-size: 0.6875rem;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.25rem;
+    }
+    .result-box .result-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.25rem;
+      font-weight: 500;
+      color: var(--gold);
+    }
+    .result-box .result-value.impossible {
+      color: var(--danger);
+    }
+
+    /* ── Weapon Timeline ── */
+    .timeline {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      overflow-x: auto;
+      padding: 1rem 0 0.5rem;
+      position: relative;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      top: 36px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--border);
+    }
+    .timeline-node {
+      flex: 1;
+      min-width: 110px;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+    .timeline-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--gold);
+      border: 2px solid var(--bg-card);
+      margin: 22px auto 0.5rem;
+      position: relative;
+    }
+    .timeline-dot::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--bg-primary);
+    }
+    .timeline-name {
+      font-weight: 500;
+      font-size: 0.875rem;
+      color: var(--text-primary);
+      margin-bottom: 0.15rem;
+    }
+    .timeline-tier {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.6875rem;
+      color: var(--gold-dim);
+      margin-bottom: 0.15rem;
+    }
+    .timeline-chapter {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+    .timeline-dmg {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.6875rem;
+      color: var(--text-tertiary);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .calc-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .calc-results {
+        grid-template-columns: 1fr 1fr;
+      }
+      canvas#curveChart {
+        height: 300px;
+      }
+    }
+    @media (max-width: 480px) {
+      .calc-grid {
+        grid-template-columns: 1fr;
+      }
+      .calc-results {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
 
   <nav class="admin-nav">
-    <a href="index.html" class="nav-back">← 返回首頁</a>
+    <a href="index.html" class="nav-back">&larr; 返回首頁</a>
     <span class="nav-title">傷害曲線推算器</span>
     <span class="nav-code">SIM-05</span>
   </nav>
@@ -19,16 +271,519 @@
     <div class="page-header">
       <h1>傷害曲線推算器</h1>
       <p class="page-sub">Damage Curve Calculator</p>
-      <p class="page-desc">推算武器傷害、屬性修正與敵人 HP 的交叉曲線</p>
+      <p class="page-desc">推算武器傷害、屬性修正與敵人 HP 的交叉曲線，驗證 4 人團隊在各階段的擊殺效率</p>
     </div>
 
-    <div class="placeholder-message">
-      <div class="placeholder-icon">🔧</div>
-      <div class="placeholder-text">此模組尚在開發中</div>
-      <div class="placeholder-sub">Module under development</div>
+    <!-- ═══════════════ 1. DPR Matrix ═══════════════ -->
+    <div class="section-card">
+      <h2>DPR 矩陣</h2>
+      <p class="section-sub">每回合單人傷害期望值 (Damage Per Round) = 武器傷害 &times; 命中率</p>
+      <div class="matrix-wrap">
+        <table class="matrix-table" id="dprMatrix">
+          <thead id="dprHead"></thead>
+          <tbody id="dprBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 2. Turns-to-Kill ═══════════════ -->
+    <div class="section-card">
+      <h2>擊殺回合數 (4 人團隊)</h2>
+      <p class="section-sub">Team DPR = 單人 DPR &times; 4 | 回生: 雜兵 0 / 威脅 0 / 精英 0.5 / 頭目 2 / 巨頭 4</p>
+      <div class="matrix-wrap">
+        <table class="matrix-table" id="ttkTable">
+          <thead id="ttkHead"></thead>
+          <tbody id="ttkBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 3. Interactive Curve Chart ═══════════════ -->
+    <div class="section-card">
+      <h2>擊殺曲線圖</h2>
+      <p class="section-sub">X 軸 = 總修正值 (+0 ~ +12)，Y 軸 = 擊殺回合數，紅色虛線 = 危險區 (6+ 回合)</p>
+      <div class="chart-controls">
+        <label for="chartWeaponSelect">武器階級：</label>
+        <select id="chartWeaponSelect"></select>
+        <label for="chartTeamSize">團隊人數：</label>
+        <select id="chartTeamSize">
+          <option value="1">1 人</option>
+          <option value="2">2 人</option>
+          <option value="3">3 人</option>
+          <option value="4" selected>4 人</option>
+        </select>
+      </div>
+      <div class="chart-canvas-wrap">
+        <canvas id="curveChart"></canvas>
+      </div>
+      <div class="chart-legend" id="chartLegend"></div>
+    </div>
+
+    <!-- ═══════════════ 4. Custom Calculator ═══════════════ -->
+    <div class="section-card">
+      <h2>自訂情境計算器</h2>
+      <p class="section-sub">輸入自訂參數，即時計算擊殺數據</p>
+      <div class="calc-grid">
+        <div class="field">
+          <label for="calcWeaponDmg">武器傷害</label>
+          <input type="number" id="calcWeaponDmg" value="3" min="1" max="20">
+        </div>
+        <div class="field">
+          <label for="calcModifier">總修正值</label>
+          <input type="number" id="calcModifier" value="6" min="0" max="20">
+        </div>
+        <div class="field">
+          <label for="calcDC">敵人 DC</label>
+          <input type="number" id="calcDC" value="12" min="1" max="30">
+        </div>
+        <div class="field">
+          <label for="calcHP">敵人 HP</label>
+          <input type="number" id="calcHP" value="14" min="1" max="200">
+        </div>
+        <div class="field">
+          <label for="calcRegen">敵人回生/回合</label>
+          <input type="number" id="calcRegen" value="0" min="0" max="20" step="0.5">
+        </div>
+        <div class="field">
+          <label for="calcTeam">團隊人數</label>
+          <select id="calcTeam">
+            <option value="1">1 人</option>
+            <option value="2">2 人</option>
+            <option value="3">3 人</option>
+            <option value="4" selected>4 人</option>
+          </select>
+        </div>
+      </div>
+      <div class="calc-results" id="calcResults">
+        <div class="result-box">
+          <div class="result-label">命中率</div>
+          <div class="result-value" id="resHitRate">--</div>
+        </div>
+        <div class="result-box">
+          <div class="result-label">單人 DPR</div>
+          <div class="result-value" id="resDPR">--</div>
+        </div>
+        <div class="result-box">
+          <div class="result-label">團隊 DPR</div>
+          <div class="result-value" id="resTeamDPR">--</div>
+        </div>
+        <div class="result-box">
+          <div class="result-label">有效敵人 HP</div>
+          <div class="result-value" id="resEffHP">--</div>
+        </div>
+        <div class="result-box">
+          <div class="result-label">擊殺回合數</div>
+          <div class="result-value" id="resTTK">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ 5. Weapon Progression Timeline ═══════════════ -->
+    <div class="section-card">
+      <h2>武器進程時間線</h2>
+      <p class="section-sub">各武器階級的建議可取得章節</p>
+      <div class="timeline" id="weaponTimeline"></div>
     </div>
   </div>
 
   <script src="admin-shared.js"></script>
+  <script>
+  (function() {
+    'use strict';
+
+    // ── Constants ──
+    const STAGES = [
+      { label: '早期 +3',  modifier: 3 },
+      { label: '中前 +6',  modifier: 6 },
+      { label: '中後 +9',  modifier: 9 },
+      { label: '後期 +12', modifier: 12 },
+    ];
+
+    const REGEN_BY_TIER = { 1: 0, 2: 0, 3: 0.5, 4: 2, 5: 4 };
+
+    const TIER_COLORS = {
+      1: '#5AE47F',   // Minion — green
+      2: '#4A9CE4',   // Threat — blue
+      3: '#C9A84C',   // Elite — gold
+      4: '#E47F5A',   // Boss — orange
+      5: '#E45A7F',   // Titan — red
+    };
+
+    const WEAPON_CHAPTERS = {
+      1: '第 1 章',
+      2: '第 1 章',
+      3: '第 3-5 章',
+      4: '第 4-6 章',
+      5: '第 6-8 章',
+      6: '第 7-9 章',
+    };
+
+    const TEAM_SIZE = 4;
+
+    // ── Helpers ──
+    function calcDPR(weaponDmg, modifier, dc) {
+      return weaponDmg * hitRate(modifier, dc);
+    }
+
+    function calcTTK(teamDPR, hp, regen) {
+      if (teamDPR <= regen) return Infinity;
+      return hp / (teamDPR - regen);
+    }
+
+    function dprClass(dpr) {
+      if (dpr <= 0) return 'dpr-zero';
+      if (dpr >= 3) return 'dpr-high';
+      if (dpr >= 1.5) return 'dpr-mid';
+      return 'dpr-low';
+    }
+
+    function ttkClass(ttk) {
+      if (ttk === Infinity) return 'ttk-impossible';
+      if (ttk <= 3) return 'ttk-fast';
+      if (ttk <= 6) return 'ttk-ok';
+      return 'ttk-slow';
+    }
+
+    function fmtTTK(ttk) {
+      if (ttk === Infinity) return '不可能';
+      return ttk.toFixed(1);
+    }
+
+    function avgHP(tier) {
+      const t = ENEMY_TIERS[tier];
+      return (t.hpRange[0] + t.hpRange[1]) / 2;
+    }
+
+    // ══════════════════════════════════════
+    // 1. DPR Matrix
+    // ══════════════════════════════════════
+    function buildDPRMatrix() {
+      const thead = document.getElementById('dprHead');
+      const tbody = document.getElementById('dprBody');
+
+      // Header row 1: stage groups
+      let h1 = '<tr><th></th>';
+      STAGES.forEach(s => {
+        const enemyCount = Object.keys(ENEMY_TIERS).length;
+        h1 += `<th colspan="${enemyCount}" class="stage-header">${s.label}</th>`;
+      });
+      h1 += '</tr>';
+
+      // Header row 2: enemy DCs per stage
+      let h2 = '<tr><th class="row-header">武器</th>';
+      STAGES.forEach(() => {
+        for (let tier = 1; tier <= 5; tier++) {
+          const e = ENEMY_TIERS[tier];
+          h2 += `<th>${e.name}<br><span style="font-size:0.625rem;color:var(--text-tertiary)">DC${e.dc}</span></th>`;
+        }
+      });
+      h2 += '</tr>';
+
+      thead.innerHTML = h1 + h2;
+
+      // Body: one row per weapon tier
+      let bodyHTML = '';
+      for (let w = 1; w <= 6; w++) {
+        const wt = WEAPON_TIERS[w];
+        bodyHTML += `<tr><td class="row-header">${wt.name} (Dmg ${wt.damage})</td>`;
+        STAGES.forEach(s => {
+          for (let tier = 1; tier <= 5; tier++) {
+            const dc = ENEMY_TIERS[tier].dc;
+            const dpr = calcDPR(wt.damage, s.modifier, dc);
+            bodyHTML += `<td class="${dprClass(dpr)}">${dpr.toFixed(2)}</td>`;
+          }
+        });
+        bodyHTML += '</tr>';
+      }
+      tbody.innerHTML = bodyHTML;
+    }
+
+    // ══════════════════════════════════════
+    // 2. Turns-to-Kill Table
+    // ══════════════════════════════════════
+    function buildTTKTable() {
+      const thead = document.getElementById('ttkHead');
+      const tbody = document.getElementById('ttkBody');
+
+      let hRow = '<tr><th class="row-header">武器 @ 修正</th>';
+      for (let tier = 1; tier <= 5; tier++) {
+        const e = ENEMY_TIERS[tier];
+        hRow += `<th>${e.name}<br><span style="font-size:0.625rem;color:var(--text-tertiary)">HP ${avgHP(tier).toFixed(0)} / 回生 ${REGEN_BY_TIER[tier]}</span></th>`;
+      }
+      hRow += '</tr>';
+      thead.innerHTML = hRow;
+
+      // Show representative combos: weapon tier + stage modifier
+      const combos = [
+        { w: 1, mod: 3,  label: '隨身 @ +3' },
+        { w: 2, mod: 3,  label: '基礎 @ +3' },
+        { w: 2, mod: 6,  label: '基礎 @ +6' },
+        { w: 3, mod: 6,  label: '標準 @ +6' },
+        { w: 3, mod: 9,  label: '標準 @ +9' },
+        { w: 4, mod: 9,  label: '進階 @ +9' },
+        { w: 5, mod: 9,  label: '稀有 @ +9' },
+        { w: 5, mod: 12, label: '稀有 @ +12' },
+        { w: 6, mod: 12, label: '傳奇 @ +12' },
+      ];
+
+      let bodyHTML = '';
+      combos.forEach(c => {
+        bodyHTML += `<tr><td class="row-header">${c.label}</td>`;
+        for (let tier = 1; tier <= 5; tier++) {
+          const dc = ENEMY_TIERS[tier].dc;
+          const dpr = calcDPR(WEAPON_TIERS[c.w].damage, c.mod, dc);
+          const teamDPR = dpr * TEAM_SIZE;
+          const hp = avgHP(tier);
+          const regen = REGEN_BY_TIER[tier];
+          const ttk = calcTTK(teamDPR, hp, regen);
+          bodyHTML += `<td class="ttk-cell ${ttkClass(ttk)}">${fmtTTK(ttk)}</td>`;
+        }
+        bodyHTML += '</tr>';
+      });
+      tbody.innerHTML = bodyHTML;
+    }
+
+    // ══════════════════════════════════════
+    // 3. Interactive Curve Chart
+    // ══════════════════════════════════════
+    const chartWeaponSel = document.getElementById('chartWeaponSelect');
+    const chartTeamSel   = document.getElementById('chartTeamSize');
+
+    // Populate weapon selector
+    for (let w = 1; w <= 6; w++) {
+      const wt = WEAPON_TIERS[w];
+      const opt = document.createElement('option');
+      opt.value = w;
+      opt.textContent = `${wt.name} (Dmg ${wt.damage})`;
+      if (w === 3) opt.selected = true;
+      chartWeaponSel.appendChild(opt);
+    }
+
+    function drawChart() {
+      const canvas = document.getElementById('curveChart');
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+
+      // Size
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const W = rect.width - 32; // padding
+      const H = 400;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const weaponTier = parseInt(chartWeaponSel.value);
+      const teamSize   = parseInt(chartTeamSel.value);
+      const weaponDmg  = WEAPON_TIERS[weaponTier].damage;
+
+      const modMin = 0, modMax = 12;
+      const maxTTK = 20; // Y cap
+      const dangerLine = 6;
+
+      const padL = 52, padR = 20, padT = 20, padB = 40;
+      const plotW = W - padL - padR;
+      const plotH = H - padT - padB;
+
+      function xPos(mod) { return padL + (mod - modMin) / (modMax - modMin) * plotW; }
+      function yPos(ttk) {
+        const clamped = Math.min(ttk, maxTTK);
+        return padT + (clamped / maxTTK) * plotH;
+      }
+
+      // Clear
+      ctx.clearRect(0, 0, W, H);
+
+      // Grid
+      ctx.strokeStyle = 'rgba(42,42,68,0.6)';
+      ctx.lineWidth = 1;
+      for (let y = 0; y <= maxTTK; y += 2) {
+        ctx.beginPath();
+        ctx.moveTo(padL, yPos(y));
+        ctx.lineTo(W - padR, yPos(y));
+        ctx.stroke();
+      }
+      for (let x = modMin; x <= modMax; x++) {
+        ctx.beginPath();
+        ctx.moveTo(xPos(x), padT);
+        ctx.lineTo(xPos(x), H - padB);
+        ctx.stroke();
+      }
+
+      // Danger zone line
+      ctx.strokeStyle = 'rgba(184,76,76,0.7)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padL, yPos(dangerLine));
+      ctx.lineTo(W - padR, yPos(dangerLine));
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Danger label
+      ctx.font = '11px "JetBrains Mono", monospace';
+      ctx.fillStyle = 'rgba(184,76,76,0.8)';
+      ctx.textAlign = 'left';
+      ctx.fillText('危險區 (6+)', padL + 4, yPos(dangerLine) - 5);
+
+      // Draw lines for each enemy tier
+      for (let tier = 5; tier >= 1; tier--) {
+        const dc = ENEMY_TIERS[tier].dc;
+        const hp = avgHP(tier);
+        const regen = REGEN_BY_TIER[tier];
+        const color = TIER_COLORS[tier];
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        let started = false;
+        for (let mod = modMin; mod <= modMax; mod++) {
+          const dprVal = calcDPR(weaponDmg, mod, dc);
+          const teamDPR = dprVal * teamSize;
+          const ttk = calcTTK(teamDPR, hp, regen);
+
+          if (ttk === Infinity) {
+            // Break the line
+            if (started) ctx.stroke();
+            started = false;
+            // Draw X marker for impossible
+            ctx.fillStyle = color;
+            ctx.font = 'bold 10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('X', xPos(mod), yPos(maxTTK) - 4);
+            continue;
+          }
+
+          const x = xPos(mod);
+          const y = yPos(ttk);
+          if (!started) {
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            started = true;
+          } else {
+            ctx.lineTo(x, y);
+          }
+
+          // Dot
+          ctx.fillStyle = color;
+          ctx.fillRect(x - 2, y - 2, 4, 4);
+        }
+        if (started) ctx.stroke();
+      }
+
+      // Axes labels
+      ctx.fillStyle = '#8A8778';
+      ctx.font = '11px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      for (let x = modMin; x <= modMax; x++) {
+        ctx.fillText('+' + x, xPos(x), H - padB + 16);
+      }
+      ctx.textAlign = 'right';
+      for (let y = 0; y <= maxTTK; y += 2) {
+        ctx.fillText(y.toString(), padL - 8, yPos(y) + 4);
+      }
+
+      // Axis titles
+      ctx.fillStyle = '#5A5A52';
+      ctx.font = '12px "Noto Sans TC", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('總修正值', padL + plotW / 2, H - 2);
+
+      ctx.save();
+      ctx.translate(12, padT + plotH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText('擊殺回合數', 0, 0);
+      ctx.restore();
+
+      // Build legend
+      const legendEl = document.getElementById('chartLegend');
+      legendEl.innerHTML = '';
+      for (let tier = 1; tier <= 5; tier++) {
+        const e = ENEMY_TIERS[tier];
+        const item = document.createElement('span');
+        item.className = 'legend-item';
+        item.innerHTML = `<span class="legend-swatch" style="background:${TIER_COLORS[tier]}"></span>${e.name} (DC${e.dc})`;
+        legendEl.appendChild(item);
+      }
+    }
+
+    chartWeaponSel.addEventListener('change', drawChart);
+    chartTeamSel.addEventListener('change', drawChart);
+    window.addEventListener('resize', drawChart);
+
+    // ══════════════════════════════════════
+    // 4. Custom Scenario Calculator
+    // ══════════════════════════════════════
+    const calcInputs = ['calcWeaponDmg', 'calcModifier', 'calcDC', 'calcHP', 'calcRegen', 'calcTeam'];
+
+    function runCalc() {
+      const wDmg   = parseFloat(document.getElementById('calcWeaponDmg').value) || 0;
+      const mod    = parseFloat(document.getElementById('calcModifier').value) || 0;
+      const dc     = parseFloat(document.getElementById('calcDC').value) || 1;
+      const hp     = parseFloat(document.getElementById('calcHP').value) || 1;
+      const regen  = parseFloat(document.getElementById('calcRegen').value) || 0;
+      const team   = parseInt(document.getElementById('calcTeam').value) || 1;
+
+      const hr = hitRate(mod, dc);
+      const dprVal = wDmg * hr;
+      const teamDPR = dprVal * team;
+      const ttk = calcTTK(teamDPR, hp, regen);
+
+      document.getElementById('resHitRate').textContent = fmtPercent(hr);
+      document.getElementById('resDPR').textContent = dprVal.toFixed(2);
+      document.getElementById('resTeamDPR').textContent = teamDPR.toFixed(2);
+
+      const effHP = teamDPR > regen ? (hp / (1 - regen / teamDPR)).toFixed(1) : '--';
+      document.getElementById('resEffHP').textContent = effHP;
+
+      const ttkEl = document.getElementById('resTTK');
+      if (ttk === Infinity) {
+        ttkEl.textContent = '不可能';
+        ttkEl.className = 'result-value impossible';
+      } else {
+        ttkEl.textContent = ttk.toFixed(2) + ' 回合';
+        ttkEl.className = 'result-value';
+      }
+    }
+
+    calcInputs.forEach(id => {
+      document.getElementById(id).addEventListener('input', runCalc);
+      document.getElementById(id).addEventListener('change', runCalc);
+    });
+
+    // ══════════════════════════════════════
+    // 5. Weapon Progression Timeline
+    // ══════════════════════════════════════
+    function buildTimeline() {
+      const container = document.getElementById('weaponTimeline');
+      let html = '';
+      for (let w = 1; w <= 6; w++) {
+        const wt = WEAPON_TIERS[w];
+        html += `
+          <div class="timeline-node">
+            <div class="timeline-tier">T${w}</div>
+            <div class="timeline-dot"></div>
+            <div class="timeline-name">${wt.name}</div>
+            <div class="timeline-chapter">${WEAPON_CHAPTERS[w]}</div>
+            <div class="timeline-dmg">Dmg ${wt.damage} / Cost ${wt.cost}</div>
+          </div>`;
+      }
+      container.innerHTML = html;
+    }
+
+    // ══════════════════════════════════════
+    // Init
+    // ══════════════════════════════════════
+    buildDPRMatrix();
+    buildTTKTable();
+    buildTimeline();
+    runCalc();
+    // Delay chart draw slightly to let layout settle
+    requestAnimationFrame(() => requestAnimationFrame(drawChart));
+
+  })();
+  </script>
 </body>
 </html>

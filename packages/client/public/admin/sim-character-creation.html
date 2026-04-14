@@ -6,11 +6,386 @@
   <title>創角點數模擬器 — Admin Module</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    /* ── Layout ── */
+    .sim-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .sim-full { grid-column: 1 / -1; }
+
+    /* ── Section titles ── */
+    .section-title {
+      font-family: 'Cinzel', serif;
+      font-size: 1.125rem;
+      color: var(--gold);
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-subtitle {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      margin-bottom: 1rem;
+    }
+
+    /* ── Faction Selection ── */
+    .faction-select-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .faction-select-row select {
+      width: 280px;
+      padding: 0.625rem 0.75rem;
+      font-size: 0.9375rem;
+    }
+    .faction-code-breakdown {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+    .code-letter-card {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.8125rem;
+    }
+    .code-letter-card.main-letter {
+      border-color: var(--gold);
+      background: rgba(201, 168, 76, 0.08);
+    }
+    .code-letter-card .letter {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--gold);
+    }
+    .code-letter-card .bonus {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--success);
+      font-weight: 500;
+    }
+
+    /* ── Attribute Rows ── */
+    .attr-table {
+      width: 100%;
+    }
+    .attr-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.625rem 0;
+      border-bottom: 1px solid rgba(42, 42, 68, 0.5);
+    }
+    .attr-row:last-child { border-bottom: none; }
+    .attr-name {
+      width: 90px;
+      font-weight: 500;
+      font-size: 0.9375rem;
+    }
+    .attr-abbr {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      width: 36px;
+    }
+    .attr-bar-container {
+      flex: 1;
+      height: 24px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+    .attr-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+      position: relative;
+    }
+    .attr-bar-base {
+      background: var(--text-tertiary);
+    }
+    .attr-bar-faction {
+      background: var(--info);
+    }
+    .attr-bar-free {
+      background: var(--gold);
+    }
+    .attr-bar-segments {
+      display: flex;
+      height: 100%;
+    }
+    .attr-bar-seg {
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+    .seg-base { background: rgba(90, 90, 82, 0.6); }
+    .seg-faction { background: rgba(74, 124, 155, 0.7); }
+    .seg-free { background: var(--gold); }
+    .attr-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.125rem;
+      font-weight: 700;
+      width: 28px;
+      text-align: center;
+      color: var(--gold);
+    }
+    .attr-controls {
+      display: flex;
+      gap: 4px;
+    }
+    .attr-btn {
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1rem;
+      font-weight: 700;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .attr-btn:hover:not(:disabled) {
+      border-color: var(--gold);
+      color: var(--gold);
+      background: var(--bg-card-hover);
+    }
+    .attr-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .attr-modifier {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      width: 40px;
+      text-align: center;
+    }
+    .attr-breakdown {
+      font-size: 0.6875rem;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      width: 100px;
+      text-align: right;
+    }
+
+    /* ── Free Points Counter ── */
+    .free-points-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-top: 1rem;
+    }
+    .free-points-label {
+      font-size: 0.9375rem;
+      color: var(--text-secondary);
+    }
+    .free-points-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    .free-points-value.has-points { color: var(--gold); }
+    .free-points-value.no-points { color: var(--text-tertiary); }
+    .free-points-value.over-budget { color: var(--danger); }
+
+    /* ── Summary Panel ── */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .summary-stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+    .summary-stat-name {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+    }
+    .summary-stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .summary-derived {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .derived-box {
+      flex: 1;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      text-align: center;
+      background: var(--bg-primary);
+    }
+    .derived-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.25rem;
+    }
+    .derived-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    .derived-hp { color: var(--danger); }
+    .derived-san { color: var(--info); }
+
+    /* ── Radar Chart ── */
+    .radar-container {
+      display: flex;
+      justify-content: center;
+      padding: 0.5rem 0;
+    }
+    .radar-container canvas {
+      max-width: 280px;
+      max-height: 280px;
+    }
+
+    /* ── Preset Buttons ── */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 0.75rem;
+    }
+    .preset-btn {
+      padding: 0.75rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+    .preset-btn:hover {
+      border-color: var(--gold);
+      background: var(--bg-card-hover);
+    }
+    .preset-name {
+      font-weight: 500;
+      font-size: 0.9375rem;
+      color: var(--text-primary);
+      margin-bottom: 0.25rem;
+    }
+    .preset-desc {
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+    }
+
+    /* ── Hit Rate Table ── */
+    .hit-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .hit-table th {
+      font-size: 0.75rem;
+      padding: 0.5rem;
+    }
+    .hit-table td {
+      padding: 0.5rem;
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
+    }
+    .hit-table td.attr-col {
+      text-align: left;
+      font-family: 'Noto Sans TC', sans-serif;
+      font-weight: 500;
+    }
+    .hit-rate-cell {
+      border-radius: 3px;
+      padding: 0.25rem 0.5rem;
+    }
+    .rate-high { color: var(--success); }
+    .rate-mid { color: var(--warning); }
+    .rate-low { color: var(--danger); }
+    .rate-zero { color: var(--text-tertiary); }
+
+    /* ── Analysis ── */
+    .analysis-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .analysis-tag {
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.8125rem;
+      border: 1px solid;
+    }
+    .analysis-tag.strength {
+      border-color: var(--success);
+      color: var(--success);
+      background: rgba(45, 139, 111, 0.1);
+    }
+    .analysis-tag.weakness {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: rgba(184, 76, 76, 0.1);
+    }
+
+    .reset-row {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
+
+    @media (max-width: 768px) {
+      .sim-grid {
+        grid-template-columns: 1fr;
+      }
+      .attr-row {
+        flex-wrap: wrap;
+      }
+      .attr-breakdown {
+        width: 100%;
+        text-align: left;
+        padding-left: 126px;
+      }
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+      .faction-select-row select {
+        width: 100%;
+      }
+    }
+  </style>
 </head>
 <body>
 
   <nav class="admin-nav">
-    <a href="index.html" class="nav-back">← 返回首頁</a>
+    <a href="index.html" class="nav-back">&larr; 返回首頁</a>
     <span class="nav-title">創角點數模擬器</span>
     <span class="nav-code">SIM-03</span>
   </nav>
@@ -19,16 +394,560 @@
     <div class="page-header">
       <h1>創角點數模擬器</h1>
       <p class="page-sub">Character Creation Simulator</p>
-      <p class="page-desc">模擬 21 點分配的各種組合與能力影響</p>
+      <p class="page-desc">
+        模擬創角時的 18 點分配系統。基礎 7 點（每項屬性起始 1）+ 主陣營首字母 +3 + 3 個子陣營字母各 +1 + 5 自由點數 = 18 總點。每項屬性創角上限 5。
+      </p>
     </div>
 
-    <div class="placeholder-message">
-      <div class="placeholder-icon">🔧</div>
-      <div class="placeholder-text">此模組尚在開發中</div>
-      <div class="placeholder-sub">Module under development</div>
+    <!-- ── Faction Selection ── -->
+    <div class="card sim-full" style="margin-bottom:1.5rem">
+      <div class="section-title">陣營選擇</div>
+      <div class="faction-select-row">
+        <label style="margin-bottom:0;white-space:nowrap">主陣營：</label>
+        <select id="factionSelect">
+          <option value="">-- 選擇陣營 --</option>
+        </select>
+      </div>
+      <div id="factionBreakdown" class="faction-code-breakdown" style="display:none"></div>
+    </div>
+
+    <div class="sim-grid">
+      <!-- ── Left: Point Allocation ── -->
+      <div class="card">
+        <div class="section-title">屬性分配</div>
+        <div id="attrTable" class="attr-table"></div>
+        <div class="free-points-bar">
+          <span class="free-points-label">剩餘自由點數</span>
+          <span id="freePointsDisplay" class="free-points-value has-points">5</span>
+        </div>
+        <div class="reset-row">
+          <button class="btn btn-danger" onclick="resetFreePoints()">重置自由點數</button>
+          <button class="btn" onclick="resetAll()">全部重置</button>
+        </div>
+      </div>
+
+      <!-- ── Right: Character Summary ── -->
+      <div class="card">
+        <div class="section-title">角色總覽</div>
+        <div class="summary-derived">
+          <div class="derived-box">
+            <div class="derived-label">HP 生命值</div>
+            <div id="hpDisplay" class="derived-value derived-hp">7</div>
+          </div>
+          <div class="derived-box">
+            <div class="derived-label">SAN 理智值</div>
+            <div id="sanDisplay" class="derived-value derived-san">7</div>
+          </div>
+        </div>
+        <div id="summaryGrid" class="summary-grid"></div>
+        <div class="radar-container">
+          <canvas id="radarCanvas" width="280" height="280"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Preset Characters ── -->
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="section-title">預設角色範本</div>
+      <p class="section-subtitle">快速填入典型配點方案，可在此基礎上微調。</p>
+      <div class="preset-grid" id="presetGrid"></div>
+    </div>
+
+    <!-- ── Analysis ── -->
+    <div class="sim-grid">
+      <div class="card">
+        <div class="section-title">命中率預覽</div>
+        <p class="section-subtitle">僅使用屬性修正值（不含熟練/裝備），d20 骰。</p>
+        <div style="overflow-x:auto">
+          <table class="hit-table" id="hitTable">
+            <thead>
+              <tr>
+                <th style="text-align:left">屬性</th>
+                <th>雜兵 DC8</th>
+                <th>威脅 DC12</th>
+                <th>精英 DC16</th>
+                <th>頭目 DC20</th>
+                <th>巨頭 DC24</th>
+              </tr>
+            </thead>
+            <tbody id="hitTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">強弱項分析</div>
+        <div id="analysisContent">
+          <p style="color:var(--text-tertiary);font-size:0.875rem">請先選擇陣營並分配點數。</p>
+        </div>
+      </div>
     </div>
   </div>
 
   <script src="admin-shared.js"></script>
+  <script>
+  (function() {
+    'use strict';
+
+    // ── Faction 4-letter codes ──
+    // Each faction's letter is first; remaining 3 letters are sub-faction bonuses
+    const FACTION_CODES = {
+      E: { code: 'ENTJ', letters: ['E','N','T','J'] },
+      I: { code: 'ISFP', letters: ['I','S','F','P'] },
+      S: { code: 'SITJ', letters: ['S','I','T','J'] },
+      N: { code: 'NEFP', letters: ['N','E','F','P'] },
+      T: { code: 'TISJ', letters: ['T','I','S','J'] },
+      F: { code: 'FENP', letters: ['F','E','N','P'] },
+      J: { code: 'JSET', letters: ['J','S','E','T'] },
+      P: { code: 'PENF', letters: ['P','E','N','F'] },
+    };
+
+    // Letter → attribute id mapping
+    const LETTER_TO_ATTR = {
+      E: 'charisma',
+      I: 'perception',
+      S: 'strength',
+      N: 'willpower',
+      T: 'intellect',
+      F: 'willpower',
+      J: 'constitution',
+      P: 'agility',
+    };
+
+    // Letter → attribute zh short
+    const LETTER_TO_ZH = {
+      E: 'CHA 魅力',
+      I: 'PER 感知',
+      S: 'STR 力量',
+      N: 'WIL 意志',
+      T: 'INT 智力',
+      F: 'WIL 意志',
+      J: 'CON 體質',
+      P: 'DEX 敏捷',
+    };
+
+    const ATTR_KEYS = ['strength','agility','constitution','intellect','willpower','perception','charisma'];
+    const MAX_VAL = GAME_RULES.ATTRIBUTE_CREATION_MAX; // 5
+    const TOTAL_FREE = 5;
+
+    // State
+    let selectedFaction = '';
+    let factionBonus = {};   // attr_id -> bonus from faction
+    let freeAlloc = {};      // attr_id -> free points allocated
+    ATTR_KEYS.forEach(k => { factionBonus[k] = 0; freeAlloc[k] = 0; });
+
+    // ── Initialize Faction Dropdown ──
+    const sel = document.getElementById('factionSelect');
+    Object.entries(FACTIONS).forEach(([key, f]) => {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = `${f.code} ${f.zh} (${f.en}) — ${FACTION_CODES[key].code}`;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', onFactionChange);
+
+    // ── Preset Characters ──
+    const PRESETS = [
+      {
+        name: '守護者 / 前線型',
+        desc: '高體質力量，抗打輸出',
+        faction: 'J',
+        free: { strength: 2, constitution: 1, agility: 1, willpower: 1, intellect: 0, perception: 0, charisma: 0 }
+      },
+      {
+        name: '神秘學家 / 法師型',
+        desc: '高意志智力，施法核心',
+        faction: 'N',
+        free: { willpower: 1, intellect: 2, perception: 1, charisma: 1, strength: 0, agility: 0, constitution: 0 }
+      },
+      {
+        name: '偵探 / 調查型',
+        desc: '高感知智力，線索收集',
+        faction: 'T',
+        free: { perception: 1, intellect: 1, charisma: 2, agility: 1, strength: 0, constitution: 0, willpower: 0 }
+      },
+      {
+        name: '通才 / 平衡型',
+        desc: '均衡配點，泛用角色',
+        faction: 'E',
+        free: { strength: 1, agility: 1, constitution: 1, perception: 1, willpower: 1, intellect: 0, charisma: 0 }
+      },
+    ];
+
+    const presetGrid = document.getElementById('presetGrid');
+    PRESETS.forEach((p, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'preset-btn';
+      btn.innerHTML = `<div class="preset-name">${p.name}</div><div class="preset-desc">${p.desc} (${FACTIONS[p.faction].zh})</div>`;
+      btn.addEventListener('click', () => applyPreset(i));
+      presetGrid.appendChild(btn);
+    });
+
+    function applyPreset(index) {
+      const p = PRESETS[index];
+      sel.value = p.faction;
+      onFactionChange();
+      ATTR_KEYS.forEach(k => { freeAlloc[k] = p.free[k] || 0; });
+      render();
+    }
+
+    // ── Faction Change ──
+    function onFactionChange() {
+      selectedFaction = sel.value;
+      ATTR_KEYS.forEach(k => { factionBonus[k] = 0; });
+
+      if (selectedFaction && FACTION_CODES[selectedFaction]) {
+        const fc = FACTION_CODES[selectedFaction];
+        fc.letters.forEach((letter, idx) => {
+          const attrId = LETTER_TO_ATTR[letter];
+          const bonus = idx === 0 ? 3 : 1;
+          factionBonus[attrId] = (factionBonus[attrId] || 0) + bonus;
+        });
+        showBreakdown(fc);
+      } else {
+        document.getElementById('factionBreakdown').style.display = 'none';
+      }
+
+      // Reset free alloc if any attribute would exceed max
+      ATTR_KEYS.forEach(k => {
+        const base = 1 + (factionBonus[k] || 0);
+        if (base + freeAlloc[k] > MAX_VAL) {
+          freeAlloc[k] = Math.max(0, MAX_VAL - base);
+        }
+      });
+      render();
+    }
+
+    function showBreakdown(fc) {
+      const container = document.getElementById('factionBreakdown');
+      container.style.display = 'flex';
+      container.innerHTML = fc.letters.map((letter, idx) => {
+        const isMain = idx === 0;
+        const bonus = isMain ? '+3' : '+1';
+        return `<div class="code-letter-card ${isMain ? 'main-letter' : ''}">
+          <span class="letter">${letter}</span>
+          <span>${LETTER_TO_ZH[letter]}</span>
+          <span class="bonus">${bonus}</span>
+        </div>`;
+      }).join('');
+    }
+
+    // ── Build Attribute Rows ──
+    function buildAttrTable() {
+      const container = document.getElementById('attrTable');
+      container.innerHTML = '';
+      ATTR_KEYS.forEach(attrId => {
+        const a = ATTRIBUTES[attrId];
+        const row = document.createElement('div');
+        row.className = 'attr-row';
+        row.dataset.attr = attrId;
+        row.innerHTML = `
+          <span class="attr-name">${a.zh}</span>
+          <span class="attr-abbr">${a.abbr}</span>
+          <div class="attr-bar-container">
+            <div class="attr-bar-segments" data-bar="${attrId}"></div>
+          </div>
+          <span class="attr-value" data-val="${attrId}">1</span>
+          <div class="attr-controls">
+            <button class="attr-btn" data-action="dec" data-attr="${attrId}">-</button>
+            <button class="attr-btn" data-action="inc" data-attr="${attrId}">+</button>
+          </div>
+          <span class="attr-modifier" data-mod="${attrId}">+0</span>
+          <span class="attr-breakdown" data-bk="${attrId}">1+0+0</span>
+        `;
+        container.appendChild(row);
+      });
+
+      container.addEventListener('click', e => {
+        const btn = e.target.closest('.attr-btn');
+        if (!btn) return;
+        const attrId = btn.dataset.attr;
+        const action = btn.dataset.action;
+        const base = 1 + (factionBonus[attrId] || 0);
+        const currentFree = freeAlloc[attrId];
+        const remaining = getRemainingFree();
+
+        if (action === 'inc') {
+          if (base + currentFree >= MAX_VAL) return;
+          if (remaining <= 0) return;
+          freeAlloc[attrId]++;
+        } else {
+          if (currentFree <= 0) return;
+          freeAlloc[attrId]--;
+        }
+        render();
+      });
+    }
+
+    function getRemainingFree() {
+      let used = 0;
+      ATTR_KEYS.forEach(k => used += freeAlloc[k]);
+      return TOTAL_FREE - used;
+    }
+
+    function getAttrValue(attrId) {
+      return 1 + (factionBonus[attrId] || 0) + (freeAlloc[attrId] || 0);
+    }
+
+    // ── Render ──
+    function render() {
+      const remaining = getRemainingFree();
+
+      // Attribute rows
+      ATTR_KEYS.forEach(attrId => {
+        const base = 1;
+        const fb = factionBonus[attrId] || 0;
+        const free = freeAlloc[attrId] || 0;
+        const total = base + fb + free;
+        const mod = GAME_RULES.getModifier(total);
+
+        // Value
+        const valEl = document.querySelector(`[data-val="${attrId}"]`);
+        valEl.textContent = total;
+
+        // Bar segments
+        const barEl = document.querySelector(`[data-bar="${attrId}"]`);
+        const pctBase = (base / MAX_VAL * 100);
+        const pctFaction = (fb / MAX_VAL * 100);
+        const pctFree = (free / MAX_VAL * 100);
+        barEl.innerHTML = `
+          <div class="attr-bar-seg seg-base" style="width:${pctBase}%"></div>
+          <div class="attr-bar-seg seg-faction" style="width:${pctFaction}%"></div>
+          <div class="attr-bar-seg seg-free" style="width:${pctFree}%"></div>
+        `;
+
+        // Modifier
+        const modEl = document.querySelector(`[data-mod="${attrId}"]`);
+        modEl.textContent = mod >= 0 ? `+${mod}` : `${mod}`;
+
+        // Breakdown
+        const bkEl = document.querySelector(`[data-bk="${attrId}"]`);
+        bkEl.textContent = `${base}+${fb}+${free}`;
+
+        // Button states
+        const row = document.querySelector(`.attr-row[data-attr="${attrId}"]`);
+        const decBtn = row.querySelector('[data-action="dec"]');
+        const incBtn = row.querySelector('[data-action="inc"]');
+        decBtn.disabled = free <= 0;
+        incBtn.disabled = (total >= MAX_VAL) || (remaining <= 0);
+      });
+
+      // Free points display
+      const fpDisp = document.getElementById('freePointsDisplay');
+      fpDisp.textContent = remaining;
+      fpDisp.className = 'free-points-value ' + (remaining > 0 ? 'has-points' : remaining === 0 ? 'no-points' : 'over-budget');
+
+      // Summary
+      renderSummary();
+      renderRadar();
+      renderHitTable();
+      renderAnalysis();
+    }
+
+    function renderSummary() {
+      const con = getAttrValue('constitution');
+      const wil = getAttrValue('willpower');
+      const hp = GAME_RULES.getMaxHP(con);
+      const san = GAME_RULES.getMaxSAN(wil);
+
+      document.getElementById('hpDisplay').textContent = hp;
+      document.getElementById('sanDisplay').textContent = san;
+
+      const grid = document.getElementById('summaryGrid');
+      grid.innerHTML = ATTR_KEYS.map(attrId => {
+        const a = ATTRIBUTES[attrId];
+        const val = getAttrValue(attrId);
+        const mod = GAME_RULES.getModifier(val);
+        return `<div class="summary-stat">
+          <span class="summary-stat-name">${a.zh} (${a.abbr})</span>
+          <span class="summary-stat-value">${val} <span style="font-size:0.75rem;color:var(--text-secondary)">[${mod >= 0 ? '+' + mod : mod}]</span></span>
+        </div>`;
+      }).join('');
+    }
+
+    // ── Radar Chart (Canvas) ──
+    function renderRadar() {
+      const canvas = document.getElementById('radarCanvas');
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width;
+      const H = canvas.height;
+      const cx = W / 2;
+      const cy = H / 2;
+      const R = Math.min(cx, cy) - 30;
+      const n = ATTR_KEYS.length; // 7
+
+      ctx.clearRect(0, 0, W, H);
+
+      // Draw grid rings
+      for (let ring = 1; ring <= MAX_VAL; ring++) {
+        const r = R * (ring / MAX_VAL);
+        ctx.beginPath();
+        for (let i = 0; i <= n; i++) {
+          const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
+          const x = cx + r * Math.cos(angle);
+          const y = cy + r * Math.sin(angle);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = ring === MAX_VAL ? 'rgba(201,168,76,0.3)' : 'rgba(42,42,68,0.6)';
+        ctx.lineWidth = ring === MAX_VAL ? 1.5 : 0.5;
+        ctx.stroke();
+      }
+
+      // Draw axis lines
+      for (let i = 0; i < n; i++) {
+        const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + R * Math.cos(angle), cy + R * Math.sin(angle));
+        ctx.strokeStyle = 'rgba(42,42,68,0.4)';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+
+      // Draw data polygon
+      ctx.beginPath();
+      const values = ATTR_KEYS.map(k => getAttrValue(k));
+      values.forEach((val, i) => {
+        const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
+        const r = R * (val / MAX_VAL);
+        const x = cx + r * Math.cos(angle);
+        const y = cy + r * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(201,168,76,0.15)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(201,168,76,0.8)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Draw data points & labels
+      values.forEach((val, i) => {
+        const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
+        const r = R * (val / MAX_VAL);
+        const x = cx + r * Math.cos(angle);
+        const y = cy + r * Math.sin(angle);
+
+        // Point
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#C9A84C';
+        ctx.fill();
+
+        // Label
+        const lx = cx + (R + 18) * Math.cos(angle);
+        const ly = cy + (R + 18) * Math.sin(angle);
+        ctx.font = '500 11px "Noto Sans TC", sans-serif';
+        ctx.fillStyle = '#8A8778';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(ATTRIBUTES[ATTR_KEYS[i]].zh, lx, ly);
+      });
+    }
+
+    // ── Hit Rate Table ──
+    function renderHitTable() {
+      const tbody = document.getElementById('hitTableBody');
+      const tiers = [1, 2, 3, 4, 5];
+      tbody.innerHTML = ATTR_KEYS.map(attrId => {
+        const a = ATTRIBUTES[attrId];
+        const mod = GAME_RULES.getModifier(getAttrValue(attrId));
+        const cells = tiers.map(t => {
+          const dc = ENEMY_TIERS[t].dc;
+          const rate = hitRate(mod, dc);
+          const pct = (rate * 100).toFixed(0);
+          let cls = 'rate-zero';
+          if (rate >= 0.6) cls = 'rate-high';
+          else if (rate >= 0.3) cls = 'rate-mid';
+          else if (rate > 0) cls = 'rate-low';
+          return `<td><span class="hit-rate-cell ${cls}">${pct}%</span></td>`;
+        }).join('');
+        return `<tr><td class="attr-col">${a.zh} [+${mod}]</td>${cells}</tr>`;
+      }).join('');
+    }
+
+    // ── Analysis ──
+    function renderAnalysis() {
+      const container = document.getElementById('analysisContent');
+      const vals = {};
+      ATTR_KEYS.forEach(k => vals[k] = getAttrValue(k));
+
+      const sorted = ATTR_KEYS.slice().sort((a, b) => vals[b] - vals[a]);
+      const strengths = sorted.filter(k => vals[k] >= 4);
+      const weaknesses = sorted.filter(k => vals[k] <= 1);
+      const average = sorted.filter(k => vals[k] >= 2 && vals[k] <= 3);
+
+      let html = '';
+
+      if (strengths.length > 0) {
+        html += `<p style="color:var(--text-secondary);font-size:0.875rem;margin-bottom:0.5rem">強項（4+）：</p>`;
+        html += `<div class="analysis-tags">${strengths.map(k =>
+          `<span class="analysis-tag strength">${ATTRIBUTES[k].zh} ${vals[k]}</span>`
+        ).join('')}</div>`;
+      }
+
+      if (weaknesses.length > 0) {
+        html += `<p style="color:var(--text-secondary);font-size:0.875rem;margin-top:1rem;margin-bottom:0.5rem">弱項（1）：</p>`;
+        html += `<div class="analysis-tags">${weaknesses.map(k =>
+          `<span class="analysis-tag weakness">${ATTRIBUTES[k].zh} ${vals[k]}</span>`
+        ).join('')}</div>`;
+      }
+
+      if (average.length > 0) {
+        html += `<p style="color:var(--text-secondary);font-size:0.875rem;margin-top:1rem;margin-bottom:0.5rem">普通（2-3）：</p>`;
+        html += `<div class="analysis-tags">${average.map(k =>
+          `<span class="analysis-tag" style="border-color:var(--text-tertiary);color:var(--text-secondary)">${ATTRIBUTES[k].zh} ${vals[k]}</span>`
+        ).join('')}</div>`;
+      }
+
+      // Overall verdict
+      const maxVal = vals[sorted[0]];
+      const minVal = vals[sorted[sorted.length - 1]];
+      const spread = maxVal - minVal;
+      let verdict = '';
+      if (spread <= 1) {
+        verdict = '極度平衡型配點，沒有明顯短板但也無突出優勢。適合通才角色。';
+      } else if (spread <= 2) {
+        verdict = '偏平衡的配點，有輕微傾向但整體穩定。';
+      } else if (spread >= 4) {
+        verdict = '極端專精型配點，單項能力極強但弱點明顯。高風險高報酬。';
+      } else {
+        verdict = '中等專精程度，兼顧核心能力與基礎覆蓋。';
+      }
+
+      const totalPoints = ATTR_KEYS.reduce((sum, k) => sum + vals[k], 0);
+      html += `<p style="color:var(--text-secondary);font-size:0.875rem;margin-top:1.25rem;padding-top:0.75rem;border-top:1px solid var(--border)">
+        <strong style="color:var(--text-primary)">總評：</strong>${verdict}<br>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--text-tertiary)">
+          總點數：${totalPoints}/18 ｜ 落差：${spread} ｜ HP ${GAME_RULES.getMaxHP(vals.constitution)} / SAN ${GAME_RULES.getMaxSAN(vals.willpower)}
+        </span>
+      </p>`;
+
+      container.innerHTML = html || '<p style="color:var(--text-tertiary);font-size:0.875rem">請先選擇陣營並分配點數。</p>';
+    }
+
+    // ── Reset Functions ──
+    window.resetFreePoints = function() {
+      ATTR_KEYS.forEach(k => freeAlloc[k] = 0);
+      render();
+    };
+
+    window.resetAll = function() {
+      sel.value = '';
+      selectedFaction = '';
+      ATTR_KEYS.forEach(k => { factionBonus[k] = 0; freeAlloc[k] = 0; });
+      document.getElementById('factionBreakdown').style.display = 'none';
+      render();
+    };
+
+    // ── Init ──
+    buildAttrTable();
+    render();
+
+  })();
+  </script>
 </body>
 </html>

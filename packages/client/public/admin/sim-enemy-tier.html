@@ -3,32 +3,708 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>敵人階層設計器 — Admin Module</title>
+  <title>敵人階層模擬器 — Admin Module</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    /* ── Tier colors ── */
+    .tier-1 { --tc: #6B8E6B; }
+    .tier-2 { --tc: #4A7C9B; }
+    .tier-3 { --tc: #C9A84C; }
+    .tier-4 { --tc: #B84C4C; }
+    .tier-5 { --tc: #7B4EA3; }
+
+    .tier-badge {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 500;
+      border: 1px solid var(--tc);
+      color: var(--tc);
+      background: transparent;
+    }
+    .tier-badge-fill {
+      background: var(--tc);
+      color: #0D0D14;
+      font-weight: 700;
+    }
+
+    /* ── Section cards ── */
+    .section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .section:hover {
+      border-color: var(--border-hover);
+      box-shadow: 0 0 20px var(--gold-glow);
+    }
+    .section h2 {
+      font-size: 1.25rem;
+      margin-bottom: 0.25rem;
+    }
+    .section-sub {
+      font-size: 0.8125rem;
+      color: var(--text-tertiary);
+      margin-bottom: 1rem;
+      font-family: 'Cinzel', serif;
+    }
+
+    /* ── Tables ── */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    .data-table th {
+      padding: 0.625rem 0.75rem;
+      text-align: center;
+      border-bottom: 2px solid var(--border);
+      font-family: 'Cinzel', serif;
+      font-size: 0.75rem;
+      color: var(--gold-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .data-table td {
+      padding: 0.5rem 0.75rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
+    }
+    .data-table tr:hover td {
+      background: var(--bg-card-hover);
+    }
+    .data-table .row-label {
+      text-align: left;
+      font-family: 'Noto Sans TC', sans-serif;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    /* Tier-colored header cells */
+    .th-tier-1 { color: #6B8E6B !important; border-bottom-color: #6B8E6B !important; }
+    .th-tier-2 { color: #4A7C9B !important; border-bottom-color: #4A7C9B !important; }
+    .th-tier-3 { color: #C9A84C !important; border-bottom-color: #C9A84C !important; }
+    .th-tier-4 { color: #B84C4C !important; border-bottom-color: #B84C4C !important; }
+    .th-tier-5 { color: #7B4EA3 !important; border-bottom-color: #7B4EA3 !important; }
+
+    /* ── Canvas chart ── */
+    .chart-wrap {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-top: 0.75rem;
+    }
+    canvas { display: block; width: 100%; }
+
+    /* ── Controls row ── */
+    .controls {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      margin-bottom: 1rem;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .control-group label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+    .control-group select,
+    .control-group input {
+      width: auto;
+      min-width: 140px;
+      font-size: 0.8125rem;
+    }
+
+    /* ── Results box ── */
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .result-card {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      text-align: center;
+    }
+    .result-card .val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--gold);
+    }
+    .result-card .label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+    }
+
+    /* ── Color-coded cells ── */
+    .cell-green { color: #2D8B6F; }
+    .cell-gold  { color: #C9A84C; }
+    .cell-red   { color: #B84C4C; }
+
+    /* ── Material table ── */
+    .mat-output {
+      margin-top: 1rem;
+    }
+    .mat-output table {
+      font-size: 0.8125rem;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .controls { flex-direction: column; }
+      .control-group select,
+      .control-group input { width: 100%; }
+      .data-table { font-size: 0.75rem; }
+      .data-table th, .data-table td { padding: 0.375rem 0.4rem; }
+      .results-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
 </head>
 <body>
 
   <nav class="admin-nav">
-    <a href="index.html" class="nav-back">← 返回首頁</a>
-    <span class="nav-title">敵人階層設計器</span>
+    <a href="index.html" class="nav-back">&larr; 返回首頁</a>
+    <span class="nav-title">敵人階層模擬器</span>
     <span class="nav-code">SIM-04</span>
   </nav>
 
   <div class="container">
     <div class="page-header">
-      <h1>敵人階層設計器</h1>
-      <p class="page-sub">Enemy Tier Designer</p>
-      <p class="page-desc">設計與驗證五階層敵人的數值曲線</p>
+      <h1>敵人階層模擬器</h1>
+      <p class="page-sub">Enemy Tier Simulator</p>
+      <p class="page-desc">五階層敵人數值總覽、命中率分析、團隊模擬與素材經濟預覽</p>
     </div>
 
-    <div class="placeholder-message">
-      <div class="placeholder-icon">🔧</div>
-      <div class="placeholder-text">此模組尚在開發中</div>
-      <div class="placeholder-sub">Module under development</div>
+    <!-- ============================================ -->
+    <!-- 1. Tier Comparison Table                     -->
+    <!-- ============================================ -->
+    <div class="section">
+      <h2>階層總覽</h2>
+      <p class="section-sub">Tier Comparison</p>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="tierTable">
+          <thead>
+            <tr>
+              <th>屬性</th>
+              <th class="th-tier-1">T1 雜兵</th>
+              <th class="th-tier-2">T2 威脅</th>
+              <th class="th-tier-3">T3 精英</th>
+              <th class="th-tier-4">T4 頭目</th>
+              <th class="th-tier-5">T5 巨頭</th>
+            </tr>
+          </thead>
+          <tbody id="tierBody"></tbody>
+        </table>
+      </div>
     </div>
-  </div>
+
+    <!-- ============================================ -->
+    <!-- 2. Hit Rate vs Tier Chart                    -->
+    <!-- ============================================ -->
+    <div class="section">
+      <h2>命中率 vs 階層</h2>
+      <p class="section-sub">Hit Rate vs Enemy Tier</p>
+      <p style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:0.5rem;">
+        四個遊戲階段（Ch.1 +3 / Ch.5 +6 / Ch.8 +9 / Ch.10 +12）對各階層敵人的命中率
+      </p>
+      <div class="chart-wrap">
+        <canvas id="hitRateChart" height="300"></canvas>
+      </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- 3. Team vs Enemy Simulator                   -->
+    <!-- ============================================ -->
+    <div class="section">
+      <h2>團隊 vs 敵人模擬</h2>
+      <p class="section-sub">Team vs Enemy Simulator</p>
+
+      <div class="controls">
+        <div class="control-group">
+          <label>敵人階層</label>
+          <select id="simTier">
+            <option value="1">T1 雜兵 (Minion)</option>
+            <option value="2">T2 威脅 (Threat)</option>
+            <option value="3" selected>T3 精英 (Elite)</option>
+            <option value="4">T4 頭目 (Boss)</option>
+            <option value="5">T5 巨頭 (Titan)</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>團隊階段</label>
+          <select id="simStage">
+            <option value="1">Ch.1 初期 (武器T1, 修正+3)</option>
+            <option value="5">Ch.5 中前期 (武器T2, 修正+6)</option>
+            <option value="8" selected>Ch.8 中後期 (武器T4, 修正+9)</option>
+            <option value="10">Ch.10 終盤 (武器T6, 修正+12)</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>&nbsp;</label>
+          <button class="btn btn-primary" id="simBtn">模擬 100 場</button>
+        </div>
+      </div>
+
+      <div class="results-grid" id="simResults" style="display:none;">
+        <div class="result-card">
+          <div class="val" id="resWinRate">--</div>
+          <div class="label">勝率</div>
+        </div>
+        <div class="result-card">
+          <div class="val" id="resAvgTurns">--</div>
+          <div class="label">平均回合數</div>
+        </div>
+        <div class="result-card">
+          <div class="val" id="resAvgHP">--</div>
+          <div class="label">剩餘平均 HP</div>
+        </div>
+        <div class="result-card">
+          <div class="val" id="resDrops">--</div>
+          <div class="label">預期素材掉落 / 場</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- 4. Damage Output Analysis                    -->
+    <!-- ============================================ -->
+    <div class="section">
+      <h2>傷害輸出分析</h2>
+      <p class="section-sub">Damage Output Analysis</p>
+      <p style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:0.75rem;">
+        各武器階層 vs 各敵人階層：預計擊殺所需命中次數 / 4 人團隊預計回合數
+      </p>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="dmgTable">
+          <thead>
+            <tr>
+              <th>武器</th>
+              <th class="th-tier-1">T1 雜兵</th>
+              <th class="th-tier-2">T2 威脅</th>
+              <th class="th-tier-3">T3 精英</th>
+              <th class="th-tier-4">T4 頭目</th>
+              <th class="th-tier-5">T5 巨頭</th>
+            </tr>
+          </thead>
+          <tbody id="dmgBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- 5. Material Economy Preview                  -->
+    <!-- ============================================ -->
+    <div class="section">
+      <h2>素材經濟預覽</h2>
+      <p class="section-sub">Material Economy Preview</p>
+
+      <div class="controls">
+        <div class="control-group">
+          <label>戰鬥次數</label>
+          <input type="number" id="matFights" value="10" min="1" max="999" style="width:100px;">
+        </div>
+        <div class="control-group">
+          <label>敵人階層</label>
+          <select id="matTier">
+            <option value="1">T1 雜兵</option>
+            <option value="2">T2 威脅</option>
+            <option value="3" selected>T3 精英</option>
+            <option value="4">T4 頭目</option>
+            <option value="5">T5 巨頭</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>&nbsp;</label>
+          <button class="btn btn-primary" id="matBtn">計算</button>
+        </div>
+      </div>
+
+      <div class="mat-output" id="matOutput"></div>
+    </div>
+
+  </div><!-- /.container -->
 
   <script src="admin-shared.js"></script>
+  <script>
+  (function() {
+    'use strict';
+
+    // ── Tier colors ──
+    const TIER_COLORS = {
+      1: '#6B8E6B',
+      2: '#4A7C9B',
+      3: '#C9A84C',
+      4: '#B84C4C',
+      5: '#7B4EA3'
+    };
+
+    // ── Material drop rules (補充06) ──
+    const MATERIAL_TYPES = [
+      { id: 'mineral', zh: '礦物' },
+      { id: 'wood',    zh: '木材' },
+      { id: 'insect',  zh: '蟲類' },
+      { id: 'fish',    zh: '魚類' },
+      { id: 'monster', zh: '怪物素材' }
+    ];
+
+    const DROP_RULES = {
+      1: { lvRange: [1, 3], qtyRange: [1, 1] },
+      2: { lvRange: [3, 5], qtyRange: [1, 2] },
+      3: { lvRange: [5, 7], qtyRange: [2, 3] },
+      4: { lvRange: [7, 9], qtyRange: [3, 5] },
+      5: { lvRange: [9, 10], qtyRange: [5, 8] }
+    };
+
+    // ── Stage presets ──
+    const STAGES = {
+      1:  { label: 'Ch.1',  modifier: 3,  weaponTier: 1, teamHP: 15 },
+      5:  { label: 'Ch.5',  modifier: 6,  weaponTier: 2, teamHP: 22 },
+      8:  { label: 'Ch.8',  modifier: 9,  weaponTier: 4, teamHP: 30 },
+      10: { label: 'Ch.10', modifier: 12, weaponTier: 6, teamHP: 38 }
+    };
+
+    // ── 1. Tier Comparison Table ──
+    function buildTierTable() {
+      const rows = [
+        { label: 'DC (難度等級)', key: 'dc', fmt: v => v },
+        { label: 'HP 範圍', key: 'hp', fmt: (_, t) => `${t.hpRange[0]} - ${t.hpRange[1]}` },
+        { label: '傷害範圍', key: 'dmg', fmt: (_, t) => `${t.dmgRange[0]} - ${t.dmgRange[1]}` },
+        { label: '平均 HP', key: 'avgHp', fmt: (_, t) => ((t.hpRange[0] + t.hpRange[1]) / 2).toFixed(1) },
+        { label: '平均傷害', key: 'avgDmg', fmt: (_, t) => ((t.dmgRange[0] + t.dmgRange[1]) / 2).toFixed(1) },
+        { label: '掉落等級', key: 'dropLv', fmt: (_, __, tier) => `LV${DROP_RULES[tier].lvRange[0]}-${DROP_RULES[tier].lvRange[1]}` },
+        { label: '掉落數量', key: 'dropQty', fmt: (_, __, tier) => `${DROP_RULES[tier].qtyRange[0]}-${DROP_RULES[tier].qtyRange[1]}` }
+      ];
+
+      const tbody = document.getElementById('tierBody');
+      tbody.innerHTML = rows.map(row => {
+        let cells = `<td class="row-label">${row.label}</td>`;
+        for (let tier = 1; tier <= 5; tier++) {
+          const t = ENEMY_TIERS[tier];
+          const val = row.fmt(t[row.key], t, tier);
+          cells += `<td>${val}</td>`;
+        }
+        return `<tr>${cells}</tr>`;
+      }).join('');
+    }
+
+    // ── 2. Hit Rate Chart ──
+    function drawHitRateChart() {
+      const canvas = document.getElementById('hitRateChart');
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = 300 * dpr;
+      canvas.style.height = '300px';
+      ctx.scale(dpr, dpr);
+
+      const W = rect.width;
+      const H = 300;
+      const pad = { top: 30, right: 20, bottom: 60, left: 55 };
+      const chartW = W - pad.left - pad.right;
+      const chartH = H - pad.top - pad.bottom;
+
+      ctx.clearRect(0, 0, W, H);
+
+      const stages = [
+        { label: 'Ch.1 (+3)', mod: 3 },
+        { label: 'Ch.5 (+6)', mod: 6 },
+        { label: 'Ch.8 (+9)', mod: 9 },
+        { label: 'Ch.10 (+12)', mod: 12 }
+      ];
+
+      const groupCount = stages.length;
+      const barsPerGroup = 5;
+      const groupWidth = chartW / groupCount;
+      const barWidth = Math.min(groupWidth / (barsPerGroup + 2), 18);
+      const groupBarWidth = barWidth * barsPerGroup;
+
+      // Y axis grid
+      ctx.strokeStyle = '#2A2A44';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = '#8A8778';
+      ctx.font = '11px JetBrains Mono';
+      ctx.textAlign = 'right';
+      for (let p = 0; p <= 100; p += 20) {
+        const y = pad.top + chartH - (p / 100) * chartH;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(W - pad.right, y);
+        ctx.stroke();
+        ctx.fillText(p + '%', pad.left - 8, y + 4);
+      }
+
+      // Bars
+      stages.forEach((stage, gi) => {
+        const gx = pad.left + gi * groupWidth + (groupWidth - groupBarWidth) / 2;
+
+        for (let tier = 1; tier <= 5; tier++) {
+          const dc = ENEMY_TIERS[tier].dc;
+          const rate = hitRate(stage.mod, dc);
+          const barH = rate * chartH;
+          const bx = gx + (tier - 1) * barWidth;
+          const by = pad.top + chartH - barH;
+
+          // Color gradient: green(high) -> gold(mid) -> red(low)
+          let color;
+          if (rate >= 0.6) {
+            const t = (rate - 0.6) / 0.4;
+            color = lerpColor('#C9A84C', '#2D8B6F', t);
+          } else {
+            const t = rate / 0.6;
+            color = lerpColor('#B84C4C', '#C9A84C', t);
+          }
+
+          ctx.fillStyle = color;
+          ctx.fillRect(bx, by, barWidth - 2, barH);
+
+          // Rate text on bar
+          if (barH > 18) {
+            ctx.fillStyle = '#E8E4D9';
+            ctx.font = '9px JetBrains Mono';
+            ctx.textAlign = 'center';
+            ctx.fillText(Math.round(rate * 100) + '%', bx + (barWidth - 2) / 2, by + 12);
+          }
+        }
+
+        // Stage label
+        ctx.fillStyle = '#8A8778';
+        ctx.font = '11px Noto Sans TC';
+        ctx.textAlign = 'center';
+        ctx.fillText(stage.label, pad.left + gi * groupWidth + groupWidth / 2, H - pad.bottom + 16);
+      });
+
+      // Legend
+      const legendY = H - 18;
+      let lx = pad.left;
+      ctx.font = '10px Noto Sans TC';
+      for (let tier = 1; tier <= 5; tier++) {
+        ctx.fillStyle = TIER_COLORS[tier];
+        ctx.fillRect(lx, legendY - 8, 10, 10);
+        ctx.fillStyle = '#8A8778';
+        ctx.textAlign = 'left';
+        const txt = `T${tier} ${ENEMY_TIERS[tier].name}`;
+        ctx.fillText(txt, lx + 13, legendY);
+        lx += ctx.measureText(txt).width + 26;
+      }
+    }
+
+    function lerpColor(a, b, t) {
+      const ah = parseInt(a.slice(1), 16);
+      const bh = parseInt(b.slice(1), 16);
+      const ar = (ah >> 16) & 0xff, ag = (ah >> 8) & 0xff, ab = ah & 0xff;
+      const br = (bh >> 16) & 0xff, bg = (bh >> 8) & 0xff, bb = bh & 0xff;
+      const rr = Math.round(ar + (br - ar) * t);
+      const rg = Math.round(ag + (bg - ag) * t);
+      const rb = Math.round(ab + (bb - ab) * t);
+      return '#' + ((1 << 24) + (rr << 16) + (rg << 8) + rb).toString(16).slice(1);
+    }
+
+    // ── 3. Team vs Enemy Simulator ──
+    function runSimulation() {
+      const tierNum = parseInt(document.getElementById('simTier').value);
+      const stageNum = parseInt(document.getElementById('simStage').value);
+      const enemy = ENEMY_TIERS[tierNum];
+      const stage = STAGES[stageNum];
+      const weaponDmg = WEAPON_TIERS[stage.weaponTier].damage;
+      const teamSize = 4;
+      const rate = hitRate(stage.modifier, enemy.dc);
+      const maxTurns = 30;
+      const simCount = 100;
+
+      let wins = 0;
+      let totalTurns = 0;
+      let totalHPRemaining = 0;
+
+      for (let s = 0; s < simCount; s++) {
+        const enemyHP = randInt(enemy.hpRange[0], enemy.hpRange[1]);
+        let hp = enemyHP;
+        // Each team member has individual HP based on stage
+        const memberHP = new Array(teamSize).fill(Math.round(stage.teamHP / teamSize * 2.5));
+        let turn = 0;
+        let won = false;
+
+        while (turn < maxTurns) {
+          turn++;
+          // Team attacks
+          for (let m = 0; m < teamSize; m++) {
+            if (memberHP[m] <= 0) continue;
+            if (rollD20() + stage.modifier >= enemy.dc) {
+              hp -= weaponDmg;
+            }
+          }
+          if (hp <= 0) { won = true; break; }
+
+          // Enemy attacks a random alive member
+          const alive = [];
+          for (let m = 0; m < teamSize; m++) {
+            if (memberHP[m] > 0) alive.push(m);
+          }
+          if (alive.length === 0) break;
+          const target = alive[randInt(0, alive.length - 1)];
+          memberHP[target] -= randInt(enemy.dmgRange[0], enemy.dmgRange[1]);
+
+          // Check team wipe
+          if (memberHP.every(h => h <= 0)) break;
+        }
+
+        if (won) {
+          wins++;
+          totalHPRemaining += memberHP.reduce((s, h) => s + Math.max(0, h), 0);
+        }
+        totalTurns += turn;
+      }
+
+      // Expected drops per fight
+      const drop = DROP_RULES[tierNum];
+      const avgDropQty = (drop.qtyRange[0] + drop.qtyRange[1]) / 2;
+
+      document.getElementById('simResults').style.display = 'grid';
+      document.getElementById('resWinRate').textContent = fmtPercent(wins / simCount);
+      document.getElementById('resAvgTurns').textContent = (totalTurns / simCount).toFixed(1);
+      document.getElementById('resAvgHP').textContent = wins > 0 ? (totalHPRemaining / wins).toFixed(0) : '--';
+      document.getElementById('resDrops').textContent = avgDropQty.toFixed(1);
+
+      // Color the win rate
+      const wr = wins / simCount;
+      const wrEl = document.getElementById('resWinRate');
+      if (wr >= 0.7) wrEl.style.color = '#2D8B6F';
+      else if (wr >= 0.4) wrEl.style.color = '#C9A84C';
+      else wrEl.style.color = '#B84C4C';
+    }
+
+    // ── 4. Damage Output Analysis ──
+    function buildDamageTable() {
+      const tbody = document.getElementById('dmgBody');
+      // For each weapon tier, assume a "middle" stage modifier mapping
+      // WeaponT1→+3, T2→+5, T3→+7, T4→+9, T5→+10, T6→+12
+      const weaponModifiers = { 1: 3, 2: 5, 3: 7, 4: 9, 5: 10, 6: 12 };
+
+      let html = '';
+      for (let wt = 1; wt <= 6; wt++) {
+        const w = WEAPON_TIERS[wt];
+        const mod = weaponModifiers[wt];
+        html += `<tr><td class="row-label">T${wt} ${w.name} (${w.en})</td>`;
+        for (let et = 1; et <= 5; et++) {
+          const e = ENEMY_TIERS[et];
+          const avgHP = (e.hpRange[0] + e.hpRange[1]) / 2;
+          const rate = hitRate(mod, e.dc);
+          // Expected hits to kill = avgHP / weaponDmg
+          const hitsToKill = rate > 0 ? avgHP / w.damage / rate : Infinity;
+          // With 4 team members attacking per turn
+          const turnsTeam = rate > 0 ? hitsToKill / 4 : Infinity;
+          const turnsRound = Math.ceil(turnsTeam * 10) / 10;
+
+          let cls = 'cell-green';
+          if (turnsRound > 6) cls = 'cell-red';
+          else if (turnsRound > 3) cls = 'cell-gold';
+
+          const hitsStr = hitsToKill === Infinity ? '--' : hitsToKill.toFixed(1);
+          const turnsStr = turnsRound === Infinity ? '--' : turnsRound.toFixed(1);
+
+          html += `<td class="${cls}">${hitsStr} 次<br><span style="font-size:0.7rem;opacity:0.7;">${turnsStr} 回合</span></td>`;
+        }
+        html += '</tr>';
+      }
+      tbody.innerHTML = html;
+    }
+
+    // ── 5. Material Economy Preview ──
+    function calcMaterials() {
+      const fights = parseInt(document.getElementById('matFights').value) || 1;
+      const tierNum = parseInt(document.getElementById('matTier').value);
+      const drop = DROP_RULES[tierNum];
+      const avgQty = (drop.qtyRange[0] + drop.qtyRange[1]) / 2;
+      const totalDrops = fights * avgQty;
+      // Materials are randomly distributed among 5 types
+      const perType = totalDrops / 5;
+
+      const lvMin = drop.lvRange[0];
+      const lvMax = drop.lvRange[1];
+      const avgLv = ((lvMin + lvMax) / 2).toFixed(1);
+
+      let html = `
+        <p style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:0.5rem;">
+          ${fights} 場 T${tierNum} ${ENEMY_TIERS[tierNum].name} 戰鬥的預期素材產出
+        </p>
+        <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>素材類型</th>
+              <th>預期數量</th>
+              <th>等級範圍</th>
+              <th>平均等級</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+      MATERIAL_TYPES.forEach(mat => {
+        html += `
+            <tr>
+              <td class="row-label">${mat.zh}</td>
+              <td>${perType.toFixed(1)}</td>
+              <td>LV${lvMin} - LV${lvMax}</td>
+              <td>${avgLv}</td>
+            </tr>`;
+      });
+
+      html += `
+            <tr style="border-top:2px solid var(--border);">
+              <td class="row-label" style="color:var(--gold);font-weight:700;">總計</td>
+              <td style="color:var(--gold);font-weight:700;">${totalDrops.toFixed(1)}</td>
+              <td>LV${lvMin} - LV${lvMax}</td>
+              <td>${avgLv}</td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+        <p style="font-size:0.75rem;color:var(--text-tertiary);margin-top:0.5rem;">
+          * 假設每種素材等機率掉落，單場掉落 ${drop.qtyRange[0]}-${drop.qtyRange[1]} 個
+        </p>`;
+
+      document.getElementById('matOutput').innerHTML = html;
+    }
+
+    // ── Init ──
+    document.addEventListener('DOMContentLoaded', function() {
+      buildTierTable();
+      buildDamageTable();
+      drawHitRateChart();
+      calcMaterials();
+
+      document.getElementById('simBtn').addEventListener('click', runSimulation);
+      document.getElementById('matBtn').addEventListener('click', calcMaterials);
+
+      // Redraw chart on resize
+      let resizeTimer;
+      window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(drawHitRateChart, 200);
+      });
+    });
+
+  })();
+  </script>
+
 </body>
 </html>

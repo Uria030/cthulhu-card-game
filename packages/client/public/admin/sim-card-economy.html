@@ -6,11 +6,338 @@
   <title>卡牌經濟模擬器 — Admin Module</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    /* ── Layout ── */
+    .section-title {
+      font-family: 'Cinzel', serif;
+      font-size: 1.125rem;
+      color: var(--gold);
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-block {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 860px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    /* ── Slider ── */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .slider-row label { margin-bottom: 0; min-width: 80px; }
+    .slider-row input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      border: none;
+      padding: 0;
+    }
+    .slider-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--gold); cursor: pointer;
+      border: 2px solid var(--bg-primary);
+    }
+    .slider-row input[type="range"]::-moz-range-thumb {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--gold); cursor: pointer;
+      border: 2px solid var(--bg-primary);
+    }
+    .slider-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.25rem;
+      color: var(--gold);
+      min-width: 2.5ch;
+      text-align: right;
+    }
+
+    /* ── Cost Distribution ── */
+    .cost-dist-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+    .cost-dist-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .cost-dist-item label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--gold-dim);
+      margin-bottom: 0;
+    }
+    .cost-dist-item input {
+      width: 48px;
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.875rem;
+      padding: 0.35rem 0.25rem;
+    }
+    .avg-cost-display {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+    .avg-cost-display span {
+      color: var(--gold);
+      font-size: 1rem;
+    }
+    .dist-warning {
+      font-size: 0.8125rem;
+      color: var(--danger);
+      margin-top: 0.25rem;
+    }
+
+    /* ── Preset Buttons ── */
+    .preset-row {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+    .btn-sm {
+      padding: 0.3rem 0.75rem;
+      font-size: 0.8125rem;
+    }
+
+    /* ── Card Chips ── */
+    .card-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px; height: 46px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.875rem;
+      color: var(--gold);
+      margin: 2px;
+      position: relative;
+      cursor: default;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .card-chip.playable {
+      border-color: var(--gold-dim);
+      box-shadow: 0 0 6px var(--gold-glow);
+      cursor: pointer;
+    }
+    .card-chip.playable:hover {
+      border-color: var(--gold);
+      box-shadow: 0 0 12px var(--gold-glow);
+    }
+    .card-chip.played {
+      opacity: 0.3;
+      border-color: var(--success);
+    }
+
+    /* ── State Display ── */
+    .state-row {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .state-item {
+      text-align: center;
+    }
+    .state-item .state-label {
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      margin-bottom: 0.125rem;
+    }
+    .state-item .state-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.5rem;
+      color: var(--gold);
+    }
+    .state-item .state-val.danger { color: var(--danger); }
+    .state-item .state-val.success { color: var(--success); }
+
+    .hand-area {
+      min-height: 56px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 2px;
+      padding: 0.5rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 0.75rem;
+    }
+    .hand-area-label {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.35rem;
+    }
+
+    /* ── Turn Log ── */
+    .turn-log {
+      max-height: 260px;
+      overflow-y: auto;
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      padding: 0.75rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .turn-log .turn-entry {
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .turn-log .turn-entry:last-child { border-bottom: none; }
+    .turn-num { color: var(--gold); font-weight: 600; }
+    .log-draw { color: var(--info); }
+    .log-res { color: var(--success); }
+    .log-play { color: var(--warning); }
+    .log-discard { color: var(--danger); }
+
+    /* ── Button Row ── */
+    .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Charts ── */
+    .chart-container {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .chart-container canvas {
+      width: 100% !important;
+      height: 200px !important;
+    }
+    .chart-label {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+      text-align: center;
+    }
+
+    /* ── Metrics ── */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.75rem;
+    }
+    .metric-box {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem;
+      text-align: center;
+    }
+    .metric-box .metric-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.375rem;
+      color: var(--gold);
+    }
+    .metric-box .metric-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+    }
+
+    /* ── Mulligan ── */
+    .mulligan-hand {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+    .mulligan-card {
+      width: 52px; height: 72px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.25rem;
+      color: var(--gold);
+    }
+    .prob-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.35rem;
+      font-size: 0.8125rem;
+    }
+    .prob-bar-label {
+      min-width: 70px;
+      color: var(--text-secondary);
+      text-align: right;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .prob-bar-track {
+      flex: 1; height: 16px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .prob-bar-fill {
+      height: 100%;
+      background: var(--gold);
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+    .prob-bar-pct {
+      min-width: 48px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--gold);
+      font-size: 0.8125rem;
+    }
+
+    /* ── Balance Checker ── */
+    .balance-result {
+      padding: 0.75rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+    .balance-result.ok { background: rgba(45,139,111,0.1); border: 1px solid var(--success); color: var(--success); }
+    .balance-result.warn { background: rgba(201,168,76,0.1); border: 1px solid var(--warning); color: var(--warning); }
+    .balance-result.bad { background: rgba(184,76,76,0.1); border: 1px solid var(--danger); color: var(--danger); }
+  </style>
 </head>
 <body>
 
   <nav class="admin-nav">
-    <a href="index.html" class="nav-back">← 返回首頁</a>
+    <a href="index.html" class="nav-back">&larr; 返回首頁</a>
     <span class="nav-title">卡牌經濟模擬器</span>
     <span class="nav-code">SIM-06</span>
   </nav>
@@ -19,16 +346,610 @@
     <div class="page-header">
       <h1>卡牌經濟模擬器</h1>
       <p class="page-sub">Card Economy Simulator</p>
-      <p class="page-desc">模擬卡牌抽取、資源消耗與手牌經濟循環</p>
+      <p class="page-desc">模擬卡牌抽取、資源消耗與手牌經濟循環，驗證牌組構築的經濟可行性</p>
     </div>
 
-    <div class="placeholder-message">
-      <div class="placeholder-icon">🔧</div>
-      <div class="placeholder-text">此模組尚在開發中</div>
-      <div class="placeholder-sub">Module under development</div>
+    <!-- ════════ 1. Deck Configuration ════════ -->
+    <div class="section-block">
+      <h2 class="section-title">牌組配置</h2>
+
+      <div class="slider-row">
+        <label>牌組大小</label>
+        <input type="range" id="deckSize" min="15" max="30" value="20">
+        <span class="slider-value" id="deckSizeVal">20</span>
+      </div>
+
+      <div style="margin-bottom:0.5rem;font-size:0.8125rem;color:var(--text-secondary);">各費用卡牌數量（總和須等於牌組大小）</div>
+      <div class="cost-dist-row" id="costDistRow"></div>
+      <div class="avg-cost-display">平均費用：<span id="avgCostVal">0.00</span></div>
+      <div class="dist-warning" id="distWarning" style="display:none;"></div>
+
+      <div style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:0.35rem;">快速預設</div>
+      <div class="preset-row">
+        <button class="btn btn-sm" onclick="applyPreset('aggro')">低費快攻</button>
+        <button class="btn btn-sm" onclick="applyPreset('balanced')">均衡牌組</button>
+        <button class="btn btn-sm" onclick="applyPreset('control')">高費控制</button>
+      </div>
     </div>
-  </div>
+
+    <!-- ════════ 2. Turn-by-Turn Simulator ════════ -->
+    <div class="section-block">
+      <h2 class="section-title">回合模擬</h2>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="advanceTurn()">模擬回合</button>
+        <button class="btn" onclick="autoSimulate(10)">自動模擬 10 回合</button>
+        <button class="btn btn-danger" onclick="resetSim()">重置</button>
+      </div>
+
+      <div class="state-row" id="stateRow">
+        <div class="state-item"><div class="state-label">回合</div><div class="state-val" id="sTurn">0</div></div>
+        <div class="state-item"><div class="state-label">資源</div><div class="state-val" id="sRes">5</div></div>
+        <div class="state-item"><div class="state-label">行動點</div><div class="state-val" id="sAct">0</div></div>
+        <div class="state-item"><div class="state-label">手牌</div><div class="state-val" id="sHand">5</div></div>
+        <div class="state-item"><div class="state-label">牌庫</div><div class="state-val" id="sDeck">15</div></div>
+        <div class="state-item"><div class="state-label">棄牌堆</div><div class="state-val" id="sDiscard">0</div></div>
+      </div>
+
+      <div class="hand-area-label">手牌（點擊可出牌的卡牌來打出）</div>
+      <div class="hand-area" id="handArea"></div>
+
+      <div style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:0.35rem;">回合紀錄</div>
+      <div class="turn-log" id="turnLog"><div style="color:var(--text-tertiary);">尚未開始模擬...</div></div>
+    </div>
+
+    <!-- ════════ 3. Economy Analysis ════════ -->
+    <div class="section-block">
+      <h2 class="section-title">經濟分析</h2>
+      <div class="grid-2">
+        <div>
+          <div class="chart-label">資源曲線（收入 vs 支出）</div>
+          <div class="chart-container"><canvas id="chartResource"></canvas></div>
+        </div>
+        <div>
+          <div class="chart-label">卡牌流量（抽牌 vs 出牌）</div>
+          <div class="chart-container"><canvas id="chartCardFlow"></canvas></div>
+        </div>
+      </div>
+      <div class="metrics-grid" id="metricsGrid">
+        <div class="metric-box"><div class="metric-val" id="mAvgPlay">--</div><div class="metric-label">平均每回合可出牌數</div></div>
+        <div class="metric-box"><div class="metric-val" id="mDeckOut">--</div><div class="metric-label">牌庫耗盡回合</div></div>
+        <div class="metric-box"><div class="metric-val" id="mResSurplus">--</div><div class="metric-label">平均資源盈餘/回合</div></div>
+      </div>
+    </div>
+
+    <!-- ════════ 4. Mulligan Simulator ════════ -->
+    <div class="section-block">
+      <h2 class="section-title">起手調度模擬</h2>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="drawMulligan()">抽起手牌</button>
+        <button class="btn" onclick="drawMulligan()">重抽</button>
+        <button class="btn" onclick="runMulliganSim()">模擬 1000 次</button>
+      </div>
+      <div class="mulligan-hand" id="mulliganHand"></div>
+      <div id="mulliganProb" style="font-size:0.875rem;color:var(--text-secondary);margin-bottom:0.75rem;"></div>
+      <div id="mulliganDist"></div>
+    </div>
+
+    <!-- ════════ 5. Economic Balance Checker ════════ -->
+    <div class="section-block">
+      <h2 class="section-title">經濟平衡檢查</h2>
+      <p style="font-size:0.875rem;color:var(--text-secondary);margin-bottom:0.75rem;">根據目前牌組配置，分析此牌組是否能維持每回合出 1 張牌的經濟</p>
+      <button class="btn btn-primary" onclick="runBalanceCheck()">執行分析</button>
+      <div id="balanceResult" style="margin-top:0.75rem;"></div>
+    </div>
+
+  </div><!-- /container -->
 
   <script src="admin-shared.js"></script>
+  <script>
+    /* ══════════════════════════════════════════
+       State
+       ══════════════════════════════════════════ */
+    const R = GAME_RULES;
+    let costDist = [3, 4, 5, 4, 2, 1, 1]; // cards at cost 0-6
+    let sim = null; // simulation state
+    let history = { income: [], spending: [], drawn: [], played: [] };
+
+    /* ══════════════════════════════════════════
+       Deck Configuration
+       ══════════════════════════════════════════ */
+    function buildCostInputs() {
+      const row = document.getElementById('costDistRow');
+      row.innerHTML = '';
+      for (let c = 0; c <= 6; c++) {
+        const d = document.createElement('div');
+        d.className = 'cost-dist-item';
+        d.innerHTML = `<label>費用 ${c}</label><input type="number" min="0" max="30" value="${costDist[c]}" data-cost="${c}" onchange="onCostChange()">`;
+        row.appendChild(d);
+      }
+      updateAvgCost();
+    }
+
+    function onCostChange() {
+      const inputs = document.querySelectorAll('#costDistRow input');
+      inputs.forEach((inp, i) => costDist[i] = Math.max(0, parseInt(inp.value) || 0));
+      updateAvgCost();
+    }
+
+    function updateAvgCost() {
+      const total = costDist.reduce((a, b) => a + b, 0);
+      const deckSize = parseInt(document.getElementById('deckSize').value);
+      const warn = document.getElementById('distWarning');
+      if (total !== deckSize) {
+        warn.textContent = `卡牌總數 ${total} 不等於牌組大小 ${deckSize}，請調整`;
+        warn.style.display = 'block';
+      } else {
+        warn.style.display = 'none';
+      }
+      const avg = total > 0 ? costDist.reduce((s, n, i) => s + n * i, 0) / total : 0;
+      document.getElementById('avgCostVal').textContent = avg.toFixed(2);
+    }
+
+    document.getElementById('deckSize').addEventListener('input', function() {
+      document.getElementById('deckSizeVal').textContent = this.value;
+      updateAvgCost();
+    });
+
+    const PRESETS = {
+      aggro:    [4, 5, 5, 3, 2, 1, 0],  // 20 cards, low cost
+      balanced: [2, 3, 5, 4, 3, 2, 1],   // 20 cards
+      control:  [1, 2, 3, 4, 4, 3, 3],   // 20 cards
+    };
+
+    function applyPreset(name) {
+      const p = PRESETS[name];
+      const total = p.reduce((a, b) => a + b, 0);
+      document.getElementById('deckSize').value = total;
+      document.getElementById('deckSizeVal').textContent = total;
+      costDist = [...p];
+      buildCostInputs();
+    }
+
+    /* ══════════════════════════════════════════
+       Deck Builder Helper
+       ══════════════════════════════════════════ */
+    function buildDeck() {
+      const deck = [];
+      costDist.forEach((n, cost) => { for (let i = 0; i < n; i++) deck.push(cost); });
+      // shuffle
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = randInt(0, i);
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+      return deck;
+    }
+
+    /* ══════════════════════════════════════════
+       Turn-by-Turn Simulator
+       ══════════════════════════════════════════ */
+    function initSim() {
+      const deck = buildDeck();
+      const hand = deck.splice(0, 5); // starting hand of 5
+      sim = {
+        turn: 0,
+        resources: R.STARTING_RESOURCES,
+        actions: 0,
+        hand: hand,
+        deck: deck,
+        discard: [],
+        log: [],
+      };
+      history = { income: [], spending: [], drawn: [], played: [] };
+    }
+
+    function resetSim() {
+      sim = null;
+      history = { income: [], spending: [], drawn: [], played: [] };
+      document.getElementById('turnLog').innerHTML = '<div style="color:var(--text-tertiary);">尚未開始模擬...</div>';
+      updateStateDisplay();
+      updateCharts();
+      updateMetrics();
+    }
+
+    function advanceTurn() {
+      if (!sim) initSim();
+      sim.turn++;
+      sim.actions = R.ACTIONS_PER_TURN;
+      let turnIncome = 0;
+      let turnSpent = 0;
+      let turnDrawn = 0;
+      let turnPlayed = 0;
+      const logLines = [];
+      logLines.push(`<span class="turn-num">回合 ${sim.turn}</span>`);
+
+      // Draw phase
+      const drawCount = R.CARDS_DRAWN_PER_TURN;
+      for (let i = 0; i < drawCount; i++) {
+        if (sim.deck.length > 0) {
+          const card = sim.deck.pop();
+          sim.hand.push(card);
+          turnDrawn++;
+          logLines.push(`<span class="log-draw">  抽牌：費用 ${card}（牌庫剩 ${sim.deck.length}）</span>`);
+        } else {
+          logLines.push(`<span class="log-discard">  牌庫已空，無法抽牌</span>`);
+        }
+      }
+
+      // Resource phase
+      sim.resources += R.RESOURCE_PER_TURN;
+      turnIncome += R.RESOURCE_PER_TURN;
+      logLines.push(`<span class="log-res">  資源 +${R.RESOURCE_PER_TURN}（目前 ${sim.resources}）</span>`);
+
+      // Auto-play: play cards greedily (cheapest first) until out of actions or resources
+      const sortedHand = [...sim.hand].sort((a, b) => a - b);
+      for (const cost of sortedHand) {
+        if (sim.actions <= 0) break;
+        if (cost <= sim.resources) {
+          const idx = sim.hand.indexOf(cost);
+          if (idx !== -1) {
+            sim.hand.splice(idx, 1);
+            sim.discard.push(cost);
+            sim.resources -= cost;
+            sim.actions--;
+            turnSpent += cost;
+            turnPlayed++;
+            logLines.push(`<span class="log-play">  出牌：費用 ${cost}（資源剩 ${sim.resources}，行動剩 ${sim.actions}）</span>`);
+          }
+        }
+      }
+
+      // Discard excess hand
+      while (sim.hand.length > R.HAND_LIMIT) {
+        const discarded = sim.hand.pop();
+        sim.discard.push(discarded);
+        logLines.push(`<span class="log-discard">  棄牌（超過手牌上限）：費用 ${discarded}</span>`);
+      }
+
+      history.income.push(turnIncome);
+      history.spending.push(turnSpent);
+      history.drawn.push(turnDrawn);
+      history.played.push(turnPlayed);
+
+      sim.log.unshift(logLines.join('<br>'));
+      renderLog();
+      updateStateDisplay();
+      updateCharts();
+      updateMetrics();
+    }
+
+    function autoSimulate(n) {
+      if (!sim) initSim();
+      for (let i = 0; i < n; i++) advanceTurn();
+    }
+
+    function renderLog() {
+      if (!sim) return;
+      const el = document.getElementById('turnLog');
+      el.innerHTML = sim.log.map(l => `<div class="turn-entry">${l}</div>`).join('');
+    }
+
+    function updateStateDisplay() {
+      if (!sim) {
+        document.getElementById('sTurn').textContent = '0';
+        document.getElementById('sRes').textContent = R.STARTING_RESOURCES;
+        document.getElementById('sAct').textContent = '0';
+        document.getElementById('sHand').textContent = '5';
+        document.getElementById('sDeck').textContent = '--';
+        document.getElementById('sDiscard').textContent = '0';
+        document.getElementById('handArea').innerHTML = '';
+        return;
+      }
+      document.getElementById('sTurn').textContent = sim.turn;
+      document.getElementById('sRes').textContent = sim.resources;
+      const actEl = document.getElementById('sAct');
+      actEl.textContent = sim.actions;
+      actEl.className = 'state-val' + (sim.actions === 0 ? ' danger' : '');
+      document.getElementById('sHand').textContent = sim.hand.length;
+      const deckEl = document.getElementById('sDeck');
+      deckEl.textContent = sim.deck.length;
+      deckEl.className = 'state-val' + (sim.deck.length === 0 ? ' danger' : '');
+      document.getElementById('sDiscard').textContent = sim.discard.length;
+
+      // render hand cards
+      const handArea = document.getElementById('handArea');
+      handArea.innerHTML = '';
+      sim.hand.forEach((cost, idx) => {
+        const chip = document.createElement('div');
+        chip.className = 'card-chip';
+        chip.textContent = cost;
+        if (sim.actions > 0 && cost <= sim.resources) {
+          chip.classList.add('playable');
+          chip.title = `點擊打出（費用 ${cost}）`;
+          chip.onclick = () => playCard(idx);
+        }
+        handArea.appendChild(chip);
+      });
+    }
+
+    function playCard(idx) {
+      if (!sim || sim.actions <= 0) return;
+      const cost = sim.hand[idx];
+      if (cost > sim.resources) return;
+      sim.hand.splice(idx, 1);
+      sim.discard.push(cost);
+      sim.resources -= cost;
+      sim.actions--;
+      // update current turn history
+      if (history.spending.length > 0) history.spending[history.spending.length - 1] += cost;
+      if (history.played.length > 0) history.played[history.played.length - 1]++;
+      updateStateDisplay();
+      updateCharts();
+      updateMetrics();
+    }
+
+    /* ══════════════════════════════════════════
+       Charts (canvas-based)
+       ══════════════════════════════════════════ */
+    function drawLineChart(canvasId, datasets, maxTurns) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = 200 * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = '200px';
+      ctx.scale(dpr, dpr);
+
+      const W = rect.width;
+      const H = 200;
+      const pad = { top: 20, right: 20, bottom: 30, left: 40 };
+      const plotW = W - pad.left - pad.right;
+      const plotH = H - pad.top - pad.bottom;
+
+      ctx.clearRect(0, 0, W, H);
+
+      const turns = maxTurns || Math.max(1, ...datasets.map(d => d.data.length));
+      let maxVal = 1;
+      datasets.forEach(d => d.data.forEach(v => { if (v > maxVal) maxVal = v; }));
+      maxVal = Math.ceil(maxVal * 1.2);
+
+      // grid
+      ctx.strokeStyle = '#2A2A44';
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i <= 4; i++) {
+        const y = pad.top + (plotH / 4) * i;
+        ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+      }
+
+      // axis labels
+      ctx.fillStyle = '#5A5A52';
+      ctx.font = '10px JetBrains Mono';
+      ctx.textAlign = 'right';
+      for (let i = 0; i <= 4; i++) {
+        const y = pad.top + (plotH / 4) * i;
+        const val = Math.round(maxVal * (1 - i / 4));
+        ctx.fillText(val, pad.left - 6, y + 3);
+      }
+      ctx.textAlign = 'center';
+      const step = Math.max(1, Math.floor(turns / 10));
+      for (let t = 1; t <= turns; t += step) {
+        const x = pad.left + ((t - 1) / Math.max(1, turns - 1)) * plotW;
+        ctx.fillText(t, x, H - pad.bottom + 16);
+      }
+
+      // lines
+      datasets.forEach(ds => {
+        if (ds.data.length < 1) return;
+        ctx.strokeStyle = ds.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ds.data.forEach((v, i) => {
+          const x = pad.left + (i / Math.max(1, turns - 1)) * plotW;
+          const y = pad.top + plotH - (v / maxVal) * plotH;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // dots
+        ctx.fillStyle = ds.color;
+        ds.data.forEach((v, i) => {
+          const x = pad.left + (i / Math.max(1, turns - 1)) * plotW;
+          const y = pad.top + plotH - (v / maxVal) * plotH;
+          ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+        });
+      });
+
+      // legend
+      let lx = pad.left;
+      datasets.forEach(ds => {
+        ctx.fillStyle = ds.color;
+        ctx.fillRect(lx, 4, 12, 3);
+        ctx.fillStyle = '#8A8778';
+        ctx.font = '10px Noto Sans TC';
+        ctx.textAlign = 'left';
+        ctx.fillText(ds.label, lx + 16, 10);
+        lx += ctx.measureText(ds.label).width + 32;
+      });
+    }
+
+    function updateCharts() {
+      // cumulative resources
+      let cumIncome = [], cumSpend = [];
+      let ci = 0, cs = 0;
+      for (let i = 0; i < history.income.length; i++) {
+        ci += history.income[i]; cs += history.spending[i];
+        cumIncome.push(ci); cumSpend.push(cs);
+      }
+      drawLineChart('chartResource', [
+        { label: '累計收入', data: cumIncome, color: '#2D8B6F' },
+        { label: '累計支出', data: cumSpend, color: '#B84C4C' },
+      ], history.income.length);
+
+      drawLineChart('chartCardFlow', [
+        { label: '抽牌', data: history.drawn, color: '#4A7C9B' },
+        { label: '出牌', data: history.played, color: '#C9A84C' },
+      ], history.drawn.length);
+    }
+
+    function updateMetrics() {
+      if (!history.played.length) {
+        document.getElementById('mAvgPlay').textContent = '--';
+        document.getElementById('mDeckOut').textContent = '--';
+        document.getElementById('mResSurplus').textContent = '--';
+        return;
+      }
+      const avgPlay = (history.played.reduce((a, b) => a + b, 0) / history.played.length).toFixed(1);
+      document.getElementById('mAvgPlay').textContent = avgPlay;
+
+      // turns until deck out
+      const deckTotal = costDist.reduce((a, b) => a + b, 0);
+      const drawPerTurn = R.CARDS_DRAWN_PER_TURN;
+      const afterStart = deckTotal - 5; // after drawing starting hand
+      const deckOutTurn = afterStart > 0 ? Math.ceil(afterStart / drawPerTurn) : 0;
+      document.getElementById('mDeckOut').textContent = deckOutTurn > 0 ? `${deckOutTurn}` : 'N/A';
+
+      const avgSurplus = ((history.income.reduce((a, b) => a + b, 0) - history.spending.reduce((a, b) => a + b, 0)) / history.income.length).toFixed(1);
+      const surplusEl = document.getElementById('mResSurplus');
+      surplusEl.textContent = (avgSurplus >= 0 ? '+' : '') + avgSurplus;
+      surplusEl.className = 'metric-val' + (avgSurplus < 0 ? ' danger' : '');
+      surplusEl.style.color = avgSurplus < 0 ? 'var(--danger)' : 'var(--success)';
+    }
+
+    /* ══════════════════════════════════════════
+       Mulligan Simulator
+       ══════════════════════════════════════════ */
+    function drawMulligan() {
+      const deck = buildDeck();
+      const hand = deck.splice(0, 5);
+      const handArea = document.getElementById('mulliganHand');
+      handArea.innerHTML = '';
+      hand.forEach(cost => {
+        const el = document.createElement('div');
+        el.className = 'mulligan-card';
+        el.textContent = cost;
+        handArea.appendChild(el);
+      });
+      const totalCost = hand.reduce((a, b) => a + b, 0);
+      const hasLow = hand.some(c => c <= 2);
+      document.getElementById('mulliganProb').innerHTML =
+        `起手總費用：<strong style="color:var(--gold)">${totalCost}</strong>` +
+        ` | 含 2 費以下卡牌：<strong style="color:${hasLow ? 'var(--success)' : 'var(--danger)'}">${hasLow ? '是' : '否'}</strong>`;
+    }
+
+    function runMulliganSim() {
+      const N = 1000;
+      const costBuckets = [0, 0, 0, 0, 0]; // 0-2, 3-5, 6-8, 9-12, 13+
+      const bucketLabels = ['0-2', '3-5', '6-8', '9-12', '13+'];
+      let hasLowCount = 0;
+
+      for (let i = 0; i < N; i++) {
+        const deck = buildDeck();
+        const hand = deck.splice(0, 5);
+        const total = hand.reduce((a, b) => a + b, 0);
+        if (hand.some(c => c <= 2)) hasLowCount++;
+        if (total <= 2) costBuckets[0]++;
+        else if (total <= 5) costBuckets[1]++;
+        else if (total <= 8) costBuckets[2]++;
+        else if (total <= 12) costBuckets[3]++;
+        else costBuckets[4]++;
+      }
+
+      const lowProb = (hasLowCount / N * 100).toFixed(1);
+      document.getElementById('mulliganProb').innerHTML =
+        `模擬 ${N} 次結果 | 起手含 2 費以下卡牌機率：<strong style="color:var(--gold)">${lowProb}%</strong>`;
+
+      const distEl = document.getElementById('mulliganDist');
+      distEl.innerHTML = '<div style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:0.5rem;">起手總費用分布</div>';
+      const maxBucket = Math.max(...costBuckets, 1);
+      bucketLabels.forEach((label, i) => {
+        const pct = (costBuckets[i] / N * 100).toFixed(1);
+        const barW = (costBuckets[i] / maxBucket * 100).toFixed(1);
+        distEl.innerHTML += `
+          <div class="prob-bar-row">
+            <span class="prob-bar-label">${label}</span>
+            <div class="prob-bar-track"><div class="prob-bar-fill" style="width:${barW}%"></div></div>
+            <span class="prob-bar-pct">${pct}%</span>
+          </div>`;
+      });
+    }
+
+    /* ══════════════════════════════════════════
+       Economic Balance Checker
+       ══════════════════════════════════════════ */
+    function runBalanceCheck() {
+      const total = costDist.reduce((a, b) => a + b, 0);
+      const avg = total > 0 ? costDist.reduce((s, n, i) => s + n * i, 0) / total : 0;
+      const issues = [];
+      let severity = 'ok';
+
+      // Resource analysis: each turn you get +1 resource. Starting 5.
+      // To play 1 card/turn, average cost must be <= average income.
+      // Over 10 turns: total income = 5 + 10*1 = 15. Cards played = 10. Avg affordable cost = 1.5.
+      // But you also have 3 actions per turn, can use 1 for +1 resource.
+      // So max income with 1 action for resource: 5 + 10*2 = 25, avg affordable = 2.5 per card (10 cards).
+      const turnsToCheck = 10;
+      const baseIncome = R.STARTING_RESOURCES + turnsToCheck * R.RESOURCE_PER_TURN;
+      const extraIncome = turnsToCheck; // 1 action/turn for resource
+      const maxIncome = baseIncome + extraIncome;
+      const cardsCanPlay = Math.min(turnsToCheck * (R.ACTIONS_PER_TURN - 1), total - 5); // reserve 1 action for resource
+      const affordableAvg = cardsCanPlay > 0 ? maxIncome / cardsCanPlay : 0;
+
+      if (avg > affordableAvg + 0.5) {
+        issues.push(`平均費用 ${avg.toFixed(1)} 過高（10 回合可負擔平均 ${affordableAvg.toFixed(1)}），資源將長期不足`);
+        severity = 'bad';
+      }
+
+      if (avg > 3) {
+        issues.push(`平均費用 ${avg.toFixed(1)} > 3，牌組容易資源匱乏`);
+        if (severity !== 'bad') severity = 'warn';
+      }
+
+      if (total < 15) {
+        issues.push(`牌組僅 ${total} 張，少於建議最低 15 張，將過快耗盡牌庫`);
+        if (severity !== 'bad') severity = 'warn';
+      }
+
+      // Check if enough low-cost cards for early game
+      const lowCost = costDist[0] + costDist[1] + costDist[2];
+      const lowPct = total > 0 ? lowCost / total : 0;
+      if (lowPct < 0.3) {
+        issues.push(`低費（0-2）卡牌僅佔 ${(lowPct * 100).toFixed(0)}%，建議至少 30% 以確保前期有牌可出`);
+        if (severity !== 'bad') severity = 'warn';
+      }
+
+      // Check sustainability: simulate 10 turns of playing 1 card/turn
+      let simRes = R.STARTING_RESOURCES;
+      let starvedTurns = 0;
+      const sortedCosts = [];
+      costDist.forEach((n, c) => { for (let i = 0; i < n; i++) sortedCosts.push(c); });
+      sortedCosts.sort((a, b) => a - b);
+      // skip first 5 (starting hand drawn), then simulate drawing 1/turn
+      let playIdx = 0;
+      for (let t = 1; t <= 10; t++) {
+        simRes += R.RESOURCE_PER_TURN;
+        // try to play cheapest available card
+        if (playIdx < sortedCosts.length && sortedCosts[playIdx] <= simRes) {
+          simRes -= sortedCosts[playIdx];
+          playIdx++;
+        } else {
+          starvedTurns++;
+        }
+      }
+      if (starvedTurns > 3) {
+        issues.push(`最佳情境下 10 回合中有 ${starvedTurns} 回合無法出牌，經濟嚴重不足`);
+        severity = 'bad';
+      } else if (starvedTurns > 1) {
+        issues.push(`最佳情境下 10 回合中有 ${starvedTurns} 回合無法出牌`);
+        if (severity !== 'bad') severity = 'warn';
+      }
+
+      const resultEl = document.getElementById('balanceResult');
+      if (issues.length === 0) {
+        resultEl.innerHTML = `<div class="balance-result ok">此牌組經濟結構健康，能維持每回合至少出 1 張牌。<br>平均費用 ${avg.toFixed(1)}，牌庫大小 ${total}。</div>`;
+      } else {
+        const icon = severity === 'bad' ? '嚴重警告' : '注意';
+        resultEl.innerHTML = `<div class="balance-result ${severity}"><strong>${icon}</strong><br>${issues.map(i => '- ' + i).join('<br>')}</div>`;
+      }
+    }
+
+    /* ══════════════════════════════════════════
+       Init
+       ══════════════════════════════════════════ */
+    buildCostInputs();
+    updateStateDisplay();
+    updateCharts();
+  </script>
 </body>
 </html>

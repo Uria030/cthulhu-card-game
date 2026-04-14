@@ -390,6 +390,7 @@
               <div class="balance-row"><span class="bal-label">等級抵扣</span><span class="bal-val" id="balLevelDisc">0</span></div>
               <div class="balance-row"><span class="bal-label">消耗類型修正</span><span class="bal-val" id="balConsumeMod">0</span></div>
               <div class="balance-row"><span class="bal-label">留場修正</span><span class="bal-val" id="balStayMod">0</span></div>
+              <div class="balance-row" id="balSpecialRow" style="display:none;"><span class="bal-label">簽名/獨特修正</span><span class="bal-val" id="balSpecialMod">0</span></div>
               <hr class="balance-divider">
               <div class="balance-row"><span class="bal-label">小計</span><span class="bal-val" id="balSubtotal">0V</span></div>
               <div class="balance-row"><span class="bal-label">費用設定</span><span class="bal-val" id="balCost">0</span></div>
@@ -788,6 +789,10 @@
     const isAlly = cardType === 'ally';
     const isSkill = cardType === 'skill';
 
+    const isSig = el('f_is_signature').checked;
+    const isUnique = el('f_is_unique').checked;
+    const specialMod = (isSig ? -3 : 0) + (isUnique ? -1 : 0);
+
     let totalValue, stayMod, ratio, rarityDisc, rarity, status, msg;
 
     if (isSkill) {
@@ -811,7 +816,7 @@
       totalValue = calcAllyBaseValue() + effectsValue;
       stayMod = 0; // already included in calcAllyBaseValue
       ratio = '1:1';
-      rarityDisc = totalValue - levelDisc - cost;
+      rarityDisc = totalValue - levelDisc - cost + specialMod;
       rarity = rarityFromDiscount(rarityDisc);
       status = rarity.status; msg = rarity.msg;
     } else if (isWeapon) {
@@ -819,7 +824,7 @@
       totalValue = weaponOut + effectsValue;
       stayMod = -1;
       ratio = '2:1';
-      rarityDisc = totalValue + stayMod + consumeMod - levelDisc - (cost * 2);
+      rarityDisc = totalValue + stayMod + consumeMod - levelDisc - (cost * 2) + specialMod;
       rarity = rarityFromDiscount(rarityDisc);
       status = rarity.status; msg = rarity.msg;
     } else if (cardType === 'asset') {
@@ -828,7 +833,7 @@
       totalValue = uses > 0 ? effectsValue * uses : effectsValue;
       stayMod = -1;
       ratio = '2:1';
-      rarityDisc = totalValue + stayMod + consumeMod - levelDisc - (cost * 2);
+      rarityDisc = totalValue + stayMod + consumeMod - levelDisc - (cost * 2) + specialMod;
       rarity = rarityFromDiscount(rarityDisc);
       status = rarity.status; msg = rarity.msg;
     } else {
@@ -836,12 +841,12 @@
       totalValue = effectsValue;
       stayMod = 0;
       ratio = '1:1';
-      rarityDisc = totalValue - levelDisc - cost;
+      rarityDisc = totalValue - levelDisc - cost + specialMod;
       rarity = rarityFromDiscount(rarityDisc);
       status = rarity.status; msg = rarity.msg;
     }
 
-    return { totalValue, levelDisc, consumeMod, stayMod, ratio, cost, rarityDisc, rarity: rarity.name || rarity, status, msg, isSkill, effectsValue };
+    return { totalValue, levelDisc, consumeMod, stayMod, specialMod, ratio, cost, rarityDisc, rarity: rarity.name || rarity, status, msg, isSkill, effectsValue };
   }
 
   function rarityFromDiscount(disc) {
@@ -860,7 +865,9 @@
     el('balLevelDisc').textContent = b.levelDisc > 0 ? `-${b.levelDisc}V` : '0';
     el('balConsumeMod').textContent = b.consumeMod !== 0 ? `${b.consumeMod}V` : '0';
     el('balStayMod').textContent = b.stayMod !== 0 ? `${b.stayMod}V` : '0';
-    const subtotal = b.totalValue + (b.stayMod || 0) + (b.consumeMod || 0) - b.levelDisc;
+    el('balSpecialMod').textContent = b.specialMod !== 0 ? `${b.specialMod}V` : '0';
+    el('balSpecialRow').style.display = b.specialMod !== 0 ? '' : 'none';
+    const subtotal = b.totalValue + (b.stayMod || 0) + (b.consumeMod || 0) + (b.specialMod || 0) - b.levelDisc;
     el('balSubtotal').textContent = subtotal.toFixed(1) + 'V';
     el('balCost').textContent = b.cost;
     el('balRatio').textContent = b.ratio;
@@ -1929,7 +1936,8 @@
     el('f_type').addEventListener('change', toggleConditionalFields);
     el('f_weapon_tier').addEventListener('change', onWeaponTierChange);
     el('f_slot').addEventListener('change', () => { el('slotNote').textContent = SLOTS[el('f_slot').value]?.note || ''; });
-    el('f_is_signature').addEventListener('change', toggleConditionalFields);
+    el('f_is_signature').addEventListener('change', () => { toggleConditionalFields(); updatePreview(); });
+    el('f_is_unique').addEventListener('change', () => updatePreview());
     el('f_is_revelation').addEventListener('change', toggleConditionalFields);
     el('searchInput').addEventListener('input', renderList);
     el('filterFaction').addEventListener('change', renderList);

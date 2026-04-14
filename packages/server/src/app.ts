@@ -16,6 +16,7 @@ export async function buildApp() {
         cb(null, true); // Allow all for now during development
       }
     },
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
   });
 

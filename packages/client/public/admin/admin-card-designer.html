@@ -7,8 +7,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
   <style>
-    .main-layout { display: flex; gap: 1rem; min-height: calc(100vh - 50px); }
-    .panel-left { width: 280px; flex-shrink: 0; background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 1rem; overflow-y: auto; max-height: calc(100vh - 50px); }
+    .main-layout { display: flex; gap: 0; min-height: calc(100vh - 50px); }
+    .panel-left { width: 280px; flex-shrink: 0; background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 1rem; overflow-y: auto; max-height: calc(100vh - 50px); transition: width 0.2s, padding 0.2s, opacity 0.2s; }
+    .panel-left.collapsed { width: 0; padding: 0; overflow: hidden; border-right: none; opacity: 0; }
+    .panel-toggle { flex-shrink: 0; width: 24px; background: var(--bg-secondary); border: none; border-right: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 0.75rem; padding: 0; }
+    .panel-toggle:hover { color: var(--gold); background: var(--bg-card); }
     .panel-right { flex: 1; padding: 1rem 1.5rem; overflow-y: auto; max-height: calc(100vh - 50px); }
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
     .toolbar .spacer { flex: 1; }
@@ -123,7 +126,7 @@
     .right-sticky-col { position: sticky; top: 60px; max-height: calc(100vh - 70px); overflow-y: auto; }
     @media (max-width: 1440px) { .edit-preview-layout { grid-template-columns: 1fr; } .right-sticky-col { position: static; max-height: none; display: grid; grid-template-columns: 1fr 320px; gap: 1rem; align-items: start; } .preview-card { width: 300px; } .balance-panel { width: 100%; } }
     @media (max-width: 900px) { .right-sticky-col { grid-template-columns: 1fr; } .preview-card, .balance-panel { width: 100%; } }
-    @media (max-width: 768px) { .main-layout { flex-direction: column; } .panel-left { width: 100%; max-height: 300px; border-right: none; border-bottom: 1px solid var(--border); } }
+    @media (max-width: 768px) { .main-layout { flex-direction: column; } .panel-left:not(.collapsed) { width: 100%; max-height: 300px; border-right: none; border-bottom: 1px solid var(--border); } .panel-toggle { width: 100%; height: 28px; border-right: none; border-bottom: 1px solid var(--border); } }
   </style>
 </head>
 <body>
@@ -135,7 +138,7 @@
 
   <div class="main-layout">
     <!-- Left Panel -->
-    <div class="panel-left">
+    <div class="panel-left" id="panelLeft">
       <div class="search-box"><input type="text" id="searchInput" placeholder="搜尋名稱或代碼…"></div>
       <div class="filter-row">
         <select id="filterFaction"><option value="">全部陣營</option></select>
@@ -148,6 +151,7 @@
       <div id="cardList"></div>
       <div class="list-stats" id="listStats">0 張卡片</div>
     </div>
+    <button class="panel-toggle" id="panelToggle" onclick="toggleLeftPanel()" title="收合/展開卡片列表">&#9664;</button>
 
     <!-- Right Panel -->
     <div class="panel-right">
@@ -1761,6 +1765,15 @@
         return def ? `${def.en}${t}` : code;
       }
     }
+  }
+
+  /* ── Left Panel Toggle ── */
+  function toggleLeftPanel() {
+    const panel = el('panelLeft');
+    const btn = el('panelToggle');
+    const collapsed = panel.classList.toggle('collapsed');
+    btn.innerHTML = collapsed ? '&#9654;' : '&#9664;';
+    btn.title = collapsed ? '展開卡片列表' : '收合卡片列表';
   }
 
   /* ── Section Collapse ── */

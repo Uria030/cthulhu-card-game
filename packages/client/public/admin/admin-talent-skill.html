@@ -3,32 +3,1137 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>天賦與技能樹管理 — Admin Module</title>
+  <title>天賦樹設計器 — Admin Module</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    /* ── Layout ── */
+    .main-layout { display: flex; gap: 0; min-height: calc(100vh - 50px); }
+    .panel-left {
+      position: fixed; top: 50px; left: 0; bottom: 0; width: 220px;
+      background: var(--bg-secondary); border-right: 1px solid var(--border);
+      overflow-y: auto; z-index: 50; transition: transform 0.25s ease;
+      display: flex; flex-direction: column;
+    }
+    .panel-left.collapsed { transform: translateX(-100%); }
+    .panel-main { flex: 1; margin-left: 220px; padding: 1rem 1.5rem; overflow-y: auto; transition: margin-left 0.25s ease; }
+    .panel-main.expanded { margin-left: 0; }
+
+    /* ── Toolbar ── */
+    .toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+    .toolbar .spacer { flex: 1; }
+    .tab-group { display: flex; gap: 0; }
+    .tab-btn { padding: 0.4rem 1rem; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary);
+      cursor: pointer; font-size: 0.8125rem; font-family: 'Noto Sans TC', sans-serif; transition: all 0.2s; }
+    .tab-btn:first-child { border-radius: 6px 0 0 6px; }
+    .tab-btn:last-child { border-radius: 0 6px 6px 0; }
+    .tab-btn.active { background: var(--gold); color: var(--bg-primary); border-color: var(--gold); font-weight: 500; }
+
+    /* ── Faction List ── */
+    .faction-list { flex: 1; padding: 0.5rem 0; }
+    .faction-item {
+      display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 1rem;
+      cursor: pointer; transition: background 0.15s; border-left: 3px solid transparent;
+    }
+    .faction-item:hover { background: var(--bg-card); }
+    .faction-item.active { border-left-color: var(--gold); background: var(--bg-card); }
+    .faction-color { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .faction-name { font-size: 0.875rem; flex: 1; }
+    .faction-status { font-size: 0.75rem; }
+    .status-complete { color: var(--success); }
+    .status-partial { color: var(--warning); }
+    .status-pending { color: var(--text-tertiary); }
+    .panel-stats { padding: 0.75rem 1rem; border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--text-tertiary); line-height: 1.8; }
+
+    /* ── Section headers ── */
+    .section-title {
+      font-family: 'Cinzel', serif; font-size: 0.875rem; color: var(--gold-dim); text-transform: uppercase;
+      letter-spacing: 0.05em; margin: 1.25rem 0 0.75rem; padding-bottom: 0.375rem; border-bottom: 1px solid var(--border);
+      cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .section-title::before { content: '\25B8'; font-size: 0.625rem; transition: transform 0.15s; }
+    .section-title.open::before { transform: rotate(90deg); }
+    .section-content { overflow: hidden; transition: max-height 0.25s ease; }
+    .section-content.collapsed { max-height: 0 !important; }
+
+    /* ── Form grid ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group label { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem; }
+    .form-row { display: flex; gap: 0.5rem; align-items: center; }
+
+    /* ── Branch cards ── */
+    .branch-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
+    .branch-card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem;
+      transition: border-color 0.2s;
+    }
+    .branch-card:hover { border-color: var(--border-hover); }
+    .branch-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .branch-swatch { width: 14px; height: 14px; border-radius: 3px; }
+    .branch-name { font-weight: 500; font-size: 0.9375rem; }
+    .branch-en { font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 0.375rem; }
+    .branch-theme { font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+    .branch-progress { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 0.625rem; }
+    .progress-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--gold); border-radius: 2px; transition: width 0.3s; }
+    .branch-actions { display: flex; gap: 0.375rem; }
+    .branch-edit-form { display: none; margin-top: 0.75rem; }
+    .branch-edit-form.open { display: block; }
+
+    /* ── SVG Tree ── */
+    .tree-container { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem; overflow: hidden; position: relative; min-height: 400px; }
+    .tree-svg { width: 100%; display: block; }
+    .tree-svg text { font-family: 'Noto Sans TC', sans-serif; }
+
+    /* ── Node editor ── */
+    .node-editor { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-top: 1rem; display: none; }
+    .node-editor.open { display: block; }
+    .node-editor-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+    .node-editor-title { font-family: 'Cinzel', serif; font-size: 1rem; color: var(--gold); }
+    .node-editor-type { font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: 4px; border: 1px solid var(--border); }
+    .node-editor-close { margin-left: auto; cursor: pointer; color: var(--text-tertiary); font-size: 1.25rem; }
+    .node-editor-close:hover { color: var(--text-primary); }
+
+    /* ── Effect table ── */
+    .effect-table { width: 100%; margin: 0.5rem 0; }
+    .effect-table th { font-size: 0.75rem; padding: 0.375rem 0.5rem; }
+    .effect-table td { padding: 0.375rem 0.5rem; font-size: 0.8125rem; }
+    .effect-row-edit { display: none; }
+    .effect-row-edit.open { display: table-row; }
+    .effect-value-tag { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--gold); }
+    .effect-total { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; color: var(--gold); margin-top: 0.25rem; }
+
+    /* ── Compare tab ── */
+    .compare-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.5rem; }
+    .compare-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; cursor: pointer; transition: border-color 0.2s; text-align: center; }
+    .compare-card:hover { border-color: var(--gold); }
+    .compare-faction { font-family: 'Cinzel', serif; font-size: 1rem; margin-bottom: 0.25rem; }
+    .compare-attrs { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; }
+    .compare-status { font-size: 0.8125rem; }
+    .compare-proficiency { font-size: 0.75rem; color: var(--text-tertiary); }
+    .matrix-table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+    .matrix-table th, .matrix-table td { text-align: center; padding: 0.5rem; font-size: 0.8125rem; border: 1px solid var(--border); }
+    .matrix-table th { background: var(--bg-secondary); color: var(--gold-dim); font-size: 0.75rem; }
+    .matrix-primary { color: var(--gold); font-weight: 700; }
+    .matrix-secondary { color: var(--text-secondary); }
+
+    /* ── AI dialog ── */
+    .ai-dialog { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 200; background: rgba(0,0,0,0.7); align-items: center; justify-content: center; }
+    .ai-dialog.open { display: flex; }
+    .ai-dialog-body { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; width: 500px; max-width: 90vw; }
+    .ai-dialog-title { font-family: 'Cinzel', serif; color: var(--gold); margin-bottom: 1rem; }
+    .ai-context { font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 0.75rem; line-height: 1.6; }
+    .ai-status { font-size: 0.8125rem; color: var(--text-tertiary); margin-top: 0.5rem; min-height: 1.2em; }
+
+    /* ── Tooltip ── */
+    .tree-tooltip { position: absolute; z-index: 150; background: var(--bg-secondary); border: 1px solid var(--gold-dim); border-radius: 6px; padding: 0.625rem 0.875rem; pointer-events: none; max-width: 280px; display: none; }
+    .tree-tooltip .tt-name { font-weight: 500; margin-bottom: 0.25rem; }
+    .tree-tooltip .tt-type { font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 0.25rem; }
+    .tree-tooltip .tt-cost { font-size: 0.75rem; color: var(--gold-dim); margin-bottom: 0.375rem; }
+    .tree-tooltip .tt-desc { font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 0.25rem; }
+    .tree-tooltip .tt-effects { font-size: 0.75rem; color: var(--text-tertiary); white-space: pre-line; }
+
+    /* ── Responsive ── */
+    @media (max-width: 1200px) { .branch-grid { grid-template-columns: 1fr; } .compare-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 768px) {
+      .panel-left { transform: translateX(-100%); } .panel-main { margin-left: 0; }
+      .form-grid { grid-template-columns: 1fr; } .compare-grid { grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
 <body>
 
   <nav class="admin-nav">
-    <a href="index.html" class="nav-back">← 返回首頁</a>
-    <span class="nav-title">天賦與技能樹管理</span>
+    <a href="index.html" class="nav-back">&larr; 返回首頁</a>
+    <button class="btn" onclick="toggleLeftPanel()" style="padding:0.25rem 0.5rem;font-size:0.75rem;" title="切換面板">&#9776;</button>
+    <span class="nav-title">天賦樹設計器</span>
     <span class="nav-code">MOD-02</span>
   </nav>
 
-  <div class="container">
-    <div class="page-header">
-      <h1>天賦與技能樹管理</h1>
-      <p class="page-sub">Talent & Skill Tree</p>
-      <p class="page-desc">管理調查員天賦節點與技能樹結構</p>
+  <div class="main-layout">
+    <!-- Left Panel: Faction Selection -->
+    <div class="panel-left" id="panelLeft">
+      <div style="padding:0.75rem 1rem;font-family:'Cinzel',serif;font-size:0.8125rem;color:var(--gold-dim);border-bottom:1px solid var(--border);">FACTIONS</div>
+      <div class="faction-list" id="factionList"></div>
+      <div class="panel-stats" id="panelStats"></div>
     </div>
 
-    <div class="placeholder-message">
-      <div class="placeholder-icon">🔧</div>
-      <div class="placeholder-text">此模組尚在開發中</div>
-      <div class="placeholder-sub">Module under development</div>
+    <!-- Main Panel -->
+    <div class="panel-main" id="panelMain">
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="tab-group">
+          <button class="tab-btn active" data-tab="editor" onclick="switchTab('editor')">樹狀編輯</button>
+          <button class="tab-btn" data-tab="compare" onclick="switchTab('compare')">陣營比較</button>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn" onclick="exportJSON()">匯出 JSON</button>
+        <button class="btn" onclick="document.getElementById('importFile').click()">匯入 JSON</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
+        <button class="btn" onclick="promptApiKey()">設定 API Key</button>
+      </div>
+
+      <!-- Editor Tab -->
+      <div id="tabEditor">
+        <!-- Section 1: Tree Basic Info -->
+        <div class="section-title open" onclick="toggleSection('secInfo')">天賦樹基本資訊</div>
+        <div class="section-content" id="secInfo">
+          <div class="form-grid">
+            <div class="form-group"><label>陣營代碼</label><input id="f_faction_code" readonly></div>
+            <div class="form-group"><label>設計狀態</label><input id="f_design_status" readonly></div>
+            <div class="form-group"><label>中文名稱</label><input id="f_name_zh"></div>
+            <div class="form-group"><label>英文名稱</label><input id="f_name_en"></div>
+            <div class="form-group"><label>主屬性</label><select id="f_primary_attribute"></select></div>
+            <div class="form-group"><label>副屬性</label><select id="f_secondary_attribute"></select></div>
+            <div class="form-group"><label>主戰鬥熟練</label><select id="f_combat_prof_primary"></select></div>
+            <div class="form-group"><label>副戰鬥熟練</label><select id="f_combat_prof_secondary"></select></div>
+            <div class="form-group full"><label>中文說明</label><textarea id="f_description_zh" rows="2"></textarea></div>
+            <div class="form-group full"><label>英文說明</label><div class="form-row"><textarea id="f_description_en" rows="2" style="flex:1"></textarea><button class="btn" onclick="aiTranslate('f_description_zh','f_description_en')" style="white-space:nowrap">生成英文</button></div></div>
+            <div class="form-group full"><label>設計備註</label><textarea id="f_design_notes" rows="2"></textarea></div>
+          </div>
+          <button class="btn btn-primary" onclick="saveTreeInfo()">儲存基本資訊</button>
+        </div>
+
+        <!-- Section 2: Branches -->
+        <div class="section-title open" onclick="toggleSection('secBranches')">分支路線管理</div>
+        <div class="section-content" id="secBranches">
+          <div class="branch-grid" id="branchGrid"></div>
+        </div>
+
+        <!-- Section 3: Visual Tree -->
+        <div class="section-title open" onclick="toggleSection('secTree')">天賦樹視覺編輯器</div>
+        <div class="section-content" id="secTree">
+          <div class="tree-container" id="treeContainer">
+            <svg class="tree-svg" id="treeSvg" viewBox="0 0 800 1200"></svg>
+            <div class="tree-tooltip" id="treeTooltip"></div>
+          </div>
+        </div>
+
+        <!-- Section 4: Node Editor -->
+        <div class="node-editor" id="nodeEditor">
+          <div class="node-editor-header">
+            <span class="node-editor-title" id="neTitle">編輯節點</span>
+            <span class="node-editor-type" id="neType"></span>
+            <span id="neDirty" style="color:var(--gold);display:none">●</span>
+            <span class="node-editor-close" onclick="closeNodeEditor()">&times;</span>
+          </div>
+          <div class="form-grid">
+            <div class="form-group"><label>中文名稱</label><input id="ne_name_zh" oninput="markNodeDirty()"></div>
+            <div class="form-group"><label>英文名稱</label><div class="form-row"><input id="ne_name_en" style="flex:1" oninput="markNodeDirty()"><button class="btn" onclick="aiTranslate('ne_name_zh','ne_name_en')" style="padding:0.3rem 0.5rem;font-size:0.75rem">EN</button></div></div>
+            <div class="form-group"><label>節點類型</label><select id="ne_node_type" onchange="onNodeTypeChange();markNodeDirty()"></select></div>
+            <div class="form-group"><label>天賦點花費</label><input type="number" id="ne_cost" min="1" max="5" oninput="markNodeDirty()"></div>
+            <div class="form-group full"><label>中文描述</label><textarea id="ne_desc_zh" rows="2" oninput="markNodeDirty()"></textarea></div>
+            <div class="form-group full"><label>英文描述</label><div class="form-row"><textarea id="ne_desc_en" rows="2" style="flex:1" oninput="markNodeDirty()"></textarea><button class="btn" onclick="aiTranslate('ne_desc_zh','ne_desc_en')" style="padding:0.3rem 0.5rem;font-size:0.75rem">EN</button></div></div>
+          </div>
+
+          <!-- Conditional fields -->
+          <div id="neBoostSection" style="display:none">
+            <div class="form-grid">
+              <div class="form-group"><label>提升屬性</label><select id="ne_boost_attr" onchange="markNodeDirty()"></select></div>
+              <div class="form-group"><label>提升量</label><input type="number" id="ne_boost_amount" value="1" min="1" max="3" oninput="markNodeDirty()"></div>
+            </div>
+          </div>
+          <div id="neProfSection" style="display:none">
+            <div class="form-group"><label>解鎖專精類型</label><select id="ne_proficiency" onchange="markNodeDirty()"></select></div>
+          </div>
+          <div id="neCardSection" style="display:none">
+            <div class="form-group"><label>綁定天賦卡代碼</label><div class="form-row"><input id="ne_card_code" style="flex:1" oninput="markNodeDirty()"><button class="btn" onclick="searchTalentCards()" style="padding:0.3rem 0.5rem;font-size:0.75rem">搜尋卡片</button></div></div>
+          </div>
+
+          <!-- Effects -->
+          <div style="display:flex;align-items:center;gap:0.5rem;margin:0.75rem 0 0.375rem">
+            <span style="font-size:0.8125rem;color:var(--gold-dim)">效果列表</span>
+            <button class="btn" onclick="addEffect()" style="padding:0.2rem 0.5rem;font-size:0.75rem">+ 新增</button>
+          </div>
+          <table class="effect-table">
+            <thead><tr><th>#</th><th>效果代碼</th><th>效果描述</th><th>價值</th><th></th></tr></thead>
+            <tbody id="effectsBody"></tbody>
+          </table>
+          <div class="effect-total" id="effectTotal">效果總價值：0V</div>
+
+          <!-- Design notes -->
+          <div class="form-group" style="margin-top:0.75rem"><label>設計備註</label><textarea id="ne_design_notes" rows="2" oninput="markNodeDirty()"></textarea></div>
+
+          <!-- Actions -->
+          <div style="display:flex;gap:0.5rem;margin-top:1rem;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="saveNode()">儲存節點</button>
+            <button class="btn" onclick="openAiNodeDialog()">AI 生成效果</button>
+            <button class="btn" onclick="markNodeComplete()">標記為完成</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Compare Tab -->
+      <div id="tabCompare" style="display:none">
+        <h2 style="font-size:1.125rem;margin-bottom:1rem">八陣營天賦樹概覽</h2>
+        <div class="compare-grid" id="compareGrid"></div>
+        <h3 style="font-size:0.9375rem;margin-bottom:0.75rem">屬性覆蓋矩陣</h3>
+        <div id="attrMatrix"></div>
+        <h3 style="font-size:0.9375rem;margin:1rem 0 0.75rem">戰鬥熟練覆蓋矩陣</h3>
+        <div id="profMatrix"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Generation Dialog -->
+  <div class="ai-dialog" id="aiDialog">
+    <div class="ai-dialog-body">
+      <div class="ai-dialog-title" id="aiDialogTitle">AI 生成節點效果</div>
+      <div class="ai-context" id="aiDialogContext"></div>
+      <div class="form-group"><label>設計方向補充（可選）</label><textarea id="aiUserInput" rows="3" placeholder="例如：偏重團隊增益、配合指揮官主題..."></textarea></div>
+      <div class="ai-status" id="aiStatus"></div>
+      <div style="display:flex;gap:0.5rem;margin-top:1rem;justify-content:flex-end">
+        <button class="btn" onclick="closeAiDialog()">取消</button>
+        <button class="btn btn-primary" id="aiGenBtn" onclick="runAiGenerate()">生成</button>
+      </div>
     </div>
   </div>
 
   <script src="admin-shared.js"></script>
+  <script>
+/* ========================================
+   MOD-02: Talent Tree Designer
+   ======================================== */
+
+const el = id => document.getElementById(id);
+const intVal = id => parseInt(el(id).value, 10) || 0;
+
+// ── State ──
+let allTrees = [];
+let currentTree = null;   // full tree data (with branches + nodes)
+let currentFaction = null; // faction code
+let selectedNodeId = null;
+let nodeDirty = false;
+let aiMode = null; // 'node' | 'branch'
+let aiBranchIndex = null;
+
+const NODE_ICONS = { passive:'◆', attribute_boost:'▲', proficiency:'⚔', talent_card:'★', branch_choice:'◈', milestone:'✦', ultimate:'✹' };
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', async () => {
+  populateSelects();
+  await loadAllTrees();
+  if (allTrees.length > 0) selectFaction(allTrees[0].faction_code);
+});
+
+function populateSelects() {
+  // Attributes
+  const attrOpts = '<option value="">—</option>' + Object.entries(ATTRIBUTES).map(([k,v]) => `<option value="${k}">${v.zh} ${v.en}</option>`).join('');
+  ['f_primary_attribute','f_secondary_attribute','ne_boost_attr'].forEach(id => el(id).innerHTML = attrOpts);
+
+  // Combat styles
+  const styleOpts = '<option value="">—</option>' + Object.entries(COMBAT_STYLES).map(([k,v]) => `<option value="${k}">${v.zh}</option>`).join('');
+  ['f_combat_prof_primary','f_combat_prof_secondary'].forEach(id => el(id).innerHTML = styleOpts);
+
+  // Node types
+  el('ne_node_type').innerHTML = Object.entries(NODE_TYPES).map(([k,v]) => `<option value="${k}">${v.zh}</option>`).join('');
+
+  // Proficiency (specializations)
+  const profOpts = '<option value="">—</option>' + Object.entries(COMBAT_SPECIALIZATIONS).map(([k,v]) => `<option value="${k}">${v.zh} (${COMBAT_STYLES[v.parent]?.zh || ''})</option>`).join('');
+  el('ne_proficiency').innerHTML = profOpts;
+}
+
+// ── API calls ──
+async function loadAllTrees() {
+  try {
+    const res = await adminFetch('/api/talent-trees');
+    const data = await res.json();
+    if (data.success) { allTrees = data.data; renderFactionList(); }
+  } catch (e) { console.error('loadAllTrees', e); }
+}
+
+async function loadTree(factionCode) {
+  try {
+    const res = await adminFetch(`/api/talent-trees/${factionCode}`);
+    const data = await res.json();
+    if (data.success) { currentTree = data.data; renderTreeEditor(); }
+  } catch (e) { console.error('loadTree', e); }
+}
+
+async function loadCompareData() {
+  try {
+    const res = await adminFetch('/api/talent-trees/compare');
+    const data = await res.json();
+    if (data.success) renderCompareTab(data.data);
+  } catch (e) { console.error('loadCompare', e); }
+}
+
+// ── Faction list ──
+function renderFactionList() {
+  const factions = ['E','I','S','N','T','F','J','P'];
+  let html = '';
+  let complete = 0, partial = 0, pending = 0, designedTotal = 0, nodesTotal = 0;
+
+  for (const fc of factions) {
+    const t = allTrees.find(t => t.faction_code === fc);
+    const fi = FACTIONS[fc];
+    const status = t?.design_status || 'pending';
+    const statusIcon = status === 'complete' ? '✓' : status === 'partial' ? '◐' : '○';
+    const statusClass = 'status-' + status;
+    if (status === 'complete') complete++; else if (status === 'partial') partial++; else pending++;
+    if (t?.stats) { designedTotal += t.stats.designed_nodes; nodesTotal += t.stats.total_nodes; }
+
+    html += `<div class="faction-item ${fc === currentFaction ? 'active' : ''}" onclick="selectFaction('${fc}')">
+      <div class="faction-color" style="background:${fi.color}"></div>
+      <span class="faction-name">${fc} ${fi.zh}</span>
+      <span class="faction-status ${statusClass}">${statusIcon}</span>
+    </div>`;
+  }
+
+  el('factionList').innerHTML = html;
+  el('panelStats').innerHTML = `設計進度：<br>
+    <span class="status-complete">✓</span> 完成 ${complete}/8<br>
+    <span class="status-partial">◐</span> 部分 ${partial}/8<br>
+    <span class="status-pending">○</span> 待設計 ${pending}/8<br>
+    節點：${designedTotal}/${nodesTotal} 已設計`;
+}
+
+function selectFaction(fc) {
+  currentFaction = fc;
+  closeNodeEditor();
+  loadTree(fc);
+  renderFactionList();
+}
+
+// ── Tab switching ──
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  el('tabEditor').style.display = tab === 'editor' ? '' : 'none';
+  el('tabCompare').style.display = tab === 'compare' ? '' : 'none';
+  if (tab === 'compare') loadCompareData();
+}
+
+// ── Section toggle ──
+function toggleSection(id) {
+  const sec = el(id);
+  const title = sec.previousElementSibling;
+  sec.classList.toggle('collapsed');
+  title.classList.toggle('open');
+}
+
+// ── Panel toggle ──
+function toggleLeftPanel() {
+  el('panelLeft').classList.toggle('collapsed');
+  el('panelMain').classList.toggle('expanded');
+}
+
+// ── Render tree editor ──
+function renderTreeEditor() {
+  if (!currentTree) return;
+  const t = currentTree;
+  el('f_faction_code').value = t.faction_code;
+  el('f_design_status').value = t.design_status;
+  el('f_name_zh').value = t.name_zh || '';
+  el('f_name_en').value = t.name_en || '';
+  el('f_primary_attribute').value = t.primary_attribute || '';
+  el('f_secondary_attribute').value = t.secondary_attribute || '';
+  el('f_combat_prof_primary').value = t.combat_proficiency_primary || '';
+  el('f_combat_prof_secondary').value = t.combat_proficiency_secondary || '';
+  el('f_description_zh').value = t.description_zh || '';
+  el('f_description_en').value = t.description_en || '';
+  el('f_design_notes').value = t.design_notes || '';
+
+  renderBranches();
+  renderSvgTree();
+}
+
+// ── Save tree info ──
+async function saveTreeInfo() {
+  if (!currentTree) return;
+  try {
+    const body = {
+      name_zh: el('f_name_zh').value, name_en: el('f_name_en').value,
+      description_zh: el('f_description_zh').value, description_en: el('f_description_en').value,
+      primary_attribute: el('f_primary_attribute').value, secondary_attribute: el('f_secondary_attribute').value,
+      combat_proficiency_primary: el('f_combat_prof_primary').value, combat_proficiency_secondary: el('f_combat_prof_secondary').value,
+      design_notes: el('f_design_notes').value,
+    };
+    const res = await adminFetch(`/api/talent-trees/${currentFaction}`, { method: 'PUT', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.success) { alert('已儲存'); await loadAllTrees(); await loadTree(currentFaction); }
+    else alert('儲存失敗：' + (data.error || ''));
+  } catch (e) { alert('儲存失敗'); console.error(e); }
+}
+
+// ── Branches ──
+function renderBranches() {
+  if (!currentTree?.branches) { el('branchGrid').innerHTML = ''; return; }
+  const nodes = currentTree.nodes || [];
+  let html = '';
+  for (const b of currentTree.branches) {
+    const bn = nodes.filter(n => n.branch_id === b.id);
+    const designed = bn.filter(n => n.design_status === 'complete' || n.design_status === 'draft').length;
+    const total = bn.length;
+    const pct = total > 0 ? Math.round(designed / total * 100) : 0;
+
+    html += `<div class="branch-card">
+      <div class="branch-header"><div class="branch-swatch" style="background:${b.color_hex || '#555'}"></div><span class="branch-name">${b.name_zh}</span></div>
+      <div class="branch-en">${b.name_en || ''}</div>
+      <div class="branch-theme">${b.theme_keywords || ''}</div>
+      <div class="branch-progress"><span>${designed}/${total}</span><div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div></div>
+      <div class="branch-actions">
+        <button class="btn" onclick="toggleBranchEdit(${b.branch_index})" style="padding:0.25rem 0.5rem;font-size:0.75rem">編輯</button>
+        <button class="btn" onclick="openAiBranchDialog(${b.branch_index})" style="padding:0.25rem 0.5rem;font-size:0.75rem">AI 生成</button>
+      </div>
+      <div class="branch-edit-form" id="branchEdit${b.branch_index}">
+        <div class="form-grid" style="margin-top:0.5rem">
+          <div class="form-group"><label>中文名稱</label><input id="be_name_zh_${b.branch_index}" value="${b.name_zh || ''}"></div>
+          <div class="form-group"><label>英文名稱</label><input id="be_name_en_${b.branch_index}" value="${b.name_en || ''}"></div>
+          <div class="form-group full"><label>中文說明</label><textarea id="be_desc_zh_${b.branch_index}" rows="2">${b.description_zh || ''}</textarea></div>
+          <div class="form-group"><label>主題關鍵字</label><input id="be_theme_${b.branch_index}" value="${b.theme_keywords || ''}"></div>
+          <div class="form-group"><label>分支色彩</label><input type="color" id="be_color_${b.branch_index}" value="${b.color_hex || '#555555'}" style="height:34px"></div>
+          <div class="form-group full"><label>設計備註</label><textarea id="be_notes_${b.branch_index}" rows="2">${b.design_notes || ''}</textarea></div>
+        </div>
+        <button class="btn btn-primary" onclick="saveBranch(${b.branch_index})" style="margin-top:0.5rem">儲存分支</button>
+      </div>
+    </div>`;
+  }
+  el('branchGrid').innerHTML = html;
+}
+
+function toggleBranchEdit(idx) {
+  const form = el('branchEdit' + idx);
+  form.classList.toggle('open');
+}
+
+async function saveBranch(idx) {
+  try {
+    const body = {
+      name_zh: el(`be_name_zh_${idx}`).value, name_en: el(`be_name_en_${idx}`).value,
+      description_zh: el(`be_desc_zh_${idx}`).value,
+      theme_keywords: el(`be_theme_${idx}`).value, color_hex: el(`be_color_${idx}`).value,
+      design_notes: el(`be_notes_${idx}`).value,
+    };
+    const res = await adminFetch(`/api/talent-trees/${currentFaction}/branches/${idx}`, { method: 'PUT', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.success) { alert('分支已儲存'); await loadTree(currentFaction); }
+    else alert('儲存失敗');
+  } catch (e) { alert('儲存失敗'); console.error(e); }
+}
+
+// ══════════════════════════════════════════
+//  SVG Tree Rendering
+// ══════════════════════════════════════════
+const TREE_LAYOUT = { TRUNK_X: 400, LEVEL_H: 85, BRANCH_SPREAD: 200, NODE_W: 48, NODE_H: 48, PAD_TOP: 50 };
+
+function calcPositions() {
+  if (!currentTree) return {};
+  const pos = {};
+  const { TRUNK_X, LEVEL_H, BRANCH_SPREAD, PAD_TOP } = TREE_LAYOUT;
+  const branches = currentTree.branches || [];
+  for (const n of (currentTree.nodes || [])) {
+    const y = PAD_TOP + n.level * LEVEL_H;
+    if (n.is_trunk) {
+      pos[n.id] = { x: TRUNK_X, y };
+    } else {
+      const bi = branches.findIndex(b => b.id === n.branch_id);
+      const ox = (bi === -1 ? 0 : bi - 1) * BRANCH_SPREAD;
+      pos[n.id] = { x: TRUNK_X + ox, y };
+    }
+  }
+  return pos;
+}
+
+function renderSvgTree() {
+  const svg = el('treeSvg');
+  svg.innerHTML = '';
+  if (!currentTree?.nodes?.length) return;
+
+  const pos = calcPositions();
+  const nodes = currentTree.nodes;
+  const branches = currentTree.branches || [];
+
+  // Adjust viewBox
+  const maxY = Math.max(...Object.values(pos).map(p => p.y)) + 60;
+  svg.setAttribute('viewBox', `0 0 800 ${Math.max(maxY, 400)}`);
+
+  // Draw connections
+  const trunkNodes = nodes.filter(n => n.is_trunk).sort((a,b) => a.level - b.level);
+  for (let i = 0; i < trunkNodes.length - 1; i++) drawLine(svg, pos[trunkNodes[i].id], pos[trunkNodes[i+1].id], '#8A8778');
+
+  const lv2 = trunkNodes.find(n => n.level === 2);
+  if (lv2) {
+    const lv3s = nodes.filter(n => n.level === 3 && !n.is_trunk);
+    for (const n3 of lv3s) {
+      const b = branches.find(b => b.id === n3.branch_id);
+      drawLine(svg, pos[lv2.id], pos[n3.id], b?.color_hex || '#8A8778');
+    }
+  }
+
+  for (const b of branches) {
+    const bNodes = nodes.filter(n => n.branch_id === b.id).sort((a,c) => a.level - c.level);
+    for (let i = 0; i < bNodes.length - 1; i++) drawLine(svg, pos[bNodes[i].id], pos[bNodes[i+1].id], b.color_hex || '#8A8778');
+  }
+
+  // Draw nodes
+  for (const n of nodes) {
+    const p = pos[n.id]; if (!p) continue;
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.style.cursor = 'pointer';
+    g.addEventListener('click', () => openNodeEditor(n.id));
+    g.addEventListener('mouseenter', e => showTooltip(n, e));
+    g.addEventListener('mouseleave', hideTooltip);
+
+    const ntc = NODE_TYPES[n.node_type] || NODE_TYPES.passive;
+    const isSel = n.id === selectedNodeId;
+    const statusAlpha = n.design_status === 'complete' ? 0.3 : n.design_status === 'draft' ? 0.15 : 0.08;
+    const strokeColor = isSel ? '#C9A84C' : n.design_status === 'complete' ? '#C9A84C' : n.design_status === 'draft' ? '#8B7535' : '#2A2A44';
+    const strokeW = isSel ? 3 : 1;
+    const strokeDash = n.design_status === 'pending' ? '4,3' : n.design_status === 'draft' ? '6,3' : 'none';
+
+    const rect = svgEl('rect', { x: p.x-24, y: p.y-24, width:48, height:48, rx:8,
+      fill: ntc.color, 'fill-opacity': statusAlpha, stroke: strokeColor, 'stroke-width': strokeW,
+      'stroke-dasharray': strokeDash });
+    if (isSel) { const glow = svgEl('rect', { x:p.x-26, y:p.y-26, width:52, height:52, rx:10, fill:'none', stroke:'#C9A84C', 'stroke-width':1, 'stroke-opacity':0.3 }); g.appendChild(glow); }
+
+    const lvTxt = svgEl('text', { x:p.x-20, y:p.y-12, 'font-size':10, fill:'#8A8778' }); lvTxt.textContent = `Lv${n.level}`;
+    const icon = svgEl('text', { x:p.x, y:p.y+5, 'text-anchor':'middle', 'font-size':16, fill:'#E8E4D9' }); icon.textContent = NODE_ICONS[n.node_type] || '●';
+    const name = svgEl('text', { x:p.x, y:p.y+38, 'text-anchor':'middle', 'font-size':10, fill:'#8A8778' });
+    const label = n.name_zh || ''; name.textContent = label.length > 6 ? label.substring(0,6)+'…' : label;
+
+    g.appendChild(rect); g.appendChild(lvTxt); g.appendChild(icon); g.appendChild(name);
+    svg.appendChild(g);
+  }
+}
+
+function svgEl(tag, attrs) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k,v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+  return el;
+}
+
+function drawLine(svg, from, to, color) {
+  const line = svgEl('line', { x1:from.x, y1:from.y+24, x2:to.x, y2:to.y-24, stroke:color, 'stroke-width':2, 'stroke-opacity':0.5 });
+  svg.insertBefore(line, svg.firstChild);
+}
+
+// ── Tooltip ──
+function showTooltip(node, e) {
+  const tt = el('treeTooltip');
+  const ntc = NODE_TYPES[node.node_type] || {};
+  const effSum = (node.effects || []).map(e => `· ${e.effect_desc_zh || ''} (${e.effect_value || 0}V)`).join('\n') || '（尚未設計效果）';
+  tt.innerHTML = `<div class="tt-name">${node.name_zh || '—'}</div>
+    <div class="tt-type">${ntc.zh || ''} · Lv${node.level}</div>
+    <div class="tt-cost">花費：${node.talent_point_cost} 天賦點</div>
+    <div class="tt-desc">${node.description_zh || '待設計'}</div>
+    <div class="tt-effects">${effSum}</div>`;
+  const rect = el('treeContainer').getBoundingClientRect();
+  tt.style.left = (e.clientX - rect.left + 12) + 'px';
+  tt.style.top = (e.clientY - rect.top + 12) + 'px';
+  tt.style.display = 'block';
+}
+function hideTooltip() { el('treeTooltip').style.display = 'none'; }
+
+// ══════════════════════════════════════════
+//  Node Editor
+// ══════════════════════════════════════════
+function openNodeEditor(nodeId) {
+  if (nodeDirty && selectedNodeId && selectedNodeId !== nodeId) {
+    if (!confirm('有未儲存的變更，確定要切換？')) return;
+  }
+  selectedNodeId = nodeId;
+  nodeDirty = false;
+  el('neDirty').style.display = 'none';
+
+  const node = currentTree.nodes.find(n => n.id === nodeId);
+  if (!node) return;
+
+  const ntc = NODE_TYPES[node.node_type] || {};
+  el('neTitle').textContent = `編輯節點：Lv${node.level} ${node.name_zh || ''}`;
+  el('neType').textContent = ntc.zh || '';
+  el('neType').style.borderColor = ntc.color || '';
+  el('neType').style.color = ntc.color || '';
+
+  el('ne_name_zh').value = node.name_zh || '';
+  el('ne_name_en').value = node.name_en || '';
+  el('ne_node_type').value = node.node_type || 'passive';
+  el('ne_cost').value = node.talent_point_cost || 1;
+  el('ne_desc_zh').value = node.description_zh || '';
+  el('ne_desc_en').value = node.description_en || '';
+  el('ne_design_notes').value = node.design_notes || '';
+
+  // Conditional
+  el('ne_boost_attr').value = node.boost_attribute || '';
+  el('ne_boost_amount').value = node.boost_amount || 1;
+  el('ne_card_code').value = node.talent_card_code || '';
+
+  onNodeTypeChange();
+  renderEffects(node.effects || []);
+
+  el('nodeEditor').classList.add('open');
+  renderSvgTree(); // re-render to show selection
+}
+
+function closeNodeEditor() {
+  selectedNodeId = null;
+  nodeDirty = false;
+  el('nodeEditor').classList.remove('open');
+  renderSvgTree();
+}
+
+function markNodeDirty() { nodeDirty = true; el('neDirty').style.display = ''; }
+
+function onNodeTypeChange() {
+  const nt = el('ne_node_type').value;
+  el('neBoostSection').style.display = (nt === 'attribute_boost' || nt === 'ultimate') ? '' : 'none';
+  el('neProfSection').style.display = nt === 'proficiency' ? '' : 'none';
+  el('neCardSection').style.display = nt === 'talent_card' ? '' : 'none';
+}
+
+// ── Effects ──
+let currentEffects = [];
+
+function renderEffects(effects) {
+  currentEffects = effects.map(e => ({...e}));
+  const tbody = el('effectsBody');
+  tbody.innerHTML = '';
+  let totalV = 0;
+
+  currentEffects.forEach((eff, i) => {
+    totalV += parseFloat(eff.effect_value) || 0;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i+1}</td><td><input value="${eff.effect_code||''}" onchange="currentEffects[${i}].effect_code=this.value;markNodeDirty()" style="width:120px;font-size:0.8125rem"></td>
+      <td><input value="${eff.effect_desc_zh||''}" onchange="currentEffects[${i}].effect_desc_zh=this.value;markNodeDirty()" style="font-size:0.8125rem"></td>
+      <td><input type="number" step="0.5" value="${eff.effect_value||0}" onchange="currentEffects[${i}].effect_value=parseFloat(this.value)||0;updateEffectTotal();markNodeDirty()" style="width:60px;font-size:0.8125rem;text-align:right"></td>
+      <td><button onclick="removeEffect(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:1rem">&times;</button></td>`;
+    tbody.appendChild(tr);
+  });
+
+  el('effectTotal').textContent = `效果總價值：${totalV.toFixed(1)}V`;
+}
+
+function addEffect() {
+  currentEffects.push({ effect_code:'', effect_params:{}, effect_desc_zh:'', effect_desc_en:'', effect_value:0 });
+  renderEffects(currentEffects);
+  markNodeDirty();
+}
+
+function removeEffect(i) {
+  currentEffects.splice(i, 1);
+  renderEffects(currentEffects);
+  markNodeDirty();
+}
+
+function updateEffectTotal() {
+  const total = currentEffects.reduce((s,e) => s + (parseFloat(e.effect_value)||0), 0);
+  el('effectTotal').textContent = `效果總價值：${total.toFixed(1)}V`;
+}
+
+// ── Save node ──
+async function saveNode() {
+  if (!selectedNodeId || !currentTree) return;
+  try {
+    const body = {
+      name_zh: el('ne_name_zh').value, name_en: el('ne_name_en').value,
+      node_type: el('ne_node_type').value, talent_point_cost: intVal('ne_cost'),
+      description_zh: el('ne_desc_zh').value, description_en: el('ne_desc_en').value,
+      boost_attribute: el('ne_boost_attr').value || null,
+      boost_amount: intVal('ne_boost_amount') || 1,
+      talent_card_code: el('ne_card_code').value || null,
+      design_notes: el('ne_design_notes').value,
+      design_status: determineNodeStatus(),
+    };
+
+    const res = await adminFetch(`/api/talent-trees/${currentFaction}/nodes/${selectedNodeId}`, { method:'PUT', body:JSON.stringify(body) });
+    const nodeData = await res.json();
+    if (!nodeData.success) { alert('儲存失敗'); return; }
+
+    // Save effects
+    const effRes = await adminFetch(`/api/talent-trees/${currentFaction}/nodes/${selectedNodeId}/effects`, {
+      method: 'PUT', body: JSON.stringify({ effects: currentEffects })
+    });
+    const effData = await effRes.json();
+    if (!effData.success) { alert('效果儲存失敗'); return; }
+
+    nodeDirty = false;
+    el('neDirty').style.display = 'none';
+    alert('已儲存');
+    await loadAllTrees();
+    await loadTree(currentFaction);
+    // Re-open the same node
+    if (selectedNodeId) {
+      const saved = selectedNodeId;
+      setTimeout(() => openNodeEditor(saved), 50);
+    }
+  } catch (e) { alert('儲存失敗'); console.error(e); }
+}
+
+function determineNodeStatus() {
+  const nameZh = el('ne_name_zh').value;
+  const hasEffects = currentEffects.some(e => e.effect_desc_zh);
+  if (nameZh && hasEffects) return 'complete';
+  if (nameZh) return 'draft';
+  return 'pending';
+}
+
+async function markNodeComplete() {
+  el('ne_node_type'); // just trigger
+  await saveNode(); // save first
+  if (!selectedNodeId) return;
+  await adminFetch(`/api/talent-trees/${currentFaction}/nodes/${selectedNodeId}`, {
+    method:'PUT', body:JSON.stringify({ design_status: 'complete' })
+  });
+  await loadAllTrees();
+  await loadTree(currentFaction);
+  const saved = selectedNodeId;
+  setTimeout(() => openNodeEditor(saved), 50);
+}
+
+// ── Talent card search ──
+async function searchTalentCards() {
+  try {
+    const res = await adminFetch(`/api/cards?slot=talent&faction=${currentFaction}`);
+    const data = await res.json();
+    if (!data.success || !data.data.length) { alert('找不到天賦卡'); return; }
+    const list = data.data.map(c => `${c.code}: ${c.name_zh}`).join('\n');
+    const code = prompt('選擇天賦卡代碼：\n\n' + list);
+    if (code) { el('ne_card_code').value = code.split(':')[0].trim(); markNodeDirty(); }
+  } catch (e) { alert('搜尋失敗'); }
+}
+
+// ══════════════════════════════════════════
+//  Compare Tab
+// ══════════════════════════════════════════
+function renderCompareTab(data) {
+  // Overview cards
+  let cardsHtml = '';
+  for (const t of data) {
+    const fi = FACTIONS[t.faction_code];
+    const pct = Math.round(t.completion_rate * 100);
+    const statusIcon = t.design_status === 'complete' ? '✓' : t.design_status === 'partial' ? '◐' : '○';
+    const pa = ATTRIBUTES[t.primary_attribute]; const sa = ATTRIBUTES[t.secondary_attribute];
+    const cp = COMBAT_STYLES[t.combat_proficiency_primary]; const cs = COMBAT_STYLES[t.combat_proficiency_secondary];
+    cardsHtml += `<div class="compare-card" onclick="switchTab('editor');selectFaction('${t.faction_code}')" style="border-left:3px solid ${fi.color}">
+      <div class="compare-faction" style="color:${fi.color}">${t.faction_code} ${fi.zh}</div>
+      <div class="compare-attrs">${pa?.zh||''}/${sa?.zh||''}</div>
+      <div class="compare-status"><span class="status-${t.design_status}">${statusIcon} ${pct}%</span></div>
+      <div class="compare-proficiency">${cp?.zh||''}/${cs?.zh||''}</div>
+    </div>`;
+  }
+  el('compareGrid').innerHTML = cardsHtml;
+
+  // Attribute matrix
+  const attrs = Object.keys(ATTRIBUTES);
+  const fcs = data.map(t => t.faction_code);
+  let mHtml = '<table class="matrix-table"><thead><tr><th>屬性</th>';
+  for (const fc of fcs) mHtml += `<th style="color:${FACTIONS[fc].color}">${fc}</th>`;
+  mHtml += '</tr></thead><tbody>';
+  for (const a of attrs) {
+    mHtml += `<tr><td>${ATTRIBUTES[a].zh}</td>`;
+    for (const t of data) {
+      let cell = '';
+      if (t.primary_attribute === a) cell = '<span class="matrix-primary">①</span>';
+      else if (t.secondary_attribute === a) cell = '<span class="matrix-secondary">②</span>';
+      mHtml += `<td>${cell}</td>`;
+    }
+    mHtml += '</tr>';
+  }
+  mHtml += '</tbody></table>';
+  el('attrMatrix').innerHTML = mHtml;
+
+  // Proficiency matrix
+  const profs = Object.keys(COMBAT_STYLES);
+  let pHtml = '<table class="matrix-table"><thead><tr><th>熟練</th>';
+  for (const fc of fcs) pHtml += `<th style="color:${FACTIONS[fc].color}">${fc}</th>`;
+  pHtml += '</tr></thead><tbody>';
+  for (const p of profs) {
+    pHtml += `<tr><td>${COMBAT_STYLES[p].zh}</td>`;
+    for (const t of data) {
+      let cell = '';
+      if (t.combat_proficiency_primary === p) cell = '<span class="matrix-primary">①</span>';
+      else if (t.combat_proficiency_secondary === p) cell = '<span class="matrix-secondary">②</span>';
+      pHtml += `<td>${cell}</td>`;
+    }
+    pHtml += '</tr>';
+  }
+  pHtml += '</tbody></table>';
+  el('profMatrix').innerHTML = pHtml;
+}
+
+// ══════════════════════════════════════════
+//  AI Generation (Gemini)
+// ══════════════════════════════════════════
+function getGeminiKey() { return localStorage.getItem('gemini_api_key') || ''; }
+function promptApiKey() {
+  const key = prompt('輸入 Gemini API Key：', getGeminiKey());
+  if (key !== null) localStorage.setItem('gemini_api_key', key);
+}
+
+function openAiNodeDialog() {
+  if (!selectedNodeId || !currentTree) return;
+  const node = currentTree.nodes.find(n => n.id === selectedNodeId);
+  if (!node) return;
+  aiMode = 'node';
+  const b = currentTree.branches.find(br => br.id === node.branch_id);
+  el('aiDialogTitle').textContent = 'AI 生成節點效果';
+  el('aiDialogContext').innerHTML = `陣營：${currentTree.name_zh}（${currentTree.faction_code}）<br>
+    分支：${b?.name_zh || '主幹'}<br>等級：Lv${node.level}<br>節點類型：${NODE_TYPES[node.node_type]?.zh || ''}`;
+  el('aiUserInput').value = '';
+  el('aiStatus').textContent = '';
+  el('aiDialog').classList.add('open');
+}
+
+function openAiBranchDialog(branchIdx) {
+  if (!currentTree) return;
+  aiMode = 'branch';
+  aiBranchIndex = branchIdx;
+  const b = currentTree.branches.find(br => br.branch_index === branchIdx);
+  el('aiDialogTitle').textContent = 'AI 生成完整分支';
+  el('aiDialogContext').innerHTML = `陣營：${currentTree.name_zh}（${currentTree.faction_code}）<br>
+    分支：${b?.name_zh || ''}<br>主題：${b?.theme_keywords || ''}<br>將生成 Lv3-12 共 10 個節點`;
+  el('aiUserInput').value = '';
+  el('aiStatus').textContent = '';
+  el('aiDialog').classList.add('open');
+}
+
+function closeAiDialog() { el('aiDialog').classList.remove('open'); aiMode = null; }
+
+async function runAiGenerate() {
+  const key = getGeminiKey();
+  if (!key) { alert('請先設定 Gemini API Key'); return; }
+
+  el('aiStatus').textContent = '生成中...';
+  el('aiGenBtn').disabled = true;
+
+  try {
+    const prompt = aiMode === 'node' ? buildNodePrompt() : buildBranchPrompt();
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json' }
+      })
+    });
+
+    const result = await response.json();
+    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('No response from Gemini');
+
+    const parsed = JSON.parse(text);
+
+    if (aiMode === 'node') {
+      applyAiNodeResult(parsed);
+    } else {
+      await applyAiBranchResult(parsed);
+    }
+
+    el('aiStatus').textContent = '生成完成！';
+    setTimeout(closeAiDialog, 800);
+  } catch (e) {
+    console.error('AI generation error:', e);
+    el('aiStatus').textContent = '生成失敗：' + e.message;
+  } finally {
+    el('aiGenBtn').disabled = false;
+  }
+}
+
+function buildNodePrompt() {
+  const node = currentTree.nodes.find(n => n.id === selectedNodeId);
+  const b = currentTree.branches.find(br => br.id === node.branch_id);
+  const prevNode = currentTree.nodes.find(n => n.branch_id === node.branch_id && n.level === node.level - 1);
+
+  return `你是一個克蘇魯神話合作卡牌遊戲的系統設計師。請為天賦樹中的一個節點設計效果。
+
+## 遊戲背景
+- 1-4 人合作，克蘇魯神話世界觀
+- 天賦樹是角色的個人成長路徑，花費天賦點解鎖被動能力節點
+- d20 系統，屬性修正 1:1，1V = 1 行動點 = 1 資源 = 抽 1 張 = 造成 1 傷害
+
+## 設計對象
+陣營：${currentTree.faction_code} ${currentTree.name_zh}（${currentTree.name_en}）
+陣營特色：${currentTree.description_zh}
+主屬性：${currentTree.primary_attribute} / 副屬性：${currentTree.secondary_attribute}
+分支路線：${b?.name_zh || '主幹'}（${b?.name_en || ''}）
+分支主題：${b?.theme_keywords || ''}
+等級：Lv${node.level}
+節點類型：${node.node_type}
+前一級節點：${prevNode?.description_zh || '無'}
+
+設計方向補充：${el('aiUserInput').value || '無'}
+
+## 設計原則
+1. 漸進式成長 — 低級節點給基礎能力，高級給強力但不破格的效果
+2. 被動為主 — 天賦節點的效果以永久被動為主
+3. 不破壞紅線 — 不能產生無限循環、不能消滅挑戰
+
+## 輸出格式（JSON）
+{"name_zh":"2-4字","name_en":"","description_zh":"","description_en":"","effects":[{"effect_code":"","effect_params":{},"effect_desc_zh":"","effect_desc_en":"","effect_value":1.0}],"design_notes":""}`;
+}
+
+function buildBranchPrompt() {
+  const b = currentTree.branches.find(br => br.branch_index === aiBranchIndex);
+  const lv1 = currentTree.nodes.find(n => n.level === 1 && n.is_trunk);
+  return `你是一個克蘇魯神話合作卡牌遊戲的系統設計師。請為天賦樹的一條完整分支路線（Lv3 到 Lv12，共 10 個節點）設計效果。
+
+## 遊戲背景
+同上（d20 合作遊戲，天賦樹是職業等級表）。
+
+## 設計對象
+陣營：${currentTree.faction_code} ${currentTree.name_zh}
+分支路線：${b?.name_zh || ''}（${b?.name_en || ''}）
+分支主題：${b?.theme_keywords || ''}
+主幹效果：Lv1 ${lv1?.description_zh || '基礎被動'}，Lv2 ${currentTree.primary_attribute} +1
+
+設計方向補充：${el('aiUserInput').value || '無'}
+
+## 節點類型限制
+Lv3:branch_choice, Lv4:passive, Lv5:proficiency, Lv6:milestone, Lv7:attribute_boost, Lv8:proficiency, Lv9:talent_card, Lv10:attribute_boost, Lv11:passive, Lv12:ultimate
+
+## 設計原則
+1. 10 個節點要形成完整成長弧線
+2. Lv3 讓玩家想選這條分支
+3. Lv6 是打法質變點
+4. Lv9 天賦卡是分支標誌性簽名卡
+5. Lv12 是超凡入聖
+
+## 輸出格式（JSON）
+{"branch_summary":"","nodes":[{"level":3,"node_type":"branch_choice","name_zh":"","name_en":"","description_zh":"","description_en":"","effects":[{"effect_code":"","effect_params":{},"effect_desc_zh":"","effect_desc_en":"","effect_value":1.0}],"boost_attribute":null,"proficiency_code":null,"talent_card_concept":null,"design_notes":""},{"level":4,...},...,{"level":12,...}]}`;
+}
+
+function applyAiNodeResult(data) {
+  if (data.name_zh) el('ne_name_zh').value = data.name_zh;
+  if (data.name_en) el('ne_name_en').value = data.name_en;
+  if (data.description_zh) el('ne_desc_zh').value = data.description_zh;
+  if (data.description_en) el('ne_desc_en').value = data.description_en;
+  if (data.design_notes) el('ne_design_notes').value = data.design_notes;
+  if (data.effects) renderEffects(data.effects);
+  markNodeDirty();
+}
+
+async function applyAiBranchResult(data) {
+  if (!data.nodes || !Array.isArray(data.nodes)) { alert('AI 回傳格式錯誤'); return; }
+  const b = currentTree.branches.find(br => br.branch_index === aiBranchIndex);
+  if (!b) return;
+
+  for (const aiNode of data.nodes) {
+    const dbNode = currentTree.nodes.find(n => n.branch_id === b.id && n.level === aiNode.level);
+    if (!dbNode) continue;
+
+    const body = {
+      name_zh: aiNode.name_zh || dbNode.name_zh,
+      name_en: aiNode.name_en || dbNode.name_en,
+      description_zh: aiNode.description_zh || '',
+      description_en: aiNode.description_en || '',
+      boost_attribute: aiNode.boost_attribute || null,
+      talent_card_code: aiNode.talent_card_concept || null,
+      design_status: 'draft',
+      design_notes: aiNode.design_notes || '',
+    };
+
+    await adminFetch(`/api/talent-trees/${currentFaction}/nodes/${dbNode.id}`, { method: 'PUT', body: JSON.stringify(body) });
+
+    if (aiNode.effects && aiNode.effects.length > 0) {
+      await adminFetch(`/api/talent-trees/${currentFaction}/nodes/${dbNode.id}/effects`, {
+        method: 'PUT', body: JSON.stringify({ effects: aiNode.effects })
+      });
+    }
+  }
+
+  await loadAllTrees();
+  await loadTree(currentFaction);
+}
+
+// ══════════════════════════════════════════
+//  Import / Export
+// ══════════════════════════════════════════
+async function exportJSON() {
+  try {
+    const res = await adminFetch('/api/talent-trees/export');
+    const data = await res.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `talent-trees-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+  } catch (e) { alert('匯出失敗'); }
+}
+
+async function importJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const json = JSON.parse(text);
+    const payload = json.data || json;
+    const res = await adminFetch('/api/talent-trees/import', { method: 'POST', body: JSON.stringify({ data: Array.isArray(payload) ? payload : [payload] }) });
+    const result = await res.json();
+    if (result.success) { alert(`已匯入 ${result.imported} 棵天賦樹`); await loadAllTrees(); if (currentFaction) await loadTree(currentFaction); }
+    else alert('匯入失敗：' + (result.error || ''));
+  } catch (e) { alert('匯入失敗：' + e.message); }
+  event.target.value = '';
+}
+
+// ── AI translate helper ──
+async function aiTranslate(srcId, dstId) {
+  const key = getGeminiKey();
+  if (!key) { alert('請先設定 Gemini API Key'); return; }
+  const text = el(srcId).value;
+  if (!text) return;
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: `Translate the following Chinese text to English. Only output the translation, nothing else.\n\n${text}` }] }] })
+    });
+    const data = await res.json();
+    const translated = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    el(dstId).value = translated.trim();
+  } catch (e) { alert('翻譯失敗'); }
+}
+
+// ── Keyboard shortcuts ──
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 's') {
+    e.preventDefault();
+    if (selectedNodeId) saveNode();
+  }
+  if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+    e.preventDefault();
+    saveTreeInfo();
+  }
+  if (e.ctrlKey && e.key === 'g') {
+    e.preventDefault();
+    if (selectedNodeId) openAiNodeDialog();
+  }
+  if (e.key === 'Escape') {
+    if (el('aiDialog').classList.contains('open')) closeAiDialog();
+    else closeNodeEditor();
+  }
+  // Arrow keys for node navigation
+  if (selectedNodeId && currentTree && !e.ctrlKey && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+    e.preventDefault();
+    navigateNode(e.key);
+  }
+});
+
+function navigateNode(key) {
+  const node = currentTree.nodes.find(n => n.id === selectedNodeId);
+  if (!node) return;
+  let target = null;
+
+  if (key === 'ArrowUp') {
+    target = currentTree.nodes.filter(n => n.branch_id === node.branch_id && n.level === node.level - 1)[0]
+      || (node.level === 3 ? currentTree.nodes.find(n => n.level === 2 && n.is_trunk) : null);
+  } else if (key === 'ArrowDown') {
+    target = currentTree.nodes.filter(n => n.branch_id === node.branch_id && n.level === node.level + 1)[0];
+    if (!target && node.is_trunk && node.level === 2) target = currentTree.nodes.filter(n => n.level === 3)[0];
+  } else if (key === 'ArrowLeft' || key === 'ArrowRight') {
+    const sameLv = currentTree.nodes.filter(n => n.level === node.level && !n.is_trunk).sort((a,b) => {
+      const ai = currentTree.branches.findIndex(br => br.id === a.branch_id);
+      const bi = currentTree.branches.findIndex(br => br.id === b.branch_id);
+      return ai - bi;
+    });
+    const idx = sameLv.findIndex(n => n.id === node.id);
+    if (idx >= 0) {
+      const next = key === 'ArrowRight' ? (idx + 1) % sameLv.length : (idx - 1 + sameLv.length) % sameLv.length;
+      target = sameLv[next];
+    }
+  }
+
+  if (target) openNodeEditor(target.id);
+}
+  </script>
 </body>
 </html>

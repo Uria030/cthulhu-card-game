@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.4.0';
+const ADMIN_VERSION = '0.5.0';
 
 // ============================================
 // API 設定
@@ -78,7 +78,7 @@ const GAME_RULES = {
   ATTRIBUTE_MIN: 1,
   ATTRIBUTE_MAX: 10,
   ATTRIBUTE_CREATION_MAX: 5,
-  CREATION_TOTAL_POINTS: 21,  // 7 attributes × average 3.0
+  CREATION_TOTAL_POINTS: 18,  // GDD05: 18 點創角，差額 5 點由天賦樹補回
   ATTRIBUTE_COUNT: 7,
   HP_BASE: 5,
   SAN_BASE: 5,
@@ -304,6 +304,45 @@ const TEAM_SPIRIT_RULES = {
   DEPTH_COST: 1,
   TOTAL_COST_PER_SPIRIT: 6,
   CANDIDATE_POOL: 32,
+};
+
+// ============================================
+// 天賦樹常數 (MOD-02)
+// ============================================
+const TALENT_TREE_RULES = {
+  MAX_LEVEL: 12,
+  BRANCHES_PER_TREE: 3,
+  TREES_COUNT: 8,
+  BRANCH_CHOICE_LEVEL: 3,
+  MILESTONE_LEVELS: [3, 6],
+  PROFICIENCY_LEVELS: [5, 8],
+  ATTRIBUTE_BOOST_LEVELS: [2, 7, 10, 11, 12],
+  TALENT_CARD_LEVEL: 9,
+  ULTIMATE_LEVEL: 12,
+  TOTAL_TALENT_POINTS_PER_BRANCH: 16,
+  STARTING_ATTRIBUTE_POINTS: 18,
+  ATTRIBUTE_BOOSTS_COUNT: 5,
+};
+
+const NODE_TYPES = {
+  passive:         { zh: '被動能力',   en: 'Passive',         color: '#C9A84C' },
+  attribute_boost: { zh: '屬性提升',   en: 'Attribute Boost', color: '#4A7C9B' },
+  proficiency:     { zh: '專精解鎖',   en: 'Proficiency',     color: '#B84C4C' },
+  talent_card:     { zh: '天賦卡解鎖', en: 'Talent Card',     color: '#7B4EA3' },
+  branch_choice:   { zh: '分支選擇',   en: 'Branch Choice',   color: '#2D8B6F' },
+  milestone:       { zh: '質變能力',   en: 'Milestone',       color: '#C9A84C' },
+  ultimate:        { zh: '終極天賦',   en: 'Ultimate',        color: '#FFD700' },
+};
+
+const FACTION_ATTRIBUTES = {
+  E: { primary: 'charisma',     secondary: 'strength',   zh: '號令', en: 'Herald',  color: '#C9A84C' },
+  I: { primary: 'intellect',    secondary: 'willpower',  zh: '深淵', en: 'Abyss',   color: '#3A5FA0' },
+  S: { primary: 'perception',   secondary: 'strength',   zh: '鐵證', en: 'Witness', color: '#8B5E3C' },
+  N: { primary: 'willpower',    secondary: 'intellect',  zh: '天啟', en: 'Oracle',  color: '#7B4EA3' },
+  T: { primary: 'intellect',    secondary: 'perception', zh: '解析', en: 'Cipher',  color: '#4A7C9B' },
+  F: { primary: 'willpower',    secondary: 'charisma',   zh: '聖燼', en: 'Ember',   color: '#B84C4C' },
+  J: { primary: 'constitution', secondary: 'strength',   zh: '鐵壁', en: 'Bastion', color: '#6B6B6B' },
+  P: { primary: 'agility',      secondary: 'perception', zh: '流影', en: 'Flux',    color: '#2D8B6F' },
 };
 
 /* ── 工具函數 ── */

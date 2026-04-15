@@ -485,6 +485,232 @@ INSERT INTO spirit_depth_effects (spirit_def_id, depth, effect_name_zh, effect_d
 ON CONFLICT (spirit_def_id, depth) DO NOTHING;
 `;
 
+// Migration 009: Talent tree system (MOD-02)
+const MIGRATION_009_SQL = `
+-- ============================================
+-- Migration 009: Talent tree system (MOD-02)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS talent_trees (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  faction_code      VARCHAR(2) UNIQUE NOT NULL
+                    CHECK (faction_code IN ('E','I','S','N','T','F','J','P')),
+  name_zh           VARCHAR(64) NOT NULL,
+  name_en           VARCHAR(64) NOT NULL,
+  description_zh    TEXT,
+  description_en    TEXT,
+  primary_attribute VARCHAR(16) NOT NULL,
+  secondary_attribute VARCHAR(16),
+  combat_proficiency_primary   VARCHAR(64),
+  combat_proficiency_secondary VARCHAR(64),
+  design_notes      TEXT,
+  design_status     VARCHAR(16) NOT NULL DEFAULT 'pending'
+                    CHECK (design_status IN ('pending','partial','complete')),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS talent_branches (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tree_id           UUID NOT NULL REFERENCES talent_trees(id) ON DELETE CASCADE,
+  branch_index      INTEGER NOT NULL CHECK (branch_index BETWEEN 1 AND 3),
+  name_zh           VARCHAR(64) NOT NULL,
+  name_en           VARCHAR(64) NOT NULL,
+  description_zh    TEXT,
+  description_en    TEXT,
+  theme_keywords    TEXT,
+  color_hex         VARCHAR(7),
+  design_notes      TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (tree_id, branch_index)
+);
+
+CREATE TABLE IF NOT EXISTS talent_nodes (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tree_id           UUID NOT NULL REFERENCES talent_trees(id) ON DELETE CASCADE,
+  branch_id         UUID REFERENCES talent_branches(id) ON DELETE SET NULL,
+  level             INTEGER NOT NULL CHECK (level BETWEEN 1 AND 12),
+  is_trunk          BOOLEAN NOT NULL DEFAULT FALSE,
+  node_type         VARCHAR(32) NOT NULL DEFAULT 'passive'
+                    CHECK (node_type IN (
+                      'passive','attribute_boost','proficiency',
+                      'talent_card','branch_choice','milestone','ultimate'
+                    )),
+  name_zh           VARCHAR(64) NOT NULL,
+  name_en           VARCHAR(64) NOT NULL,
+  description_zh    TEXT,
+  description_en    TEXT,
+  boost_attribute   VARCHAR(16),
+  boost_amount      INTEGER DEFAULT 1,
+  talent_card_code  VARCHAR(64),
+  prerequisites     JSONB NOT NULL DEFAULT '[]',
+  talent_point_cost INTEGER NOT NULL DEFAULT 1,
+  sort_order        INTEGER NOT NULL DEFAULT 0,
+  design_status     VARCHAR(16) NOT NULL DEFAULT 'pending'
+                    CHECK (design_status IN ('pending','draft','complete')),
+  design_notes      TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_talent_nodes_tree ON talent_nodes(tree_id);
+CREATE INDEX IF NOT EXISTS idx_talent_nodes_branch ON talent_nodes(branch_id);
+CREATE INDEX IF NOT EXISTS idx_talent_nodes_level ON talent_nodes(tree_id, level);
+
+CREATE TABLE IF NOT EXISTS talent_node_effects (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  node_id           UUID NOT NULL REFERENCES talent_nodes(id) ON DELETE CASCADE,
+  effect_code       VARCHAR(64) NOT NULL,
+  effect_params     JSONB NOT NULL DEFAULT '{}',
+  effect_desc_zh    TEXT NOT NULL,
+  effect_desc_en    TEXT,
+  effect_value      DECIMAL(5,1) DEFAULT 0,
+  sort_order        INTEGER NOT NULL DEFAULT 0,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_talent_effects_node ON talent_node_effects(node_id);
+
+-- Seed: 8 talent trees
+INSERT INTO talent_trees (faction_code, name_zh, name_en, primary_attribute, secondary_attribute, combat_proficiency_primary, combat_proficiency_secondary, description_zh) VALUES
+('E', '號令天賦樹', 'Herald Talent Tree', 'charisma', 'strength', 'military', 'brawl',
+ '團隊增益、共享資源、NPC 互動、領導光環。號令者是隊伍的核心，透過指揮和激勵讓全隊更強。'),
+('I', '深淵天賦樹', 'Abyss Talent Tree', 'intellect', 'willpower', 'arcane', 'assassin',
+ '單獨加成、牌庫操控、自我增幅、專精強化。凝視深淵的學者，在孤獨中找到別人找不到的答案。'),
+('S', '鐵證天賦樹', 'Witness Talent Tree', 'perception', 'strength', 'shooting', 'sidearm',
+ '裝備加成、物理攻擊、消耗品效率、環境互動。鐵證如山的調查員，用物理手段解決問題。'),
+('N', '天啟天賦樹', 'Oracle Talent Tree', 'willpower', 'intellect', 'arcane', 'engineer',
+ '混沌袋操控、預見事件、法術強化、預知反應。被知識選中的先知，看見別人看不見的東西。'),
+('T', '解析天賦樹', 'Cipher Talent Tree', 'intellect', 'perception', 'engineer', 'archery',
+ '弱點揭露、敵人預測、檢定重擲、資源效率。冷靜的分析師，將混亂化為秩序。'),
+('F', '聖燼天賦樹', 'Ember Talent Tree', 'willpower', 'charisma', 'brawl', 'military',
+ '治療、替人承傷、犧牲換效果、信念計數器。燃燒自己照亮他人的守護者。'),
+('J', '鐵壁天賦樹', 'Bastion Talent Tree', 'constitution', 'strength', 'military', 'sidearm',
+ '傷害減免、回合佈局、牌組一致性、堅守強化。不動如山的堡壘，隊伍最後的防線。'),
+('P', '流影天賦樹', 'Flux Talent Tree', 'agility', 'perception', 'assassin', 'archery',
+ '反應行動、棄牌堆回收、隨機獎勵、逆境觸發。在混亂中起舞的幸運兒，越絕望越強大。')
+ON CONFLICT (faction_code) DO NOTHING;
+
+-- Seed: 24 branches (3 per tree)
+INSERT INTO talent_branches (tree_id, branch_index, name_zh, name_en, theme_keywords, color_hex) VALUES
+((SELECT id FROM talent_trees WHERE faction_code='E'), 1, '戰場指揮', 'Field Commander', '團隊增益、行動經濟、戰術佈署', '#C9A84C'),
+((SELECT id FROM talent_trees WHERE faction_code='E'), 2, '外交斡旋', 'Diplomat', 'NPC 互動、資源共享、情報交換', '#D4B85C'),
+((SELECT id FROM talent_trees WHERE faction_code='E'), 3, '激勵之聲', 'Inspiring Voice', '士氣增幅、恐懼抵抗、團隊回復', '#BF9A3C'),
+((SELECT id FROM talent_trees WHERE faction_code='I'), 1, '禁忌學識', 'Forbidden Scholar', '書籍研究、牌庫操控、知識解鎖', '#2A3F6F'),
+((SELECT id FROM talent_trees WHERE faction_code='I'), 2, '陰影行者', 'Shadow Walker', '隱蔽、暗殺、單獨行動增益', '#1E2D5A'),
+((SELECT id FROM talent_trees WHERE faction_code='I'), 3, '深淵凝視', 'Abyss Gazer', '自我增幅、代價換力量、SAN 燃燒', '#3A5090'),
+((SELECT id FROM talent_trees WHERE faction_code='S'), 1, '火力至上', 'Firepower', '射擊強化、彈藥效率、遠程制壓', '#8B5E3C'),
+((SELECT id FROM talent_trees WHERE faction_code='S'), 2, '裝備大師', 'Equipment Master', '鍛造增幅、裝備耐久、多槽位', '#7A4E2C'),
+((SELECT id FROM talent_trees WHERE faction_code='S'), 3, '現場鑑識', 'Field Forensics', '線索發現、環境互動、消耗品回收', '#9C6E4C'),
+((SELECT id FROM talent_trees WHERE faction_code='N'), 1, '星象術士', 'Astromancer', '法術強化、混沌袋操控、元素精通', '#7B4EA3'),
+((SELECT id FROM talent_trees WHERE faction_code='N'), 2, '預言者', 'Prophet', '預見事件、預知反應、議程操控', '#6B3E93'),
+((SELECT id FROM talent_trees WHERE faction_code='N'), 3, '次元行者', 'Dimension Walker', '空間操控、傳送、次元門互動', '#8B5EB3'),
+((SELECT id FROM talent_trees WHERE faction_code='T'), 1, '弱點分析', 'Weakness Analyst', '敵人弱點揭露、增傷標記、情報收集', '#4A7C9B'),
+((SELECT id FROM talent_trees WHERE faction_code='T'), 2, '資源工程', 'Resource Engineer', '資源效率、經濟引擎、抽牌優化', '#3A6C8B'),
+((SELECT id FROM talent_trees WHERE faction_code='T'), 3, '戰術規劃', 'Tactical Planner', '檢定重擲、機率操控、計畫執行', '#5A8CAB'),
+((SELECT id FROM talent_trees WHERE faction_code='F'), 1, '神聖治療', 'Sacred Healer', 'HP/SAN 恢復、狀態清除、創傷修復', '#B84C4C'),
+((SELECT id FROM talent_trees WHERE faction_code='F'), 2, '鋼鐵守護', 'Iron Guardian', '替人承傷、護盾生成、嘲諷強化', '#A83C3C'),
+((SELECT id FROM talent_trees WHERE faction_code='F'), 3, '殉道之路', 'Martyr''s Path', '犧牲換效果、信念計數器、瀕死增幅', '#C85C5C'),
+((SELECT id FROM talent_trees WHERE faction_code='J'), 1, '不動堡壘', 'Immovable Fortress', '傷害減免、護甲強化、反擊', '#6B6B6B'),
+((SELECT id FROM talent_trees WHERE faction_code='J'), 2, '秩序之盾', 'Shield of Order', '回合佈局、牌組一致性、計畫行動', '#5B5B5B'),
+((SELECT id FROM talent_trees WHERE faction_code='J'), 3, '戰線維持', 'Front Line', '嘲諷、交戰控制、區域封鎖', '#7B7B7B'),
+((SELECT id FROM talent_trees WHERE faction_code='P'), 1, '機運之子', 'Fortune''s Child', '隨機獎勵、幸運觸發、混沌袋祝福', '#2D8B6F'),
+((SELECT id FROM talent_trees WHERE faction_code='P'), 2, '棄牌堆行者', 'Discard Walker', '棄牌堆回收、循環引擎、資源再生', '#1D7B5F'),
+((SELECT id FROM talent_trees WHERE faction_code='P'), 3, '逆境爆發', 'Adversity Surge', '低血量增幅、逆境觸發、反應行動強化', '#3D9B7F')
+ON CONFLICT (tree_id, branch_index) DO NOTHING;
+
+-- Seed: 256 nodes (32 per tree × 8 trees) via PL/pgSQL loop
+DO $seed$
+DECLARE
+  v_tree_id UUID;
+  v_primary VARCHAR(16);
+  v_b1 UUID; v_b2 UUID; v_b3 UUID;
+  v_fc VARCHAR(2);
+BEGIN
+  FOR v_fc IN SELECT unnest(ARRAY['E','I','S','N','T','F','J','P']) LOOP
+    SELECT id, primary_attribute INTO v_tree_id, v_primary
+      FROM talent_trees WHERE faction_code = v_fc;
+    IF v_tree_id IS NULL THEN CONTINUE; END IF;
+    IF EXISTS (SELECT 1 FROM talent_nodes WHERE tree_id = v_tree_id LIMIT 1) THEN CONTINUE; END IF;
+
+    SELECT id INTO v_b1 FROM talent_branches WHERE tree_id = v_tree_id AND branch_index = 1;
+    SELECT id INTO v_b2 FROM talent_branches WHERE tree_id = v_tree_id AND branch_index = 2;
+    SELECT id INTO v_b3 FROM talent_branches WHERE tree_id = v_tree_id AND branch_index = 3;
+
+    -- Lv1: trunk passive
+    INSERT INTO talent_nodes (tree_id, level, is_trunk, node_type, name_zh, name_en, description_zh, talent_point_cost, sort_order)
+    VALUES (v_tree_id, 1, TRUE, 'passive', '基礎本能', 'Basic Instinct', '陣營的基礎被動能力，採用該陣營即獲得', 1, 1);
+
+    -- Lv2: trunk attribute boost (auto-fill primary)
+    INSERT INTO talent_nodes (tree_id, level, is_trunk, node_type, name_zh, name_en, description_zh, boost_attribute, boost_amount, talent_point_cost, sort_order)
+    VALUES (v_tree_id, 2, TRUE, 'attribute_boost', '屬性覺醒 I', 'Attribute Awakening I', '第一次屬性提升（+1 陣營主屬性）', v_primary, 1, 1, 2);
+
+    -- Lv3: branch choice ×3
+    INSERT INTO talent_nodes (tree_id, branch_id, level, is_trunk, node_type, name_zh, name_en, description_zh, talent_point_cost, sort_order) VALUES
+    (v_tree_id, v_b1, 3, FALSE, 'branch_choice', '分支一：覺醒', 'Branch 1: Awakening', '選擇此分支路線，解鎖分支一的後續節點', 1, 3),
+    (v_tree_id, v_b2, 3, FALSE, 'branch_choice', '分支二：覺醒', 'Branch 2: Awakening', '選擇此分支路線，解鎖分支二的後續節點', 1, 3),
+    (v_tree_id, v_b3, 3, FALSE, 'branch_choice', '分支三：覺醒', 'Branch 3: Awakening', '選擇此分支路線，解鎖分支三的後續節點', 1, 3);
+
+    -- Lv4: passive ×3
+    INSERT INTO talent_nodes (tree_id, branch_id, level, is_trunk, node_type, name_zh, name_en, description_zh, talent_point_cost, sort_order) VALUES
+    (v_tree_id, v_b1, 4, FALSE, 'passive', '分支一 Lv4', 'Branch 1 Lv4', '待設計', 1, 4),
+    (v_tree_id, v_b2, 4, FALSE, 'passive', '分支二 Lv4', 'Branch 2 Lv4', '待設計', 1, 4),
+    (v_tree_id, v_b3, 4, FALSE, 'passive', '分支三 Lv4', 'Branch 3 Lv4', '待設計', 1, 4);
+
+    -- Lv5: proficiency ×3
+    INSERT INTO talent_nodes (tree_id, branch_id, level, is_trunk, node_type, name_zh, name_en, description_zh, talent_point_cost, sort_order) VALUES
+    (v_tree_id, v_b1, 5, FALSE, 'proficiency', '專精解鎖 I', 'Specialization I', '解鎖一個戰鬥專精槽位', 1, 5),
+    (v_tree_id, v_b2, 5, FALSE, 'proficiency', '專精解鎖 I', 'Specialization I', '解鎖一個戰鬥專精槽位', 1, 5),
+    (v_tree_id, v_b3, 5, FALSE, 'proficiency', '專精解鎖 I', 'Specialization I', '解鎖一個戰鬥專精槽位', 1, 5);
+
+    -- Lv6: milestone ×3
+    INSERT INTO talent_nodes (tree_id, branch_id, level, is_trunk, node_type, name_zh, name_en, description_zh, talent_point_cost, sort_order) VALUES
+    (v_tree_id, v_b1, 6, FALSE, 'milestone', '分支一：核心', 'Branch 1: Core', '分支核心能力，打法產生實質差異', 2, 6),
+    (v_tree_id, v_b2, 6, FALSE, 'milestone', '分支二：核心', 'Branch 2: Core', '分支核心能力，打法產生實質差異', 2, 6),
+    (v_tree_id, v_b3, 6, FALSE, 'milestone', '分支三：核心', 'Branch 3: Core', '分支核心能力，打法產生實質差異', 2, 6);
+
+    -- Lv7: attribute boost ×3
+    INSERT INTO talent_nodes (tree_id, branch_id, level, is_trunk, node_type, name_zh, name_en, description_zh, talent_point_cost, sort_order) VALUES
+    (v_tree_id, v_b1, 7, FALSE, 'attribute_boost', '屬性覺醒 II', 'Attribute Awakening II', '第二次屬性提升', 1, 7),
+    (v_tree_id, v_b2, 7, FALSE, 'attribute_boost', '屬性覺醒 II', 'Attribute Awakening II', '第二次屬性提升', 1, 7),
+    (v_tree_id, v_b3, 7, FALSE, 'attribute_boost', '屬性覺醒 II', 'Attribute Awakening II', '第二次屬性提升', 1, 7);
+
+    -- Lv8: proficiency ×3
+    INSERT INTO talent_nodes (tree_id, branch_id, level, is_trunk, node_type, name_zh, name_en, description_zh, talent_point_cost, sort_order) VALUES
+    (v_tree_id, v_b1, 8, FALSE, 'proficiency', '進階專精', 'Advanced Specialization', '解鎖進階戰鬥專精或強化已有專精', 1, 8),
+    (v_tree_id, v_b2, 8, FALSE, 'proficiency', '進階專精', 'Advanced Specialization', '解鎖進階戰鬥專精或強化已有專精', 1, 8),
+    (v_tree_id, v_b3, 8, FALSE, 'proficiency', '進階專精', 'Advanced Specialization', '解鎖進階戰鬥專精或強化已有專精', 1, 8);
+
+    -- Lv9: talent card ×3
+    INSERT INTO talent_nodes (tree_id, branch_id, level, is_trunk, node_type, name_zh, name_en, description_zh, talent_point_cost, sort_order) VALUES
+    (v_tree_id, v_b1, 9, FALSE, 'talent_card', '天賦卡 I', 'Talent Card I', '解鎖分支專屬天賦簽名卡', 1, 9),
+    (v_tree_id, v_b2, 9, FALSE, 'talent_card', '天賦卡 I', 'Talent Card I', '解鎖分支專屬天賦簽名卡', 1, 9),
+    (v_tree_id, v_b3, 9, FALSE, 'talent_card', '天賦卡 I', 'Talent Card I', '解鎖分支專屬天賦簽名卡', 1, 9);
+
+    -- Lv10: attribute boost ×3
+    INSERT INTO talent_nodes (tree_id, branch_id, level, is_trunk, node_type, name_zh, name_en, description_zh, talent_point_cost, sort_order) VALUES
+    (v_tree_id, v_b1, 10, FALSE, 'attribute_boost', '屬性覺醒 III', 'Attribute Awakening III', '第三次屬性提升', 1, 10),
+    (v_tree_id, v_b2, 10, FALSE, 'attribute_boost', '屬性覺醒 III', 'Attribute Awakening III', '第三次屬性提升', 1, 10),
+    (v_tree_id, v_b3, 10, FALSE, 'attribute_boost', '屬性覺醒 III', 'Attribute Awakening III', '第三次屬性提升', 1, 10);
+
+    -- Lv11: passive ×3
+    INSERT INTO talent_nodes (tree_id, branch_id, level, is_trunk, node_type, name_zh, name_en, description_zh, talent_point_cost, sort_order) VALUES
+    (v_tree_id, v_b1, 11, FALSE, 'passive', '分支一 Lv11', 'Branch 1 Lv11', '高階被動能力 + 第四次屬性提升', 2, 11),
+    (v_tree_id, v_b2, 11, FALSE, 'passive', '分支二 Lv11', 'Branch 2 Lv11', '高階被動能力 + 第四次屬性提升', 2, 11),
+    (v_tree_id, v_b3, 11, FALSE, 'passive', '分支三 Lv11', 'Branch 3 Lv11', '高階被動能力 + 第四次屬性提升', 2, 11);
+
+    -- Lv12: ultimate ×3
+    INSERT INTO talent_nodes (tree_id, branch_id, level, is_trunk, node_type, name_zh, name_en, description_zh, talent_point_cost, sort_order) VALUES
+    (v_tree_id, v_b1, 12, FALSE, 'ultimate', '終極天賦：分支一', 'Ultimate: Branch 1', '超凡入聖的終極能力，依分支不同而異', 3, 12),
+    (v_tree_id, v_b2, 12, FALSE, 'ultimate', '終極天賦：分支二', 'Ultimate: Branch 2', '超凡入聖的終極能力，依分支不同而異', 3, 12),
+    (v_tree_id, v_b3, 12, FALSE, 'ultimate', '終極天賦：分支三', 'Ultimate: Branch 3', '超凡入聖的終極能力，依分支不同而異', 3, 12);
+
+  END LOOP;
+END $seed$;
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -497,6 +723,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_006_SQL);
     await client.query(MIGRATION_007_SQL);
     await client.query(MIGRATION_008_SQL);
+    await client.query(MIGRATION_009_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

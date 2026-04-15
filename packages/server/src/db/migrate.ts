@@ -711,6 +711,213 @@ BEGIN
 END $seed$;
 `;
 
+// Migration 010: Monster system (MOD-03) — 5 tables + seed data
+const MIGRATION_010_SQL = `
+-- ============================================
+-- Migration 010: Monster system (MOD-03)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS monster_families (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(64) UNIQUE NOT NULL,
+  name_zh VARCHAR(64) NOT NULL,
+  name_en VARCHAR(64) NOT NULL,
+  patron_zh VARCHAR(64), patron_en VARCHAR(64),
+  patron_title_zh VARCHAR(128), patron_title_en VARCHAR(128),
+  theme_zh TEXT, theme_en TEXT,
+  family_type VARCHAR(16) NOT NULL DEFAULT 'deity' CHECK (family_type IN ('deity','mortal','undead','independent')),
+  chaos_bag_preferences JSONB NOT NULL DEFAULT '{}',
+  attack_element VARCHAR(16), damage_focus VARCHAR(16),
+  combat_tempo_zh TEXT, combat_tempo_en TEXT,
+  typical_keywords JSONB NOT NULL DEFAULT '[]',
+  ai_preference VARCHAR(32),
+  weaknesses JSONB NOT NULL DEFAULT '[]',
+  resistances JSONB NOT NULL DEFAULT '[]',
+  immunities JSONB NOT NULL DEFAULT '[]',
+  inflicted_statuses JSONB NOT NULL DEFAULT '[]',
+  self_buffs JSONB NOT NULL DEFAULT '[]',
+  status_immunities JSONB NOT NULL DEFAULT '[]',
+  fear_radius_range JSONB NOT NULL DEFAULT '[1,2]',
+  fear_value_range JSONB NOT NULL DEFAULT '[1,3]',
+  fear_design_note_zh TEXT, fear_design_note_en TEXT,
+  defense_attribute_tendency JSONB NOT NULL DEFAULT '{}',
+  rival_family_codes JSONB NOT NULL DEFAULT '[]',
+  rival_note_zh TEXT, rival_note_en TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  expansion_note TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  design_status VARCHAR(16) NOT NULL DEFAULT 'draft' CHECK (design_status IN ('draft','review','approved')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS monster_species (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  family_id UUID NOT NULL REFERENCES monster_families(id) ON DELETE CASCADE,
+  code VARCHAR(64) UNIQUE NOT NULL,
+  name_zh VARCHAR(64) NOT NULL, name_en VARCHAR(64) NOT NULL,
+  description_zh TEXT, description_en TEXT,
+  lore_zh TEXT, lore_en TEXT,
+  base_attack_element VARCHAR(16) DEFAULT 'physical',
+  base_ai_preference VARCHAR(32),
+  base_weaknesses JSONB, base_resistances JSONB, base_immunities JSONB, base_status_immunities JSONB,
+  tier_min INTEGER NOT NULL DEFAULT 1 CHECK (tier_min BETWEEN 1 AND 5),
+  tier_max INTEGER NOT NULL DEFAULT 3 CHECK (tier_max BETWEEN 1 AND 5),
+  base_keywords JSONB NOT NULL DEFAULT '[]',
+  defense_attribute_tendency JSONB,
+  design_notes TEXT,
+  variant_count INTEGER NOT NULL DEFAULT 0,
+  art_url TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  design_status VARCHAR(16) NOT NULL DEFAULT 'draft' CHECK (design_status IN ('draft','review','approved')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_tier_range CHECK (tier_min <= tier_max)
+);
+
+CREATE TABLE IF NOT EXISTS monster_variants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  species_id UUID NOT NULL REFERENCES monster_species(id) ON DELETE CASCADE,
+  code VARCHAR(64) UNIQUE NOT NULL,
+  name_zh VARCHAR(64) NOT NULL, name_en VARCHAR(64) NOT NULL,
+  tier INTEGER NOT NULL CHECK (tier BETWEEN 1 AND 5),
+  dc INTEGER NOT NULL, hp_base INTEGER NOT NULL,
+  hp_per_player INTEGER NOT NULL DEFAULT 0,
+  damage_physical INTEGER NOT NULL DEFAULT 0, damage_horror INTEGER NOT NULL DEFAULT 0,
+  regen_per_round INTEGER NOT NULL DEFAULT 0,
+  spell_defense INTEGER NOT NULL DEFAULT 0 CHECK (spell_defense BETWEEN 0 AND 9),
+  attacks_per_round INTEGER NOT NULL DEFAULT 1,
+  fear_radius INTEGER NOT NULL DEFAULT 1, fear_value INTEGER NOT NULL DEFAULT 1,
+  fear_type VARCHAR(16) NOT NULL DEFAULT 'first_sight' CHECK (fear_type IN ('first_sight','per_round','on_reveal')),
+  movement_speed INTEGER NOT NULL DEFAULT 1,
+  movement_type VARCHAR(16) NOT NULL DEFAULT 'ground' CHECK (movement_type IN ('ground','flying','dimensional','burrowing')),
+  keywords JSONB NOT NULL DEFAULT '[]',
+  attack_element VARCHAR(16),
+  weaknesses JSONB, resistances JSONB, immunities JSONB,
+  resistance_values JSONB NOT NULL DEFAULT '{}',
+  inflicted_statuses JSONB, self_buffs JSONB, status_immunities JSONB,
+  ai_preference VARCHAR(32), ai_preference_param VARCHAR(32), ai_behavior_notes TEXT,
+  is_undefeatable BOOLEAN NOT NULL DEFAULT FALSE,
+  phase_count INTEGER NOT NULL DEFAULT 1,
+  phase_rules JSONB NOT NULL DEFAULT '[]',
+  legendary_actions JSONB NOT NULL DEFAULT '[]',
+  environment_effects JSONB NOT NULL DEFAULT '[]',
+  description_zh TEXT, description_en TEXT, art_url TEXT, design_notes TEXT,
+  attack_card_count INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  design_status VARCHAR(16) NOT NULL DEFAULT 'draft' CHECK (design_status IN ('draft','review','approved')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS monster_attack_cards (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  species_id UUID REFERENCES monster_species(id) ON DELETE CASCADE,
+  variant_id UUID REFERENCES monster_variants(id) ON DELETE CASCADE,
+  code VARCHAR(64) UNIQUE NOT NULL,
+  name_zh VARCHAR(64) NOT NULL, name_en VARCHAR(64) NOT NULL,
+  defense_attribute VARCHAR(16) NOT NULL,
+  dc_override INTEGER,
+  damage_physical INTEGER NOT NULL DEFAULT 0, damage_horror INTEGER NOT NULL DEFAULT 0,
+  damage_element VARCHAR(16) NOT NULL DEFAULT 'physical',
+  inflicts_status JSONB NOT NULL DEFAULT '[]',
+  special_effect JSONB NOT NULL DEFAULT '{}',
+  weight INTEGER NOT NULL DEFAULT 10,
+  use_condition JSONB NOT NULL DEFAULT '{}',
+  narrative_attack_zh TEXT, narrative_attack_en TEXT,
+  narrative_hit_zh TEXT, narrative_hit_en TEXT,
+  narrative_miss_zh TEXT, narrative_miss_en TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_attack_card_owner CHECK (species_id IS NOT NULL OR variant_id IS NOT NULL)
+);
+
+CREATE TABLE IF NOT EXISTS monster_status_descriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  variant_id UUID NOT NULL REFERENCES monster_variants(id) ON DELETE CASCADE,
+  hp_threshold INTEGER NOT NULL,
+  description_zh TEXT NOT NULL, description_en TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (variant_id, hp_threshold)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monster_species_family ON monster_species(family_id);
+CREATE INDEX IF NOT EXISTS idx_monster_variants_species ON monster_variants(species_id);
+CREATE INDEX IF NOT EXISTS idx_monster_variants_tier ON monster_variants(tier);
+CREATE INDEX IF NOT EXISTS idx_monster_attack_species ON monster_attack_cards(species_id);
+CREATE INDEX IF NOT EXISTS idx_monster_attack_variant ON monster_attack_cards(variant_id);
+CREATE INDEX IF NOT EXISTS idx_monster_status_variant ON monster_status_descriptions(variant_id);
+
+-- Seed: 10 monster families (7 deity + 3 non-deity)
+INSERT INTO monster_families (code,name_zh,name_en,patron_zh,patron_en,patron_title_zh,family_type,theme_zh,attack_element,damage_focus,combat_tempo_zh,typical_keywords,ai_preference,weaknesses,resistances,immunities,inflicted_statuses,self_buffs,status_immunities,fear_radius_range,fear_value_range,fear_design_note_zh,defense_attribute_tendency,rival_family_codes,rival_note_zh,chaos_bag_preferences,sort_order,design_status) VALUES
+('house_cthulhu','克蘇魯眷族','House of Cthulhu','克蘇魯','Cthulhu','沉睡者、拉萊耶之主','deity','海洋、沉睡、夢境入侵、潮汐般不可阻擋的壓迫。','physical','hp','慢但沉重 — 每一擊傷害高，攻擊頻率低','["massive","crush"]','nearest','["fire","electric"]','["ice"]','[]','[{"code":"wet","frequency":"high","note":"海水浸泡"},{"code":"vulnerable","frequency":"medium","note":"觸手纏繞"},{"code":"madness","frequency":"low","note":"夢境入侵"}]','[{"code":"armor","frequency":"high","note":"鱗片甲殼"},{"code":"regeneration","frequency":"medium","note":"肉體再生"}]','["frozen","wet"]','[1,2]','[2,4]','遠遠看不怕，近距離壓迫感極強','{"strength":"high","constitution":"high","agility":"medium","willpower":"low"}','["house_hastur"]','水 vs 風','{"skull":"blood_sacrifice","cultist":"follower_response","tablet":"forbidden_knowledge","elder_thing":"otherworld_seep"}',1,'approved'),
+('house_hastur','哈斯塔眷族','House of Hastur','哈斯塔','Hastur','無以名狀者、黃衣之王','deity','風、天空、瘋狂、藝術腐化、黃色符號。','physical','san','不正面交鋒 — 從遠處持續消磨理智','["flying","curse_on_death"]','lowest_san','["physical"]','["ice"]','[]','[{"code":"madness","frequency":"very_high","note":"核心手段"},{"code":"weakened","frequency":"high","note":"精神動搖"},{"code":"silence","frequency":"medium","note":"封鎖施法"},{"code":"darkness","frequency":"medium","note":"精神迷霧"},{"code":"marked","frequency":"low","note":"黃色印記"}]','[{"code":"ward","frequency":"high","note":"精神護壁"},{"code":"stealth","frequency":"medium","note":"幻影存在"}]','["madness","darkness"]','[3,5]','[1,2]','瀰漫性，遠遠就開始侵蝕','{"willpower":"high","perception":"high","intellect":"medium","strength":"low"}','["house_cthulhu"]','風 vs 水','{"skull":"life_drain","cultist":"doom_advance","tablet":"mad_whisper","elder_thing":"spacetime_warp"}',2,'approved'),
+('house_shub','莎布·尼古拉絲眷族','House of Shub-Niggurath','莎布·尼古拉絲','Shub-Niggurath','黑山羊、千子之母','deity','繁殖、森林、腐化的生命力、母性的扭曲。','physical','hp','群體壓制 — 數量多、單體不強、源源不絕','["swarm","hunter"]','nearest','["fire"]','["ice"]','[]','[{"code":"poison","frequency":"very_high","note":"核心手段"},{"code":"bleed","frequency":"high","note":"觸手撕裂"},{"code":"vulnerable","frequency":"medium","note":"酸液腐蝕"},{"code":"fatigue","frequency":"low","note":"孢子倦意"}]','[{"code":"regeneration","frequency":"very_high","note":"核心家族特色"},{"code":"armor","frequency":"medium","note":"樹皮外殼"}]','["poison","bleed"]','[2,3]','[1,3]','越來越多的恐懼，數量壓迫','{"constitution":"high","agility":"high","strength":"medium","willpower":"low"}','[]',NULL,'{"skull":"death_touch","cultist":"ritual_resonance","tablet":"mental_exhaustion","elder_thing":"rift_expand"}',3,'approved'),
+('house_nyarlathotep','奈亞拉托提普眷族','House of Nyarlathotep','奈亞拉托提普','Nyarlathotep','無貌之神、伏行之混沌、千面信使','deity','欺騙、偽裝、混沌、計謀、千面神。','mixed','mixed','不可預測 — 規則改寫、陷阱、詛咒','[]','most_clues','[]','[]','[]','[{"code":"marked","frequency":"high","note":"鎖定獵物"},{"code":"madness","frequency":"high","note":"真相衝擊"},{"code":"weakened","frequency":"medium","note":"心理操縱"},{"code":"disarm","frequency":"medium","note":"精神控制"},{"code":"silence","frequency":"low","note":"封鎖認知"},{"code":"doom_status","frequency":"low","note":"詛咒"}]','[{"code":"stealth","frequency":"very_high","note":"偽裝核心"},{"code":"empowered","frequency":"medium","note":"力量湧現"},{"code":"ward","frequency":"medium","note":"精神防禦"}]','["marked","weakened"]','[0,5]','[0,5]','不固定 — 偽裝時0，真身揭露時全場最高','{"perception":"high","intellect":"high","willpower":"high","charisma":"medium","strength":"low","agility":"low"}','[]','外神信使，可客串出現在任何家族關卡','{"skull":"life_cost","cultist":"exposed","tablet":"forbidden_truth","elder_thing":"space_sever"}',4,'approved'),
+('house_yog','猶格·索托斯眷族','House of Yog-Sothoth','猶格·索托斯','Yog-Sothoth','門之鑰、萬有即一','deity','維度、時空、門戶、角度、幾何恐怖。','physical','mixed','突襲型 — 憑空出現、攻擊、消失','["flying"]','lowest_attr','[]','["physical"]','[]','[{"code":"weakened","frequency":"high","note":"時空扭曲"},{"code":"madness","frequency":"high","note":"維度恐懼"},{"code":"darkness","frequency":"medium","note":"維度重疊"},{"code":"doom_status","frequency":"medium","note":"時空侵蝕"},{"code":"fatigue","frequency":"low","note":"時間扭曲"}]','[{"code":"stealth","frequency":"very_high","note":"維度跳躍"},{"code":"haste","frequency":"medium","note":"超速行動"}]','["frozen","burning"]','[1,1]','[3,5]','憑空出現的瞬間衝擊','{"perception":"high","intellect":"high","agility":"medium","willpower":"medium"}','[]',NULL,'{"skull":"blood_sacrifice","cultist":"doom_advance","tablet":"memory_collapse","elder_thing":"spacetime_warp"}',5,'approved'),
+('house_cthugha','克圖格亞眷族','House of Cthugha','克圖格亞','Cthugha','爆燃者、居於火焰者','deity','火焰、爆燃、恆星、毀滅性的光與熱。','fire','hp','攻擊性極強 — 傷害高、防禦低、速戰速決','["crush","swift"]','nearest','["ice","physical"]','[]','["fire"]','[{"code":"burning","frequency":"very_high","note":"核心手段"},{"code":"vulnerable","frequency":"high","note":"灼傷削弱"},{"code":"bleed","frequency":"medium","note":"灼傷傷口"},{"code":"fatigue","frequency":"low","note":"高溫"}]','[{"code":"empowered","frequency":"medium","note":"火焰暴走"},{"code":"haste","frequency":"medium","note":"急速蔓延"}]','["burning","frozen","wet"]','[2,3]','[1,2]','恐懼來自傷害本身','{"agility":"high","constitution":"high","strength":"medium","willpower":"low"}','["house_hastur"]','克圖格亞被召喚來對抗哈斯塔','{"skull":"death_touch","cultist":"exposed","tablet":"forbidden_knowledge","elder_thing":"otherworld_fire"}',6,'approved'),
+('house_yig','伊格眷族','House of Yig','伊格','Yig','蛇之父','deity','蛇、毒、古老文明、隱伏、地底、腐朽的智慧。','physical','hp','伏擊型 — 先隱藏、再突襲、帶毒素 DoT','["hunter","apathetic"]','lowest_hp','["ice","fire"]','[]','[]','[{"code":"poison","frequency":"very_high","note":"核心手段"},{"code":"bleed","frequency":"high","note":"毒牙咬傷"},{"code":"weakened","frequency":"medium","note":"蛇毒肌肉無力"},{"code":"weakness_status","frequency":"medium","note":"神經毒素"},{"code":"silence","frequency":"low","note":"封鎖咒語"}]','[{"code":"stealth","frequency":"very_high","note":"天然潛伏"},{"code":"armor","frequency":"medium","note":"蛇鱗防禦"},{"code":"empowered","frequency":"low","note":"祭司法術增幅"}]','["poison"]','[1,2]','[1,2]','伏擊的恐懼在看到的瞬間爆發','{"constitution":"high","agility":"high","perception":"medium","strength":"medium"}','[]',NULL,'{"skull":"blood_sacrifice","cultist":"follower_response","tablet":"mad_whisper","elder_thing":"otherworld_seep"}',7,'approved')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO monster_families (code,name_zh,name_en,family_type,theme_zh,attack_element,damage_focus,combat_tempo_zh,typical_keywords,ai_preference,inflicted_statuses,self_buffs,status_immunities,fear_radius_range,fear_value_range,fear_design_note_zh,defense_attribute_tendency,sort_order,design_status) VALUES
+('fallen','凡人墮落者','The Fallen','mortal','邪教徒、瘋狂學者、丘丘人。可搭配任何主神家族出現。','physical','mixed','雜兵為主，偶有精英級祭司','[]','nearest','[]','[]','[]','[1,1]','[0,1]','人類級恐懼','{"strength":"medium","agility":"medium","constitution":"medium","intellect":"medium","willpower":"medium","perception":"medium","charisma":"medium"}',8,'approved'),
+('undying','亡者回響','The Undying','undead','死而不朽的存在。食屍鬼、格拉基之僕從、蠕行者。','physical','mixed','消耗型 — 擊殺後可能復活','["haunting","curse_on_death"]','lowest_hp','[{"code":"madness","frequency":"high","note":"面對已死之物"},{"code":"poison","frequency":"medium","note":"屍毒"},{"code":"fatigue","frequency":"medium","note":"死氣侵蝕"}]','[{"code":"regeneration","frequency":"high","note":"不死再生"},{"code":"armor","frequency":"medium","note":"僵硬屍體"}]','["poison","bleed","fatigue"]','[1,2]','[2,3]','面對已死之物行走的原始恐懼','{"willpower":"high","constitution":"high","strength":"medium","agility":"low"}',9,'approved'),
+('independent','獨立存在','Independent Entities','independent','不隸屬任何舊日支配者的獨立存在。修格斯、夜魘、星之彩、米·戈、古老者。','mixed','mixed','多樣化 — 每種獨立存在都有獨特的戰鬥模式','[]','random','[]','[]','[]','[1,3]','[1,4]','不可分類的未知帶來的恐懼','{}',10,'approved')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO monster_families (code,name_zh,name_en,patron_zh,patron_en,patron_title_zh,family_type,theme_zh,is_active,expansion_note,sort_order,design_status) VALUES
+('house_tsathoggua','札特瓜眷族','House of Tsathoggua','札特瓜','Tsathoggua','簡體常用撒托古亞','deity','地底、慵懶、黑暗、無形之子、沃米人',FALSE,'待擴充',11,'draft'),
+('house_shudde_mell','修德·梅爾眷族','House of Shudde M''ell','修德·梅爾','Shudde M''ell','鑽地魔蟲之主','deity','地震、鑽地、地底恐怖',FALSE,'待擴充',12,'draft'),
+('house_nodens','諾登斯陣營','House of Nodens','諾登斯','Nodens','相對友善的古老存在、夜魘統領','deity','相對友善的古老存在、夜魘統領',FALSE,'待擴充 — 特殊家族，可能是盟友而非敵人',13,'draft')
+ON CONFLICT (code) DO NOTHING;
+
+-- Seed: 32 monster species
+INSERT INTO monster_species (family_id,code,name_zh,name_en,description_zh,tier_min,tier_max,base_keywords,sort_order,design_status) VALUES
+((SELECT id FROM monster_families WHERE code='house_cthulhu'),'deep_one','深潛者','Deep One','克蘇魯的基礎眷屬，半人半魚的海底生物。',1,3,'[]',1,'draft'),
+((SELECT id FROM monster_families WHERE code='house_cthulhu'),'star_spawn','星之眷族','Star-Spawn of Cthulhu','克蘇魯的直系眷屬，巨大的類克蘇魯存在。',3,4,'["massive"]',2,'draft'),
+((SELECT id FROM monster_families WHERE code='house_cthulhu'),'dagon','達貢','Dagon','父神達貢，深潛者的統帥。',4,4,'["massive","crush"]',3,'draft'),
+((SELECT id FROM monster_families WHERE code='house_cthulhu'),'hydra','海德拉','Hydra','母神海德拉，與達貢並列的深潛者統帥。',4,4,'["massive","crush"]',4,'draft'),
+((SELECT id FROM monster_families WHERE code='house_cthulhu'),'cthulhu','克蘇魯','Cthulhu','沉睡者。拉萊耶之主。不可擊敗。',5,5,'["massive"]',5,'draft'),
+((SELECT id FROM monster_families WHERE code='house_hastur'),'yellow_acolyte','黃衣信徒','Yellow Acolyte','哈斯塔的凡人信徒，黃色符號的傳播者。',1,2,'[]',1,'draft'),
+((SELECT id FROM monster_families WHERE code='house_hastur'),'byakhee','拜亞基','Byakhee','星際飛行的怪物，哈斯塔的忠實眷族。',2,3,'["flying"]',2,'draft'),
+((SELECT id FROM monster_families WHERE code='house_hastur'),'lloigor_zhar','羅伊格爾與札爾','Lloigor & Zhar','雙子舊日支配者，哈斯塔的眷屬。',3,4,'[]',3,'draft'),
+((SELECT id FROM monster_families WHERE code='house_hastur'),'king_in_yellow','黃衣之王','King in Yellow','哈斯塔的化身之一。精神壓制能力極強。',4,4,'["curse_on_death"]',4,'draft'),
+((SELECT id FROM monster_families WHERE code='house_hastur'),'ithaqua','伊塔庫亞','Ithaqua','風行者。在暴風雪中狩獵的恐怖存在。',4,5,'["flying","swift"]',5,'draft'),
+((SELECT id FROM monster_families WHERE code='house_hastur'),'hastur','哈斯塔','Hastur','無以名狀者。不可擊敗。',5,5,'[]',6,'draft'),
+((SELECT id FROM monster_families WHERE code='house_shub'),'dark_young','黑山羊幼崽','Dark Young','莎布·尼古拉絲的子嗣。幼體成群出沒，成體龐大而致命。',1,4,'["swarm"]',1,'draft'),
+((SELECT id FROM monster_families WHERE code='house_shub'),'shub_niggurath','莎布·尼古拉絲','Shub-Niggurath','黑山羊、千子之母。不可擊敗。',5,5,'["massive"]',2,'draft'),
+((SELECT id FROM monster_families WHERE code='house_nyarlathotep'),'nyar_cultist','邪教信徒（偽裝）','Cultist (Disguised)','奈亞拉托提普的凡人信徒，各種偽裝身分。',1,2,'["apathetic"]',1,'draft'),
+((SELECT id FROM monster_families WHERE code='house_nyarlathotep'),'shan','夏蓋蟲族','Insect from Shaggai','寄生型外星昆蟲，精神控制能力極強。',2,3,'[]',2,'draft'),
+((SELECT id FROM monster_families WHERE code='house_nyarlathotep'),'hunting_horror','恐怖獵手','Hunting Horror','奈亞拉托提普的僕從，黑暗中的獵手。',3,3,'["flying","hunter"]',3,'draft'),
+((SELECT id FROM monster_families WHERE code='house_nyarlathotep'),'nyar_avatar','奈亞拉托提普的化身','Avatar of Nyarlathotep','千面神的化身之一。每次出現形態都不同。',4,5,'[]',4,'draft'),
+((SELECT id FROM monster_families WHERE code='house_nyarlathotep'),'nyarlathotep','奈亞拉托提普','Nyarlathotep','無貌之神。不可擊敗。',5,5,'[]',5,'draft'),
+((SELECT id FROM monster_families WHERE code='house_yog'),'dimensional_shambler','空鬼','Dimensional Shambler','次元徘徊者，在維度之間遊蕩的恐怖存在。',2,3,'[]',1,'draft'),
+((SELECT id FROM monster_families WHERE code='house_yog'),'hound_of_tindalos','廷達洛斯獵犬','Hound of Tindalos','角度中的獵手，從時空裂縫中撲出。',3,3,'["hunter","swift"]',2,'draft'),
+((SELECT id FROM monster_families WHERE code='house_yog'),'yog_sothoth','猶格·索托斯','Yog-Sothoth','門之鑰、萬有即一。不可擊敗。',5,5,'[]',3,'draft'),
+((SELECT id FROM monster_families WHERE code='house_cthugha'),'fire_vampire','炎之精','Fire Vampire','純火焰構成的生命體，小型但致命。',1,2,'["swift"]',1,'draft'),
+((SELECT id FROM monster_families WHERE code='house_cthugha'),'flame_construct','火焰造物','Flame Construct','由克圖格亞的火焰凝聚而成的戰鬥造物。',3,3,'["crush"]',2,'draft'),
+((SELECT id FROM monster_families WHERE code='house_cthugha'),'aphoom_zhah','亞弗姆·扎','Aphoom-Zhah','克圖格亞的後裔，冷焰之主。',4,4,'[]',3,'draft'),
+((SELECT id FROM monster_families WHERE code='house_cthugha'),'cthugha','克圖格亞','Cthugha','爆燃者、居於火焰者。不可擊敗。',5,5,'["massive"]',4,'draft'),
+((SELECT id FROM monster_families WHERE code='house_yig'),'serpent_scout','蛇人斥候','Serpent Scout','蛇人的先遣偵察兵，善於潛伏和突襲。',1,2,'["apathetic"]',1,'draft'),
+((SELECT id FROM monster_families WHERE code='house_yig'),'serpent_warrior','蛇人戰士','Serpent Warrior','蛇人的正規戰鬥兵，裝備古老文明的武器。',2,3,'["hunter"]',2,'draft'),
+((SELECT id FROM monster_families WHERE code='house_yig'),'serpent_priest','蛇人祭司','Serpent Priest','蛇人的祭司，掌握古老魔法和蛇毒秘術。',3,4,'[]',3,'draft'),
+((SELECT id FROM monster_families WHERE code='house_yig'),'yig','伊格','Yig','蛇之父。頭目到巨頭級。',4,5,'["massive"]',4,'draft'),
+((SELECT id FROM monster_families WHERE code='fallen'),'cultist','邪教徒','Cultist','各種舊日支配者的凡人崇拜者。',1,2,'[]',1,'draft'),
+((SELECT id FROM monster_families WHERE code='fallen'),'mad_scholar','瘋狂學者','Mad Scholar','因鑽研禁忌知識而失去理智的學者。',2,3,'[]',2,'draft'),
+((SELECT id FROM monster_families WHERE code='fallen'),'tcho_tcho','丘丘人','Tcho-Tcho','退化的人類部落，崇拜各種黑暗力量。',1,3,'["swarm"]',3,'draft'),
+((SELECT id FROM monster_families WHERE code='undying'),'ghoul','食屍鬼','Ghoul','以屍體為食的地底生物，曾經是人類。',1,3,'["haunting"]',1,'draft'),
+((SELECT id FROM monster_families WHERE code='undying'),'servant_of_glaaki','格拉基之僕從','Servant of Glaaki','被格拉基的棘刺刺穿後變成不死僕從。',2,3,'["haunting","curse_on_death"]',2,'draft'),
+((SELECT id FROM monster_families WHERE code='undying'),'crawling_one','蠕行者','Crawling One','由無數蠕蟲構成的不死存在。',3,4,'["swarm"]',3,'draft'),
+((SELECT id FROM monster_families WHERE code='independent'),'shoggoth','修格斯','Shoggoth','不定形僕從，古老者創造的生物兵器。極度危險。',3,4,'["massive"]',1,'draft'),
+((SELECT id FROM monster_families WHERE code='independent'),'nightgaunt','夜魘','Nightgaunt','幻夢境生物，無面的黑色飛行生物。',2,3,'["flying"]',2,'draft'),
+((SELECT id FROM monster_families WHERE code='independent'),'colour_out_of_space','星之彩','Colour out of Space','來自宇宙的顏色，非物質存在。',3,4,'[]',3,'draft'),
+((SELECT id FROM monster_families WHERE code='independent'),'mi_go','米·戈','Mi-Go','猶格斯星的真菌生物，外星科學家。',2,3,'["flying"]',4,'draft'),
+((SELECT id FROM monster_families WHERE code='independent'),'elder_thing','古老者','Elder Thing','又稱古老種族，南極文明的創造者。',3,4,'[]',5,'draft')
+ON CONFLICT (code) DO NOTHING;
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -724,6 +931,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_007_SQL);
     await client.query(MIGRATION_008_SQL);
     await client.query(MIGRATION_009_SQL);
+    await client.query(MIGRATION_010_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

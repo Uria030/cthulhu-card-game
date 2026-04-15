@@ -6,29 +6,877 @@
   <title>敵人設計器 — Admin Module</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    .main-layout{display:flex;gap:0;min-height:calc(100vh - 50px)}
+    .panel-left{position:fixed;top:50px;left:0;bottom:0;width:280px;background:var(--bg-secondary);border-right:1px solid var(--border);overflow-y:auto;z-index:50;display:flex;flex-direction:column;transition:transform .25s}
+    .panel-left.collapsed{transform:translateX(-100%)}
+    .panel-main{flex:1;margin-left:280px;padding:1rem 1.5rem;overflow-y:auto;transition:margin-left .25s}
+    .panel-main.expanded{margin-left:0}
+
+    .panel-section-title{padding:.5rem 1rem;font-family:'Cinzel',serif;font-size:.75rem;color:var(--gold-dim);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.05em}
+
+    .family-item{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;cursor:pointer;border-left:3px solid transparent;transition:background .15s;font-size:.875rem}
+    .family-item:hover{background:var(--bg-card)}
+    .family-item.active{border-left-color:var(--gold);background:var(--bg-card)}
+    .family-emoji{font-size:1.125rem;width:1.5rem;text-align:center}
+    .family-name{flex:1}
+    .family-stat{font-size:.7rem;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace}
+
+    .species-item,.variant-item{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;cursor:pointer;border-left:3px solid transparent;transition:background .15s;font-size:.8125rem}
+    .species-item:hover,.variant-item:hover{background:var(--bg-card)}
+    .species-item.active,.variant-item.active{border-left-color:var(--gold);background:var(--bg-card)}
+    .species-tier{font-size:.625rem;color:var(--text-tertiary)}
+    .tier-badge{display:inline-block;padding:0 .375rem;border-radius:3px;font-size:.6875rem;font-family:'JetBrains Mono',monospace;border:1px solid}
+    .add-btn{display:block;width:calc(100% - 1.5rem);margin:.5rem .75rem;padding:.375rem;text-align:center;font-size:.75rem;cursor:pointer;border:1px dashed var(--border);border-radius:6px;color:var(--text-tertiary);background:transparent;transition:all .2s}
+    .add-btn:hover{border-color:var(--gold);color:var(--gold)}
+
+    .toolbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem}
+    .toolbar .spacer{flex:1}
+    .tab-group{display:flex;gap:0}
+    .tab-btn{padding:.4rem 1rem;border:1px solid var(--border);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;font-size:.8125rem;font-family:'Noto Sans TC',sans-serif;transition:all .2s}
+    .tab-btn:first-child{border-radius:6px 0 0 6px}
+    .tab-btn:last-child{border-radius:0 6px 6px 0}
+    .tab-btn.active{background:var(--gold);color:var(--bg-primary);border-color:var(--gold);font-weight:500}
+
+    .section-title{font-family:'Cinzel',serif;font-size:.875rem;color:var(--gold-dim);text-transform:uppercase;letter-spacing:.05em;margin:1.25rem 0 .75rem;padding-bottom:.375rem;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;display:flex;align-items:center;gap:.5rem}
+    .section-title::before{content:'\25B8';font-size:.625rem;transition:transform .15s}
+    .section-title.open::before{transform:rotate(90deg)}
+    .section-content{overflow:hidden;transition:max-height .25s ease}
+    .section-content.collapsed{max-height:0!important}
+
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem}
+    .form-grid .full{grid-column:1/-1}
+    .form-group{display:flex;flex-direction:column}
+    .form-group label{font-size:.75rem;color:var(--text-secondary);margin-bottom:.2rem}
+
+    .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.625rem;margin-bottom:.75rem}
+    .stat-card{background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:.625rem;text-align:center}
+    .stat-card label{font-size:.6875rem;color:var(--text-secondary);display:block;margin-bottom:.25rem}
+    .stat-card input{width:100%;text-align:center;font-size:1.125rem;font-family:'JetBrains Mono',monospace;font-weight:500;background:transparent;border:none;color:var(--text-primary)}
+    .stat-card input:focus{outline:none;color:var(--gold)}
+    .stat-card .hint{font-size:.625rem;color:var(--text-tertiary);margin-top:.2rem}
+    .stat-card.warn{border-color:var(--warning)}
+
+    .kw-group{margin-bottom:.75rem}
+    .kw-group-title{font-size:.75rem;color:var(--text-secondary);margin-bottom:.375rem}
+    .kw-tag{display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .5rem;margin:.125rem;border:1px solid var(--border);border-radius:4px;font-size:.75rem;cursor:pointer;transition:all .15s;user-select:none}
+    .kw-tag.selected{border-color:var(--gold);color:var(--gold);background:var(--gold-glow)}
+    .kw-tag.inherited{border-style:dashed;opacity:.6}
+
+    .status-row{display:flex;gap:.5rem;align-items:center;margin-bottom:.375rem;flex-wrap:wrap}
+    .status-row select,.status-row input{font-size:.8125rem}
+    .freq-select{width:100px}
+
+    .attack-card-item{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:.75rem;margin-bottom:.625rem;transition:border-color .2s}
+    .attack-card-item:hover{border-color:var(--border-hover)}
+    .attack-card-item.shared{border-left:3px solid var(--gold-dim);background:rgba(201,168,76,.05)}
+    .ac-header{display:flex;align-items:center;gap:.5rem;margin-bottom:.375rem;flex-wrap:wrap}
+    .ac-name{font-weight:500}
+    .ac-detail{font-size:.8125rem;color:var(--text-secondary)}
+    .ac-narrative{font-size:.75rem;color:var(--text-tertiary);margin-top:.25rem;font-style:italic}
+    .ac-actions{margin-left:auto;display:flex;gap:.25rem}
+
+    .defense-dist{margin-bottom:.75rem}
+    .dist-bar{display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem;font-size:.75rem}
+    .dist-bar-label{width:3rem;text-align:right;color:var(--text-secondary)}
+    .dist-bar-fill{height:8px;border-radius:4px;transition:width .3s}
+    .dist-bar-pct{width:3rem;color:var(--text-tertiary)}
+
+    .narrative-row{margin-bottom:.5rem}
+    .narrative-row label{font-size:.6875rem;color:var(--text-tertiary);margin-bottom:.125rem;display:block}
+    .narrative-row textarea{width:100%;font-size:.8125rem;resize:vertical}
+
+    .overview-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.5rem}
+    .overview-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:.875rem;text-align:center;cursor:pointer;transition:border-color .2s}
+    .overview-card:hover{border-color:var(--gold)}
+    .overview-card.inactive{opacity:.4;border-style:dashed}
+    .ov-emoji{font-size:1.5rem;margin-bottom:.25rem}
+    .ov-name{font-size:.875rem;margin-bottom:.25rem}
+    .ov-stats{font-size:.75rem;color:var(--text-secondary);line-height:1.5}
+    .ov-bar{height:4px;background:var(--border);border-radius:2px;margin-top:.5rem;overflow:hidden}
+    .ov-bar-fill{height:100%;background:var(--gold);border-radius:2px}
+
+    .matrix-table{width:100%;border-collapse:collapse;margin-bottom:1.5rem}
+    .matrix-table th,.matrix-table td{text-align:center;padding:.5rem;font-size:.8125rem;border:1px solid var(--border)}
+    .matrix-table th{background:var(--bg-secondary);color:var(--gold-dim);font-size:.75rem}
+
+    .float-save{position:fixed;bottom:1.5rem;right:1.5rem;z-index:100;display:none}
+    .float-save.visible{display:block}
+    .float-save .btn{box-shadow:0 2px 12px rgba(0,0,0,.4)}
+    .float-save.dirty .btn{box-shadow:0 0 15px var(--gold-glow),0 2px 12px rgba(0,0,0,.4)}
+
+    .ai-dialog{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:200;background:rgba(0,0,0,.7);align-items:center;justify-content:center}
+    .ai-dialog.open{display:flex}
+    .ai-dialog-body{background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:1.5rem;width:520px;max-width:90vw}
+    .ai-dialog-title{font-family:'Cinzel',serif;color:var(--gold);margin-bottom:1rem}
+    .ai-status{font-size:.8125rem;color:var(--text-tertiary);margin-top:.5rem;min-height:1.2em}
+
+    @media(max-width:1200px){.stat-grid{grid-template-columns:repeat(2,1fr)}.overview-grid{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:768px){.panel-left{transform:translateX(-100%)}.panel-main{margin-left:0}.form-grid{grid-template-columns:1fr}.stat-grid{grid-template-columns:1fr 1fr}.overview-grid{grid-template-columns:1fr 1fr}}
+  </style>
 </head>
 <body>
-
   <nav class="admin-nav">
-    <a href="index.html" class="nav-back">← 返回首頁</a>
+    <a href="index.html" class="nav-back">&larr; 返回首頁</a>
+    <button class="btn" onclick="toggleLeftPanel()" style="padding:.25rem .5rem;font-size:.75rem">&#9776;</button>
     <span class="nav-title">敵人設計器</span>
     <span class="nav-code">MOD-03</span>
   </nav>
 
-  <div class="container">
-    <div class="page-header">
-      <h1>敵人設計器</h1>
-      <p class="page-sub">Enemy Designer</p>
-      <p class="page-desc">設計敵人單位，設定階層、屬性與行為模式</p>
+  <div class="main-layout">
+    <div class="panel-left" id="panelLeft">
+      <div class="panel-section-title">Families</div>
+      <div id="familyList"></div>
+      <div class="panel-section-title">Species</div>
+      <div id="speciesList"></div>
+      <button class="add-btn" onclick="createSpecies()">+ 新增種族</button>
+      <div class="panel-section-title">Variants</div>
+      <div id="variantList"></div>
+      <button class="add-btn" onclick="createVariant()">+ 新增變體</button>
     </div>
 
-    <div class="placeholder-message">
-      <div class="placeholder-icon">🔧</div>
-      <div class="placeholder-text">此模組尚在開發中</div>
-      <div class="placeholder-sub">Module under development</div>
+    <div class="panel-main" id="panelMain">
+      <div class="toolbar">
+        <div class="tab-group">
+          <button class="tab-btn active" data-tab="editor" onclick="switchTab('editor')">怪物編輯</button>
+          <button class="tab-btn" data-tab="overview" onclick="switchTab('overview')">家族總覽</button>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn" onclick="promptApiKey()">設定 API Key</button>
+      </div>
+
+      <!-- Editor Tab -->
+      <div id="tabEditor">
+        <div id="welcomeMsg" style="text-align:center;padding:3rem;color:var(--text-tertiary)">
+          <div style="font-size:2rem;margin-bottom:.5rem">🐙</div>
+          <div>選擇左側家族、種族和變體開始設計</div>
+        </div>
+
+        <!-- Family Info (read-only summary) -->
+        <div id="familyInfoPanel" style="display:none">
+          <div class="section-title open">家族資訊</div>
+          <div class="section-content" id="secFamilyInfo"></div>
+        </div>
+
+        <!-- Species Editor -->
+        <div id="speciesPanel" style="display:none">
+          <div class="section-title open" onclick="toggleSection('secSpecies')">種族基本資訊</div>
+          <div class="section-content" id="secSpecies">
+            <div class="form-grid">
+              <div class="form-group"><label>代碼</label><input id="sp_code" oninput="markDirty()"></div>
+              <div class="form-group"><label>設計狀態</label><select id="sp_status" onchange="markDirty()"><option value="draft">草稿</option><option value="review">審核</option><option value="approved">定稿</option></select></div>
+              <div class="form-group"><label>中文名</label><input id="sp_name_zh" oninput="markDirty()"></div>
+              <div class="form-group"><label>英文名</label><input id="sp_name_en" oninput="markDirty()"></div>
+              <div class="form-group full"><label>種族描述</label><textarea id="sp_desc" rows="2" oninput="markDirty()"></textarea></div>
+              <div class="form-group full"><label>神話學背景</label><textarea id="sp_lore" rows="2" oninput="markDirty()"></textarea></div>
+              <div class="form-group"><label>位階下限</label><select id="sp_tier_min" onchange="markDirty()"><option value="1">1 雜兵</option><option value="2">2 威脅</option><option value="3">3 精英</option><option value="4">4 頭目</option><option value="5">5 巨頭</option></select></div>
+              <div class="form-group"><label>位階上限</label><select id="sp_tier_max" onchange="markDirty()"><option value="1">1 雜兵</option><option value="2">2 威脅</option><option value="3">3 精英</option><option value="4">4 頭目</option><option value="5">5 巨頭</option></select></div>
+              <div class="form-group full"><label>設計備註</label><textarea id="sp_notes" rows="2" oninput="markDirty()"></textarea></div>
+            </div>
+          </div>
+          <div id="speciesVariantTable"></div>
+        </div>
+
+        <!-- Variant Editor -->
+        <div id="variantPanel" style="display:none">
+          <!-- Basic Info -->
+          <div class="section-title open" onclick="toggleSection('secVarBasic')">基本資訊</div>
+          <div class="section-content" id="secVarBasic">
+            <div class="form-grid">
+              <div class="form-group"><label>代碼</label><input id="v_code" readonly></div>
+              <div class="form-group"><label>位階</label><select id="v_tier" onchange="onTierChange();markDirty()"></select></div>
+              <div class="form-group"><label>中文名</label><input id="v_name_zh" oninput="markDirty()"></div>
+              <div class="form-group"><label>英文名</label><input id="v_name_en" oninput="markDirty()"></div>
+              <div class="form-group"><label>不可擊敗</label><label style="display:flex;align-items:center;gap:.5rem;margin-top:.25rem"><input type="checkbox" id="v_undefeatable" onchange="markDirty()" style="width:auto"> 巨頭劇情怪</label></div>
+              <div class="form-group"><label>設計狀態</label><select id="v_status" onchange="markDirty()"><option value="draft">草稿</option><option value="review">審核</option><option value="approved">定稿</option></select></div>
+              <div class="form-group full"><label>描述</label><textarea id="v_desc" rows="2" oninput="markDirty()"></textarea></div>
+            </div>
+          </div>
+
+          <!-- Combat Stats -->
+          <div class="section-title open" onclick="toggleSection('secVarStats')">核心數值</div>
+          <div class="section-content" id="secVarStats">
+            <div class="stat-grid" id="statGrid"></div>
+            <div style="font-size:.75rem;color:var(--gold-dim);margin:.5rem 0">恐懼系統</div>
+            <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
+              <div class="stat-card"><label>恐懼半徑</label><input type="number" id="v_fear_radius" min="0" max="5" oninput="markDirty()"><div class="hint" id="hintFearR"></div></div>
+              <div class="stat-card"><label>恐懼值</label><input type="number" id="v_fear_value" min="0" max="10" oninput="markDirty()"><div class="hint" id="hintFearV"></div></div>
+              <div class="stat-card"><label>觸發類型</label><select id="v_fear_type" onchange="markDirty()" style="font-size:.8125rem;text-align:center"></select></div>
+            </div>
+            <div style="font-size:.75rem;color:var(--gold-dim);margin:.5rem 0">移動</div>
+            <div class="stat-grid" style="grid-template-columns:1fr 1fr">
+              <div class="stat-card"><label>移動速度</label><input type="number" id="v_move_speed" min="0" max="5" oninput="markDirty()"></div>
+              <div class="stat-card"><label>移動類型</label><select id="v_move_type" onchange="markDirty()" style="font-size:.8125rem;text-align:center"></select></div>
+            </div>
+          </div>
+
+          <!-- Keywords & Status -->
+          <div class="section-title open" onclick="toggleSection('secVarKw')">詞綴與狀態</div>
+          <div class="section-content" id="secVarKw">
+            <div id="kwContainer"></div>
+            <div style="font-size:.75rem;color:var(--gold-dim);margin:.75rem 0 .375rem">元素弱點 / 抗性 / 免疫</div>
+            <div id="elementContainer"></div>
+            <div style="font-size:.75rem;color:var(--gold-dim);margin:.75rem 0 .375rem">施加的負面狀態</div>
+            <div id="inflictedContainer"></div>
+            <button class="btn" onclick="addInflictedStatus()" style="font-size:.75rem;padding:.25rem .5rem;margin-top:.25rem">+ 新增</button>
+            <div style="font-size:.75rem;color:var(--gold-dim);margin:.75rem 0 .375rem">自身正面狀態</div>
+            <div id="selfBuffContainer"></div>
+            <button class="btn" onclick="addSelfBuff()" style="font-size:.75rem;padding:.25rem .5rem;margin-top:.25rem">+ 新增</button>
+          </div>
+
+          <!-- AI Behavior -->
+          <div class="section-title open" onclick="toggleSection('secVarAI')">AI 行為</div>
+          <div class="section-content" id="secVarAI">
+            <div class="form-grid">
+              <div class="form-group"><label>AI 偏好</label><select id="v_ai_pref" onchange="markDirty()"></select></div>
+              <div class="form-group"><label>偏好參數</label><input id="v_ai_param" oninput="markDirty()" placeholder="lowest_attr 時填屬性"></div>
+              <div class="form-group full"><label>AI 行為補充</label><textarea id="v_ai_notes" rows="2" oninput="markDirty()"></textarea></div>
+            </div>
+            <div id="resolvedAI" style="font-size:.8125rem;color:var(--text-secondary);margin-top:.25rem"></div>
+          </div>
+
+          <!-- Boss Section (tier >= 4) -->
+          <div id="bossSection" style="display:none">
+            <div class="section-title open" onclick="toggleSection('secBoss')">頭目/巨頭專屬</div>
+            <div class="section-content" id="secBoss">
+              <div class="form-grid">
+                <div class="form-group"><label>階段數</label><input type="number" id="v_phase_count" min="1" max="5" value="1" oninput="markDirty()"></div>
+              </div>
+              <div style="font-size:.75rem;color:var(--gold-dim);margin:.5rem 0">傳奇行動</div>
+              <div id="legendaryContainer"></div>
+              <button class="btn" onclick="addLegendary()" style="font-size:.75rem;padding:.25rem .5rem;margin-top:.25rem">+ 新增傳奇行動</button>
+            </div>
+          </div>
+
+          <!-- Attack Cards -->
+          <div class="section-title open" onclick="toggleSection('secAttacks')">招式池</div>
+          <div class="section-content" id="secAttacks">
+            <div class="defense-dist" id="defenseDist"></div>
+            <div id="attackCardList"></div>
+            <div style="display:flex;gap:.5rem;margin-top:.5rem">
+              <button class="btn" onclick="createAttackCard()">+ 新增專屬招式</button>
+              <button class="btn" onclick="aiGeneratePool()">AI 批次生成</button>
+            </div>
+            <div id="attackHint" style="font-size:.75rem;color:var(--warning);margin-top:.375rem"></div>
+          </div>
+
+          <!-- Status Descriptions -->
+          <div class="section-title open" onclick="toggleSection('secNarrative')">敘事狀態描述</div>
+          <div class="section-content" id="secNarrative">
+            <div id="narrativeContainer"></div>
+            <button class="btn" style="margin-top:.5rem" onclick="aiGenerateNarrative()">AI 生成全部敘事</button>
+          </div>
+
+          <!-- Design Checklist -->
+          <div id="designChecklist" style="font-size:.8125rem;margin:1rem 0;padding:.75rem;background:var(--bg-card);border:1px solid var(--border);border-radius:8px"></div>
+        </div>
+      </div>
+
+      <!-- Overview Tab -->
+      <div id="tabOverview" style="display:none">
+        <h2 style="font-size:1.125rem;margin-bottom:1rem">設計進度總覽</h2>
+        <div class="overview-grid" id="overviewGrid"></div>
+        <h3 style="font-size:.9375rem;margin-bottom:.75rem">家族速查對照表</h3>
+        <div style="overflow-x:auto" id="familyMatrix"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Save -->
+  <div class="float-save" id="floatSave"><button class="btn btn-primary" onclick="saveCurrentEditor()">儲存 (Ctrl+S)</button></div>
+
+  <!-- AI Dialog -->
+  <div class="ai-dialog" id="aiDialog">
+    <div class="ai-dialog-body">
+      <div class="ai-dialog-title" id="aiDialogTitle">AI 生成</div>
+      <div id="aiDialogContext" style="font-size:.8125rem;color:var(--text-secondary);margin-bottom:.75rem"></div>
+      <div class="form-group"><label>設計方向補充</label><textarea id="aiUserInput" rows="3" placeholder="可選"></textarea></div>
+      <div class="ai-status" id="aiStatus"></div>
+      <div style="display:flex;gap:.5rem;margin-top:1rem;justify-content:flex-end">
+        <button class="btn" onclick="closeAiDialog()">取消</button>
+        <button class="btn btn-primary" id="aiGenBtn" onclick="runAiGenerate()">生成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Attack Card Edit Dialog -->
+  <div class="ai-dialog" id="acDialog">
+    <div class="ai-dialog-body" style="width:600px">
+      <div class="ai-dialog-title">招式卡編輯</div>
+      <div class="form-grid">
+        <div class="form-group"><label>代碼</label><input id="ac_code"></div>
+        <div class="form-group"><label>權重</label><input type="number" id="ac_weight" value="10" min="1" max="30"></div>
+        <div class="form-group"><label>中文名</label><input id="ac_name_zh"></div>
+        <div class="form-group"><label>英文名</label><input id="ac_name_en"></div>
+        <div class="form-group"><label>防禦屬性</label><select id="ac_def_attr"></select></div>
+        <div class="form-group"><label>傷害元素</label><select id="ac_dmg_elem"></select></div>
+        <div class="form-group"><label>物理傷害</label><input type="number" id="ac_dmg_phys" min="0" max="20"></div>
+        <div class="form-group"><label>恐懼傷害</label><input type="number" id="ac_dmg_horror" min="0" max="20"></div>
+      </div>
+      <div class="narrative-row"><label>攻擊敘事</label><textarea id="ac_narr_atk" rows="2"></textarea></div>
+      <div class="narrative-row"><label>命中敘事</label><textarea id="ac_narr_hit" rows="2"></textarea></div>
+      <div class="narrative-row"><label>閃避敘事</label><textarea id="ac_narr_miss" rows="2"></textarea></div>
+      <div style="display:flex;gap:.5rem;margin-top:1rem;justify-content:flex-end">
+        <button class="btn" onclick="closeAcDialog()">取消</button>
+        <button class="btn btn-primary" onclick="saveAttackCard()">儲存招式卡</button>
+      </div>
     </div>
   </div>
 
   <script src="admin-shared.js"></script>
+  <script>
+const el=id=>document.getElementById(id);
+const intVal=id=>parseInt(el(id).value,10)||0;
+
+// State
+let families=[], allSpecies=[], currentFamily=null, currentSpecies=null, currentVariant=null;
+let variantData=null; // full variant data with resolved
+let dirty=false, aiMode=null, editingAcId=null;
+
+document.addEventListener('DOMContentLoaded', async()=>{
+  populateSelects();
+  await loadFamilies();
+});
+
+function populateSelects(){
+  // Tier select for variant
+  const tierOpts=Object.entries(MONSTER_TIERS).map(([k,v])=>`<option value="${k}">${v.name_zh}</option>`).join('');
+  el('v_tier').innerHTML=tierOpts;
+  // Fear type
+  el('v_fear_type').innerHTML=Object.entries(FEAR_TYPES).map(([k,v])=>`<option value="${k}">${v.name_zh}</option>`).join('');
+  // Move type
+  el('v_move_type').innerHTML=Object.entries(MOVEMENT_TYPES).map(([k,v])=>`<option value="${k}">${v.name_zh}</option>`).join('');
+  // AI pref
+  el('v_ai_pref').innerHTML='<option value="">使用繼承預設</option>'+Object.entries(AI_PREFERENCES).map(([k,v])=>`<option value="${k}">${v.name_zh}</option>`).join('');
+  // Attack card selects
+  el('ac_def_attr').innerHTML=Object.entries(ATTRIBUTES).map(([k,v])=>`<option value="${k}">${v.zh}</option>`).join('');
+  el('ac_dmg_elem').innerHTML=Object.entries(ATTACK_ELEMENTS).map(([k,v])=>`<option value="${k}">${v.name_zh}</option>`).join('');
+}
+
+// ── API ──
+const API='/api/admin/monsters';
+async function loadFamilies(){
+  try{const r=await adminFetch(`${API}/families`);const d=await r.json();if(d.success)families=d.data||d.families||[];renderFamilyList();}catch(e){console.error(e)}
+}
+async function loadSpeciesForFamily(familyId){
+  try{const r=await adminFetch(`${API}/species?family_id=${familyId}`);const d=await r.json();allSpecies=d.success?(d.data||d.species||[]):[];renderSpeciesList();}catch(e){console.error(e)}
+}
+async function loadSpeciesDetail(id){
+  try{const r=await adminFetch(`${API}/species/${id}`);const d=await r.json();if(d.success){currentSpecies=d.data||d.species;showSpeciesEditor();}}catch(e){console.error(e)}
+}
+async function loadVariantDetail(id){
+  try{const r=await adminFetch(`${API}/variants/${id}`);const d=await r.json();if(d.success){variantData=d.data||d.variant;currentVariant=variantData;showVariantEditor();}}catch(e){console.error(e)}
+}
+async function loadVariantsForSpecies(speciesId){
+  try{const r=await adminFetch(`${API}/variants?species_id=${speciesId}`);const d=await r.json();return d.success?(d.data||d.variants||[]):[];}catch(e){return[]}
+}
+
+// ── Left panel ──
+function renderFamilyList(){
+  el('familyList').innerHTML=families.filter(f=>f.is_active!==false).map(f=>{
+    const emoji=FAMILY_EMOJIS[f.code]||'❓';
+    const sc=f.species_count||0;const vc=f.variant_count||0;
+    return `<div class="family-item ${currentFamily?.id===f.id?'active':''}" onclick="selectFamily('${f.id}')">
+      <span class="family-emoji">${emoji}</span><span class="family-name">${f.name_zh}</span>
+      <span class="family-stat">${sc}/${vc}</span></div>`;
+  }).join('');
+}
+
+function renderSpeciesList(){
+  el('speciesList').innerHTML=allSpecies.map(s=>{
+    const tMin=MONSTER_TIERS[s.tier_min]?.name_zh||'';const tMax=MONSTER_TIERS[s.tier_max]?.name_zh||'';
+    return `<div class="species-item ${currentSpecies?.id===s.id?'active':''}" onclick="selectSpecies('${s.id}')">
+      <span style="flex:1">${s.name_zh}</span><span class="species-tier">${tMin}–${tMax}</span></div>`;
+  }).join('');
+}
+
+async function renderVariantList(){
+  if(!currentSpecies)return;
+  const variants=await loadVariantsForSpecies(currentSpecies.id);
+  el('variantList').innerHTML=variants.map(v=>{
+    const t=MONSTER_TIERS[v.tier];const col=t?.color||'#555';
+    return `<div class="variant-item ${currentVariant?.id===v.id?'active':''}" onclick="selectVariant('${v.id}')">
+      <span style="flex:1">${v.name_zh}</span>
+      <span class="tier-badge" style="border-color:${col};color:${col}">${t?.name_zh||''}</span></div>`;
+  }).join('');
+}
+
+async function selectFamily(id){
+  currentFamily=families.find(f=>f.id===id);currentSpecies=null;currentVariant=null;variantData=null;dirty=false;
+  renderFamilyList();
+  await loadSpeciesForFamily(id);
+  el('variantList').innerHTML='';
+  showFamilyInfo();
+}
+
+async function selectSpecies(id){
+  currentSpecies=allSpecies.find(s=>s.id===id)||null;currentVariant=null;variantData=null;dirty=false;
+  renderSpeciesList();
+  await renderVariantList();
+  await loadSpeciesDetail(id);
+}
+
+async function selectVariant(id){
+  dirty=false;
+  await loadVariantDetail(id);
+  renderVariantList();
+}
+
+// ── Panels ──
+function hideAllPanels(){['welcomeMsg','familyInfoPanel','speciesPanel','variantPanel'].forEach(id=>el(id).style.display='none');el('floatSave').classList.remove('visible')}
+
+function showFamilyInfo(){
+  hideAllPanels();el('familyInfoPanel').style.display='';
+  if(!currentFamily)return;
+  const f=currentFamily;
+  const emoji=FAMILY_EMOJIS[f.code]||'';
+  el('secFamilyInfo').innerHTML=`<div style="font-size:1.5rem;text-align:center;margin:.5rem 0">${emoji}</div>
+    <h3 style="text-align:center;margin-bottom:.25rem">${f.name_zh} ${f.name_en||''}</h3>
+    <p style="text-align:center;font-size:.8125rem;color:var(--text-secondary);margin-bottom:.75rem">${f.patron_zh?f.patron_zh+' — '+f.patron_title_zh:f.family_type}</p>
+    <p style="font-size:.875rem;margin-bottom:.5rem">${f.theme_zh||''}</p>
+    <div class="form-grid" style="font-size:.8125rem">
+      <div><span style="color:var(--text-secondary)">攻擊元素：</span>${ATTACK_ELEMENTS[f.attack_element]?.name_zh||'混合'}</div>
+      <div><span style="color:var(--text-secondary)">傷害偏重：</span>${f.damage_focus==='hp'?'HP':'SAN'}</div>
+      <div><span style="color:var(--text-secondary)">AI 偏好：</span>${AI_PREFERENCES[f.ai_preference]?.name_zh||'—'}</div>
+      <div><span style="color:var(--text-secondary)">戰鬥節奏：</span>${f.combat_tempo_zh||'—'}</div>
+    </div>`;
+}
+
+function showSpeciesEditor(){
+  hideAllPanels();el('speciesPanel').style.display='';el('floatSave').classList.add('visible');
+  if(!currentSpecies)return;
+  const s=currentSpecies;
+  el('sp_code').value=s.code||'';el('sp_name_zh').value=s.name_zh||'';el('sp_name_en').value=s.name_en||'';
+  el('sp_desc').value=s.description_zh||'';el('sp_lore').value=s.lore_zh||'';el('sp_notes').value=s.design_notes||'';
+  el('sp_tier_min').value=s.tier_min||1;el('sp_tier_max').value=s.tier_max||3;el('sp_status').value=s.design_status||'draft';
+  dirty=false;updateFloatSave();
+}
+
+function showVariantEditor(){
+  hideAllPanels();el('variantPanel').style.display='';el('floatSave').classList.add('visible');
+  if(!variantData)return;
+  const v=variantData;
+  el('v_code').value=v.code||'';el('v_name_zh').value=v.name_zh||'';el('v_name_en').value=v.name_en||'';
+  el('v_tier').value=v.tier||1;el('v_undefeatable').checked=!!v.is_undefeatable;
+  el('v_desc').value=v.description_zh||'';el('v_status').value=v.design_status||'draft';
+  el('v_fear_radius').value=v.fear_radius??1;el('v_fear_value').value=v.fear_value??1;el('v_fear_type').value=v.fear_type||'first_sight';
+  el('v_move_speed').value=v.movement_speed??1;el('v_move_type').value=v.movement_type||'ground';
+  el('v_ai_pref').value=v.ai_preference||'';el('v_ai_param').value=v.ai_preference_param||'';el('v_ai_notes').value=v.ai_behavior_notes||'';
+  el('v_phase_count').value=v.phase_count||1;
+
+  renderStatGrid(v);
+  renderKeywords(v);
+  renderElementConfig(v);
+  renderInflictedStatuses(v);
+  renderSelfBuffs(v);
+  renderResolvedAI(v);
+  renderAttackCards(v);
+  renderNarrative(v);
+  renderDesignChecklist(v);
+
+  el('bossSection').style.display=(v.tier>=4)?'':'none';
+  // Hint fear ranges from family
+  if(currentFamily){
+    const fr=currentFamily.fear_radius_range||[1,2];const fv=currentFamily.fear_value_range||[1,3];
+    el('hintFearR').textContent=`家族: ${fr[0]}–${fr[1]}`;
+    el('hintFearV').textContent=`家族: ${fv[0]}–${fv[1]}`;
+  }
+  dirty=false;updateFloatSave();
+}
+
+// ── Stat Grid ──
+const STAT_FIELDS=[
+  {id:'v_dc',label:'DC',key:'dc'},{id:'v_hp',label:'HP',key:'hp_base'},
+  {id:'v_hpp',label:'HP/人',key:'hp_per_player'},{id:'v_spell',label:'法術防禦',key:'spell_defense'},
+  {id:'v_dmg',label:'物理傷害',key:'damage_physical'},{id:'v_horror',label:'恐懼傷害',key:'damage_horror'},
+  {id:'v_regen',label:'每回合回血',key:'regen_per_round'},{id:'v_attacks',label:'攻擊次數',key:'attacks_per_round'}
+];
+function renderStatGrid(v){
+  const tier=v.tier||1;const t=ENEMY_TIERS[tier];
+  el('statGrid').innerHTML=STAT_FIELDS.map(f=>{
+    let hint='';
+    if(f.key==='dc')hint=`建議: ${t.dc}`;
+    else if(f.key==='hp_base')hint=`${t.hpRange[0]}–${t.hpRange[1]}`;
+    else if(f.key==='damage_physical')hint=`${t.dmgRange[0]}–${t.dmgRange[1]}`;
+    else if(f.key==='spell_defense'){const sd=Array.isArray(t.spellDef)?t.spellDef:[t.spellDef,t.spellDef];hint=`${sd[0]}–${sd[1]}`;}
+    else if(f.key==='attacks_per_round'){const a=Array.isArray(t.attacks)?t.attacks:[t.attacks,t.attacks];hint=`${a[0]}–${a[1]||a[0]}`;}
+    return `<div class="stat-card"><label>${f.label}</label><input type="number" id="${f.id}" value="${v[f.key]??0}" oninput="markDirty()"><div class="hint">${hint}</div></div>`;
+  }).join('');
+}
+
+function onTierChange(){
+  const tier=intVal('v_tier');
+  const defs=TIER_DEFAULTS[tier];
+  if(defs&&confirm('是否將數值重置為新位階的建議中間值？')){
+    if(el('v_dc'))el('v_dc').value=defs.dc;
+    if(el('v_hp'))el('v_hp').value=defs.hp_base;
+    if(el('v_dmg'))el('v_dmg').value=defs.damage_physical;
+    if(el('v_spell'))el('v_spell').value=defs.spell_defense;
+    if(el('v_attacks'))el('v_attacks').value=defs.attacks_per_round;
+  }
+  el('bossSection').style.display=(tier>=4)?'':'none';
+  if(variantData)renderStatGrid({...variantData,tier,dc:intVal('v_dc'),hp_base:intVal('v_hp'),damage_physical:intVal('v_dmg'),spell_defense:intVal('v_spell'),attacks_per_round:intVal('v_attacks')});
+}
+
+// ── Keywords ──
+function renderKeywords(v){
+  const kws=v.keywords||[];
+  const cats={movement:'移動類',engagement:'交戰類',death_effect:'死亡效果類',defense:'防禦類',special:'特殊類'};
+  let html='';
+  for(const[cat,label] of Object.entries(cats)){
+    const group=Object.entries(MONSTER_KEYWORDS).filter(([_,k])=>k.category===cat);
+    if(!group.length)continue;
+    html+=`<div class="kw-group"><div class="kw-group-title">${label}</div>`;
+    for(const[code,kw] of group){
+      const sel=kws.includes(code)?'selected':'';
+      html+=`<span class="kw-tag ${sel}" onclick="toggleKw(this,'${code}')" title="${kw.effect_zh}">${kw.name_zh}</span>`;
+    }
+    html+=`</div>`;
+  }
+  el('kwContainer').innerHTML=html;
+}
+function toggleKw(elem,code){elem.classList.toggle('selected');markDirty();}
+function collectKeywords(){return [...el('kwContainer').querySelectorAll('.kw-tag.selected')].map(t=>t.textContent).map(zh=>{const e=Object.entries(MONSTER_KEYWORDS).find(([_,v])=>v.name_zh===zh);return e?e[0]:null}).filter(Boolean)}
+// Actually collect by checking which codes are toggled
+function collectKwCodes(){
+  const tags=el('kwContainer').querySelectorAll('.kw-tag.selected');
+  const codes=[];
+  tags.forEach(t=>{const oc=t.getAttribute('onclick');const m=oc.match(/'([^']+)'/);if(m)codes.push(m[1]);});
+  return codes;
+}
+
+// ── Element config ──
+function renderElementConfig(v){
+  const resolved=v.resolved||{};
+  const elems=['physical','fire','ice','electric']; // no arcane!
+  const makeRow=(label,field)=>{
+    const vals=v[field]||resolved[field]||[];const isInherited=!v[field]&&!!resolved[field];
+    return `<div style="margin-bottom:.375rem"><span style="font-size:.75rem;color:var(--text-secondary);width:3rem;display:inline-block">${label}：</span>
+      ${elems.map(e=>{const sel=vals.includes(e)?'selected':'';const inh=isInherited?'inherited':'';
+        return `<span class="kw-tag ${sel} ${inh}" onclick="toggleElem(this)" data-field="${field}" data-elem="${e}">${ATTACK_ELEMENTS[e]?.name_zh||e}</span>`;}).join('')}</div>`;
+  };
+  el('elementContainer').innerHTML=makeRow('弱點','weaknesses')+makeRow('抗性','resistances')+makeRow('免疫','immunities');
+}
+function toggleElem(elem){elem.classList.toggle('selected');elem.classList.remove('inherited');markDirty();}
+function collectElementField(field){return [...el('elementContainer').querySelectorAll(`[data-field="${field}"].selected`)].map(t=>t.dataset.elem)}
+
+// ── Status lists ──
+let inflictedStatuses=[], selfBuffs=[];
+function renderInflictedStatuses(v){
+  inflictedStatuses=(v.inflicted_statuses||v.resolved?.inflicted_statuses||[]).map(s=>({...s}));
+  renderStatusList('inflictedContainer',inflictedStatuses,NEGATIVE_STATUSES);
+}
+function renderSelfBuffs(v){
+  selfBuffs=(v.self_buffs||v.resolved?.self_buffs||[]).map(s=>({...s}));
+  renderStatusList('selfBuffContainer',selfBuffs,POSITIVE_STATUSES);
+}
+function renderStatusList(containerId,list,statusMap){
+  el(containerId).innerHTML=list.map((s,i)=>`<div class="status-row">
+    <select onchange="list[${i}].code=this.value;markDirty()" style="width:120px">${Object.entries(statusMap).map(([k,v])=>`<option value="${k}" ${k===s.code?'selected':''}>${v.name_zh}</option>`).join('')}</select>
+    <select class="freq-select" onchange="markDirty()"><option ${s.frequency==='very_high'?'selected':''}>very_high</option><option ${s.frequency==='high'?'selected':''}>high</option><option ${s.frequency==='medium'?'selected':''}>medium</option><option ${s.frequency==='low'?'selected':''}>low</option></select>
+    <input value="${s.note||''}" placeholder="備註" style="flex:1" oninput="markDirty()">
+    <button onclick="this.parentElement.remove();markDirty()" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:1rem">&times;</button>
+  </div>`).join('');
+}
+function addInflictedStatus(){inflictedStatuses.push({code:'poison',frequency:'medium',note:''});renderStatusList('inflictedContainer',inflictedStatuses,NEGATIVE_STATUSES);markDirty();}
+function addSelfBuff(){selfBuffs.push({code:'armor',frequency:'medium',note:''});renderStatusList('selfBuffContainer',selfBuffs,POSITIVE_STATUSES);markDirty();}
+function collectStatusList(containerId){
+  return [...el(containerId).querySelectorAll('.status-row')].map(row=>{
+    const sels=row.querySelectorAll('select');const inp=row.querySelector('input');
+    return{code:sels[0]?.value,frequency:sels[1]?.value,note:inp?.value||''};
+  });
+}
+
+// ── Resolved AI ──
+function renderResolvedAI(v){
+  const r=v.resolved||{};
+  const src=v.ai_preference?'自身設定':(!currentSpecies?.base_ai_preference?'家族預設':'種族預設');
+  const pref=AI_PREFERENCES[r.ai_preference||v.ai_preference];
+  el('resolvedAI').innerHTML=pref?`✦ 有效偏好：${pref.name_zh} (${r.ai_preference||v.ai_preference}) — 來源：${src}`:'';
+}
+
+// ── Attack Cards ──
+function renderAttackCards(v){
+  const cards=v.attack_cards||[];
+  const suggested={1:[2,3],2:[3,4],3:[4,6],4:[6,8],5:[8,10]}[v.tier]||[2,3];
+  // Defense dist
+  const distMap={};
+  Object.keys(ATTRIBUTES).forEach(a=>distMap[a]=0);
+  cards.forEach(c=>{if(distMap[c.defense_attribute]!==undefined)distMap[c.defense_attribute]++});
+  const total=cards.length||1;
+  el('defenseDist').innerHTML=cards.length?Object.entries(ATTRIBUTES).map(([k,a])=>{
+    const pct=Math.round(distMap[k]/total*100);
+    return `<div class="dist-bar"><span class="dist-bar-label">${a.zh}</span><div style="flex:1;background:var(--border);height:8px;border-radius:4px"><div class="dist-bar-fill" style="width:${pct}%;background:var(--gold)"></div></div><span class="dist-bar-pct">${pct}%</span></div>`;
+  }).join(''):'';
+
+  el('attackCardList').innerHTML=cards.map(c=>{
+    const shared=c.species_id&&!c.variant_id;
+    const elem=ATTACK_ELEMENTS[c.damage_element]||{name_zh:'物理'};
+    const attr=ATTRIBUTES[c.defense_attribute]||{zh:'?'};
+    return `<div class="attack-card-item ${shared?'shared':''}">
+      <div class="ac-header">
+        ${shared?'<span class="tag tag-gold">共享</span>':''}
+        <span class="ac-name">${c.name_zh||''}</span>
+        <span class="ac-detail">防禦: ${attr.zh} | ${elem.name_zh} ${c.damage_physical||0} | 恐懼 ${c.damage_horror||0} | 權重 ${c.weight||10}</span>
+        ${!shared?`<div class="ac-actions"><button class="btn" onclick="editAttackCard('${c.id}')" style="font-size:.7rem;padding:.2rem .4rem">編輯</button><button class="btn btn-danger" onclick="deleteAttackCard('${c.id}')" style="font-size:.7rem;padding:.2rem .4rem">刪除</button></div>`:''}
+      </div>
+      ${c.narrative_attack_zh?`<div class="ac-narrative">${c.narrative_attack_zh}</div>`:''}
+    </div>`;
+  }).join('');
+
+  el('attackHint').textContent=cards.length<suggested[0]?`⚠ 目前 ${cards.length} 張招式卡，建議至少 ${suggested[0]} 張（${MONSTER_TIERS[v.tier]?.name_zh}級）`:'';
+}
+
+// ── Narrative ──
+function renderNarrative(v){
+  const descs=v.status_descriptions||DEFAULT_STATUS_DESCRIPTIONS;
+  const thresholds=[{t:100,label:'100% — 完好'},{t:75,label:'75% — 輕傷'},{t:50,label:'50% — 重傷'},{t:25,label:'25% — 瀕死'},{t:0,label:'0% — 死亡'}];
+  el('narrativeContainer').innerHTML=thresholds.map(th=>{
+    const d=descs.find(d=>d.hp_threshold===th.t);
+    return `<div class="narrative-row"><label>${th.label}</label><textarea rows="1" data-threshold="${th.t}" oninput="markDirty()">${d?.description_zh||''}</textarea></div>`;
+  }).join('');
+}
+function collectNarrative(){
+  return [...el('narrativeContainer').querySelectorAll('textarea')].map(ta=>({hp_threshold:parseInt(ta.dataset.threshold),description_zh:ta.value}));
+}
+
+// ── Design checklist ──
+function renderDesignChecklist(v){
+  const cards=v.attack_cards||[];const suggested={1:[2,3],2:[3,4],3:[4,6],4:[6,8],5:[8,10]}[v.tier]||[2,3];
+  const checks=[
+    {ok:v.dc>0&&v.hp_base>0,text:'核心數值已設定'},
+    {ok:(v.keywords||[]).length>0||(v.resolved?.weaknesses||[]).length>0,text:'詞綴或弱點已配置'},
+    {ok:cards.length>=suggested[0],text:`招式卡數量充足（${cards.length}/${suggested[0]}+）`},
+    {ok:!!v.ai_preference||!!v.resolved?.ai_preference,text:'AI 行為已設定'},
+    {ok:v.status_descriptions?.some(d=>!DEFAULT_STATUS_DESCRIPTIONS.find(dd=>dd.description_zh===d.description_zh)),text:'敘事描述已自訂'},
+  ];
+  el('designChecklist').innerHTML=checks.map(c=>`<div style="margin-bottom:.25rem">${c.ok?'✅':'⚠'} ${c.text}</div>`).join('')
+    +(checks.every(c=>c.ok)?'<div style="margin-top:.375rem;color:var(--gold)">✦ 此變體設計完整，建議狀態改為 review</div>':'');
+}
+
+// ── Save ──
+function markDirty(){dirty=true;updateFloatSave()}
+function updateFloatSave(){el('floatSave').classList.toggle('dirty',dirty)}
+
+async function saveCurrentEditor(){
+  if(currentVariant&&el('variantPanel').style.display!=='none')await saveVariant();
+  else if(currentSpecies&&el('speciesPanel').style.display!=='none')await saveSpecies();
+}
+
+async function saveSpecies(){
+  if(!currentSpecies)return;
+  const body={name_zh:el('sp_name_zh').value,name_en:el('sp_name_en').value,description_zh:el('sp_desc').value,
+    lore_zh:el('sp_lore').value,tier_min:intVal('sp_tier_min'),tier_max:intVal('sp_tier_max'),
+    design_notes:el('sp_notes').value,design_status:el('sp_status').value};
+  try{const r=await adminFetch(`${API}/species/${currentSpecies.id}`,{method:'PUT',body:JSON.stringify(body)});
+    const d=await r.json();if(d.success){alert('已儲存');dirty=false;updateFloatSave();await loadSpeciesForFamily(currentFamily.id);}else alert('失敗：'+(d.error||''));}catch(e){alert('儲存失敗')}
+}
+
+async function saveVariant(){
+  if(!variantData)return;
+  const body={
+    name_zh:el('v_name_zh').value,name_en:el('v_name_en').value,tier:intVal('v_tier'),
+    dc:intVal('v_dc'),hp_base:intVal('v_hp'),hp_per_player:intVal('v_hpp'),
+    damage_physical:intVal('v_dmg'),damage_horror:intVal('v_horror'),
+    regen_per_round:intVal('v_regen'),spell_defense:intVal('v_spell'),
+    attacks_per_round:intVal('v_attacks'),
+    fear_radius:intVal('v_fear_radius'),fear_value:intVal('v_fear_value'),fear_type:el('v_fear_type').value,
+    movement_speed:intVal('v_move_speed'),movement_type:el('v_move_type').value,
+    keywords:collectKwCodes(),
+    weaknesses:collectElementField('weaknesses'),resistances:collectElementField('resistances'),immunities:collectElementField('immunities'),
+    inflicted_statuses:collectStatusList('inflictedContainer'),self_buffs:collectStatusList('selfBuffContainer'),
+    ai_preference:el('v_ai_pref').value||null,ai_preference_param:el('v_ai_param').value||null,
+    ai_behavior_notes:el('v_ai_notes').value,
+    is_undefeatable:el('v_undefeatable').checked,phase_count:intVal('v_phase_count'),
+    description_zh:el('v_desc').value,design_status:el('v_status').value
+  };
+  try{
+    const r=await adminFetch(`${API}/variants/${variantData.id}`,{method:'PUT',body:JSON.stringify(body)});
+    const d=await r.json();if(!d.success){alert('失敗：'+(d.error||''));return;}
+    // Save narrative
+    const narr=collectNarrative();
+    await adminFetch(`${API}/variants/${variantData.id}/status-descriptions`,{method:'PUT',body:JSON.stringify({descriptions:narr})});
+    alert('已儲存');dirty=false;updateFloatSave();
+    await loadVariantDetail(variantData.id);await loadFamilies();await renderVariantList();
+  }catch(e){alert('儲存失敗');console.error(e)}
+}
+
+// ── Create / Delete ──
+async function createSpecies(){
+  if(!currentFamily){alert('請先選擇家族');return;}
+  const name=prompt('新種族中文名：');if(!name)return;
+  const code=prompt('代碼（snake_case）：');if(!code)return;
+  try{const r=await adminFetch(`${API}/species`,{method:'POST',body:JSON.stringify({family_id:currentFamily.id,code,name_zh:name,name_en:code})});
+    const d=await r.json();if(d.success){await loadSpeciesForFamily(currentFamily.id);await loadFamilies();selectSpecies((d.data||d.species).id);}else alert(d.error||'失敗');}catch(e){alert('建立失敗')}
+}
+
+async function createVariant(){
+  if(!currentSpecies){alert('請先選擇種族');return;}
+  const name=prompt('新變體中文名：');if(!name)return;
+  const code=prompt('代碼（snake_case）：');if(!code)return;
+  const tier=parseInt(prompt(`位階（${currentSpecies.tier_min}-${currentSpecies.tier_max}）：`,currentSpecies.tier_min))||currentSpecies.tier_min;
+  try{const r=await adminFetch(`${API}/variants`,{method:'POST',body:JSON.stringify({species_id:currentSpecies.id,code,name_zh:name,name_en:code,tier})});
+    const d=await r.json();if(d.success){await renderVariantList();await loadFamilies();selectVariant((d.data||d.variant).id);}else alert(d.error||'失敗');}catch(e){alert('建立失敗')}
+}
+
+async function duplicateVariant(){
+  if(!variantData)return;
+  if(!confirm(`複製「${variantData.name_zh}」？`))return;
+  try{const r=await adminFetch(`${API}/variants/${variantData.id}/duplicate`,{method:'POST'});
+    const d=await r.json();if(d.success){await renderVariantList();await loadFamilies();}else alert(d.error||'失敗');}catch(e){alert('複製失敗')}
+}
+
+// ── Attack Card CRUD ──
+function createAttackCard(){editingAcId=null;el('ac_code').value='';el('ac_name_zh').value='';el('ac_name_en').value='';el('ac_weight').value=10;el('ac_dmg_phys').value=0;el('ac_dmg_horror').value=0;el('ac_def_attr').value='strength';el('ac_dmg_elem').value='physical';['ac_narr_atk','ac_narr_hit','ac_narr_miss'].forEach(id=>el(id).value='');el('acDialog').classList.add('open')}
+
+function editAttackCard(id){
+  const card=(variantData?.attack_cards||[]).find(c=>c.id===id);if(!card)return;
+  editingAcId=id;
+  el('ac_code').value=card.code||'';el('ac_name_zh').value=card.name_zh||'';el('ac_name_en').value=card.name_en||'';
+  el('ac_weight').value=card.weight||10;el('ac_dmg_phys').value=card.damage_physical||0;el('ac_dmg_horror').value=card.damage_horror||0;
+  el('ac_def_attr').value=card.defense_attribute||'strength';el('ac_dmg_elem').value=card.damage_element||'physical';
+  el('ac_narr_atk').value=card.narrative_attack_zh||'';el('ac_narr_hit').value=card.narrative_hit_zh||'';el('ac_narr_miss').value=card.narrative_miss_zh||'';
+  el('acDialog').classList.add('open');
+}
+function closeAcDialog(){el('acDialog').classList.remove('open')}
+
+async function saveAttackCard(){
+  const body={code:el('ac_code').value,name_zh:el('ac_name_zh').value,name_en:el('ac_name_en').value,
+    defense_attribute:el('ac_def_attr').value,damage_physical:parseInt(el('ac_dmg_phys').value)||0,
+    damage_horror:parseInt(el('ac_dmg_horror').value)||0,damage_element:el('ac_dmg_elem').value,
+    weight:parseInt(el('ac_weight').value)||10,
+    narrative_attack_zh:el('ac_narr_atk').value,narrative_hit_zh:el('ac_narr_hit').value,narrative_miss_zh:el('ac_narr_miss').value,
+    variant_id:variantData.id};
+  try{
+    const url=editingAcId?`${API}/attack-cards/${editingAcId}`:`${API}/attack-cards`;
+    const r=await adminFetch(url,{method:editingAcId?'PUT':'POST',body:JSON.stringify(body)});
+    const d=await r.json();if(d.success){closeAcDialog();await loadVariantDetail(variantData.id);}else alert(d.error||'失敗');
+  }catch(e){alert('儲存失敗')}
+}
+
+async function deleteAttackCard(id){
+  if(!confirm('確定刪除此招式卡？'))return;
+  try{await adminFetch(`${API}/attack-cards/${id}`,{method:'DELETE'});await loadVariantDetail(variantData.id);}catch(e){alert('刪除失敗')}
+}
+
+// ── Tab / Section ──
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  el('tabEditor').style.display=tab==='editor'?'':'none';
+  el('tabOverview').style.display=tab==='overview'?'':'none';
+  if(tab==='overview')loadOverview();
+}
+function toggleSection(id){el(id).classList.toggle('collapsed');el(id).previousElementSibling.classList.toggle('open')}
+function toggleLeftPanel(){el('panelLeft').classList.toggle('collapsed');el('panelMain').classList.toggle('expanded')}
+
+// ── Overview ──
+async function loadOverview(){
+  try{const r=await adminFetch(`${API}/stats/overview`);const d=await r.json();if(d.success)renderOverview(d.data||d);}catch(e){console.error(e)}
+}
+function renderOverview(data){
+  const fams=data.families||[];
+  el('overviewGrid').innerHTML=fams.map(f=>{
+    const emoji=FAMILY_EMOJIS[f.code]||'❓';const inactive=f.is_active===false;
+    const estVar=(f.species_count||0)*3;const pct=estVar>0?Math.round((f.variant_count||0)/estVar*100):0;
+    return `<div class="overview-card ${inactive?'inactive':''}" onclick="switchTab('editor');selectFamily('${f.id}')">
+      <div class="ov-emoji">${emoji}</div><div class="ov-name">${f.name_zh}</div>
+      <div class="ov-stats">種族: ${f.species_count||0}<br>變體: ${f.variant_count||0}<br>招式: ${f.attack_card_count||0}</div>
+      <div class="ov-bar"><div class="ov-bar-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+
+  // Family matrix
+  const deityFams=fams.filter(f=>f.family_type==='deity'&&f.is_active!==false);
+  let html='<table class="matrix-table"><thead><tr><th>家族</th><th>元素</th><th>偏重</th><th>弱點</th><th>抗性</th><th>AI</th></tr></thead><tbody>';
+  for(const f of deityFams){
+    const wk=(f.weaknesses||[]).map(w=>ATTACK_ELEMENTS[w]?.name_zh||w).join(', ')||'—';
+    const rs=(f.resistances||[]).map(r=>ATTACK_ELEMENTS[r]?.name_zh||r).join(', ')||'—';
+    html+=`<tr><td>${FAMILY_EMOJIS[f.code]||''} ${f.name_zh}</td><td>${ATTACK_ELEMENTS[f.attack_element]?.name_zh||'混合'}</td><td>${f.damage_focus||'混合'}</td><td>${wk}</td><td>${rs}</td><td>${AI_PREFERENCES[f.ai_preference]?.name_zh||'—'}</td></tr>`;
+  }
+  html+='</tbody></table>';
+  el('familyMatrix').innerHTML=html;
+}
+
+// ── AI Generation ──
+function getGeminiKey(){return localStorage.getItem('gemini_api_key')||''}
+function promptApiKey(){const k=prompt('Gemini API Key：',getGeminiKey());if(k!==null)localStorage.setItem('gemini_api_key',k)}
+function closeAiDialog(){el('aiDialog').classList.remove('open');aiMode=null}
+
+function aiGeneratePool(){
+  if(!variantData)return;aiMode='pool';
+  const suggested={1:3,2:4,3:5,4:7,5:9}[variantData.tier]||5;
+  el('aiDialogTitle').textContent='AI 批次生成招式池';
+  el('aiDialogContext').innerHTML=`${variantData.name_zh}（${MONSTER_TIERS[variantData.tier]?.name_zh}）<br>將生成約 ${suggested} 張招式卡`;
+  el('aiUserInput').value='';el('aiStatus').textContent='';
+  el('aiDialog').classList.add('open');
+}
+
+function aiGenerateNarrative(){
+  if(!variantData)return;aiMode='narrative';
+  el('aiDialogTitle').textContent='AI 生成敘事描述';
+  el('aiDialogContext').innerHTML=`${variantData.name_zh} — 生成 5 階段 HP 狀態描述`;
+  el('aiUserInput').value='';el('aiStatus').textContent='';
+  el('aiDialog').classList.add('open');
+}
+
+async function runAiGenerate(){
+  const key=getGeminiKey();if(!key){alert('請先設定 API Key');return;}
+  el('aiStatus').textContent='生成中...';el('aiGenBtn').disabled=true;
+  try{
+    const prompt=aiMode==='pool'?buildPoolPrompt():buildNarrativePrompt();
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:'application/json'}})
+    });
+    const result=await res.json();
+    const text=result.candidates?.[0]?.content?.parts?.[0]?.text;if(!text)throw new Error('No response');
+    const parsed=JSON.parse(text);
+
+    if(aiMode==='pool'){
+      const cards=Array.isArray(parsed)?parsed:(parsed.cards||parsed.attack_cards||[parsed]);
+      for(const c of cards){
+        await adminFetch(`${API}/attack-cards`,{method:'POST',body:JSON.stringify({...c,variant_id:variantData.id,code:c.code||(variantData.code+'_'+c.name_en?.toLowerCase().replace(/\s+/g,'_')||Math.random().toString(36).substr(2,6))})});
+      }
+      await loadVariantDetail(variantData.id);
+    } else {
+      const descs=Array.isArray(parsed)?parsed:(parsed.descriptions||[]);
+      descs.forEach(d=>{const ta=el('narrativeContainer').querySelector(`[data-threshold="${d.hp_threshold}"]`);if(ta)ta.value=d.description_zh||''});
+      markDirty();
+    }
+    el('aiStatus').textContent='生成完成！';setTimeout(closeAiDialog,800);
+  }catch(e){el('aiStatus').textContent='失敗：'+e.message}finally{el('aiGenBtn').disabled=false}
+}
+
+function buildPoolPrompt(){
+  const v=variantData;const f=currentFamily;const s=currentSpecies;
+  const suggested={1:3,2:4,3:5,4:7,5:9}[v.tier]||5;
+  const existing=(v.attack_cards||[]).map(c=>c.name_zh).join(', ')||'無';
+  return `你是克蘇魯神話 TRPG 的怪物招式設計師。請為以下怪物設計${suggested}張招式卡。
+怪物：${v.name_zh}（${v.name_en}），種族：${s?.name_zh||''}，家族：${f?.name_zh||''}
+位階：${MONSTER_TIERS[v.tier]?.name_zh}（DC ${v.dc}），攻擊元素：${ATTACK_ELEMENTS[v.resolved?.attack_element||v.attack_element||'physical']?.name_zh||'物理'}
+家族主題：${f?.theme_zh||''}
+已有招式（避免重複）：${existing}
+${el('aiUserInput').value?'補充：'+el('aiUserInput').value:''}
+防禦屬性七選：strength/agility/constitution/intellect/willpower/perception/charisma
+傷害元素：physical/fire/ice/electric/arcane
+輸出嚴格 JSON 陣列：[{"name_zh":"","name_en":"","defense_attribute":"","damage_physical":N,"damage_horror":N,"damage_element":"physical","weight":10,"narrative_attack_zh":"攻擊敘事","narrative_hit_zh":"命中敘事","narrative_miss_zh":"閃避敘事"}]
+設計原則：1.傷害參考位階範圍 2.防禦屬性要有變化 3.敘事要有克蘇魯恐怖氛圍 4.至少1張帶狀態效果`;
+}
+function buildNarrativePrompt(){
+  const v=variantData;const f=currentFamily;
+  return `你是克蘇魯神話 TRPG 怪物敘事撰寫者。為以下怪物生成 5 階段 HP 狀態描述。
+怪物：${v.name_zh}，家族：${f?.name_zh||''}，位階：${MONSTER_TIERS[v.tier]?.name_zh}
+家族主題：${f?.theme_zh||''}
+${el('aiUserInput').value?'補充：'+el('aiUserInput').value:''}
+玩家看不到 HP 數字，只看描述。從完好到死亡要有漸進的敘事張力，每段 1-2 句話。
+輸出嚴格 JSON：[{"hp_threshold":100,"description_zh":""},{"hp_threshold":75,"description_zh":""},{"hp_threshold":50,"description_zh":""},{"hp_threshold":25,"description_zh":""},{"hp_threshold":0,"description_zh":""}]`;
+}
+
+// ── Keyboard shortcuts ──
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey&&e.key==='s'){e.preventDefault();saveCurrentEditor();}
+  if(e.key==='Escape'){if(el('aiDialog').classList.contains('open'))closeAiDialog();else if(el('acDialog').classList.contains('open'))closeAcDialog();}
+});
+  </script>
 </body>
 </html>

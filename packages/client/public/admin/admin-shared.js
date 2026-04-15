@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.5.0';
+const ADMIN_VERSION = '0.6.0';
 
 // ============================================
 // API 設定
@@ -116,11 +116,11 @@ const FACTIONS = {
 };
 
 const ENEMY_TIERS = {
-  1: { name: '雜兵', en: 'Minion', dc: 12, hpRange: [3, 5],   dmgRange: [1, 2] },
-  2: { name: '威脅', en: 'Threat', dc: 16, hpRange: [8, 14],  dmgRange: [2, 4] },
-  3: { name: '精英', en: 'Elite',  dc: 20, hpRange: [18, 28], dmgRange: [3, 6] },
-  4: { name: '頭目', en: 'Boss',   dc: 24, hpRange: [35, 50], dmgRange: [4, 8] },
-  5: { name: '巨頭', en: 'Titan',  dc: 28, hpRange: [55, 70], dmgRange: [6, 10] },
+  1: { name: '雜兵', en: 'Minion', dc: 12, hpRange: [3, 5],   dmgRange: [1, 2],  regen: 0,     spellDef: [0, 1], attacks: 1 },
+  2: { name: '威脅', en: 'Threat', dc: 16, hpRange: [8, 14],  dmgRange: [2, 4],  regen: 0,     spellDef: [1, 3], attacks: 1 },
+  3: { name: '精英', en: 'Elite',  dc: 20, hpRange: [18, 28], dmgRange: [3, 6],  regen: [0,1], spellDef: [3, 5], attacks: 1 },
+  4: { name: '頭目', en: 'Boss',   dc: 24, hpRange: [35, 50], dmgRange: [4, 8],  regen: [1,3], spellDef: [5, 7], attacks: [2, 3] },
+  5: { name: '巨頭', en: 'Titan',  dc: 28, hpRange: [55, 70], dmgRange: [6, 10], regen: [3,5], spellDef: [7, 9], attacks: [2, 3] },
 };
 
 const WEAPON_TIERS = {
@@ -305,6 +305,113 @@ const TEAM_SPIRIT_RULES = {
   TOTAL_COST_PER_SPIRIT: 6,
   CANDIDATE_POOL: 32,
 };
+
+// ============================================
+// 怪物系統常數 (MOD-03)
+// ============================================
+const MONSTER_TIERS = {
+  1: { code: 'minion', name_zh: '雜兵', name_en: 'Minion', color: '#5A5A52' },
+  2: { code: 'threat', name_zh: '威脅', name_en: 'Threat', color: '#4A7C9B' },
+  3: { code: 'elite',  name_zh: '精英', name_en: 'Elite',  color: '#C9A84C' },
+  4: { code: 'boss',   name_zh: '頭目', name_en: 'Boss',   color: '#B84C4C' },
+  5: { code: 'titan',  name_zh: '巨頭', name_en: 'Titan',  color: '#7B4EA3' },
+};
+
+const MONSTER_KEYWORDS = {
+  swift:              { category:'movement',    name_zh:'快速',     name_en:'Swift',             effect_zh:'每回合移動 2 格' },
+  flying:             { category:'movement',    name_zh:'飛行',     name_en:'Flying',            effect_zh:'下回合直接出現在目標地點' },
+  hunter:             { category:'engagement',  name_zh:'獵手',     name_en:'Hunter',            effect_zh:'移動進入交戰後立刻額外攻擊一次' },
+  massive:            { category:'engagement',  name_zh:'巨大',     name_en:'Massive',           effect_zh:'與地點中所有調查員交戰' },
+  apathetic:          { category:'engagement',  name_zh:'冷漠',     name_en:'Apathetic',         effect_zh:'不主動與調查員交戰' },
+  crush:              { category:'death_effect', name_zh:'壓垮',    name_en:'Crush',             effect_zh:'被擊敗後同地點閃避檢定，失敗受傷' },
+  curse_on_death:     { category:'death_effect', name_zh:'詛咒',    name_en:'Curse on Death',    effect_zh:'被擊敗後意志檢定，失敗受恐懼' },
+  haunting:           { category:'death_effect', name_zh:'鬧鬼',    name_en:'Haunting',          effect_zh:'死亡後附著地點，調查失敗復活' },
+  physical_resistance:{ category:'defense',     name_zh:'物理抗性', name_en:'Physical Resistance', effect_zh:'減免物理傷害' },
+  physical_immunity:  { category:'defense',     name_zh:'物理免疫', name_en:'Physical Immunity',   effect_zh:'不受物理傷害' },
+  fire_resistance:    { category:'defense',     name_zh:'火屬性抗性', name_en:'Fire Resistance',   effect_zh:'減免火屬性傷害' },
+  ice_resistance:     { category:'defense',     name_zh:'冰屬性抗性', name_en:'Ice Resistance',    effect_zh:'減免冰屬性傷害' },
+  electric_resistance:{ category:'defense',     name_zh:'雷屬性抗性', name_en:'Electric Resistance',effect_zh:'減免雷屬性傷害' },
+  swarm:              { category:'special',     name_zh:'群體',     name_en:'Swarm',             effect_zh:'指定數量的分身一起行動' },
+};
+
+const AI_PREFERENCES = {
+  nearest:      { name_zh:'最近',     name_en:'Nearest',       desc_zh:'追蹤最近的調查員' },
+  lowest_hp:    { name_zh:'血量最低', name_en:'Lowest HP',     desc_zh:'追蹤 HP 最低的調查員' },
+  lowest_san:   { name_zh:'理智最低', name_en:'Lowest SAN',    desc_zh:'追蹤 SAN 最低的調查員' },
+  most_clues:   { name_zh:'線索最多', name_en:'Most Clues',    desc_zh:'追蹤持有最多線索的調查員' },
+  last_attacker:{ name_zh:'仇恨',     name_en:'Last Attacker', desc_zh:'追蹤上回合攻擊過牠的調查員' },
+  lowest_attr:  { name_zh:'屬性最低', name_en:'Lowest Attr',   desc_zh:'追蹤指定屬性最低的調查員' },
+  random:       { name_zh:'隨機',     name_en:'Random',        desc_zh:'隨機選擇' },
+};
+
+const ATTACK_ELEMENTS = {
+  physical: { name_zh:'物理', name_en:'Physical', color:'#8A8778' },
+  fire:     { name_zh:'火',   name_en:'Fire',     color:'#B84C4C' },
+  ice:      { name_zh:'冰',   name_en:'Ice',      color:'#4A7C9B' },
+  electric: { name_zh:'雷',   name_en:'Electric',  color:'#C9A84C' },
+  arcane:   { name_zh:'神秘', name_en:'Arcane',    color:'#7B4EA3' },
+};
+
+const NEGATIVE_STATUSES = {
+  poison:          { name_zh:'中毒', name_en:'Poison' },
+  bleed:           { name_zh:'流血', name_en:'Bleed' },
+  burning:         { name_zh:'燃燒', name_en:'Burning' },
+  frozen:          { name_zh:'冷凍', name_en:'Frozen' },
+  darkness:        { name_zh:'黑暗', name_en:'Darkness' },
+  disarm:          { name_zh:'繳械', name_en:'Disarm' },
+  doom_status:     { name_zh:'毀滅', name_en:'Doom' },
+  fatigue:         { name_zh:'疲勞', name_en:'Fatigue' },
+  madness:         { name_zh:'發瘋', name_en:'Madness' },
+  marked:          { name_zh:'標記', name_en:'Marked' },
+  vulnerable:      { name_zh:'脆弱', name_en:'Vulnerable' },
+  silence:         { name_zh:'沈默', name_en:'Silence' },
+  weakness_status: { name_zh:'無力', name_en:'Weakness' },
+  wet:             { name_zh:'潮濕', name_en:'Wet' },
+  weakened:        { name_zh:'弱化', name_en:'Weakened' },
+};
+
+const POSITIVE_STATUSES = {
+  empowered:    { name_zh:'強化', name_en:'Empowered' },
+  armor:        { name_zh:'護甲', name_en:'Armor' },
+  ward:         { name_zh:'護盾', name_en:'Ward' },
+  stealth:      { name_zh:'隱蔽', name_en:'Stealth' },
+  haste:        { name_zh:'加速', name_en:'Haste' },
+  regeneration: { name_zh:'再生', name_en:'Regeneration' },
+};
+
+const FEAR_TYPES = {
+  first_sight: { name_zh:'初見', name_en:'First Sight' },
+  per_round:   { name_zh:'每回合', name_en:'Per Round' },
+  on_reveal:   { name_zh:'揭露時', name_en:'On Reveal' },
+};
+
+const MOVEMENT_TYPES = {
+  ground:      { name_zh:'地面', name_en:'Ground' },
+  flying:      { name_zh:'飛行', name_en:'Flying' },
+  dimensional: { name_zh:'維度跳躍', name_en:'Dimensional' },
+  burrowing:   { name_zh:'地底鑽行', name_en:'Burrowing' },
+};
+
+const FAMILY_EMOJIS = {
+  house_cthulhu:'🐙', house_hastur:'👁', house_shub:'🐐', house_nyarlathotep:'🎭',
+  house_yog:'🌀', house_cthugha:'🔥', house_yig:'🐍', fallen:'🕯', undying:'💀', independent:'⚡',
+};
+
+const TIER_DEFAULTS = {
+  1: { dc:12, hp_base:4,  damage_physical:1, spell_defense:0, attacks_per_round:1 },
+  2: { dc:16, hp_base:11, damage_physical:3, spell_defense:2, attacks_per_round:1 },
+  3: { dc:20, hp_base:23, damage_physical:4, spell_defense:4, attacks_per_round:1 },
+  4: { dc:24, hp_base:42, damage_physical:6, spell_defense:6, attacks_per_round:2 },
+  5: { dc:28, hp_base:62, damage_physical:8, spell_defense:8, attacks_per_round:2 },
+};
+
+const DEFAULT_STATUS_DESCRIPTIONS = [
+  { hp_threshold:100, description_zh:'牠看起來毫髮無傷。', sort_order:5 },
+  { hp_threshold:75,  description_zh:'牠似乎受了一些傷，但行動不受影響。', sort_order:4 },
+  { hp_threshold:50,  description_zh:'牠的動作開始遲緩，傷口清晰可見。', sort_order:3 },
+  { hp_threshold:25,  description_zh:'牠拖著殘破的身軀，每一步都在顫抖。', sort_order:2 },
+  { hp_threshold:0,   description_zh:'牠轟然倒下，不再動彈。', sort_order:1 },
+];
 
 // ============================================
 // 天賦樹常數 (MOD-02)

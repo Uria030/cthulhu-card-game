@@ -249,6 +249,23 @@
             </div>
           </div>
 
+          <!-- Book/Relic fields -->
+          <div id="bookRelicFields" class="hidden">
+            <div class="section-label">書籍/遺跡設定</div>
+            <div class="form-grid" style="margin-top:0.5rem;">
+              <div class="form-group full">
+                <div class="check-row"><input type="checkbox" id="f_is_book"><label for="f_is_book">書籍 — 附帶閱讀長期投資行動</label></div>
+                <div class="check-row"><input type="checkbox" id="f_is_relic"><label for="f_is_relic">遺跡 — 附帶研究長期投資行動</label></div>
+              </div>
+              <div class="form-group"><label>研究方式</label><select id="f_study_method"><option value="">無</option><option value="count_only">純累積次數</option><option value="count_and_test">累積 + 檢定</option></select></div>
+              <div class="form-group"><label>所需累積次數</label><input type="number" id="f_study_required" value="0" min="0" max="20"></div>
+              <div class="form-group hidden" id="studyTestGroup"><label>檢定屬性</label><select id="f_study_test_attribute"><option value="">—</option></select></div>
+              <div class="form-group hidden" id="studyDcGroup"><label>檢定 DC</label><input type="number" id="f_study_test_dc" value="0" min="0" max="30"></div>
+              <div class="form-group"><label>難度等級 (1-5)</label><input type="number" id="f_study_difficulty_tier" value="0" min="0" max="5"></div>
+              <div class="form-group"><label>升級版卡片代碼</label><input type="text" id="f_study_upgrade_card" placeholder="升級後的卡片 code"></div>
+            </div>
+          </div>
+
           <!-- Stats: 打出效果 -->
           <div class="section-label collapsible open" id="secPlayHead" onclick="toggleSection('secPlay')">打出效果</div>
           <div class="section-content" id="secPlay"><div class="form-grid">
@@ -371,6 +388,37 @@
           <div id="effectsList"></div>
           <div class="effects-total-value" id="effectsTotalValue"></div>
           <button class="btn" onclick="addEffect()" style="margin-top:0.5rem;">+ 新增效果</button>
+
+          <!-- Upgrade Path -->
+          <div class="section-label collapsible" id="secUpgradesHead" onclick="toggleSection('secUpgrades')">升級路徑（LV1~5 差異參數）</div>
+          <div class="section-content collapsed" id="secUpgrades">
+            <div style="display:flex;gap:0.25rem;margin-bottom:0.5rem;" id="upgradeTabs">
+              <button class="btn" onclick="switchUpgradeTab(1)" id="upgradeTab1">LV1</button>
+              <button class="btn" onclick="switchUpgradeTab(2)" id="upgradeTab2">LV2</button>
+              <button class="btn" onclick="switchUpgradeTab(3)" id="upgradeTab3">LV3</button>
+              <button class="btn" onclick="switchUpgradeTab(4)" id="upgradeTab4">LV4</button>
+              <button class="btn" onclick="switchUpgradeTab(5)" id="upgradeTab5">LV5</button>
+            </div>
+            <div id="upgradeEditor" class="form-grid" style="display:none;">
+              <div class="form-group full" style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.25rem;">
+                只填與 LV0 不同的欄位，留空表示沿用基礎值。
+              </div>
+              <div class="form-group"><label>費用</label><input type="number" id="upg_cost" min="0" max="6" placeholder="沿用"></div>
+              <div class="form-group"><label>傷害</label><input type="number" id="upg_damage" min="0" max="10" placeholder="沿用"></div>
+              <div class="form-group"><label>恐懼傷害</label><input type="number" id="upg_horror" min="0" max="10" placeholder="沿用"></div>
+              <div class="form-group"><label>使用次數</label><input type="number" id="upg_uses" min="0" max="20" placeholder="沿用"></div>
+              <div class="form-group"><label>彈藥</label><input type="number" id="upg_ammo" min="0" max="20" placeholder="沿用"></div>
+              <div class="form-group"><label>盟友 HP</label><input type="number" id="upg_ally_hp" min="0" max="10" placeholder="沿用"></div>
+              <div class="form-group"><label>盟友 SAN</label><input type="number" id="upg_ally_san" min="0" max="10" placeholder="沿用"></div>
+              <div class="form-group"><label>經驗值花費</label><input type="number" id="upg_xp_cost" min="0" max="30" placeholder="沿用"></div>
+              <div class="form-group full"><label>升級描述（中文）</label><input type="text" id="upg_desc_zh" placeholder="此等級新增或變動的描述"></div>
+              <div class="form-group full"><label>升級描述（英文）</label><input type="text" id="upg_desc_en" placeholder="Upgrade description"></div>
+              <div class="form-group full" style="margin-top:0.25rem;">
+                <button class="btn btn-primary" onclick="saveUpgradeLevel()" style="font-size:0.75rem;">儲存此等級差異</button>
+                <button class="btn" onclick="clearUpgradeLevel()" style="font-size:0.75rem;margin-left:0.25rem;">清除此等級</button>
+              </div>
+            </div>
+          </div>
 
           <!-- Narrative -->
           <div class="section-label">敘事資訊</div>
@@ -550,7 +598,7 @@
 
   /* ── Commit Icons (attribute icon system) ── */
   const SINGLE_ATTR_VALUE = { 0:0, 1:0.5, 2:1.5, 3:3, 4:5, 5:7.5, 6:10 };
-  const WILD_ATTR_VALUE = { 0:0, 1:1, 2:3, 3:6 };
+  const WILD_ATTR_VALUE = { 0:0, 1:1, 2:3, 3:6, 4:9, 5:13.5 };
   const COMMIT_ATTRS = ['strength','agility','constitution','intellect','willpower','perception','charisma'];
 
   function getCommitIcons() {
@@ -577,7 +625,7 @@
   function stepCommitAttr(attr, delta) {
     const span = el('ci_' + attr);
     if (!span) return;
-    const maxVal = attr === 'all' ? 3 : 6;
+    const maxVal = attr === 'all' ? 5 : 6;
     let v = Math.max(0, Math.min(maxVal, (parseInt(span.textContent) || 0) + delta));
     span.textContent = v;
     updateCommitAttrValue(attr, v);
@@ -662,7 +710,7 @@
   };
   const CONSUME_MINIMUM = 1.5;
   const RARITY_CONSUME_RANGES = {
-    '隨身':[2.5,3], '基礎':[2.5,3], '標準':[5,6], '進階':[7,8], '稀有':[8,9], '傳奇':[9,10]
+    '隨身':[2.5,3], '基礎':[2.5,3], '標準':[5,6], '進階':[7,8], '稀有':[8,9], '傳奇':[9,Infinity]
   };
 
   function getConsumeEffect() {
@@ -822,47 +870,61 @@
       totalValue = calcAllyBaseValue() + effectsValue;
       stayMod = 0; // already included in calcAllyBaseValue
       ratio = '1:1';
-      rarityDisc = totalValue - levelDisc - cost + specialMod;
-      rarity = rarityFromDiscount(rarityDisc);
+      rarity = rarityFromEffectValue(totalValue);
+      rarityDisc = rarity.discount;
+      const calcCost = totalValue - levelDisc - rarityDisc + specialMod;
       status = rarity.status; msg = rarity.msg;
     } else if (isWeapon) {
       const weaponOut = calcWeaponOutputValue();
       totalValue = weaponOut + effectsValue;
       stayMod = -1;
-      ratio = '2:1';
-      rarityDisc = totalValue + stayMod + consumeMod - levelDisc - (cost * 2) + specialMod;
-      rarity = rarityFromDiscount(rarityDisc);
+      ratio = '1:1';  // v1.1: 資產卡改為 1:1
+      rarity = rarityFromEffectValue(totalValue);
+      rarityDisc = rarity.discount;
+      const calcCost = totalValue + stayMod + consumeMod - levelDisc - rarityDisc + specialMod;
       status = rarity.status; msg = rarity.msg;
     } else if (cardType === 'asset') {
       // Non-weapon asset
       const uses = intVal('f_uses');
       totalValue = uses > 0 ? effectsValue * uses : effectsValue;
       stayMod = -1;
-      ratio = '2:1';
-      rarityDisc = totalValue + stayMod + consumeMod - levelDisc - (cost * 2) + specialMod;
-      rarity = rarityFromDiscount(rarityDisc);
+      ratio = '1:1';  // v1.1: 資產卡改為 1:1
+      rarity = rarityFromEffectValue(totalValue);
+      rarityDisc = rarity.discount;
+      const calcCost = totalValue + stayMod + consumeMod - levelDisc - rarityDisc + specialMod;
       status = rarity.status; msg = rarity.msg;
     } else {
       // Event card
       totalValue = effectsValue;
       stayMod = 0;
       ratio = '1:1';
-      rarityDisc = totalValue - levelDisc - cost + specialMod;
-      rarity = rarityFromDiscount(rarityDisc);
+      rarity = rarityFromEffectValue(totalValue);
+      rarityDisc = rarity.discount;
+      const calcCost = totalValue - levelDisc - rarityDisc + specialMod;
       status = rarity.status; msg = rarity.msg;
     }
 
-    return { totalValue, levelDisc, consumeMod, stayMod, specialMod, ratio, cost, rarityDisc, rarity: rarity.name || rarity, status, msg, isSkill, effectsValue };
+    return { totalValue, levelDisc, consumeMod, stayMod, specialMod, ratio, cost, rarityDisc, rarity: typeof rarity === 'object' ? rarity.name : rarity, status, msg, isSkill, effectsValue };
   }
 
-  function rarityFromDiscount(disc) {
-    if (disc > 5) return { name: '超出範圍', status: 'err', msg: '效果過強或費用過低，需調整' };
-    if (disc <= 0) return { name: '隨身', status: 'ok', msg: '隨身（0V）' };
-    if (disc <= 1) return { name: '基礎', status: 'ok', msg: `基礎（-1V）${disc === 1 ? '' : ' 有餘裕'}` };
-    if (disc <= 2) return { name: '標準', status: 'ok', msg: `標準（-2V）${disc === 2 ? '' : ' 有餘裕'}` };
-    if (disc <= 3) return { name: '進階', status: 'ok', msg: `進階（-3V）${disc === 3 ? '' : ' 有餘裕'}` };
-    if (disc <= 4) return { name: '稀有', status: 'ok', msg: `稀有（-4V）${disc === 4 ? '' : ' 有餘裕'}` };
-    return { name: '傳奇', status: 'ok', msg: `傳奇（-5V）${disc === 5 ? '' : ' 有餘裕'}` };
+  // v1.1 修正案：稀有度由效果價值區間反推
+  const RARITY_VALUE_RANGES = [
+    { name: '隨身', en: 'Pocket',    min: 0,  max: 3,  discount: 0 },
+    { name: '基礎', en: 'Basic',     min: 3,  max: 6,  discount: 1 },
+    { name: '標準', en: 'Standard',  min: 6,  max: 10, discount: 2 },
+    { name: '進階', en: 'Advanced',  min: 10, max: 15, discount: 3 },
+    { name: '稀有', en: 'Rare',      min: 15, max: 22, discount: 4 },
+    { name: '傳奇', en: 'Legendary', min: 22, max: Infinity, discount: 5 },
+  ];
+
+  function rarityFromEffectValue(effectValue) {
+    for (let i = RARITY_VALUE_RANGES.length - 1; i >= 0; i--) {
+      const r = RARITY_VALUE_RANGES[i];
+      if (effectValue >= r.min) {
+        return { name: r.name, discount: r.discount, status: 'ok', msg: `${r.name}（-${r.discount}V）— 效果價值 ${effectValue.toFixed(1)}V` };
+      }
+    }
+    return { name: '隨身', discount: 0, status: 'ok', msg: '隨身（0V）' };
   }
 
   function updateBalancePanel() {
@@ -952,6 +1014,13 @@
     if (EL && EL.subtypes) {
       const stBox = el('subtypesCheckboxes');
       stBox.innerHTML = EL.subtypes.map(s => `<label style="font-size:0.75rem;"><input type="checkbox" class="subtype-cb" value="${s.code}"> ${s.zh}</label>`).join('');
+    }
+
+    // Study test attribute (book/relic)
+    const staSel = el('f_study_test_attribute');
+    if (staSel) {
+      staSel.innerHTML = '<option value="">—</option>';
+      for (const [k, v] of Object.entries(ATTRIBUTES)) staSel.innerHTML += `<option value="${k}">${v.zh}</option>`;
     }
 
     // Cost currency
@@ -1186,7 +1255,16 @@
       consume_enabled: el('f_consume_enabled')?.checked || false,
       consume_effect: getConsumeEffect(),
       subtypes: collectSubtypes(),
+      is_book: el('f_is_book')?.checked || false,
+      is_relic: el('f_is_relic')?.checked || false,
+      study_method: el('f_study_method')?.value || null,
+      study_required: intVal('f_study_required') || null,
+      study_test_attribute: el('f_study_test_attribute')?.value || null,
+      study_test_dc: intVal('f_study_test_dc') || null,
+      study_difficulty_tier: intVal('f_study_difficulty_tier') || null,
+      study_upgrade_card: el('f_study_upgrade_card')?.value?.trim() || null,
       effects: collectEffects(),
+      upgrades: (() => { saveUpgradeLevelSilent(); return Object.keys(currentUpgrades).length > 0 ? currentUpgrades : {}; })(),
       flavor_text: el('f_flavor_text').value.trim(),
       version: 1,
       created_at: editingId ? (cards.find(c => c.id === editingId)?.created_at || new Date().toISOString()) : new Date().toISOString(),
@@ -1272,6 +1350,78 @@
 
   function newCard() { clearForm(); el('f_name_zh').focus(); }
 
+  /* ── Upgrade System (LV1~5 差異參數) ── */
+  let currentUpgrades = {};  // { "1": { cost: 3, damage: 4, ... }, "2": { ... } }
+  let currentUpgradeLevel = null;
+  const UPGRADE_FIELDS = ['cost','damage','horror','uses','ammo','ally_hp','ally_san','xp_cost','desc_zh','desc_en'];
+
+  function switchUpgradeTab(lv) {
+    // Save current tab before switching
+    if (currentUpgradeLevel) saveUpgradeLevelSilent();
+    currentUpgradeLevel = lv;
+    // Highlight active tab
+    document.querySelectorAll('#upgradeTabs .btn').forEach(b => b.classList.remove('btn-primary'));
+    el('upgradeTab' + lv).classList.add('btn-primary');
+    // Show editor
+    el('upgradeEditor').style.display = '';
+    // Load data for this level
+    const data = currentUpgrades[String(lv)] || {};
+    for (const f of UPGRADE_FIELDS) {
+      const input = el('upg_' + f);
+      if (input) input.value = data[f] ?? '';
+    }
+  }
+
+  function saveUpgradeLevelSilent() {
+    if (!currentUpgradeLevel) return;
+    const data = {};
+    for (const f of UPGRADE_FIELDS) {
+      const input = el('upg_' + f);
+      if (!input) continue;
+      const v = input.value.trim();
+      if (v !== '') {
+        data[f] = input.type === 'number' ? Number(v) : v;
+      }
+    }
+    if (Object.keys(data).length > 0) {
+      currentUpgrades[String(currentUpgradeLevel)] = data;
+    } else {
+      delete currentUpgrades[String(currentUpgradeLevel)];
+    }
+    updateUpgradeTabIndicators();
+  }
+
+  function saveUpgradeLevel() {
+    saveUpgradeLevelSilent();
+    alert(`LV${currentUpgradeLevel} 差異已儲存`);
+  }
+
+  function clearUpgradeLevel() {
+    if (!currentUpgradeLevel) return;
+    delete currentUpgrades[String(currentUpgradeLevel)];
+    for (const f of UPGRADE_FIELDS) {
+      const input = el('upg_' + f);
+      if (input) input.value = '';
+    }
+    updateUpgradeTabIndicators();
+  }
+
+  function updateUpgradeTabIndicators() {
+    for (let lv = 1; lv <= 5; lv++) {
+      const tab = el('upgradeTab' + lv);
+      const has = currentUpgrades[String(lv)] && Object.keys(currentUpgrades[String(lv)]).length > 0;
+      tab.textContent = has ? `LV${lv} ●` : `LV${lv}`;
+    }
+  }
+
+  function loadUpgrades(upgrades) {
+    currentUpgrades = upgrades && typeof upgrades === 'object' ? { ...upgrades } : {};
+    currentUpgradeLevel = null;
+    el('upgradeEditor').style.display = 'none';
+    document.querySelectorAll('#upgradeTabs .btn').forEach(b => b.classList.remove('btn-primary'));
+    updateUpgradeTabIndicators();
+  }
+
   function clearForm() {
     editingId = null;
     document.querySelectorAll('.form-area input[type="text"], .form-area input[type="number"], .form-area textarea').forEach(i => { if (i.type === 'number') i.value = i.min || 0; else i.value = ''; });
@@ -1296,6 +1446,10 @@
     el('f_commit_bonus').value = '';
     loadConsumeEffect(false, null);
     renderEffects([]);
+    currentUpgrades = {};
+    currentUpgradeLevel = null;
+    el('upgradeEditor').style.display = 'none';
+    document.querySelectorAll('#upgradeTabs .btn').forEach(b => b.classList.remove('btn-primary'));
     toggleConditionalFields();
     updateCodePreview();
     updatePreview();
@@ -1822,6 +1976,14 @@
     toggle('signatureFields', el('f_is_signature').checked);
     toggle('revelationFields', el('f_is_revelation').checked);
 
+    // Book/Relic fields — show when asset has book or relic subtype
+    const subtypes = collectSubtypes ? collectSubtypes() : [];
+    const hasBookRelic = subtypes.includes('book') || subtypes.includes('relic') || el('f_is_book')?.checked || el('f_is_relic')?.checked;
+    toggle('bookRelicFields', isAsset && hasBookRelic);
+    const studyMethod = el('f_study_method')?.value;
+    toggle('studyTestGroup', studyMethod === 'count_and_test');
+    toggle('studyDcGroup', studyMethod === 'count_and_test');
+
     // Play section fields — weapon/combat only when relevant
     toggle('allyHpGroup', isAlly);
     toggle('allySanGroup', isAlly);
@@ -1953,6 +2115,9 @@
     el('f_is_signature').addEventListener('change', () => { toggleConditionalFields(); updatePreview(); });
     el('f_is_unique').addEventListener('change', () => updatePreview());
     el('f_is_revelation').addEventListener('change', toggleConditionalFields);
+    if (el('f_is_book')) el('f_is_book').addEventListener('change', toggleConditionalFields);
+    if (el('f_is_relic')) el('f_is_relic').addEventListener('change', toggleConditionalFields);
+    if (el('f_study_method')) el('f_study_method').addEventListener('change', toggleConditionalFields);
     el('searchInput').addEventListener('input', renderList);
     el('filterFaction').addEventListener('change', renderList);
     el('filterStyle').addEventListener('change', renderList);
@@ -2527,6 +2692,16 @@ ${userDescription}
     loadCommitIcons(d.commit_icons || {});
     el('f_commit_bonus').value = d.commit_bonus || '';
     loadConsumeEffect(d.consume_enabled, d.consume_effect);
+    // Book/Relic fields
+    if (el('f_is_book')) el('f_is_book').checked = !!d.is_book;
+    if (el('f_is_relic')) el('f_is_relic').checked = !!d.is_relic;
+    if (el('f_study_method')) el('f_study_method').value = d.study_method || '';
+    if (el('f_study_required')) el('f_study_required').value = d.study_required ?? 0;
+    if (el('f_study_test_attribute')) el('f_study_test_attribute').value = d.study_test_attribute || '';
+    if (el('f_study_test_dc')) el('f_study_test_dc').value = d.study_test_dc ?? 0;
+    if (el('f_study_difficulty_tier')) el('f_study_difficulty_tier').value = d.study_difficulty_tier ?? 0;
+    if (el('f_study_upgrade_card')) el('f_study_upgrade_card').value = d.study_upgrade_card || '';
+    loadUpgrades(d.upgrades);
     el('f_flavor_text').value = d.flavor_text || '';
     // Migrate old effect format if needed
     const effects = (d.effects || []).map(e => {

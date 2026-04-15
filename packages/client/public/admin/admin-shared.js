@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.1.1';
+const ADMIN_VERSION = '0.2.0';
 
 // ============================================
 // API 設定
@@ -78,13 +78,13 @@ const GAME_RULES = {
   ATTRIBUTE_MIN: 1,
   ATTRIBUTE_MAX: 10,
   ATTRIBUTE_CREATION_MAX: 5,
-  CREATION_TOTAL_POINTS: 18,  // 18 at creation + 5 via talent tree = 23 effective
+  CREATION_TOTAL_POINTS: 21,  // 7 attributes × average 3.0
   ATTRIBUTE_COUNT: 7,
   HP_BASE: 5,
   SAN_BASE: 5,
   getMaxHP: (con) => con * 2 + 5,
   getMaxSAN: (wil) => wil * 2 + 5,
-  getModifier: (attr) => Math.floor(attr / 2),
+  getModifier: (attr) => attr,  // 1:1 — 屬性值 = 修正值
   ACTIONS_PER_TURN: 3,
   HAND_LIMIT: 8,
   CARDS_DRAWN_PER_TURN: 1,
@@ -116,11 +116,11 @@ const FACTIONS = {
 };
 
 const ENEMY_TIERS = {
-  1: { name: '雜兵', en: 'Minion', dc: 8,  hpRange: [3, 5],   dmgRange: [1, 2] },
-  2: { name: '威脅', en: 'Threat', dc: 12, hpRange: [8, 14],  dmgRange: [2, 4] },
-  3: { name: '精英', en: 'Elite',  dc: 16, hpRange: [18, 28], dmgRange: [3, 6] },
-  4: { name: '頭目', en: 'Boss',   dc: 20, hpRange: [35, 50], dmgRange: [4, 8] },
-  5: { name: '巨頭', en: 'Titan',  dc: 24, hpRange: [55, 70], dmgRange: [6, 10] },
+  1: { name: '雜兵', en: 'Minion', dc: 12, hpRange: [3, 5],   dmgRange: [1, 2] },
+  2: { name: '威脅', en: 'Threat', dc: 16, hpRange: [8, 14],  dmgRange: [2, 4] },
+  3: { name: '精英', en: 'Elite',  dc: 20, hpRange: [18, 28], dmgRange: [3, 6] },
+  4: { name: '頭目', en: 'Boss',   dc: 24, hpRange: [35, 50], dmgRange: [4, 8] },
+  5: { name: '巨頭', en: 'Titan',  dc: 28, hpRange: [55, 70], dmgRange: [6, 10] },
 };
 
 const WEAPON_TIERS = {
@@ -176,8 +176,11 @@ const TRIGGERS = {
   on_enter:         { zh: '進場時',     en: 'On Enter' },
   on_leave:         { zh: '離場時',     en: 'On Leave' },
   on_draw:          { zh: '抽到時',     en: 'On Draw' },
-  on_check_success: { zh: '檢定成功時', en: 'On Check Success' },
-  on_check_fail:    { zh: '檢定失敗時', en: 'On Check Fail' },
+  on_success:       { zh: '檢定成功時', en: 'On Success' },
+  on_fail:          { zh: '檢定失敗時', en: 'On Fail' },
+  round_start:      { zh: '回合開始時', en: 'Round Start' },
+  round_end:        { zh: '回合結束時', en: 'Round End' },
+  action:           { zh: '行動',       en: 'Action' },
   reaction:         { zh: '反應',       en: 'Reaction' },
   passive:          { zh: '被動',       en: 'Passive' },
   free_action:      { zh: '免費行動',   en: 'Free Action' },
@@ -249,12 +252,12 @@ const ENEMY_PREFERENCES = {
 };
 
 const SPELL_TYPES = {
-  combat_destruction:    { code: 'combat_destruction',    zh: '戰鬥與毀滅', en: 'Combat & Destruction' },
-  investigation_prophecy:{ code: 'investigation_prophecy',zh: '調查與預言', en: 'Investigation & Prophecy' },
-  protection_evasion:    { code: 'protection_evasion',    zh: '防護與迴避', en: 'Protection & Evasion' },
-  spacetime_planar:      { code: 'spacetime_planar',      zh: '時空與位面', en: 'Spacetime & Planar' },
-  summoning_binding:     { code: 'summoning_binding',     zh: '召喚與束縛', en: 'Summoning & Binding' },
-  healing_purification:  { code: 'healing_purification',  zh: '治療與淨化', en: 'Healing & Purification' },
+  combat:       { code: 'combat',       zh: '戰鬥與毀滅', en: 'Combat & Destruction' },
+  investigation:{ code: 'investigation',zh: '調查與預言', en: 'Investigation & Prophecy' },
+  protection:   { code: 'protection',   zh: '防護與迴避', en: 'Protection & Evasion' },
+  spacetime:    { code: 'spacetime',    zh: '時空與位面', en: 'Spacetime & Planar' },
+  summoning:    { code: 'summoning',    zh: '召喚與束縛', en: 'Summoning & Binding' },
+  healing:      { code: 'healing',      zh: '治療與淨化', en: 'Healing & Purification' },
 };
 
 const SPELL_CASTINGS = {

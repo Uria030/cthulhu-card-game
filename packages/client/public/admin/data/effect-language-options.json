@@ -4,13 +4,13 @@
       { "code": "on_play", "zh": "打出時", "en": "On Play" },
       { "code": "on_commit", "zh": "加值投入時", "en": "On Commit" },
       { "code": "on_consume", "zh": "消費時", "en": "On Consume" },
-      { "code": "on_enter_play", "zh": "進場時", "en": "On Enter Play" },
-      { "code": "on_leave_play", "zh": "離場時", "en": "On Leave Play" },
+      { "code": "on_enter", "zh": "進場時", "en": "On Enter" },
+      { "code": "on_leave", "zh": "離場時", "en": "On Leave" },
       { "code": "on_draw", "zh": "被抽到時", "en": "On Draw" }
     ],
     "檢定相關": [
       { "code": "on_success", "zh": "檢定成功時", "en": "On Success" },
-      { "code": "on_failure", "zh": "檢定失敗時", "en": "On Failure" },
+      { "code": "on_fail", "zh": "檢定失敗時", "en": "On Fail" },
       { "code": "on_critical", "zh": "大成功時", "en": "On Critical" },
       { "code": "on_fumble", "zh": "大失敗時", "en": "On Fumble" }
     ],
@@ -33,11 +33,12 @@
       { "code": "on_ally_downed", "zh": "隊友倒地時", "en": "On Ally Downed" }
     ],
     "回合節奏": [
-      { "code": "on_turn_start", "zh": "回合開始時", "en": "On Turn Start" },
-      { "code": "on_turn_end", "zh": "回合結束時", "en": "On Turn End" },
+      { "code": "round_start", "zh": "回合開始時", "en": "Round Start" },
+      { "code": "round_end", "zh": "回合結束時", "en": "Round End" },
       { "code": "on_enemy_phase", "zh": "敵人階段時", "en": "On Enemy Phase" }
     ],
     "行動模式": [
+      { "code": "action", "zh": "行動", "en": "Action" },
       { "code": "reaction", "zh": "反應", "en": "Reaction" },
       { "code": "passive", "zh": "被動", "en": "Passive" },
       { "code": "free_action", "zh": "免費行動", "en": "Free Action" }
@@ -182,7 +183,8 @@
       { "code": "evade", "zh": "閃避", "en": "Evade" },
       { "code": "taunt", "zh": "嘲諷", "en": "Taunt" },
       { "code": "counterattack", "zh": "反擊", "en": "Counterattack" },
-      { "code": "extra_attack", "zh": "額外攻擊", "en": "Extra Attack" }
+      { "code": "extra_attack", "zh": "額外攻擊", "en": "Extra Attack" },
+      { "code": "cast_spell", "zh": "施放法術", "en": "Cast Spell" }
     ],
     "環境類": [
       { "code": "place_clue", "zh": "放置線索", "en": "Place Clue" },
@@ -219,7 +221,13 @@
       { "code": "remove_bless", "zh": "移除祝福", "en": "Remove Bless" },
       { "code": "remove_curse", "zh": "移除詛咒", "en": "Remove Curse" },
       { "code": "look_chaos_bag", "zh": "窺探混沌袋", "en": "Look Chaos Bag" },
-      { "code": "manipulate_chaos_bag", "zh": "操控混沌袋", "en": "Manipulate Chaos Bag" }
+      { "code": "manipulate_chaos_bag", "zh": "操控混沌袋", "en": "Manipulate Chaos Bag" },
+      { "code": "declare_stratagem", "zh": "宣告戰術", "en": "Declare Stratagem" },
+      { "code": "flip_card", "zh": "翻面卡片", "en": "Flip Card" },
+      { "code": "forge_item", "zh": "鍛造物品", "en": "Forge Item" },
+      { "code": "craft_item", "zh": "製作物品", "en": "Craft Item" },
+      { "code": "read_book", "zh": "閱讀書籍", "en": "Read Book" },
+      { "code": "research_relic", "zh": "研究遺跡", "en": "Research Relic" }
     ]
   },
 
@@ -579,6 +587,44 @@
       "optional": [
         { "key": "token_type", "type": "text", "zh": "標記類型", "en": "Token Type" }
       ]
+    },
+    "cast_spell": {
+      "required": [
+        { "key": "spell_card", "type": "text", "zh": "法術卡代碼", "en": "Spell Card Code" }
+      ]
+    },
+    "declare_stratagem": {
+      "required": [
+        { "key": "stratagem_type", "type": "text", "zh": "戰術類型", "en": "Stratagem Type" }
+      ]
+    },
+    "flip_card": {
+      "required": [
+        { "key": "target_card", "type": "text", "zh": "目標卡片代碼", "en": "Target Card Code" }
+      ],
+      "optional": [
+        { "key": "result_card", "type": "text", "zh": "翻面後卡片代碼", "en": "Result Card Code" }
+      ]
+    },
+    "forge_item": {
+      "required": [
+        { "key": "target_asset", "type": "text", "zh": "目標資產卡代碼", "en": "Target Asset Code" }
+      ]
+    },
+    "craft_item": {
+      "required": [
+        { "key": "recipe_id", "type": "text", "zh": "配方 ID", "en": "Recipe ID" }
+      ]
+    },
+    "read_book": {
+      "required": [
+        { "key": "progress", "type": "number", "zh": "累積進度", "en": "Progress", "min": 1, "max": 10 }
+      ]
+    },
+    "research_relic": {
+      "required": [
+        { "key": "progress", "type": "number", "zh": "累積進度", "en": "Progress", "min": 1, "max": 10 }
+      ]
     }
   },
 
@@ -620,7 +666,7 @@
     { "code": "physical", "zh": "物理", "en": "Physical" },
     { "code": "fire", "zh": "火", "en": "Fire" },
     { "code": "ice", "zh": "冰", "en": "Ice" },
-    { "code": "lightning", "zh": "電", "en": "Lightning" },
+    { "code": "electric", "zh": "雷", "en": "Electric" },
     { "code": "arcane", "zh": "神秘", "en": "Arcane" }
   ],
 
@@ -667,7 +713,9 @@
     { "code": "light_source", "zh": "光源", "en": "Light Source" },
     { "code": "ammo", "zh": "彈藥", "en": "Ammunition" },
     { "code": "arrow", "zh": "箭矢", "en": "Arrow" },
-    { "code": "spell", "zh": "法術", "en": "Spell" }
+    { "code": "spell", "zh": "法術", "en": "Spell" },
+    { "code": "book", "zh": "書籍", "en": "Book" },
+    { "code": "relic", "zh": "遺跡", "en": "Relic" }
   ],
 
   "resource_types": [

@@ -126,11 +126,14 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
           combat_style, attribute_modifiers, spell_type, spell_casting, hand_limit_mod,
           ally_hp, ally_san, xp_cost, subtypes,
           flavor_text, removable, committable, lethal_count, owner_investigator,
-          commit_icons, consume_enabled, consume_effect
+          commit_icons, consume_enabled, consume_effect,
+          is_book, is_relic, study_method, study_required,
+          study_test_attribute, study_test_dc, study_difficulty_tier, study_upgrade_card,
+          upgrades
         ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
           $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,
-          $39,$40,$41
+          $39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50
         ) RETURNING *`;
 
       const vals = [
@@ -141,7 +144,10 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
         b.combat_style || null, JSON.stringify(b.attribute_modifiers || {}), b.spell_type || null, b.spell_casting || null, b.hand_limit_mod || 0,
         b.ally_hp || null, b.ally_san || null, b.xp_cost || 0, b.subtypes || [],
         b.flavor_text || null, b.removable !== false, b.committable !== false, b.lethal_count || 0, b.owner_investigator || null,
-        JSON.stringify(b.commit_icons || {}), b.consume_enabled || false, b.consume_effect ? JSON.stringify(b.consume_effect) : null
+        JSON.stringify(b.commit_icons || {}), b.consume_enabled || false, b.consume_effect ? JSON.stringify(b.consume_effect) : null,
+        b.is_book || false, b.is_relic || false, b.study_method || null, b.study_required || null,
+        b.study_test_attribute || null, b.study_test_dc || null, b.study_difficulty_tier || null, b.study_upgrade_card || null,
+        JSON.stringify(b.upgrades || {})
       ];
 
       const cardResult = await client.query(insertSQL, vals);
@@ -181,8 +187,11 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
           ally_hp=$25, ally_san=$26, xp_cost=$27, subtypes=$28,
           flavor_text=$29, removable=$30, committable=$31, lethal_count=$32, owner_investigator=$33,
           commit_icons=$34, consume_enabled=$35, consume_effect=$36,
+          is_book=$37, is_relic=$38, study_method=$39, study_required=$40,
+          study_test_attribute=$41, study_test_dc=$42, study_difficulty_tier=$43, study_upgrade_card=$44,
+          upgrades=$45,
           version = version + 1, updated_at = NOW()
-        WHERE id = $37 RETURNING *`;
+        WHERE id = $46 RETURNING *`;
 
       const vals = [
         b.name_zh, b.name_en, b.slot || 'none',
@@ -194,6 +203,9 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
         b.ally_hp || null, b.ally_san || null, b.xp_cost || 0, b.subtypes || [],
         b.flavor_text || null, b.removable !== false, b.committable !== false, b.lethal_count || 0, b.owner_investigator || null,
         JSON.stringify(b.commit_icons || {}), b.consume_enabled || false, b.consume_effect ? JSON.stringify(b.consume_effect) : null,
+        b.is_book || false, b.is_relic || false, b.study_method || null, b.study_required || null,
+        b.study_test_attribute || null, b.study_test_dc || null, b.study_difficulty_tier || null, b.study_upgrade_card || null,
+        JSON.stringify(b.upgrades || {}),
         id
       ];
 
@@ -264,8 +276,9 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
             health_boost,sanity_boost,weapon_tier,ammo,uses,consume_type,
             combat_style,attribute_modifiers,spell_type,spell_casting,hand_limit_mod,
             ally_hp,ally_san,xp_cost,subtypes,flavor_text,removable,committable,lethal_count,owner_investigator,
-            commit_icons,consume_enabled,consume_effect
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41) RETURNING id`,
+            commit_icons,consume_enabled,consume_effect,
+            is_book,is_relic,study_method,study_required,study_test_attribute,study_test_dc,study_difficulty_tier,study_upgrade_card,upgrades
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50) RETURNING id`,
           [code,seriesCode,card.name_zh,card.name_en,card.faction,card.style,card.card_type||card.type,card.slot||'none',
            card.is_unique||false,card.is_signature||false,card.is_weakness||false,card.is_revelation||false,
            card.level||0,card.cost||0,card.cost_currency||'resource',card.skill_value||0,card.damage||0,card.horror||0,
@@ -273,7 +286,10 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
            card.combat_style||null,JSON.stringify(attrMods),card.spell_type||null,card.spell_casting||null,card.hand_limit_mod||0,
            card.ally_hp||null,card.ally_san||null,card.xp_cost||0,card.subtypes||[],card.flavor_text||null,
            card.removable!==false,card.committable!==false,card.lethal_count||0,card.owner_investigator||null,
-           JSON.stringify(card.commit_icons||{}),card.consume_enabled||false,card.consume_effect?JSON.stringify(card.consume_effect):null]
+           JSON.stringify(card.commit_icons||{}),card.consume_enabled||false,card.consume_effect?JSON.stringify(card.consume_effect):null,
+           card.is_book||false,card.is_relic||false,card.study_method||null,card.study_required||null,
+           card.study_test_attribute||null,card.study_test_dc||null,card.study_difficulty_tier||null,card.study_upgrade_card||null,
+           JSON.stringify(card.upgrades||{})]
         );
         await insertEffects(client, insertRes.rows[0].id, card.effects);
         await client.query('COMMIT');

@@ -270,6 +270,114 @@ EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 `;
 
+// Migration 007: Combat styles, specializations, style cards + seed data
+const MIGRATION_007_SQL = `
+-- ============================================
+-- Migration 007: Combat styles / specializations / style cards
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS combat_styles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(32) UNIQUE NOT NULL,
+  name_zh VARCHAR(64) NOT NULL,
+  name_en VARCHAR(64) NOT NULL,
+  description_zh TEXT,
+  description_en TEXT,
+  spec_count INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS combat_specializations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  style_id UUID NOT NULL REFERENCES combat_styles(id) ON DELETE CASCADE,
+  code VARCHAR(64) UNIQUE NOT NULL,
+  name_zh VARCHAR(64) NOT NULL,
+  name_en VARCHAR(64) NOT NULL,
+  description_zh TEXT,
+  description_en TEXT,
+  attribute VARCHAR(16) NOT NULL DEFAULT '',
+  prof_bonus INTEGER NOT NULL DEFAULT 1,
+  spec_bonus INTEGER NOT NULL DEFAULT 2,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS combat_style_cards (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  style_id UUID NOT NULL REFERENCES combat_styles(id) ON DELETE CASCADE,
+  code VARCHAR(64) UNIQUE NOT NULL,
+  name_zh VARCHAR(64) NOT NULL,
+  name_en VARCHAR(64) NOT NULL,
+  check_attribute VARCHAR(16) NOT NULL,
+  narrative_attack_zh TEXT NOT NULL DEFAULT '',
+  narrative_attack_en TEXT,
+  narrative_success_zh TEXT NOT NULL DEFAULT '',
+  narrative_success_en TEXT,
+  narrative_fail_zh TEXT NOT NULL DEFAULT '',
+  narrative_fail_en TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_specs_style ON combat_specializations(style_id);
+CREATE INDEX IF NOT EXISTS idx_style_cards_style ON combat_style_cards(style_id);
+
+-- Seed: 8 combat styles
+INSERT INTO combat_styles (code, name_zh, name_en, sort_order) VALUES
+  ('shooting',  '槍枝射擊', 'Shooting',          1),
+  ('archery',   '弓術',     'Archery',            2),
+  ('sidearm',   '隨身武器', 'Sidearm',            3),
+  ('military',  '軍用武器', 'Military Weapons',   4),
+  ('brawl',     '搏擊',     'Brawl',              5),
+  ('arcane',    '施法',     'Arcane',             6),
+  ('engineer',  '工兵',     'Engineer',           7),
+  ('assassin',  '暗殺',     'Assassination',      8)
+ON CONFLICT (code) DO NOTHING;
+
+-- Seed: 30 combat specializations
+INSERT INTO combat_specializations (style_id, code, name_zh, name_en, attribute, sort_order) VALUES
+  ((SELECT id FROM combat_styles WHERE code = 'shooting'),  'shooting_rifle',     '步槍',       'Rifle',              '', 1),
+  ((SELECT id FROM combat_styles WHERE code = 'shooting'),  'shooting_smg',       '衝鋒槍',     'Submachine Gun',     '', 2),
+  ((SELECT id FROM combat_styles WHERE code = 'shooting'),  'shooting_dual',      '雙槍',       'Dual Pistols',       '', 3),
+  ((SELECT id FROM combat_styles WHERE code = 'shooting'),  'shooting_pistol',    '手槍',       'Pistol',             '', 4),
+  ((SELECT id FROM combat_styles WHERE code = 'archery'),   'archery_hunter',     '獵手',       'Hunter',             '', 1),
+  ((SELECT id FROM combat_styles WHERE code = 'archery'),   'archery_rapid',      '連射',       'Rapid Fire',         '', 2),
+  ((SELECT id FROM combat_styles WHERE code = 'archery'),   'archery_poison',     '毒箭',       'Poison Arrow',       '', 3),
+  ((SELECT id FROM combat_styles WHERE code = 'archery'),   'archery_silent',     '無聲射手',   'Silent Marksman',    '', 4),
+  ((SELECT id FROM combat_styles WHERE code = 'sidearm'),   'sidearm_dagger',     '匕首術',     'Dagger Arts',        '', 1),
+  ((SELECT id FROM combat_styles WHERE code = 'sidearm'),   'sidearm_parry',      '護身格擋',   'Parry Guard',        '', 2),
+  ((SELECT id FROM combat_styles WHERE code = 'sidearm'),   'sidearm_blunt',      '鈍擊',       'Blunt Strike',       '', 3),
+  ((SELECT id FROM combat_styles WHERE code = 'sidearm'),   'sidearm_street',     '街頭格鬥',   'Street Fighting',    '', 4),
+  ((SELECT id FROM combat_styles WHERE code = 'military'),  'military_twohanded', '雙手武器',   'Two-Handed',         '', 1),
+  ((SELECT id FROM combat_styles WHERE code = 'military'),  'military_defense',   '防禦架式',   'Defensive Stance',   '', 2),
+  ((SELECT id FROM combat_styles WHERE code = 'military'),  'military_dual',      '雙持',       'Dual Wield',         '', 3),
+  ((SELECT id FROM combat_styles WHERE code = 'military'),  'military_polearm',   '長柄武器',   'Polearm',            '', 4),
+  ((SELECT id FROM combat_styles WHERE code = 'brawl'),     'brawl_tavern',       '酒館鬥毆者', 'Tavern Brawler',     '', 1),
+  ((SELECT id FROM combat_styles WHERE code = 'brawl'),     'brawl_wrestler',     '摔角大師',   'Wrestler',           '', 2),
+  ((SELECT id FROM combat_styles WHERE code = 'brawl'),     'brawl_karate',       '空手道',     'Karate',             '', 3),
+  ((SELECT id FROM combat_styles WHERE code = 'arcane'),    'arcane_ritual',      '儀式',       'Ritual',             '', 1),
+  ((SELECT id FROM combat_styles WHERE code = 'arcane'),    'arcane_incantation', '咒語',       'Incantation',        '', 2),
+  ((SELECT id FROM combat_styles WHERE code = 'arcane'),    'arcane_channeling',  '引導',       'Channeling',         '', 3),
+  ((SELECT id FROM combat_styles WHERE code = 'arcane'),    'arcane_meditation',  '冥想',       'Meditation',         '', 4),
+  ((SELECT id FROM combat_styles WHERE code = 'arcane'),    'arcane_alchemy',     '煉金',       'Alchemy',            '', 5),
+  ((SELECT id FROM combat_styles WHERE code = 'engineer'),  'engineer_demolition','爆破',       'Demolition',         '', 1),
+  ((SELECT id FROM combat_styles WHERE code = 'engineer'),  'engineer_trap',      '陷阱',       'Trap',               '', 2),
+  ((SELECT id FROM combat_styles WHERE code = 'engineer'),  'engineer_mechanic',  '機械',       'Mechanic',           '', 3),
+  ((SELECT id FROM combat_styles WHERE code = 'assassin'),  'assassin_execute',   '無聲處決',   'Silent Execution',   '', 1),
+  ((SELECT id FROM combat_styles WHERE code = 'assassin'),  'assassin_ambush',    '伏擊戰術',   'Ambush Tactics',     '', 2),
+  ((SELECT id FROM combat_styles WHERE code = 'assassin'),  'assassin_hidden',    '暗器',       'Hidden Weapons',     '', 3)
+ON CONFLICT (code) DO NOTHING;
+
+-- Update spec_count
+UPDATE combat_styles SET spec_count = (
+  SELECT COUNT(*) FROM combat_specializations WHERE style_id = combat_styles.id
+);
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -280,6 +388,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_004_SQL);
     await client.query(MIGRATION_005_SQL);
     await client.query(MIGRATION_006_SQL);
+    await client.query(MIGRATION_007_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

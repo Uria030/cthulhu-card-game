@@ -3,32 +3,934 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>戰鬥熟練管理 — Admin Module</title>
+  <title>戰鬥風格管理 — Admin Module</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    .main-layout { display: flex; gap: 0; min-height: calc(100vh - 50px); }
+    /* Left panel: fixed overlay */
+    .panel-left { position: fixed; top: 50px; left: 0; width: 260px; height: calc(100vh - 50px); background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 1rem; overflow-y: auto; z-index: 100; transition: transform 0.25s ease; transform: translateX(0); }
+    .panel-left.collapsed { transform: translateX(-100%); }
+    .panel-toggle { position: fixed; top: 50%; left: 260px; z-index: 101; width: 28px; height: 72px; background: var(--bg-secondary); border: 1px solid var(--border); border-left: none; border-radius: 0 6px 6px 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 0.75rem; padding: 0; transform: translateY(-50%); transition: left 0.25s ease; }
+    .panel-toggle.shifted { left: 0; }
+    .panel-toggle:hover { color: var(--gold); background: var(--bg-card); }
+    /* Center content */
+    .panel-center { flex: 1; padding: 1rem 1.5rem; overflow-y: auto; max-height: calc(100vh - 50px); }
+    /* Right panel: preview drawer */
+    .panel-right-drawer { width: 320px; flex-shrink: 0; background: var(--bg-secondary); border-left: 1px solid var(--border); padding: 1rem; overflow-y: auto; max-height: calc(100vh - 50px); transition: width 0.2s, padding 0.2s, opacity 0.2s; }
+    .panel-right-drawer.collapsed { width: 0; padding: 0; overflow: hidden; border-left: none; opacity: 0; }
+    .panel-right-toggle { flex-shrink: 0; width: 24px; background: var(--bg-secondary); border: none; border-left: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--gold-dim); font-size: 0.6875rem; padding: 0; writing-mode: vertical-rl; letter-spacing: 0.15em; }
+    .panel-right-toggle:hover { color: var(--gold); background: var(--bg-card); }
+    @media (max-width: 768px) { .main-layout { flex-direction: column; } .panel-left { width: 240px; } .panel-right-drawer { width: 280px; } }
+
+    /* Toolbar */
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+    .toolbar .spacer { flex: 1; }
+
+    /* Style list items */
+    .style-item { padding: 0.625rem 0.75rem; border-radius: 6px; cursor: pointer; margin-bottom: 0.35rem; border-left: 3px solid transparent; transition: background 0.15s, border-color 0.15s; }
+    .style-item:hover { background: var(--bg-card); }
+    .style-item.active { border-left-color: var(--gold); background: var(--bg-card); }
+    .style-item .si-name { font-size: 0.875rem; font-weight: 500; color: var(--text-primary); }
+    .style-item .si-meta { font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 2px; }
+
+    /* Section labels */
+    .section-label { font-family: 'Cinzel', serif; font-size: 0.75rem; font-weight: 600; color: var(--gold-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem; margin-top: 1rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem; }
+    .section-label:first-child { margin-top: 0; }
+
+    /* Form grid */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 0.75rem; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .form-group { display: flex; flex-direction: column; gap: 0.2rem; }
+    .form-group label { font-size: 0.6875rem; color: var(--text-secondary); font-family: 'Noto Sans TC', sans-serif; }
+    .form-group input, .form-group select, .form-group textarea { font-size: 0.8125rem; padding: 0.375rem 0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-family: 'JetBrains Mono', 'Noto Sans TC', monospace, sans-serif; }
+    .form-group textarea { resize: vertical; min-height: 60px; font-family: 'Noto Sans TC', sans-serif; }
+
+    /* Spec table */
+    .spec-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-top: 0.5rem; }
+    .spec-table th { text-align: left; padding: 0.35rem 0.5rem; font-size: 0.6875rem; color: var(--text-tertiary); border-bottom: 1px solid var(--border); font-weight: 500; }
+    .spec-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .spec-table tr:hover { background: var(--bg-card); }
+    .spec-table input, .spec-table select { font-size: 0.75rem; padding: 0.2rem 0.35rem; background: transparent; border: 1px solid transparent; border-radius: 3px; color: var(--text-primary); width: 100%; }
+    .spec-table input:focus, .spec-table select:focus { border-color: var(--gold-dim); background: var(--bg-primary); outline: none; }
+    .spec-table .spec-actions { white-space: nowrap; }
+    .spec-table .spec-actions button { font-size: 0.625rem; padding: 0.15rem 0.4rem; }
+
+    /* Style card list */
+    .sc-list { max-height: 300px; overflow-y: auto; margin-top: 0.5rem; }
+    .sc-item { padding: 0.5rem 0.625rem; border-radius: 4px; cursor: pointer; margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.5rem; border-left: 3px solid transparent; transition: background 0.15s; }
+    .sc-item:hover { background: var(--bg-card); }
+    .sc-item.active { border-left-color: var(--gold); background: var(--bg-card); }
+    .sc-item .sc-name { font-size: 0.8125rem; flex: 1; }
+    .sc-item .sc-attr { font-size: 0.625rem; padding: 0.1rem 0.35rem; border-radius: 3px; font-weight: 500; }
+
+    /* Attribute colors */
+    .attr-tag { display: inline-block; font-size: 0.625rem; padding: 0.1rem 0.4rem; border-radius: 3px; font-weight: 500; }
+    .attr-strength { background: rgba(184,76,76,0.2); color: #B84C4C; }
+    .attr-agility { background: rgba(45,139,111,0.2); color: #2D8B6F; }
+    .attr-constitution { background: rgba(201,168,76,0.2); color: #C9A84C; }
+    .attr-intellect { background: rgba(74,124,155,0.2); color: #4A7C9B; }
+    .attr-willpower { background: rgba(123,78,163,0.2); color: #7B4EA3; }
+    .attr-perception { background: rgba(139,94,60,0.2); color: #8B5E3C; }
+    .attr-charisma { background: rgba(212,114,140,0.2); color: #D4728C; }
+
+    /* Distribution bars */
+    .dist-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.6875rem; margin-bottom: 0.25rem; }
+    .dist-label { width: 2.5rem; text-align: right; color: var(--text-secondary); }
+    .dist-bar-bg { flex: 1; height: 14px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; }
+    .dist-bar { height: 100%; border-radius: 3px; transition: width 0.3s; min-width: 1px; }
+    .dist-count { width: 5rem; font-size: 0.625rem; color: var(--text-tertiary); }
+
+    /* Preview card */
+    .preview-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-size: 0.8125rem; }
+    .pv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .pv-title { font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 600; color: var(--gold); }
+    .pv-subtitle { font-size: 0.75rem; color: var(--text-tertiary); }
+    .pv-divider { border: none; border-top: 1px solid var(--border); margin: 0.75rem 0; }
+    .pv-section-label { font-size: 0.6875rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .pv-narrative { font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.75rem; font-family: 'Noto Sans TC', sans-serif; }
+    .pv-footer { font-size: 0.625rem; color: var(--text-tertiary); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+
+    /* AI panel */
+    .ai-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; margin-top: 0.75rem; }
+    .ai-panel summary { cursor: pointer; font-size: 0.75rem; color: var(--gold-dim); font-weight: 500; }
+    .ai-styles { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.5rem; }
+    .ai-style-btn { font-size: 0.625rem; padding: 0.2rem 0.5rem; border-radius: 3px; background: rgba(201,168,76,0.1); border: 1px solid var(--gold-dim); color: var(--gold); cursor: pointer; }
+    .ai-style-btn:hover { background: rgba(201,168,76,0.25); }
+
+    /* Buttons */
+    .btn { font-size: 0.75rem; padding: 0.35rem 0.75rem; border-radius: 4px; cursor: pointer; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); font-family: 'Noto Sans TC', sans-serif; transition: background 0.15s, border-color 0.15s; }
+    .btn:hover { border-color: var(--gold-dim); background: var(--bg-secondary); }
+    .btn-gold { border-color: var(--gold-dim); color: var(--gold); }
+    .btn-gold:hover { background: rgba(201,168,76,0.15); }
+    .btn-danger { border-color: var(--danger); color: var(--danger); }
+    .btn-danger:hover { background: rgba(184,76,76,0.15); }
+    .btn-sm { font-size: 0.625rem; padding: 0.2rem 0.5rem; }
+    .btn-ai { border-color: #7B4EA3; color: #7B4EA3; }
+    .btn-ai:hover { background: rgba(123,78,163,0.15); }
+
+    .stat-footer { font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+    .arcane-warning { font-size: 0.6875rem; color: var(--gold); background: rgba(201,168,76,0.1); border: 1px solid var(--gold-dim); border-radius: 4px; padding: 0.35rem 0.5rem; margin-top: 0.5rem; }
+    .toast { position: fixed; top: 60px; right: 1rem; background: var(--bg-card); border: 1px solid var(--success); color: var(--success); padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.8125rem; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+    .toast.show { opacity: 1; }
+    .min-count-warn { font-size: 0.6875rem; padding: 0.35rem 0.5rem; border-radius: 4px; margin-top: 0.5rem; }
+    .hidden { display: none !important; }
+  </style>
 </head>
 <body>
 
   <nav class="admin-nav">
     <a href="index.html" class="nav-back">← 返回首頁</a>
-    <span class="nav-title">戰鬥熟練管理</span>
+    <span class="nav-title">戰鬥風格管理</span>
     <span class="nav-code">MOD-05</span>
   </nav>
 
-  <div class="container">
-    <div class="page-header">
-      <h1>戰鬥熟練管理</h1>
-      <p class="page-sub">Combat Proficiency</p>
-      <p class="page-desc">管理戰鬥熟練度系統與升級曲線</p>
+  <div class="toast" id="toast"></div>
+
+  <div class="main-layout">
+    <!-- ════ LEFT PANEL: Style List ════ -->
+    <div class="panel-left" id="panelLeft">
+      <div class="toolbar" style="border-bottom:none;padding-bottom:0;margin-bottom:0.5rem;">
+        <button class="btn btn-sm" onclick="exportAll()">匯出 JSON</button>
+        <button class="btn btn-sm" onclick="document.getElementById('importFile').click()">匯入 JSON</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(this)">
+      </div>
+      <div id="styleList"></div>
+      <button class="btn btn-gold" style="width:100%;margin-top:0.5rem;" onclick="newStyle()">+ 新增風格</button>
+      <div class="stat-footer" id="globalStats">—</div>
+    </div>
+    <button class="panel-toggle" id="panelToggle" onclick="toggleLeftPanel()" title="收合/展開風格列表">&#9664;</button>
+
+    <!-- ════ CENTER: Main Content ════ -->
+    <div class="panel-center" id="panelCenter">
+
+      <!-- Block 1: Style Info -->
+      <div class="section-label">風格基本資訊</div>
+      <div class="form-grid">
+        <div class="form-group"><label>代碼 (code)</label><input type="text" id="f_code" readonly></div>
+        <div class="form-group"><label>排序</label><input type="number" id="f_sort" value="0" min="0"></div>
+        <div class="form-group"><label>中文名稱</label><input type="text" id="f_name_zh" placeholder="如：槍枝射擊"></div>
+        <div class="form-group"><label>英文名稱</label><div style="display:flex;gap:0.25rem;"><input type="text" id="f_name_en" placeholder="Shooting" style="flex:1;"><button class="btn btn-sm btn-ai" onclick="aiTranslate('f_name_zh','f_name_en')">生成</button></div></div>
+        <div class="form-group full"><label>中文說明</label><textarea id="f_desc_zh" rows="3" placeholder="風格的設計說明與定位描述"></textarea></div>
+        <div class="form-group full"><label>英文說明</label><div style="display:flex;gap:0.25rem;align-items:start;"><textarea id="f_desc_en" rows="3" placeholder="Design description" style="flex:1;"></textarea><button class="btn btn-sm btn-ai" onclick="aiTranslate('f_desc_zh','f_desc_en')">生成</button></div></div>
+      </div>
+      <div id="arcaneWarn" class="arcane-warning hidden">⚠ 施法類攻擊不擲骰，改走混沌袋流程</div>
+      <div style="margin-top:0.75rem;display:flex;gap:0.5rem;">
+        <button class="btn btn-gold" onclick="saveStyle()">儲存風格</button>
+        <button class="btn btn-danger" onclick="deleteStyle()" id="btnDeleteStyle" style="display:none;">刪除風格</button>
+      </div>
+
+      <!-- Block 2: Specializations -->
+      <div class="section-label" style="margin-top:1.5rem;">專精管理 <span id="specCount" style="font-size:0.625rem;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;"></span></div>
+      <table class="spec-table" id="specTable">
+        <thead><tr><th style="width:140px;">代碼</th><th>中文</th><th>英文</th><th style="width:80px;">屬性</th><th style="width:45px;">熟練</th><th style="width:45px;">專精</th><th style="width:90px;">操作</th></tr></thead>
+        <tbody id="specBody"></tbody>
+      </table>
+      <button class="btn btn-sm btn-gold" style="margin-top:0.5rem;" onclick="addSpecRow()">+ 新增專精</button>
+
+      <!-- Block 3: Style Cards -->
+      <div class="section-label" style="margin-top:1.5rem;">風格卡管理 <span id="cardCount" style="font-size:0.625rem;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;"></span></div>
+
+      <div style="display:flex;gap:1rem;margin-top:0.5rem;">
+        <!-- Left: card list -->
+        <div style="width:220px;flex-shrink:0;">
+          <div class="sc-list" id="scList"></div>
+          <div id="minCountWarn" class="min-count-warn hidden"></div>
+          <div style="display:flex;gap:0.35rem;margin-top:0.5rem;">
+            <button class="btn btn-sm btn-gold" onclick="newCard()">+ 新增</button>
+            <button class="btn btn-sm btn-ai" onclick="openBatchGen()">AI 批次生成</button>
+          </div>
+          <!-- Distribution -->
+          <div style="margin-top:0.75rem;" id="distPanel"></div>
+        </div>
+
+        <!-- Right: card editor -->
+        <div style="flex:1;min-width:0;">
+          <div class="form-grid">
+            <div class="form-group"><label>代碼 (自動)</label><input type="text" id="sc_code" readonly></div>
+            <div class="form-group"><label>檢定屬性</label><select id="sc_attr"></select></div>
+            <div class="form-group"><label>中文名稱</label><input type="text" id="sc_name_zh" placeholder="招式名稱" oninput="updateCardPreview()"></div>
+            <div class="form-group"><label>英文名稱</label><div style="display:flex;gap:0.25rem;"><input type="text" id="sc_name_en" placeholder="Move Name" style="flex:1;" oninput="updateCardPreview()"><button class="btn btn-sm btn-ai" onclick="aiTranslate('sc_name_zh','sc_name_en')">生成</button></div></div>
+            <div class="form-group full"><label>攻擊敘事 — 中文</label><textarea id="sc_atk_zh" rows="3" oninput="updateCardPreview()"></textarea></div>
+            <div class="form-group full"><label>攻擊敘事 — 英文</label><div style="display:flex;gap:0.25rem;align-items:start;"><textarea id="sc_atk_en" rows="3" style="flex:1;"></textarea><button class="btn btn-sm btn-ai" onclick="aiTranslate('sc_atk_zh','sc_atk_en')">生成</button></div></div>
+            <div class="form-group full"><label>成功敘事 — 中文</label><textarea id="sc_suc_zh" rows="3" oninput="updateCardPreview()"></textarea></div>
+            <div class="form-group full"><label>成功敘事 — 英文</label><div style="display:flex;gap:0.25rem;align-items:start;"><textarea id="sc_suc_en" rows="3" style="flex:1;"></textarea><button class="btn btn-sm btn-ai" onclick="aiTranslate('sc_suc_zh','sc_suc_en')">生成</button></div></div>
+            <div class="form-group full"><label>失敗敘事 — 中文</label><textarea id="sc_fail_zh" rows="3" oninput="updateCardPreview()"></textarea></div>
+            <div class="form-group full"><label>失敗敘事 — 英文</label><div style="display:flex;gap:0.25rem;align-items:start;"><textarea id="sc_fail_en" rows="3" style="flex:1;"></textarea><button class="btn btn-sm btn-ai" onclick="aiTranslate('sc_fail_zh','sc_fail_en')">生成</button></div></div>
+          </div>
+          <!-- AI single generate -->
+          <details class="ai-panel">
+            <summary>AI 生成風格卡敘事</summary>
+            <textarea id="aiInput" rows="2" style="width:100%;margin-top:0.5rem;font-size:0.75rem;background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);padding:0.35rem;resize:vertical;" placeholder="描述招式，例如：用步槍精準射擊的動作"></textarea>
+            <div class="ai-styles">
+              <button class="ai-style-btn" onclick="aiGenSingle('寫實硬派')">寫實硬派</button>
+              <button class="ai-style-btn" onclick="aiGenSingle('黑色電影')">黑色電影</button>
+              <button class="ai-style-btn" onclick="aiGenSingle('宇宙恐怖')">宇宙恐怖</button>
+              <button class="ai-style-btn" onclick="aiGenSingle('動作片')">動作片</button>
+              <button class="btn btn-sm btn-ai" style="margin-left:auto;" onclick="aiGenSingle()">生成</button>
+            </div>
+          </details>
+          <div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button class="btn btn-gold" onclick="saveCard()">儲存風格卡</button>
+            <button class="btn" onclick="saveCardAsNew()">另存新卡</button>
+            <button class="btn btn-danger" onclick="deleteCard()" id="btnDeleteCard" style="display:none;">刪除</button>
+            <button class="btn" onclick="clearCardForm()">清空表單</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Batch generate modal -->
+      <div id="batchModal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;display:flex;align-items:center;justify-content:center;">
+        <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:1.5rem;width:420px;max-width:90vw;">
+          <div class="section-label" style="margin-top:0;">批次生成風格卡</div>
+          <div class="form-grid" style="margin-top:0.5rem;">
+            <div class="form-group"><label>目標風格</label><input type="text" id="batchStyle" readonly></div>
+            <div class="form-group"><label>生成數量</label><input type="number" id="batchCount" value="5" min="1" max="20"></div>
+            <div class="form-group full"><label>敘事風格</label><select id="batchNarrative"><option value="寫實硬派">寫實硬派</option><option value="黑色電影">黑色電影</option><option value="宇宙恐怖">宇宙恐怖</option><option value="動作片">動作片</option><option value="文學風">文學風</option></select></div>
+          </div>
+          <div style="margin-top:0.75rem;display:flex;gap:0.5rem;">
+            <button class="btn btn-ai" onclick="runBatchGen()">生成</button>
+            <button class="btn" onclick="closeBatchModal()">取消</button>
+          </div>
+          <div id="batchResults" class="hidden" style="margin-top:1rem;max-height:300px;overflow-y:auto;"></div>
+        </div>
+      </div>
     </div>
 
-    <div class="placeholder-message">
-      <div class="placeholder-icon">🔧</div>
-      <div class="placeholder-text">此模組尚在開發中</div>
-      <div class="placeholder-sub">Module under development</div>
+    <!-- ════ RIGHT PANEL: Preview ════ -->
+    <button class="panel-right-toggle" id="panelRightToggle" onclick="toggleRightPanel()" title="展開預覽面板">預覽</button>
+    <div class="panel-right-drawer collapsed" id="panelRightDrawer">
+      <div class="section-label" style="margin-top:0;">風格卡預覽</div>
+      <div class="preview-card" id="cardPreview">
+        <div style="text-align:center;color:var(--text-tertiary);padding:2rem 0;">選擇或新增風格卡</div>
+      </div>
     </div>
   </div>
 
-  <script src="admin-shared.js"></script>
+<script src="admin-shared.js"></script>
+<script>
+  /* ══════════════════════════════════════════
+     State
+  ══════════════════════════════════════════ */
+  const el = (id) => document.getElementById(id);
+  let styles = [];
+  let currentStyleId = null;
+  let currentSpecs = [];
+  let currentCards = [];
+  let editingCardId = null;
+
+  const ATTR_COLORS = {
+    strength:'#B84C4C', agility:'#2D8B6F', constitution:'#C9A84C',
+    intellect:'#4A7C9B', willpower:'#7B4EA3', perception:'#8B5E3C', charisma:'#D4728C'
+  };
+
+  /* ══════════════════════════════════════════
+     Init
+  ══════════════════════════════════════════ */
+  document.addEventListener('DOMContentLoaded', async () => {
+    // Populate attribute dropdown
+    const attrOpts = '<option value="">—</option>' + Object.entries(ATTRIBUTES).map(([k,v]) => `<option value="${k}">${v.zh}</option>`).join('');
+    el('sc_attr').innerHTML = attrOpts;
+    el('sc_attr').addEventListener('change', updateCardPreview);
+
+    await loadStyles();
+    if (styles.length > 0) selectStyle(styles[0].id);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', e => {
+      if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveCard(); }
+      if (e.ctrlKey && e.key === 'n') { e.preventDefault(); newCard(); }
+      if (e.key === 'Escape') clearCardForm();
+    });
+  });
+
+  /* ══════════════════════════════════════════
+     Panel Toggles
+  ══════════════════════════════════════════ */
+  function toggleLeftPanel() {
+    const panel = el('panelLeft');
+    const btn = el('panelToggle');
+    const collapsed = panel.classList.toggle('collapsed');
+    btn.classList.toggle('shifted', collapsed);
+    btn.innerHTML = collapsed ? '&#9654;' : '&#9664;';
+  }
+  function toggleRightPanel() {
+    const drawer = el('panelRightDrawer');
+    drawer.classList.toggle('collapsed');
+  }
+
+  /* ══════════════════════════════════════════
+     Toast
+  ══════════════════════════════════════════ */
+  function toast(msg, ok = true) {
+    const t = el('toast');
+    t.textContent = msg;
+    t.style.borderColor = ok ? 'var(--success)' : 'var(--danger)';
+    t.style.color = ok ? 'var(--success)' : 'var(--danger)';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  /* ══════════════════════════════════════════
+     Style List (Left Panel)
+  ══════════════════════════════════════════ */
+  async function loadStyles() {
+    try {
+      const res = await adminFetch('/api/combat-styles');
+      const json = await res.json();
+      styles = json.data || [];
+      renderStyleList();
+      updateGlobalStats();
+    } catch (e) { console.error(e); }
+  }
+
+  function renderStyleList() {
+    el('styleList').innerHTML = styles.map(s => {
+      const active = s.id === currentStyleId ? ' active' : '';
+      return `<div class="style-item${active}" onclick="selectStyle('${s.id}')">
+        <div class="si-name">${s.name_zh || s.code}</div>
+        <div class="si-meta">${s.spec_count || 0} 專精 · ${s.card_count || 0} 風格卡</div>
+      </div>`;
+    }).join('');
+  }
+
+  async function updateGlobalStats() {
+    try {
+      const res = await adminFetch('/api/combat-styles/stats');
+      const json = await res.json();
+      const d = json.data || {};
+      el('globalStats').textContent = `${d.style_count || styles.length} 風格 · ${d.spec_count || 0} 專精 · ${d.card_count || 0} 風格卡`;
+    } catch {
+      const totalSpecs = styles.reduce((a,s) => a + (s.spec_count||0), 0);
+      const totalCards = styles.reduce((a,s) => a + (s.card_count||0), 0);
+      el('globalStats').textContent = `${styles.length} 風格 · ${totalSpecs} 專精 · ${totalCards} 風格卡`;
+    }
+  }
+
+  /* ══════════════════════════════════════════
+     Select / Load Style
+  ══════════════════════════════════════════ */
+  async function selectStyle(id) {
+    currentStyleId = id;
+    renderStyleList();
+    try {
+      const res = await adminFetch(`/api/combat-styles/${id}`);
+      const json = await res.json();
+      const s = json.data;
+      el('f_code').value = s.code || '';
+      el('f_sort').value = s.sort_order || 0;
+      el('f_name_zh').value = s.name_zh || '';
+      el('f_name_en').value = s.name_en || '';
+      el('f_desc_zh').value = s.description_zh || '';
+      el('f_desc_en').value = s.description_en || '';
+      el('btnDeleteStyle').style.display = '';
+      el('arcaneWarn').classList.toggle('hidden', s.code !== 'arcane');
+
+      currentSpecs = s.specializations || [];
+      renderSpecTable();
+
+      currentCards = s.style_cards || [];
+      renderCardList();
+
+      // Auto-select first card
+      if (currentCards.length > 0) loadCard(currentCards[0].id);
+      else clearCardForm();
+    } catch (e) { console.error(e); toast('載入失敗', false); }
+  }
+
+  /* ══════════════════════════════════════════
+     Style CRUD
+  ══════════════════════════════════════════ */
+  function newStyle() {
+    currentStyleId = null;
+    el('f_code').value = '';
+    el('f_sort').value = styles.length + 1;
+    el('f_name_zh').value = '';
+    el('f_name_en').value = '';
+    el('f_desc_zh').value = '';
+    el('f_desc_en').value = '';
+    el('btnDeleteStyle').style.display = 'none';
+    el('arcaneWarn').classList.add('hidden');
+    currentSpecs = [];
+    currentCards = [];
+    renderSpecTable();
+    renderCardList();
+    clearCardForm();
+    renderStyleList();
+  }
+
+  async function saveStyle() {
+    const body = {
+      code: el('f_code').value.trim() || el('f_name_en').value.trim().toLowerCase().replace(/\s+/g, '_'),
+      name_zh: el('f_name_zh').value.trim(),
+      name_en: el('f_name_en').value.trim(),
+      description_zh: el('f_desc_zh').value.trim(),
+      description_en: el('f_desc_en').value.trim(),
+      sort_order: parseInt(el('f_sort').value) || 0,
+    };
+    if (!body.name_zh) { toast('請填寫中文名稱', false); return; }
+    try {
+      let res;
+      if (currentStyleId) {
+        res = await adminFetch(`/api/combat-styles/${currentStyleId}`, { method: 'PUT', body: JSON.stringify(body) });
+      } else {
+        res = await adminFetch('/api/combat-styles', { method: 'POST', body: JSON.stringify(body) });
+      }
+      const json = await res.json();
+      if (!json.success) { toast(json.error || '儲存失敗', false); return; }
+      toast('風格已儲存');
+      await loadStyles();
+      if (!currentStyleId) currentStyleId = json.data.id;
+      selectStyle(currentStyleId);
+    } catch (e) { toast('儲存失敗', false); }
+  }
+
+  async function deleteStyle() {
+    if (!currentStyleId) return;
+    if (!confirm('確定刪除此風格？所有下轄專精和風格卡都會一併刪除。')) return;
+    try {
+      await adminFetch(`/api/combat-styles/${currentStyleId}`, { method: 'DELETE' });
+      toast('風格已刪除');
+      currentStyleId = null;
+      await loadStyles();
+      if (styles.length > 0) selectStyle(styles[0].id);
+      else newStyle();
+    } catch { toast('刪除失敗', false); }
+  }
+
+  /* ══════════════════════════════════════════
+     Specialization Table
+  ══════════════════════════════════════════ */
+  function renderSpecTable() {
+    el('specCount').textContent = `(${currentSpecs.length})`;
+    const attrSel = (val) => Object.entries(ATTRIBUTES).map(([k,v]) => `<option value="${k}"${k===val?' selected':''}>${v.zh}</option>`).join('');
+    el('specBody').innerHTML = currentSpecs.map(sp => `
+      <tr data-id="${sp.id}">
+        <td><input value="${sp.code||''}" readonly style="color:var(--text-tertiary);"></td>
+        <td><input value="${sp.name_zh||''}" data-field="name_zh"></td>
+        <td><input value="${sp.name_en||''}" data-field="name_en"></td>
+        <td><select data-field="attribute">${attrSel(sp.attribute)}</select></td>
+        <td><input type="number" value="${sp.prof_bonus||1}" min="1" max="3" data-field="prof_bonus" style="width:40px;"></td>
+        <td><input type="number" value="${sp.spec_bonus||2}" min="2" max="5" data-field="spec_bonus" style="width:40px;"></td>
+        <td class="spec-actions">
+          <button class="btn btn-sm btn-gold" onclick="saveSpec('${sp.id}',this)">存</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteSpec('${sp.id}')">刪</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  async function addSpecRow() {
+    if (!currentStyleId) { toast('請先儲存風格', false); return; }
+    const code = prompt('專精代碼（例如 shooting_sniper）：');
+    if (!code) return;
+    try {
+      const res = await adminFetch(`/api/combat-styles/${currentStyleId}/specs`, {
+        method: 'POST', body: JSON.stringify({ code, name_zh: code, name_en: code, attribute: '', prof_bonus: 1, spec_bonus: 2 })
+      });
+      const json = await res.json();
+      if (!json.success) { toast(json.error || '新增失敗', false); return; }
+      toast('專精已新增');
+      await selectStyle(currentStyleId);
+    } catch { toast('新增失敗', false); }
+  }
+
+  async function saveSpec(id, btn) {
+    const tr = btn.closest('tr');
+    const body = {};
+    tr.querySelectorAll('[data-field]').forEach(inp => {
+      const f = inp.dataset.field;
+      body[f] = (f === 'prof_bonus' || f === 'spec_bonus') ? parseInt(inp.value)||0 : inp.value;
+    });
+    try {
+      const res = await adminFetch(`/api/specs/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+      const json = await res.json();
+      if (json.success) toast('專精已更新'); else toast(json.error||'更新失敗', false);
+    } catch { toast('更新失敗', false); }
+  }
+
+  async function deleteSpec(id) {
+    if (!confirm('確定刪除此專精？')) return;
+    try {
+      await adminFetch(`/api/specs/${id}`, { method: 'DELETE' });
+      toast('已刪除');
+      await selectStyle(currentStyleId);
+    } catch { toast('刪除失敗', false); }
+  }
+
+  /* ══════════════════════════════════════════
+     Style Card List
+  ══════════════════════════════════════════ */
+  function renderCardList() {
+    el('cardCount').textContent = `(${currentCards.length})`;
+    el('scList').innerHTML = currentCards.length === 0
+      ? '<div style="color:var(--text-tertiary);font-size:0.75rem;padding:1rem 0;text-align:center;">尚無風格卡</div>'
+      : currentCards.map(c => {
+        const active = c.id === editingCardId ? ' active' : '';
+        const attr = c.check_attribute || '';
+        return `<div class="sc-item${active}" onclick="loadCard('${c.id}')">
+          <span class="sc-name">${c.name_zh || c.code}</span>
+          ${attr ? `<span class="sc-attr attr-tag attr-${attr}">${ATTRIBUTES[attr]?.abbr||attr}</span>` : ''}
+        </div>`;
+      }).join('');
+
+    // Min count warnings
+    const warn = el('minCountWarn');
+    if (currentCards.length < 3) {
+      warn.classList.remove('hidden');
+      warn.style.background = 'rgba(184,76,76,0.1)'; warn.style.color = 'var(--danger)'; warn.style.border = '1px solid var(--danger)';
+      warn.textContent = '⚠ 風格卡數量過少，遊戲體驗可能單調';
+    } else if (currentCards.length < 8) {
+      warn.classList.remove('hidden');
+      warn.style.background = 'rgba(201,168,76,0.1)'; warn.style.color = 'var(--gold)'; warn.style.border = '1px solid var(--gold-dim)';
+      warn.textContent = '建議至少 8 張風格卡以確保隨機性';
+    } else {
+      warn.classList.add('hidden');
+    }
+
+    renderDistribution();
+  }
+
+  function renderDistribution() {
+    const counts = {};
+    Object.keys(ATTRIBUTES).forEach(k => counts[k] = 0);
+    currentCards.forEach(c => { if (c.check_attribute && counts[c.check_attribute] !== undefined) counts[c.check_attribute]++; });
+    const total = currentCards.length || 1;
+    let html = '<div style="font-size:0.6875rem;color:var(--text-secondary);margin-bottom:0.35rem;">屬性分佈</div>';
+    for (const [k, v] of Object.entries(ATTRIBUTES)) {
+      const n = counts[k];
+      const pct = (n / total * 100);
+      const color = ATTR_COLORS[k] || '#888';
+      const warn = pct > 60 ? ' ⚠' : (n === 0 && currentCards.length > 0 ? ' ∅' : '');
+      html += `<div class="dist-row">
+        <span class="dist-label">${v.abbr}</span>
+        <div class="dist-bar-bg"><div class="dist-bar" style="width:${pct}%;background:${color};"></div></div>
+        <span class="dist-count">${n} 張（${pct.toFixed(0)}%）${warn}</span>
+      </div>`;
+    }
+    el('distPanel').innerHTML = html;
+  }
+
+  /* ══════════════════════════════════════════
+     Style Card CRUD
+  ══════════════════════════════════════════ */
+  function loadCard(id) {
+    const c = currentCards.find(x => x.id === id);
+    if (!c) return;
+    editingCardId = id;
+    el('sc_code').value = c.code || '';
+    el('sc_name_zh').value = c.name_zh || '';
+    el('sc_name_en').value = c.name_en || '';
+    el('sc_attr').value = c.check_attribute || '';
+    el('sc_atk_zh').value = c.narrative_attack_zh || '';
+    el('sc_atk_en').value = c.narrative_attack_en || '';
+    el('sc_suc_zh').value = c.narrative_success_zh || '';
+    el('sc_suc_en').value = c.narrative_success_en || '';
+    el('sc_fail_zh').value = c.narrative_fail_zh || '';
+    el('sc_fail_en').value = c.narrative_fail_en || '';
+    el('btnDeleteCard').style.display = '';
+    renderCardList();
+    updateCardPreview();
+  }
+
+  function newCard() {
+    clearCardForm();
+    el('sc_name_zh').focus();
+  }
+
+  function clearCardForm() {
+    editingCardId = null;
+    el('sc_code').value = '';
+    el('sc_name_zh').value = '';
+    el('sc_name_en').value = '';
+    el('sc_attr').value = '';
+    el('sc_atk_zh').value = '';
+    el('sc_atk_en').value = '';
+    el('sc_suc_zh').value = '';
+    el('sc_suc_en').value = '';
+    el('sc_fail_zh').value = '';
+    el('sc_fail_en').value = '';
+    el('btnDeleteCard').style.display = 'none';
+    renderCardList();
+    updateCardPreview();
+  }
+
+  async function saveCard() {
+    if (!currentStyleId) { toast('請先選擇風格', false); return; }
+    const body = {
+      name_zh: el('sc_name_zh').value.trim(),
+      name_en: el('sc_name_en').value.trim(),
+      check_attribute: el('sc_attr').value,
+      narrative_attack_zh: el('sc_atk_zh').value.trim(),
+      narrative_attack_en: el('sc_atk_en').value.trim(),
+      narrative_success_zh: el('sc_suc_zh').value.trim(),
+      narrative_success_en: el('sc_suc_en').value.trim(),
+      narrative_fail_zh: el('sc_fail_zh').value.trim(),
+      narrative_fail_en: el('sc_fail_en').value.trim(),
+    };
+    if (!body.name_zh) { toast('請填寫中文名稱', false); return; }
+    if (!body.check_attribute) { toast('請選擇檢定屬性', false); return; }
+
+    try {
+      let res;
+      if (editingCardId) {
+        res = await adminFetch(`/api/style-cards/${editingCardId}`, { method: 'PUT', body: JSON.stringify(body) });
+      } else {
+        res = await adminFetch(`/api/combat-styles/${currentStyleId}/cards`, { method: 'POST', body: JSON.stringify(body) });
+      }
+      const json = await res.json();
+      if (!json.success) { toast(json.error||'儲存失敗', false); return; }
+      toast('風格卡已儲存');
+      // Reload
+      const fullRes = await adminFetch(`/api/combat-styles/${currentStyleId}`);
+      const fullJson = await fullRes.json();
+      currentCards = fullJson.data?.style_cards || [];
+      if (!editingCardId && json.data?.id) editingCardId = json.data.id;
+      renderCardList();
+      await loadStyles(); // update card counts
+    } catch { toast('儲存失敗', false); }
+  }
+
+  async function saveCardAsNew() {
+    editingCardId = null;
+    el('sc_code').value = '';
+    await saveCard();
+  }
+
+  async function deleteCard() {
+    if (!editingCardId) return;
+    if (!confirm('確定刪除此風格卡？')) return;
+    try {
+      await adminFetch(`/api/style-cards/${editingCardId}`, { method: 'DELETE' });
+      toast('已刪除');
+      editingCardId = null;
+      const fullRes = await adminFetch(`/api/combat-styles/${currentStyleId}`);
+      const fullJson = await fullRes.json();
+      currentCards = fullJson.data?.style_cards || [];
+      clearCardForm();
+      await loadStyles();
+    } catch { toast('刪除失敗', false); }
+  }
+
+  /* ══════════════════════════════════════════
+     Card Preview (Right Panel)
+  ══════════════════════════════════════════ */
+  function updateCardPreview() {
+    const name = el('sc_name_zh').value || '(未命名)';
+    const nameEn = el('sc_name_en').value || '';
+    const attr = el('sc_attr').value;
+    const attrZh = ATTRIBUTES[attr]?.zh || '—';
+    const color = ATTR_COLORS[attr] || '#888';
+    const styleName = el('f_name_zh').value || '—';
+    const atk = el('sc_atk_zh').value || '(攻擊敘事)';
+    const suc = el('sc_suc_zh').value || '(成功敘事)';
+    const fail = el('sc_fail_zh').value || '(失敗敘事)';
+
+    el('cardPreview').innerHTML = `
+      <div class="pv-header">
+        <span class="attr-tag attr-${attr}" style="font-size:0.75rem;">${attrZh}</span>
+        <span style="font-size:0.625rem;color:var(--text-tertiary);">${styleName}</span>
+      </div>
+      <div class="pv-title">${name}</div>
+      ${nameEn ? `<div class="pv-subtitle">${nameEn}</div>` : ''}
+      <hr class="pv-divider">
+      <div class="pv-section-label" style="color:${color};">&#127919; 攻擊</div>
+      <div class="pv-narrative">${atk}</div>
+      <div class="pv-section-label" style="color:var(--success);">&#10003; 成功</div>
+      <div class="pv-narrative">${suc}</div>
+      <div class="pv-section-label" style="color:var(--danger);">&#10007; 失敗</div>
+      <div class="pv-narrative">${fail}</div>
+      <div class="pv-footer">⚠ DC 來自目標怪物 &nbsp;·&nbsp; ⚠ 傷害來自武器卡</div>
+    `;
+  }
+
+  /* ══════════════════════════════════════════
+     Export / Import
+  ══════════════════════════════════════════ */
+  async function exportAll() {
+    try {
+      const res = await adminFetch('/api/combat-styles/export');
+      const json = await res.json();
+      const blob = new Blob([JSON.stringify(json.data || [], null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'combat-styles-export.json';
+      a.click();
+      toast('匯出完成');
+    } catch { toast('匯出失敗', false); }
+  }
+
+  async function importJSON(input) {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const res = await adminFetch('/api/combat-styles/import', { method: 'POST', body: JSON.stringify({ data }) });
+      const json = await res.json();
+      if (json.success) { toast('匯入完成'); await loadStyles(); if (styles.length) selectStyle(styles[0].id); }
+      else toast(json.error||'匯入失敗', false);
+    } catch (e) { toast('匯入失敗: ' + e.message, false); }
+    input.value = '';
+  }
+
+  /* ══════════════════════════════════════════
+     AI Generation (Gemini)
+  ══════════════════════════════════════════ */
+  function getGeminiKey() {
+    let key = localStorage.getItem('gemini_api_key');
+    if (!key) {
+      key = prompt('請輸入 Gemini API Key：');
+      if (key) localStorage.setItem('gemini_api_key', key);
+    }
+    return key;
+  }
+
+  async function callGemini(prompt) {
+    const key = getGeminiKey();
+    if (!key) { toast('需要 Gemini API Key', false); return null; }
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.8 } })
+      });
+      const json = await res.json();
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      // Extract JSON from response
+      const match = text.match(/[\[{][\s\S]*[\]}]/);
+      return match ? JSON.parse(match[0]) : null;
+    } catch (e) { console.error(e); toast('AI 生成失敗: ' + e.message, false); return null; }
+  }
+
+  function buildStyleCardPrompt(userInput, narrativeStyle) {
+    const styleName = el('f_name_zh').value || '—';
+    const styleNameEn = el('f_name_en').value || '';
+    const styleDesc = el('f_desc_zh').value || '';
+    return `你是一個克蘇魯神話卡牌遊戲的敘事設計師。請為戰鬥風格卡撰寫三段敘事文字。
+
+## 遊戲背景
+這是一款 1920–30 年代偵探黑色電影 × 宇宙恐怖風格的合作卡牌遊戲。
+調查員使用各種武器與怪物戰鬥。每次攻擊時，系統抽出一張風格卡，
+呈現一段敘事，並決定本次檢定使用的屬性。
+
+## 戰鬥風格
+當前風格：${styleName}（${styleNameEn}）
+風格說明：${styleDesc}
+
+## 七大屬性
+力量（Strength）、敏捷（Agility）、體質（Constitution）、
+智力（Intellect）、意志（Willpower）、感知（Perception）、魅力（Charisma）
+
+## 使用者描述
+${userInput || '請自由發揮，設計一個符合此風格的獨特招式'}
+
+## 敘事風格
+${narrativeStyle || '寫實硬派'}
+
+## 重要規則
+- 風格卡不包含傷害數值和 DC — 這些來自武器和怪物
+- 敘事應該是通用的，不指定具體武器名稱（調查員可能用不同武器）
+- 攻擊敘事：描述攻擊動作的發動（懸念感，尚未知道結果）
+- 成功敘事：描述命中的爽快感（要有畫面感）
+- 失敗敘事：描述未命中的挫敗感（但不要太慘，保持尊嚴）
+- 敘事長度：每段 2-4 句，不超過 80 字
+- 風格基調：1920s 偵探黑色電影，克蘇魯宇宙恐怖
+
+## 輸出格式
+請回傳以下 JSON，不要回傳其他任何文字：
+{
+  "name_zh": "招式名稱（中文，2-4字）",
+  "name_en": "Move Name (English)",
+  "check_attribute": "屬性代碼（strength/agility/constitution/intellect/willpower/perception/charisma）",
+  "narrative_attack_zh": "攻擊敘事中文",
+  "narrative_attack_en": "Attack narrative in English",
+  "narrative_success_zh": "成功敘事中文",
+  "narrative_success_en": "Success narrative in English",
+  "narrative_fail_zh": "失敗敘事中文",
+  "narrative_fail_en": "Failure narrative in English"
+}`;
+  }
+
+  async function aiGenSingle(style) {
+    const input = el('aiInput').value.trim();
+    toast('AI 生成中...');
+    const result = await callGemini(buildStyleCardPrompt(input, style));
+    if (!result) return;
+    // Validate attribute
+    if (result.check_attribute && !ATTRIBUTES[result.check_attribute]) {
+      toast('AI 回傳的屬性無效，已忽略', false);
+      result.check_attribute = '';
+    }
+    el('sc_name_zh').value = result.name_zh || '';
+    el('sc_name_en').value = result.name_en || '';
+    el('sc_attr').value = result.check_attribute || '';
+    el('sc_atk_zh').value = result.narrative_attack_zh || '';
+    el('sc_atk_en').value = result.narrative_attack_en || '';
+    el('sc_suc_zh').value = result.narrative_success_zh || '';
+    el('sc_suc_en').value = result.narrative_success_en || '';
+    el('sc_fail_zh').value = result.narrative_fail_zh || '';
+    el('sc_fail_en').value = result.narrative_fail_en || '';
+    updateCardPreview();
+    toast('AI 生成完成');
+  }
+
+  /* Batch generation */
+  function openBatchGen() {
+    if (!currentStyleId) { toast('請先選擇風格', false); return; }
+    el('batchStyle').value = el('f_name_zh').value || '—';
+    el('batchResults').classList.add('hidden');
+    el('batchResults').innerHTML = '';
+    el('batchModal').classList.remove('hidden');
+    el('batchModal').style.display = 'flex';
+  }
+  function closeBatchModal() {
+    el('batchModal').classList.add('hidden');
+    el('batchModal').style.display = 'none';
+  }
+
+  async function runBatchGen() {
+    const count = parseInt(el('batchCount').value) || 5;
+    const style = el('batchNarrative').value;
+    const prompt = buildStyleCardPrompt('', style) + `
+
+## 批次要求
+請一次生成 ${count} 張不重複的風格卡。
+每張風格卡的招式動作應該各不相同，展現該風格的多樣性。
+避免重複的動詞和意象。
+
+## 輸出格式
+請回傳 JSON 陣列，不要回傳其他任何文字：
+[{ ... 第一張 ... }, { ... 第二張 ... }, ...]`;
+
+    toast('批次生成中...');
+    const results = await callGemini(prompt);
+    if (!results || !Array.isArray(results)) { toast('生成失敗', false); return; }
+
+    const panel = el('batchResults');
+    panel.classList.remove('hidden');
+    panel.innerHTML = results.map((r, i) => {
+      const attrZh = ATTRIBUTES[r.check_attribute]?.zh || '?';
+      return `<div style="border:1px solid var(--border);border-radius:4px;padding:0.5rem;margin-bottom:0.5rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-weight:500;">${r.name_zh || '?'}</span>
+          <span class="attr-tag attr-${r.check_attribute||''}">${attrZh}</span>
+        </div>
+        <div style="font-size:0.6875rem;color:var(--text-tertiary);margin:0.25rem 0;">${(r.narrative_attack_zh||'').slice(0,40)}...</div>
+        <div style="display:flex;gap:0.25rem;">
+          <button class="btn btn-sm btn-gold" onclick="adoptBatch(${i})">採用</button>
+          <button class="btn btn-sm" onclick="editBatch(${i})">編輯後採用</button>
+          <button class="btn btn-sm btn-danger" onclick="this.closest('div[style]').remove()">棄用</button>
+        </div>
+      </div>`;
+    }).join('');
+    panel._data = results;
+    toast(`已生成 ${results.length} 張`);
+  }
+
+  async function adoptBatch(idx) {
+    const data = el('batchResults')._data;
+    if (!data || !data[idx]) return;
+    const r = data[idx];
+    try {
+      const res = await adminFetch(`/api/combat-styles/${currentStyleId}/cards`, {
+        method: 'POST', body: JSON.stringify({
+          name_zh: r.name_zh, name_en: r.name_en, check_attribute: r.check_attribute || '',
+          narrative_attack_zh: r.narrative_attack_zh || '', narrative_attack_en: r.narrative_attack_en || '',
+          narrative_success_zh: r.narrative_success_zh || '', narrative_success_en: r.narrative_success_en || '',
+          narrative_fail_zh: r.narrative_fail_zh || '', narrative_fail_en: r.narrative_fail_en || '',
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast(`已採用: ${r.name_zh}`);
+        const fullRes = await adminFetch(`/api/combat-styles/${currentStyleId}`);
+        const fullJson = await fullRes.json();
+        currentCards = fullJson.data?.style_cards || [];
+        renderCardList();
+        await loadStyles();
+      } else toast(json.error||'採用失敗', false);
+    } catch { toast('採用失敗', false); }
+  }
+
+  function editBatch(idx) {
+    const data = el('batchResults')._data;
+    if (!data || !data[idx]) return;
+    const r = data[idx];
+    editingCardId = null;
+    el('sc_code').value = '';
+    el('sc_name_zh').value = r.name_zh || '';
+    el('sc_name_en').value = r.name_en || '';
+    el('sc_attr').value = r.check_attribute || '';
+    el('sc_atk_zh').value = r.narrative_attack_zh || '';
+    el('sc_atk_en').value = r.narrative_attack_en || '';
+    el('sc_suc_zh').value = r.narrative_success_zh || '';
+    el('sc_suc_en').value = r.narrative_success_en || '';
+    el('sc_fail_zh').value = r.narrative_fail_zh || '';
+    el('sc_fail_en').value = r.narrative_fail_en || '';
+    updateCardPreview();
+    closeBatchModal();
+    toast('已載入編輯，修改後按「儲存風格卡」');
+  }
+
+  /* ══════════════════════════════════════════
+     AI Translate helper
+  ══════════════════════════════════════════ */
+  async function aiTranslate(srcId, dstId) {
+    const src = el(srcId).value.trim();
+    if (!src) { toast('來源欄位為空', false); return; }
+    const key = getGeminiKey();
+    if (!key) return;
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: `請將以下中文翻譯成英文，只回傳翻譯結果，不要任何解釋或引號：\n\n${src}` }] }] })
+      });
+      const json = await res.json();
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      if (text) { el(dstId).value = text; toast('翻譯完成'); } else toast('翻譯失敗', false);
+    } catch { toast('翻譯失敗', false); }
+  }
+</script>
 </body>
 </html>

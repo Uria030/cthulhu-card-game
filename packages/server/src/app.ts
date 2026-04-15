@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { cardRoutes } from './routes/cards.js';
+import { combatStyleRoutes } from './routes/combat-styles.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -23,6 +24,7 @@ export async function buildApp() {
   await app.register(healthRoutes);
   await app.register(authRoutes);
   await app.register(cardRoutes);
+  await app.register(combatStyleRoutes);
 
   return app;
 }

@@ -4,6 +4,7 @@ import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { cardRoutes } from './routes/cards.js';
 import { combatStyleRoutes } from './routes/combat-styles.js';
+import { teamSpiritRoutes } from './routes/team-spirits.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -25,6 +26,7 @@ export async function buildApp() {
   await app.register(authRoutes);
   await app.register(cardRoutes);
   await app.register(combatStyleRoutes);
+  await app.register(teamSpiritRoutes);
 
   return app;
 }

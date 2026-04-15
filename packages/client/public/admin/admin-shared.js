@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.3.0';
+const ADMIN_VERSION = '0.4.0';
 
 // ============================================
 // API 設定
@@ -266,6 +266,44 @@ const SPELL_CASTINGS = {
   channeling:   { code: 'channeling',   zh: '引導', en: 'Channeling',   note: '持續施法, 需橫置維持' },
   meditation:   { code: 'meditation',   zh: '冥想', en: 'Meditation',   note: '-1費用, +1充能, ×0.8效果' },
   alchemy:      { code: 'alchemy',      zh: '煉金', en: 'Alchemy',      note: '產出消耗品形式法術效果' },
+};
+
+// ============================================
+// 團隊精神常數 (MOD-04)
+// ============================================
+const SPIRIT_CATEGORIES = {
+  combat:        { code: 'combat',        zh: '戰鬥類',         en: 'Combat',               count: 6 },
+  investigation: { code: 'investigation', zh: '調查與資訊類',    en: 'Investigation & Intel', count: 4 },
+  resource:      { code: 'resource',      zh: '資源與經濟類',    en: 'Resource & Economy',    count: 3 },
+  growth:        { code: 'growth',        zh: '成長與系統解鎖類', en: 'Growth & Unlock',       count: 4 },
+  knowledge:     { code: 'knowledge',     zh: '知識與神話類',    en: 'Knowledge & Mythos',    count: 2 },
+  rhythm:        { code: 'rhythm',        zh: '團隊節奏類',     en: 'Team Rhythm',           count: 2 },
+  status:        { code: 'status',        zh: '異常狀態專精類',  en: 'Status Specialization', count: 5 },
+  bestiary:      { code: 'bestiary',      zh: '怪物學類',       en: 'Bestiary',              count: 7 },
+};
+
+const EFFECT_TAGS = {
+  damage_boost:     { zh: '增傷',     en: 'Damage Boost' },
+  damage_reduction: { zh: '減傷',     en: 'Damage Reduction' },
+  healing:          { zh: '恢復',     en: 'Healing' },
+  resource_gen:     { zh: '資源產出', en: 'Resource Generation' },
+  card_advantage:   { zh: '卡牌優勢', en: 'Card Advantage' },
+  information:      { zh: '資訊獲取', en: 'Information' },
+  system_unlock:    { zh: '系統解鎖', en: 'System Unlock' },
+  status_offense:   { zh: '狀態攻擊', en: 'Status Offense' },
+  status_defense:   { zh: '狀態防禦', en: 'Status Defense' },
+  chaos_control:    { zh: '混沌操控', en: 'Chaos Control' },
+  action_economy:   { zh: '行動經濟', en: 'Action Economy' },
+  team_synergy:     { zh: '團隊協作', en: 'Team Synergy' },
+};
+
+const TEAM_SPIRIT_RULES = {
+  MAX_SELECTED: 7,
+  MAX_DEPTH: 5,
+  ADOPT_COST: 1,
+  DEPTH_COST: 1,
+  TOTAL_COST_PER_SPIRIT: 6,
+  CANDIDATE_POOL: 32,
 };
 
 /* ── 工具函數 ── */

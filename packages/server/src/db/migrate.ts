@@ -378,6 +378,113 @@ UPDATE combat_styles SET spec_count = (
 );
 `;
 
+// Migration 008: Spirit definitions + depth effects + seed data
+const MIGRATION_008_SQL = `
+-- ============================================
+-- Migration 008: Team spirit definitions system
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS spirit_definitions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(64) UNIQUE NOT NULL,
+  name_zh VARCHAR(64) NOT NULL,
+  name_en VARCHAR(64) NOT NULL,
+  category VARCHAR(32) NOT NULL DEFAULT 'combat'
+    CHECK (category IN ('combat','investigation','resource','growth','knowledge','rhythm','status','bestiary')),
+  description TEXT,
+  description_en TEXT,
+  design_notes TEXT,
+  adopt_effect_zh TEXT,
+  adopt_effect_en TEXT,
+  maxed_effect_zh TEXT,
+  maxed_effect_en TEXT,
+  milestone_name_zh VARCHAR(64),
+  milestone_name_en VARCHAR(64),
+  milestone_desc TEXT,
+  milestone_effect_zh TEXT,
+  milestone_effect_en TEXT,
+  total_value DECIMAL(5,1) NOT NULL DEFAULT 0,
+  value_per_cohesion DECIMAL(5,2) NOT NULL DEFAULT 0,
+  effect_tags JSONB NOT NULL DEFAULT '[]',
+  design_status VARCHAR(16) NOT NULL DEFAULT 'pending'
+    CHECK (design_status IN ('pending','partial','complete')),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS spirit_depth_effects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  spirit_def_id UUID NOT NULL REFERENCES spirit_definitions(id) ON DELETE CASCADE,
+  depth INTEGER NOT NULL CHECK (depth BETWEEN 1 AND 5),
+  effect_name_zh VARCHAR(64),
+  effect_name_en VARCHAR(64),
+  effect_desc_zh TEXT NOT NULL DEFAULT '',
+  effect_desc_en TEXT,
+  effect_value DECIMAL(5,1) NOT NULL DEFAULT 0,
+  effect_formula TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (spirit_def_id, depth)
+);
+CREATE INDEX IF NOT EXISTS idx_spirit_depth_spirit ON spirit_depth_effects(spirit_def_id);
+
+-- Seed: 33 team spirits
+INSERT INTO spirit_definitions (code, name_zh, name_en, category, description, sort_order) VALUES
+  ('ts_focus_fire',    '集火協調', 'Focus Fire',              'combat',        '多人攻擊同一目標時觸發聯動加成', 1),
+  ('ts_cover',         '掩護戰術', 'Cover Tactics',           'combat',        '替隊友承受藉機攻擊或部分傷害', 2),
+  ('ts_morale',        '殲滅士氣', 'Kill Morale',             'combat',        '擊殺敵人時全隊獲得增益', 3),
+  ('ts_last_stand',    '死線爆發', 'Last Stand',              'combat',        '任一隊友進入瀕死時，其他隊友獲得戰鬥增幅', 4),
+  ('ts_overwatch',     '輪替守望', 'Overwatch',               'combat',        '指定隊友進入守望，敵人進入其地點時觸發免費攻擊', 5),
+  ('ts_vendetta',      '復仇之誓', 'Vendetta',                'combat',        '隊友被擊倒時，對擊倒者攻擊獲得額外傷害', 6),
+  ('ts_clue_chain',    '線索連鎖', 'Clue Chain',              'investigation', '同一回合內於不同地點各自獲得線索時觸發額外獎勵', 7),
+  ('ts_intuition',     '隱秘感知', 'Hidden Intuition',        'investigation', '降低隱藏調查點的感知門檻，強化發現機制', 8),
+  ('ts_relic_read',    '遺跡解讀', 'Relic Reading',           'investigation', '解鎖研究神話遺跡的能力，5 點深度對應遺跡難度等級', 9),
+  ('ts_relic_research','遺跡研究', 'Relic Research',          'investigation', '強化遺跡研究效率', 10),
+  ('ts_growth',        '成長加速', 'Growth Accelerator',      'resource',      '增加經驗值、凝聚力、天賦點的獲取量', 11),
+  ('ts_harvest',       '素材豐收', 'Material Harvest',        'resource',      '增加素材掉落與採集收益', 12),
+  ('ts_spoils',        '戰利強化', 'Spoils of War',           'resource',      '增加關卡內即時收益（資源、抽牌等）', 13),
+  ('ts_forge_unlock',  '鍛造解鎖', 'Forge Unlock',            'growth',        '開啟鍛造功能，深度點數強化鍛造能力', 14),
+  ('ts_craft_unlock',  '製作解鎖', 'Craft Unlock',            'growth',        '開啟製作功能，深度點數強化製作能力', 15),
+  ('ts_short_rest',    '短休息強化','Short Rest Enhancement',  'growth',        '短休息時保留部分行動力', 16),
+  ('ts_chaos_control', '混沌袋控制','Chaos Bag Control',       'growth',        '混沌袋操控能力（窺探、重抽、移除標記等）', 17),
+  ('ts_ancient_text',  '古文解讀', 'Ancient Text',            'knowledge',     '解鎖閱讀神話典籍的能力，5 點深度對應書籍難度等級。1 點＝初階神話文獻（入門級翻譯文本、邪教筆記）。2 點＝中階（《波納佩教典》《格拉基啟示錄》）。3 點＝高階（《伊波恩之書》《無名祭祀書》）。4 點＝頂級（《屍食教典儀》《妖蛆之秘密》）。5 點＝終極禁忌典籍（《死靈之書》）。', 18),
+  ('ts_book_research', '書籍研究', 'Book Research',           'knowledge',     '強化書籍閱讀效率', 19),
+  ('ts_stratagem',     '戰術預謀', 'Stratagem',               'rhythm',        '回合開始時宣告全隊戰術狀態，全隊獲得小幅加成', 20),
+  ('ts_war_cry',       '戰場呼喊', 'War Cry',                 'rhythm',        '關鍵時刻觸發的強力全隊 BUFF', 21),
+  ('ts_corrosion',     '腐蝕專精', 'Corrosion Mastery',       'status',        '涵蓋狀態：流血（bleed, 2V/層）、中毒（poison, 3V/層）、燃燒（burning, 3V/層）。強化施加這些狀態的效果與持續性。', 22),
+  ('ts_frost',         '寒霜專精', 'Frost Mastery',           'status',        '涵蓋狀態：冷凍（frozen, 3V/層）、潮濕（wet, 1V/層）。強化冰系與水系的控場能力，利用冷凍的移動限制和潮濕的雷屬性增傷聯動。', 23),
+  ('ts_suppress',      '壓制專精', 'Suppression Mastery',     'status',        '涵蓋狀態：無力（weakness_status, 2V/層）、弱化（weakened, 3V/層）、脆弱（vulnerable, 2V/層）、繳械（disarm, 4V/層）。弱化敵人輸出與防禦能力。', 24),
+  ('ts_disrupt',       '瓦解專精', 'Disruption Mastery',      'status',        '涵蓋狀態：發瘋（madness, 6V/層）、疲勞（fatigue, 4V/層）、沈默（silence, 4V/層）。瓦解敵人行動能力的精神系控場。', 25),
+  ('ts_purify',        '淨化專精', 'Purification Mastery',    'status',        '涵蓋：全部負面狀態（移除自身）。防禦面專精，強化隊伍的負面狀態清除與抵抗能力。', 26),
+  ('ts_bestiary_cthulhu','怪物學：克蘇魯','Bestiary: Cthulhu',  'bestiary',      '克蘇魯眷族。揭露克蘇魯系怪物的弱點、行為模式與隱藏資訊。混沌袋偏好：骷髏＝血祭（流血）、邪教徒＝信徒回應（深潛者增援）、石版＝禁忌知識（恐懼傷害）、遠古邪物＝異界滲透（鬧鬼）。', 27),
+  ('ts_bestiary_hastur','怪物學：哈斯塔','Bestiary: Hastur',    'bestiary',      '哈斯塔眷族。混沌袋偏好：骷髏＝生命流逝（無力）、邪教徒＝末日推進（毀滅標記）、石版＝瘋狂低語（發瘋）、遠古邪物＝時空扭曲（隨機傳送）。', 28),
+  ('ts_bestiary_shub', '怪物學：莎布', 'Bestiary: Shub-Niggurath','bestiary',   '莎布·尼古拉絲眷族。混沌袋偏好：骷髏＝死亡之觸（HP 傷害）、邪教徒＝儀式共鳴（怪物回血）、石版＝精神枯竭（疲勞）、遠古邪物＝裂隙擴張（次元門）。', 29),
+  ('ts_bestiary_nyar', '怪物學：奈亞', 'Bestiary: Nyarlathotep','bestiary',     '奈亞拉托提普眷族。混沌袋偏好：骷髏＝生命代價（失去盟友）、邪教徒＝暴露（失去隱蔽）、石版＝不應知曉之事（神啟卡）、遠古邪物＝空間斷裂（斷開連接）。', 30),
+  ('ts_bestiary_yog',  '怪物學：猶格', 'Bestiary: Yog-Sothoth', 'bestiary',    '猶格·索托斯眷族。混沌袋偏好：骷髏＝血祭（流血）、邪教徒＝末日推進（毀滅標記）、石版＝記憶崩解（棄手牌）、遠古邪物＝時空扭曲（隨機傳送）。', 31),
+  ('ts_bestiary_cthugha','怪物學：克圖格亞','Bestiary: Cthugha','bestiary',     '克圖格亞眷族。混沌袋偏好：骷髏＝死亡之觸（HP 傷害）、邪教徒＝暴露（失去隱蔽）、石版＝禁忌知識（恐懼傷害）、遠古邪物＝異界之火（失火）。', 32),
+  ('ts_bestiary_yig',  '怪物學：伊格', 'Bestiary: Yig',         'bestiary',    '伊格眷族（預留擴展）。混沌袋偏好：骷髏＝血祭（流血）、邪教徒＝信徒回應（蛇人增援）、石版＝瘋狂低語（發瘋）、遠古邪物＝異界滲透（鬧鬼）。', 33)
+ON CONFLICT (code) DO NOTHING;
+
+-- Seed: ts_ancient_text depth effects (5 levels)
+INSERT INTO spirit_depth_effects (spirit_def_id, depth, effect_name_zh, effect_desc_zh) VALUES
+  ((SELECT id FROM spirit_definitions WHERE code='ts_ancient_text'), 1, '初階解讀', '可閱讀初階神話文獻（入門級翻譯文本、邪教筆記）'),
+  ((SELECT id FROM spirit_definitions WHERE code='ts_ancient_text'), 2, '中階解讀', '可閱讀中階神話文獻（《波納佩教典》《格拉基啟示錄》）'),
+  ((SELECT id FROM spirit_definitions WHERE code='ts_ancient_text'), 3, '高階解讀', '可閱讀高階神話文獻（《伊波恩之書》《無名祭祀書》）'),
+  ((SELECT id FROM spirit_definitions WHERE code='ts_ancient_text'), 4, '頂級解讀', '可閱讀頂級神話文獻（《屍食教典儀》《妖蛆之秘密》）'),
+  ((SELECT id FROM spirit_definitions WHERE code='ts_ancient_text'), 5, '終極禁忌', '可閱讀終極禁忌典籍（《死靈之書》）')
+ON CONFLICT (spirit_def_id, depth) DO NOTHING;
+
+-- Seed: ts_relic_read depth effects (5 levels)
+INSERT INTO spirit_depth_effects (spirit_def_id, depth, effect_name_zh, effect_desc_zh) VALUES
+  ((SELECT id FROM spirit_definitions WHERE code='ts_relic_read'), 1, '初階感應', '可研究初階神話遺跡'),
+  ((SELECT id FROM spirit_definitions WHERE code='ts_relic_read'), 2, '中階感應', '可研究中階神話遺跡'),
+  ((SELECT id FROM spirit_definitions WHERE code='ts_relic_read'), 3, '高階感應', '可研究高階神話遺跡'),
+  ((SELECT id FROM spirit_definitions WHERE code='ts_relic_read'), 4, '頂級感應', '可研究頂級神話遺跡'),
+  ((SELECT id FROM spirit_definitions WHERE code='ts_relic_read'), 5, '終極共鳴', '可研究終極神話遺跡')
+ON CONFLICT (spirit_def_id, depth) DO NOTHING;
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -389,6 +496,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_005_SQL);
     await client.query(MIGRATION_006_SQL);
     await client.query(MIGRATION_007_SQL);
+    await client.query(MIGRATION_008_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

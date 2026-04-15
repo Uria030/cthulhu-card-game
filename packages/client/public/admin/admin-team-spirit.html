@@ -6,29 +6,1132 @@
   <title>團隊精神管理 — Admin Module</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    .main-layout { display: flex; gap: 0; min-height: calc(100vh - 50px); }
+    /* Left panel: fixed overlay */
+    .panel-left { position: fixed; top: 50px; left: 0; width: 260px; height: calc(100vh - 50px); background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 1rem; overflow-y: auto; z-index: 100; transition: transform 0.25s ease; transform: translateX(0); }
+    .panel-left.collapsed { transform: translateX(-100%); }
+    .panel-toggle { position: fixed; top: 50%; left: 260px; z-index: 101; width: 28px; height: 72px; background: var(--bg-secondary); border: 1px solid var(--border); border-left: none; border-radius: 0 6px 6px 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 0.75rem; padding: 0; transform: translateY(-50%); transition: left 0.25s ease; }
+    .panel-toggle.shifted { left: 0; }
+    .panel-toggle:hover { color: var(--gold); background: var(--bg-card); }
+    /* Center content — no right panel */
+    .panel-center { flex: 1; padding: 1rem 1.5rem; overflow-y: auto; max-height: calc(100vh - 50px); }
+    @media (max-width: 768px) { .main-layout { flex-direction: column; } .panel-left { width: 240px; } }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+    .tab-btn { padding: 0.5rem 1.25rem; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-secondary); font-size: 0.8125rem; font-family: 'Noto Sans TC', sans-serif; cursor: pointer; transition: color 0.15s, border-color 0.15s; }
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Toolbar */
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
+    .toolbar .spacer { flex: 1; }
+
+    /* Spirit list items */
+    .spirit-item { padding: 0.5rem 0.625rem; border-radius: 6px; cursor: pointer; margin-bottom: 0.25rem; border-left: 3px solid transparent; transition: background 0.15s, border-color 0.15s; display: flex; align-items: center; gap: 0.5rem; }
+    .spirit-item:hover { background: var(--bg-card); }
+    .spirit-item.active { border-left-color: var(--gold); background: var(--bg-card); }
+    .spirit-item .sp-name { font-size: 0.8125rem; font-weight: 500; color: var(--text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .spirit-item .sp-status { font-size: 0.75rem; flex-shrink: 0; }
+    .sp-complete { color: var(--success); }
+    .sp-partial { color: var(--warning); }
+    .sp-pending { color: var(--text-tertiary); }
+
+    /* Category group */
+    .cat-group { margin-bottom: 0.5rem; }
+    .cat-header { font-size: 0.6875rem; font-weight: 600; color: var(--gold-dim); text-transform: uppercase; letter-spacing: 0.05em; padding: 0.35rem 0.5rem; cursor: pointer; display: flex; align-items: center; gap: 0.35rem; border-radius: 4px; }
+    .cat-header:hover { background: var(--bg-card); }
+    .cat-header .cat-arrow { font-size: 0.5rem; transition: transform 0.2s; }
+    .cat-header .cat-arrow.collapsed { transform: rotate(-90deg); }
+    .cat-body { padding-left: 0.25rem; }
+    .cat-body.collapsed { display: none; }
+
+    /* Section labels */
+    .section-label { font-family: 'Cinzel', serif; font-size: 0.75rem; font-weight: 600; color: var(--gold-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem; margin-top: 1rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem; }
+    .section-label:first-child { margin-top: 0; }
+
+    /* Form grid */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 0.75rem; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .form-group { display: flex; flex-direction: column; gap: 0.2rem; }
+    .form-group label { font-size: 0.6875rem; color: var(--text-secondary); font-family: 'Noto Sans TC', sans-serif; }
+    .form-group input, .form-group select, .form-group textarea { font-size: 0.8125rem; padding: 0.375rem 0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-family: 'JetBrains Mono', 'Noto Sans TC', monospace, sans-serif; }
+    .form-group textarea { resize: vertical; min-height: 60px; font-family: 'Noto Sans TC', sans-serif; }
+
+    /* Depth table */
+    .depth-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-top: 0.5rem; }
+    .depth-table th { text-align: left; padding: 0.35rem 0.5rem; font-size: 0.6875rem; color: var(--text-tertiary); border-bottom: 1px solid var(--border); font-weight: 500; }
+    .depth-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .depth-row { cursor: pointer; }
+    .depth-row:hover { background: var(--bg-card); }
+    .depth-row.expanded { background: var(--bg-card); }
+    .depth-detail { display: none; background: var(--bg-card); }
+    .depth-detail.show { display: table-row; }
+    .depth-detail td { padding: 0.75rem; }
+    .depth-detail input, .depth-detail textarea { font-size: 0.75rem; padding: 0.3rem 0.4rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); width: 100%; }
+    .depth-detail textarea { font-family: 'Noto Sans TC', sans-serif; resize: vertical; }
+
+    /* Progress blocks */
+    .depth-blocks { display: flex; gap: 3px; margin-top: 0.25rem; }
+    .depth-block { width: 20px; height: 10px; border-radius: 2px; background: rgba(255,255,255,0.08); }
+    .depth-block.filled { background: var(--gold); }
+
+    /* Value reference popup */
+    .value-ref { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; margin-top: 0.5rem; font-size: 0.6875rem; line-height: 1.8; color: var(--text-secondary); max-height: 250px; overflow-y: auto; }
+    .value-ref strong { color: var(--gold-dim); }
+
+    /* Effect tags checkboxes */
+    .tag-grid { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-top: 0.35rem; }
+    .tag-check { display: flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; }
+    .tag-check input { accent-color: var(--gold); }
+
+    /* Buttons */
+    .btn { font-size: 0.75rem; padding: 0.35rem 0.75rem; border-radius: 4px; cursor: pointer; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); font-family: 'Noto Sans TC', sans-serif; transition: background 0.15s, border-color 0.15s; }
+    .btn:hover { border-color: var(--gold-dim); background: var(--bg-secondary); }
+    .btn-gold { border-color: var(--gold-dim); color: var(--gold); }
+    .btn-gold:hover { background: rgba(201,168,76,0.15); }
+    .btn-danger { border-color: var(--danger); color: var(--danger); }
+    .btn-danger:hover { background: rgba(184,76,76,0.15); }
+    .btn-sm { font-size: 0.625rem; padding: 0.2rem 0.5rem; }
+    .btn-ai { border-color: #7B4EA3; color: #7B4EA3; }
+    .btn-ai:hover { background: rgba(123,78,163,0.15); }
+
+    .stat-footer { font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+    .toast { position: fixed; top: 60px; right: 1rem; background: var(--bg-card); border: 1px solid var(--success); color: var(--success); padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.8125rem; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+    .toast.show { opacity: 1; }
+    .hidden { display: none !important; }
+
+    /* ── Compare Tab ── */
+    .filter-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
+    .filter-bar select { font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); }
+    .card-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; }
+    @media (max-width: 1200px) { .card-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 900px) { .card-grid { grid-template-columns: repeat(2, 1fr); } }
+    .compare-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; cursor: pointer; transition: border-color 0.15s; position: relative; }
+    .compare-card:hover { border-color: var(--gold-dim); }
+    .compare-card.selected { border-color: var(--gold); box-shadow: 0 0 8px rgba(201,168,76,0.2); }
+    .compare-card .cc-name { font-size: 0.8125rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.25rem; }
+    .compare-card .cc-stats { font-size: 0.6875rem; color: var(--text-secondary); }
+    .compare-card .cc-tags { display: flex; flex-wrap: wrap; gap: 0.2rem; margin-top: 0.35rem; }
+    .compare-card .cc-tag { font-size: 0.5625rem; padding: 0.1rem 0.3rem; border-radius: 2px; background: rgba(201,168,76,0.1); color: var(--gold-dim); }
+    .compare-card .cc-check { position: absolute; top: 0.5rem; right: 0.5rem; }
+    .cc-depth-bar { display: flex; gap: 2px; margin-top: 0.35rem; }
+    .cc-depth-bar .db { width: 16px; height: 6px; border-radius: 1px; background: rgba(255,255,255,0.08); }
+    .cc-depth-bar .db.filled { background: var(--gold); }
+    .cc-status-badge { font-size: 0.5625rem; padding: 0.1rem 0.35rem; border-radius: 3px; font-weight: 500; }
+    .badge-complete { background: rgba(45,139,111,0.2); color: var(--success); }
+    .badge-partial { background: rgba(201,168,76,0.2); color: var(--warning); }
+    .badge-pending { background: rgba(90,90,82,0.2); color: var(--text-tertiary); }
+
+    /* Compare panel */
+    .compare-panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-top: 1rem; }
+    .compare-chart-container { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .compare-chart-container canvas { background: var(--bg-primary); border-radius: 6px; border: 1px solid var(--border); }
+    .rank-lists { display: flex; gap: 1.5rem; margin-top: 1rem; }
+    .rank-list { flex: 1; }
+    .rank-list h4 { font-size: 0.75rem; color: var(--gold-dim); margin-bottom: 0.5rem; font-family: 'Cinzel', serif; }
+    .rank-item { display: flex; justify-content: space-between; padding: 0.25rem 0.4rem; font-size: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .rank-item:hover { background: var(--bg-card); }
+    .rank-num { color: var(--gold); font-weight: 600; margin-right: 0.5rem; font-family: 'JetBrains Mono', monospace; }
+    .compare-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-top: 0.75rem; }
+    .compare-table th, .compare-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border); text-align: center; }
+    .compare-table th { color: var(--text-tertiary); font-size: 0.6875rem; }
+    .compare-table td:first-child { text-align: left; color: var(--text-secondary); }
+  </style>
 </head>
 <body>
 
   <nav class="admin-nav">
-    <a href="index.html" class="nav-back">← 返回首頁</a>
+    <a href="index.html" class="nav-back">&larr; 返回首頁</a>
     <span class="nav-title">團隊精神管理</span>
     <span class="nav-code">MOD-04</span>
   </nav>
 
-  <div class="container">
-    <div class="page-header">
-      <h1>團隊精神管理</h1>
-      <p class="page-sub">Team Spirit Manager</p>
-      <p class="page-desc">管理團隊精神系統的加成效果與觸發條件</p>
-    </div>
+  <div class="toast" id="toast"></div>
 
-    <div class="placeholder-message">
-      <div class="placeholder-icon">🔧</div>
-      <div class="placeholder-text">此模組尚在開發中</div>
-      <div class="placeholder-sub">Module under development</div>
+  <div class="main-layout">
+    <!-- LEFT PANEL: Spirit List -->
+    <div class="panel-left" id="panelLeft">
+      <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.5rem;">
+        <input type="text" id="spiritSearch" placeholder="搜尋精神..." style="width:100%;font-size:0.75rem;padding:0.3rem 0.5rem;background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);">
+      </div>
+      <div id="spiritList"></div>
+      <div class="stat-footer" id="globalStats">&mdash;</div>
+    </div>
+    <button class="panel-toggle" id="panelToggle" onclick="toggleLeftPanel()" title="收合/展開精神列表">&#9664;</button>
+
+    <!-- CENTER: Main Content -->
+    <div class="panel-center" id="panelCenter">
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <button class="btn btn-sm" onclick="exportAll()">匯出 JSON</button>
+        <button class="btn btn-sm" onclick="document.getElementById('importFile').click()">匯入 JSON</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(this)">
+        <div class="spacer"></div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="edit" onclick="switchTab('edit')">設計編輯</button>
+        <button class="tab-btn" data-tab="compare" onclick="switchTab('compare')">價值比較</button>
+      </div>
+
+      <!-- Tab 1: Design Edit -->
+      <div class="tab-content active" id="tabEdit">
+        <div id="editArea" style="opacity:0.4;pointer-events:none;">
+          <!-- Block 1: Basic Info -->
+          <div class="section-label">基本資訊</div>
+          <div class="form-grid">
+            <div class="form-group"><label>代碼 (code)</label><input type="text" id="f_code" readonly></div>
+            <div class="form-group"><label>分類</label><select id="f_category"></select></div>
+            <div class="form-group"><label>中文名稱</label><input type="text" id="f_name_zh"></div>
+            <div class="form-group"><label>英文名稱</label><div style="display:flex;gap:0.25rem;"><input type="text" id="f_name_en" style="flex:1;"><button class="btn btn-sm btn-ai" onclick="aiTranslate('f_name_zh','f_name_en')">生成英文</button></div></div>
+            <div class="form-group full"><label>中文描述</label><textarea id="f_desc_zh" rows="3"></textarea></div>
+            <div class="form-group full"><label>英文描述</label><div style="display:flex;gap:0.25rem;align-items:start;"><textarea id="f_desc_en" rows="3" style="flex:1;"></textarea><button class="btn btn-sm btn-ai" onclick="aiTranslate('f_desc_zh','f_desc_en')">生成</button></div></div>
+            <div class="form-group full"><label>設計備註</label><textarea id="f_design_notes" rows="2"></textarea></div>
+            <div class="form-group full"><label>採納效果 — 中文</label><textarea id="f_adopt_zh" rows="3"></textarea></div>
+            <div class="form-group full"><label>採納效果 — 英文</label><div style="display:flex;gap:0.25rem;align-items:start;"><textarea id="f_adopt_en" rows="3" style="flex:1;"></textarea><button class="btn btn-sm btn-ai" onclick="aiTranslate('f_adopt_zh','f_adopt_en')">生成</button></div></div>
+            <div class="form-group full"><label>滿級效果 — 中文</label><textarea id="f_maxed_zh" rows="3"></textarea></div>
+            <div class="form-group full"><label>滿級效果 — 英文</label><div style="display:flex;gap:0.25rem;align-items:start;"><textarea id="f_maxed_en" rows="3" style="flex:1;"></textarea><button class="btn btn-sm btn-ai" onclick="aiTranslate('f_maxed_zh','f_maxed_en')">生成</button></div></div>
+          </div>
+
+          <!-- Block 2: Depth Effects -->
+          <div class="section-label" style="margin-top:1.5rem;">五點深度效果 <span id="depthProgress" style="font-size:0.625rem;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;"></span></div>
+          <table class="depth-table" id="depthTable">
+            <thead><tr><th style="width:30px;">Lv</th><th>名稱</th><th>摘要</th><th style="width:50px;">價值</th><th style="width:30px;"></th></tr></thead>
+            <tbody id="depthBody"></tbody>
+          </table>
+          <div style="display:flex;align-items:center;gap:1rem;margin-top:0.5rem;">
+            <div>深度總計 <span id="depthTotal" style="font-family:'JetBrains Mono',monospace;color:var(--gold);">0</span>V</div>
+            <div class="depth-blocks" id="depthBlocks"></div>
+            <div class="spacer"></div>
+            <button class="btn btn-sm btn-ai" onclick="aiGenDepths()">AI 生成深度效果</button>
+          </div>
+
+          <!-- Block 3: Milestone -->
+          <div class="section-label" style="margin-top:1.5rem;">團隊里程碑</div>
+          <div class="form-grid">
+            <div class="form-group"><label>里程碑名稱 — 中文</label><input type="text" id="f_ms_name_zh"></div>
+            <div class="form-group"><label>里程碑名稱 — 英文</label><div style="display:flex;gap:0.25rem;"><input type="text" id="f_ms_name_en" style="flex:1;"><button class="btn btn-sm btn-ai" onclick="aiTranslate('f_ms_name_zh','f_ms_name_en')">生成</button></div></div>
+            <div class="form-group full"><label>里程碑描述</label><textarea id="f_ms_desc" rows="2"></textarea></div>
+            <div class="form-group full"><label>里程碑效果 — 中文</label><textarea id="f_ms_effect_zh" rows="4"></textarea></div>
+            <div class="form-group full"><label>里程碑效果 — 英文</label><div style="display:flex;gap:0.25rem;align-items:start;"><textarea id="f_ms_effect_en" rows="4" style="flex:1;"></textarea><button class="btn btn-sm btn-ai" onclick="aiTranslate('f_ms_effect_zh','f_ms_effect_en')">生成</button></div></div>
+          </div>
+          <div style="margin-top:0.5rem;">
+            <button class="btn btn-sm btn-ai" onclick="aiGenMilestone()">AI 生成里程碑</button>
+          </div>
+
+          <!-- Block 4: Tags & Status -->
+          <div class="section-label" style="margin-top:1.5rem;">價值標籤與設計狀態</div>
+          <div class="form-group" style="margin-bottom:0.5rem;">
+            <label>效果標籤</label>
+            <div class="tag-grid" id="tagGrid"></div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group"><label>總價值 (自動)</label><input type="text" id="f_total_value" readonly style="color:var(--gold);font-weight:600;"></div>
+            <div class="form-group"><label>每凝聚力價值 (自動)</label><input type="text" id="f_vpc" readonly style="color:var(--gold-dim);"></div>
+            <div class="form-group"><label>設計狀態 (自動)</label><input type="text" id="f_status" readonly></div>
+          </div>
+
+          <!-- Bottom buttons -->
+          <div style="margin-top:1.25rem;display:flex;gap:0.5rem;flex-wrap:wrap;padding-bottom:2rem;">
+            <button class="btn btn-gold" onclick="saveSpirit()">儲存</button>
+            <button class="btn btn-ai" onclick="aiGenFull()">AI 全套生成</button>
+            <button class="btn" onclick="markComplete()">標記為完成</button>
+          </div>
+        </div>
+        <div id="editPlaceholder" style="text-align:center;color:var(--text-tertiary);padding:3rem 0;">載入中...</div>
+      </div>
+
+      <!-- Tab 2: Compare -->
+      <div class="tab-content" id="tabCompare">
+        <div class="filter-bar">
+          <select id="cmpCategory" onchange="loadCompare()"><option value="">全部分類</option></select>
+          <select id="cmpStatus" onchange="loadCompare()"><option value="">全部狀態</option><option value="complete">完成</option><option value="partial">部分</option><option value="pending">待設計</option></select>
+          <select id="cmpTag" onchange="loadCompare()"><option value="">全部標籤</option></select>
+          <select id="cmpSort" onchange="loadCompare()"><option value="name">名稱</option><option value="total_value_desc">總價值高→低</option><option value="total_value_asc">總價值低→高</option><option value="efficiency_desc">效率高→低</option></select>
+          <div class="spacer"></div>
+          <button class="btn btn-sm btn-gold" onclick="compareSelected()">對比選中項</button>
+        </div>
+        <div class="card-grid" id="compareGrid"></div>
+        <div class="compare-panel hidden" id="comparePanel">
+          <div class="section-label" style="margin-top:0;">對比分析</div>
+          <div class="compare-chart-container">
+            <canvas id="compareCanvas" width="500" height="280"></canvas>
+            <div style="flex:1;min-width:250px;">
+              <table class="compare-table" id="compareTable"></table>
+            </div>
+          </div>
+          <div class="rank-lists" id="rankLists"></div>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <script src="admin-shared.js"></script>
+<script src="admin-shared.js"></script>
+<script>
+  /* ================================================================
+     State
+  ================================================================ */
+  const el = (id) => document.getElementById(id);
+  let spirits = [];
+  let currentSpiritId = null;
+  let currentDepths = [{},{},{},{},{}];
+  let compareData = [];
+  let selectedCompare = new Set();
+  let expandedValueRef = {};
+
+  /* ================================================================
+     Init
+  ================================================================ */
+  document.addEventListener('DOMContentLoaded', async () => {
+    // Populate category dropdown
+    const catOpts = Object.entries(SPIRIT_CATEGORIES).map(([k,v]) => `<option value="${k}">${v.zh}</option>`).join('');
+    el('f_category').innerHTML = '<option value="">--</option>' + catOpts;
+    el('cmpCategory').innerHTML = '<option value="">全部分類</option>' + catOpts;
+
+    // Populate tag filter
+    const tagOpts = Object.entries(EFFECT_TAGS).map(([k,v]) => `<option value="${k}">${v.zh}</option>`).join('');
+    el('cmpTag').innerHTML = '<option value="">全部標籤</option>' + tagOpts;
+
+    // Populate effect tag checkboxes
+    el('tagGrid').innerHTML = Object.entries(EFFECT_TAGS).map(([k,v]) =>
+      `<label class="tag-check"><input type="checkbox" value="${k}" onchange="recalcStatus()">${v.zh}</label>`
+    ).join('');
+
+    // Search
+    el('spiritSearch').addEventListener('input', renderSpiritList);
+
+    await loadSpirits();
+    if (spirits.length > 0) selectSpirit(spirits[0].id);
+    else { el('editPlaceholder').textContent = '尚無團隊精神資料'; }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', e => {
+      if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveSpirit(); }
+      if (e.ctrlKey && e.key === 'g') { e.preventDefault(); aiGenFull(); }
+      if (e.key === 'Escape') { /* no-op cancel */ }
+    });
+  });
+
+  /* ================================================================
+     Panel Toggle
+  ================================================================ */
+  function toggleLeftPanel() {
+    const panel = el('panelLeft');
+    const btn = el('panelToggle');
+    const collapsed = panel.classList.toggle('collapsed');
+    btn.classList.toggle('shifted', collapsed);
+    btn.innerHTML = collapsed ? '&#9654;' : '&#9664;';
+  }
+
+  /* ================================================================
+     Tabs
+  ================================================================ */
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    el(tab === 'edit' ? 'tabEdit' : 'tabCompare').classList.add('active');
+    if (tab === 'compare') loadCompare();
+  }
+
+  /* ================================================================
+     Toast
+  ================================================================ */
+  function toast(msg, ok = true) {
+    const t = el('toast');
+    t.textContent = msg;
+    t.style.borderColor = ok ? 'var(--success)' : 'var(--danger)';
+    t.style.color = ok ? 'var(--success)' : 'var(--danger)';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  /* ================================================================
+     Spirit List (Left Panel)
+  ================================================================ */
+  async function loadSpirits() {
+    try {
+      const res = await adminFetch('/api/team-spirits');
+      const json = await res.json();
+      spirits = json.data || [];
+      renderSpiritList();
+      updateGlobalStats();
+    } catch (e) { console.error(e); }
+  }
+
+  function renderSpiritList() {
+    const query = (el('spiritSearch').value || '').trim().toLowerCase();
+    const filtered = query ? spirits.filter(s => (s.name_zh||'').includes(query) || (s.code||'').includes(query)) : spirits;
+
+    // Group by category
+    const groups = {};
+    for (const [k, v] of Object.entries(SPIRIT_CATEGORIES)) {
+      groups[k] = { label: v.zh, items: [] };
+    }
+    groups['_other'] = { label: '未分類', items: [] };
+
+    filtered.forEach(s => {
+      const cat = s.category && groups[s.category] ? s.category : '_other';
+      groups[cat].items.push(s);
+    });
+
+    let html = '';
+    for (const [catKey, g] of Object.entries(groups)) {
+      if (g.items.length === 0) continue;
+      html += `<div class="cat-group">
+        <div class="cat-header" onclick="toggleCatGroup(this)">
+          <span class="cat-arrow">&#9660;</span>
+          ${g.label} (${g.items.length})
+        </div>
+        <div class="cat-body">`;
+      g.items.forEach(s => {
+        const active = s.id === currentSpiritId ? ' active' : '';
+        const st = computeDisplayStatus(s);
+        const icon = st === 'complete' ? '<span class="sp-status sp-complete">&#10003;</span>'
+                   : st === 'partial' ? '<span class="sp-status sp-partial">&#9684;</span>'
+                   : '<span class="sp-status sp-pending">&#9675;</span>';
+        html += `<div class="spirit-item${active}" onclick="selectSpirit('${s.id}')">
+          <span class="sp-name">${s.name_zh || s.code || '?'}</span>
+          ${icon}
+        </div>`;
+      });
+      html += '</div></div>';
+    }
+    el('spiritList').innerHTML = html || '<div style="color:var(--text-tertiary);font-size:0.75rem;padding:1rem 0;text-align:center;">無資料</div>';
+  }
+
+  function toggleCatGroup(header) {
+    const arrow = header.querySelector('.cat-arrow');
+    const body = header.nextElementSibling;
+    arrow.classList.toggle('collapsed');
+    body.classList.toggle('collapsed');
+  }
+
+  function computeDisplayStatus(s) {
+    return s.design_status || 'pending';
+  }
+
+  async function updateGlobalStats() {
+    try {
+      const res = await adminFetch('/api/team-spirits/stats');
+      const json = await res.json();
+      const d = json.data || {};
+      const complete = d.complete || 0;
+      const partial = d.partial || 0;
+      const pending = d.pending || 0;
+      el('globalStats').innerHTML = `<span class="sp-complete">&#10003;</span> 完成 ${complete} / <span class="sp-partial">&#9684;</span> 部分 ${partial} / <span class="sp-pending">&#9675;</span> 待設計 ${pending}`;
+    } catch {
+      const complete = spirits.filter(s => computeDisplayStatus(s) === 'complete').length;
+      const partial = spirits.filter(s => computeDisplayStatus(s) === 'partial').length;
+      const pending = spirits.length - complete - partial;
+      el('globalStats').innerHTML = `<span class="sp-complete">&#10003;</span> 完成 ${complete} / <span class="sp-partial">&#9684;</span> 部分 ${partial} / <span class="sp-pending">&#9675;</span> 待設計 ${pending}`;
+    }
+  }
+
+  /* ================================================================
+     Select / Load Spirit
+  ================================================================ */
+  async function selectSpirit(id) {
+    currentSpiritId = id;
+    renderSpiritList();
+    el('editArea').style.opacity = '1';
+    el('editArea').style.pointerEvents = 'auto';
+    el('editPlaceholder').classList.add('hidden');
+    try {
+      const res = await adminFetch(`/api/team-spirits/${id}`);
+      const json = await res.json();
+      const s = json.data;
+      el('f_code').value = s.code || '';
+      el('f_category').value = s.category || '';
+      el('f_name_zh').value = s.name_zh || '';
+      el('f_name_en').value = s.name_en || '';
+      el('f_desc_zh').value = s.description || '';
+      el('f_desc_en').value = s.description_en || '';
+      el('f_design_notes').value = s.design_notes || '';
+      el('f_adopt_zh').value = s.adopt_effect_zh || '';
+      el('f_adopt_en').value = s.adopt_effect_en || '';
+      el('f_maxed_zh').value = s.maxed_effect_zh || '';
+      el('f_maxed_en').value = s.maxed_effect_en || '';
+
+      // Milestone
+      el('f_ms_name_zh').value = s.milestone_name_zh || '';
+      el('f_ms_name_en').value = s.milestone_name_en || '';
+      el('f_ms_desc').value = s.milestone_desc || '';
+      el('f_ms_effect_zh').value = s.milestone_effect_zh || '';
+      el('f_ms_effect_en').value = s.milestone_effect_en || '';
+
+      // Tags
+      const tags = s.effect_tags || [];
+      el('tagGrid').querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.checked = tags.includes(cb.value);
+      });
+
+      // Depth effects
+      currentDepths = [];
+      for (let i = 1; i <= 5; i++) {
+        const d = (s.depth_effects || []).find(de => de.level === i) || {};
+        currentDepths.push({
+          id: d.id || null,
+          level: i,
+          effect_name_zh: d.effect_name_zh || '',
+          effect_name_en: d.effect_name_en || '',
+          effect_desc_zh: d.effect_desc_zh || '',
+          effect_desc_en: d.effect_desc_en || '',
+          effect_value: d.effect_value || 0,
+          effect_formula: d.effect_formula || ''
+        });
+      }
+      renderDepthTable();
+      recalcStatus();
+    } catch (e) { console.error(e); toast('載入失敗', false); }
+  }
+
+  /* ================================================================
+     Depth Effects Table
+  ================================================================ */
+  function renderDepthTable() {
+    let html = '';
+    let filledCount = 0;
+    let totalVal = 0;
+    expandedValueRef = {};
+
+    currentDepths.forEach((d, i) => {
+      const lv = i + 1;
+      const summary = (d.effect_desc_zh || '').slice(0, 40) || '(空)';
+      const val = parseFloat(d.effect_value) || 0;
+      totalVal += val;
+      if (d.effect_desc_zh) filledCount++;
+
+      html += `<tr class="depth-row" onclick="toggleDepthDetail(${i})">
+        <td style="font-weight:600;color:var(--gold);">${lv}</td>
+        <td style="font-size:0.75rem;">${d.effect_name_zh || '—'}</td>
+        <td style="font-size:0.6875rem;color:var(--text-secondary);">${summary}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;">${val}V</td>
+        <td style="font-size:0.625rem;color:var(--text-tertiary);">&#9660;</td>
+      </tr>
+      <tr class="depth-detail" id="depthDetail${i}">
+        <td colspan="5">
+          <div class="form-grid" style="gap:0.4rem 0.6rem;">
+            <div class="form-group"><label>效果名稱 — 中文</label><input type="text" value="${escAttr(d.effect_name_zh)}" onchange="updateDepth(${i},'effect_name_zh',this.value)"></div>
+            <div class="form-group"><label>效果名稱 — 英文</label><div style="display:flex;gap:0.25rem;"><input type="text" id="dep_name_en_${i}" value="${escAttr(d.effect_name_en)}" style="flex:1;" onchange="updateDepth(${i},'effect_name_en',this.value)"><button class="btn btn-sm btn-ai" onclick="aiTranslateDepth(${i},'effect_name_zh','effect_name_en')">生成</button></div></div>
+            <div class="form-group full"><label>效果描述 — 中文</label><textarea rows="3" onchange="updateDepth(${i},'effect_desc_zh',this.value)">${escHtml(d.effect_desc_zh)}</textarea></div>
+            <div class="form-group full"><label>效果描述 — 英文</label><div style="display:flex;gap:0.25rem;align-items:start;"><textarea rows="3" id="dep_desc_en_${i}" style="flex:1;" onchange="updateDepth(${i},'effect_desc_en',this.value)">${escHtml(d.effect_desc_en)}</textarea><button class="btn btn-sm btn-ai" onclick="aiTranslateDepth(${i},'effect_desc_zh','effect_desc_en')">生成</button></div></div>
+            <div class="form-group"><label>效果價值</label><input type="number" value="${val}" step="0.5" onchange="updateDepth(${i},'effect_value',parseFloat(this.value)||0);renderDepthTable();recalcStatus();"></div>
+            <div class="form-group"><label>公式</label><input type="text" value="${escAttr(d.effect_formula)}" onchange="updateDepth(${i},'effect_formula',this.value)"></div>
+          </div>
+          <div style="margin-top:0.5rem;">
+            <button class="btn btn-sm" onclick="toggleValueRef(${i})">查詢價值表</button>
+            <div id="valueRef${i}" class="value-ref hidden">
+              <strong>傷害/恢復：</strong>1傷害=1V, 1恐懼=3V, 1HP恢復=1.5V, 1SAN恢復=1.5V, 攻擊+1=2.5V/+2=5V/+3=7.5V<br>
+              <strong>卡牌/資源：</strong>抽1張=1V, 1資源=1V, 搜牌=6V, 回收棄牌=1.5V<br>
+              <strong>檢定修正：</strong>單屬性+1=0.5V/+2=1.5V/+3=3V, 萬能+1=1V/+2=3V/+3=6V<br>
+              <strong>戰鬥控制：</strong>絆倒=2V, 安全脫離=1V, 斬殺=3V+<br>
+              <strong>環境：</strong>免費線索=2V, 移除毀滅=4V<br>
+              <strong>狀態(每層)：</strong>中毒3V, 流血2V, 燃燒3V, 冷凍3V, 發瘋6V, 標記6V, 護甲3V, 護盾6V, 強化3V, 隱蔽6V, 再生6V<br>
+              <strong>特殊：</strong>快速=+1V, 額外攻擊=1.5V, 重擲=1V, 自動成功=4V
+            </div>
+          </div>
+        </td>
+      </tr>`;
+    });
+
+    el('depthBody').innerHTML = html;
+    el('depthTotal').textContent = totalVal;
+    el('depthProgress').textContent = `(${filledCount}/5)`;
+
+    // Progress blocks
+    let blocks = '';
+    for (let i = 0; i < 5; i++) {
+      blocks += `<div class="depth-block${currentDepths[i].effect_desc_zh ? ' filled' : ''}"></div>`;
+    }
+    el('depthBlocks').innerHTML = blocks;
+  }
+
+  function toggleDepthDetail(idx) {
+    const detail = el('depthDetail' + idx);
+    detail.classList.toggle('show');
+  }
+
+  function toggleValueRef(idx) {
+    el('valueRef' + idx).classList.toggle('hidden');
+  }
+
+  function updateDepth(idx, field, value) {
+    currentDepths[idx][field] = value;
+    if (field === 'effect_value') {
+      renderDepthTable();
+      recalcStatus();
+    }
+  }
+
+  async function aiTranslateDepth(idx, srcField, dstField) {
+    const src = currentDepths[idx][srcField];
+    if (!src) { toast('來源欄位為空', false); return; }
+    const key = getGeminiKey();
+    if (!key) return;
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: `請將以下中文翻譯成英文，只回傳翻譯結果，不要任何解釋或引號：\n\n${src}` }] }] })
+      });
+      const json = await res.json();
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      if (text) {
+        currentDepths[idx][dstField] = text;
+        const target = el(`dep_${dstField === 'effect_name_en' ? 'name_en' : 'desc_en'}_${idx}`);
+        if (target) target.value = text;
+        toast('翻譯完成');
+      } else toast('翻譯失敗', false);
+    } catch { toast('翻譯失敗', false); }
+  }
+
+  /* ================================================================
+     Recalculate Status
+  ================================================================ */
+  function recalcStatus() {
+    const totalVal = currentDepths.reduce((sum, d) => sum + (parseFloat(d.effect_value) || 0), 0);
+    el('f_total_value').value = totalVal + 'V';
+    el('f_vpc').value = (totalVal / 6).toFixed(2) + 'V';
+
+    // Auto-detect design status
+    const depthsFilled = currentDepths.filter(d => (d.effect_desc_zh || '').trim()).length;
+    const hasMilestone = (el('f_ms_effect_zh').value || '').trim() !== '';
+    let status;
+    if (depthsFilled === 5 && hasMilestone) status = 'complete';
+    else if (depthsFilled > 0) status = 'partial';
+    else status = 'pending';
+
+    const statusLabels = { complete: '&#10003; 完成', partial: '&#9684; 部分完成', pending: '&#9675; 待設計' };
+    el('f_status').value = status === 'complete' ? 'complete' : status === 'partial' ? 'partial' : 'pending';
+    el('f_status').style.color = status === 'complete' ? 'var(--success)' : status === 'partial' ? 'var(--warning)' : 'var(--text-tertiary)';
+  }
+
+  /* ================================================================
+     Save Spirit
+  ================================================================ */
+  async function saveSpirit() {
+    if (!currentSpiritId) { toast('請先選擇一個精神', false); return; }
+
+    // Collect tags
+    const tags = [];
+    el('tagGrid').querySelectorAll('input:checked').forEach(cb => tags.push(cb.value));
+
+    const body = {
+      name_zh: el('f_name_zh').value.trim(),
+      name_en: el('f_name_en').value.trim(),
+      category: el('f_category').value,
+      description: el('f_desc_zh').value.trim(),
+      description_en: el('f_desc_en').value.trim(),
+      design_notes: el('f_design_notes').value.trim(),
+      adopt_effect_zh: el('f_adopt_zh').value.trim(),
+      adopt_effect_en: el('f_adopt_en').value.trim(),
+      maxed_effect_zh: el('f_maxed_zh').value.trim(),
+      maxed_effect_en: el('f_maxed_en').value.trim(),
+      milestone_name_zh: el('f_ms_name_zh').value.trim(),
+      milestone_name_en: el('f_ms_name_en').value.trim(),
+      milestone_desc: el('f_ms_desc').value.trim(),
+      milestone_effect_zh: el('f_ms_effect_zh').value.trim(),
+      milestone_effect_en: el('f_ms_effect_en').value.trim(),
+      effect_tags: tags,
+      total_value: currentDepths.reduce((s, d) => s + (parseFloat(d.effect_value) || 0), 0),
+    };
+
+    // Auto status
+    const depthsFilled = currentDepths.filter(d => (d.effect_desc_zh || '').trim()).length;
+    const hasMilestone = body.milestone_effect_zh !== '';
+    body.design_status = (depthsFilled === 5 && hasMilestone) ? 'complete' : depthsFilled > 0 ? 'partial' : 'pending';
+
+    if (!body.name_zh) { toast('請填寫中文名稱', false); return; }
+
+    try {
+      // Save main spirit
+      const res = await adminFetch(`/api/team-spirits/${currentSpiritId}`, { method: 'PUT', body: JSON.stringify(body) });
+      const json = await res.json();
+      if (!json.success) { toast(json.error || '儲存失敗', false); return; }
+
+      // Save depth effects
+      const depthRes = await adminFetch(`/api/team-spirits/${currentSpiritId}/depths`, {
+        method: 'PUT',
+        body: JSON.stringify({ depths: currentDepths })
+      });
+      const depthJson = await depthRes.json();
+      if (!depthJson.success) { toast('深度效果儲存失敗: ' + (depthJson.error || ''), false); return; }
+
+      toast('已儲存');
+      await loadSpirits();
+      await selectSpirit(currentSpiritId);
+    } catch (e) { toast('儲存失敗: ' + e.message, false); }
+  }
+
+  async function markComplete() {
+    if (!currentSpiritId) return;
+    try {
+      await adminFetch(`/api/team-spirits/${currentSpiritId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ design_status: 'complete' })
+      });
+      toast('已標記為完成');
+      await loadSpirits();
+      await selectSpirit(currentSpiritId);
+    } catch { toast('標記失敗', false); }
+  }
+
+  /* ================================================================
+     Export / Import
+  ================================================================ */
+  async function exportAll() {
+    try {
+      const res = await adminFetch('/api/team-spirits/export');
+      const json = await res.json();
+      const blob = new Blob([JSON.stringify(json.data || [], null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'team-spirits-export.json';
+      a.click();
+      toast('匯出完成');
+    } catch { toast('匯出失敗', false); }
+  }
+
+  async function importJSON(input) {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const res = await adminFetch('/api/team-spirits/import', { method: 'POST', body: JSON.stringify({ data }) });
+      const json = await res.json();
+      if (json.success) { toast('匯入完成'); await loadSpirits(); if (spirits.length) selectSpirit(spirits[0].id); }
+      else toast(json.error || '匯入失敗', false);
+    } catch (e) { toast('匯入失敗: ' + e.message, false); }
+    input.value = '';
+  }
+
+  /* ================================================================
+     Compare Tab
+  ================================================================ */
+  async function loadCompare() {
+    const cat = el('cmpCategory').value;
+    const status = el('cmpStatus').value;
+    const tag = el('cmpTag').value;
+    const sort = el('cmpSort').value;
+    try {
+      let url = '/api/team-spirits?';
+      if (cat) url += `category=${cat}&`;
+      if (status) url += `design_status=${status}&`;
+      if (sort) url += `sort=${sort}&`;
+      const res = await adminFetch(url);
+      const json = await res.json();
+      compareData = json.data || [];
+      // Client-side tag filter
+      if (tag) {
+        compareData = compareData.filter(s => (s.effect_tags || []).includes(tag));
+      }
+      renderCompareGrid();
+    } catch (e) { console.error(e); }
+  }
+
+  function renderCompareGrid() {
+    el('compareGrid').innerHTML = compareData.map(s => {
+      const sel = selectedCompare.has(s.id) ? ' selected' : '';
+      const st = computeDisplayStatus(s);
+      const badgeCls = st === 'complete' ? 'badge-complete' : st === 'partial' ? 'badge-partial' : 'badge-pending';
+      const totalV = s.total_value || 0;
+      const vpc = totalV ? (totalV / 6).toFixed(1) : '0';
+      const depthCount = s.depth_count || 0;
+      const tags = (s.effect_tags || []).map(t => EFFECT_TAGS[t]?.zh || t);
+
+      let depthBar = '';
+      for (let i = 0; i < 5; i++) {
+        depthBar += `<div class="db${i < depthCount ? ' filled' : ''}"></div>`;
+      }
+
+      return `<div class="compare-card${sel}" onclick="toggleCompareSelect('${s.id}')">
+        <input type="checkbox" class="cc-check" ${selectedCompare.has(s.id) ? 'checked' : ''} onclick="event.stopPropagation();toggleCompareSelect('${s.id}')">
+        <div class="cc-name">${s.name_zh || s.code}</div>
+        <div class="cc-stats">
+          總價值 <strong>${totalV}V</strong> &middot; 效率 ${vpc}V/凝聚
+          <span class="cc-status-badge ${badgeCls}" style="margin-left:0.35rem;">${st === 'complete' ? '完成' : st === 'partial' ? '部分' : '待設計'}</span>
+        </div>
+        <div class="cc-depth-bar">${depthBar}</div>
+        <div class="cc-tags">${tags.map(t => `<span class="cc-tag">${t}</span>`).join('')}</div>
+      </div>`;
+    }).join('') || '<div style="color:var(--text-tertiary);text-align:center;padding:2rem;grid-column:1/-1;">無資料</div>';
+  }
+
+  function toggleCompareSelect(id) {
+    if (selectedCompare.has(id)) selectedCompare.delete(id);
+    else if (selectedCompare.size < 4) selectedCompare.add(id);
+    else { toast('最多選 4 項', false); return; }
+    renderCompareGrid();
+  }
+
+  async function compareSelected() {
+    if (selectedCompare.size < 2) { toast('請至少選 2 項', false); return; }
+    const ids = [...selectedCompare];
+    const items = [];
+    for (const id of ids) {
+      try {
+        const res = await adminFetch(`/api/team-spirits/${id}`);
+        const json = await res.json();
+        items.push(json.data);
+      } catch { /* skip */ }
+    }
+    if (items.length < 2) { toast('載入失敗', false); return; }
+
+    el('comparePanel').classList.remove('hidden');
+
+    // Draw chart
+    drawCompareChart(items);
+    // Build table
+    buildCompareTable(items);
+    // Build rank lists
+    buildRankLists();
+  }
+
+  const CHART_COLORS = ['#C9A84C', '#4A7C9B', '#B84C4C', '#2D8B6F'];
+
+  function drawCompareChart(items) {
+    const canvas = el('compareCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const pad = { top: 30, right: 20, bottom: 40, left: 50 };
+    const plotW = W - pad.left - pad.right;
+    const plotH = H - pad.top - pad.bottom;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0D0D14';
+    ctx.fillRect(0, 0, W, H);
+
+    // Find max value
+    let maxVal = 1;
+    items.forEach(item => {
+      (item.depth_effects || []).forEach(de => {
+        if (de.effect_value > maxVal) maxVal = de.effect_value;
+      });
+    });
+    maxVal = Math.ceil(maxVal * 1.2);
+
+    // Grid
+    ctx.strokeStyle = '#2A2A44';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 5; i++) {
+      const y = pad.top + plotH - (i / 5) * plotH;
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + plotW, y); ctx.stroke();
+      ctx.fillStyle = '#5A5A52';
+      ctx.font = '10px JetBrains Mono';
+      ctx.textAlign = 'right';
+      ctx.fillText(((maxVal * i / 5).toFixed(1)) + 'V', pad.left - 5, y + 3);
+    }
+
+    // X axis labels
+    ctx.fillStyle = '#8A8778';
+    ctx.textAlign = 'center';
+    ctx.font = '11px Noto Sans TC';
+    for (let lv = 1; lv <= 5; lv++) {
+      const x = pad.left + ((lv - 1) / 4) * plotW;
+      ctx.fillText('Lv' + lv, x, H - pad.bottom + 20);
+    }
+
+    // Draw lines
+    items.forEach((item, idx) => {
+      const depths = item.depth_effects || [];
+      const color = CHART_COLORS[idx % CHART_COLORS.length];
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+
+      for (let lv = 1; lv <= 5; lv++) {
+        const de = depths.find(d => d.level === lv);
+        const val = de ? de.effect_value : 0;
+        const x = pad.left + ((lv - 1) / 4) * plotW;
+        const y = pad.top + plotH - (val / maxVal) * plotH;
+        if (lv === 1) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Dots
+      for (let lv = 1; lv <= 5; lv++) {
+        const de = depths.find(d => d.level === lv);
+        const val = de ? de.effect_value : 0;
+        const x = pad.left + ((lv - 1) / 4) * plotW;
+        const y = pad.top + plotH - (val / maxVal) * plotH;
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // Legend
+      const lx = pad.left + 10 + idx * 120;
+      const ly = 14;
+      ctx.fillStyle = color;
+      ctx.fillRect(lx, ly - 4, 12, 4);
+      ctx.fillStyle = '#E8E4D9';
+      ctx.font = '10px Noto Sans TC';
+      ctx.textAlign = 'left';
+      ctx.fillText(item.name_zh || item.code, lx + 16, ly);
+    });
+  }
+
+  function buildCompareTable(items) {
+    let html = '<thead><tr><th>指標</th>';
+    items.forEach(it => { html += `<th>${it.name_zh || it.code}</th>`; });
+    html += '</tr></thead><tbody>';
+
+    const rows = [
+      { label: '總價值', fn: it => (it.total_value || 0) + 'V' },
+      { label: '每凝聚力', fn: it => ((it.total_value || 0) / 6).toFixed(2) + 'V' },
+      { label: '分類', fn: it => SPIRIT_CATEGORIES[it.category]?.zh || '—' },
+      { label: '設計狀態', fn: it => it.design_status || 'pending' },
+    ];
+    for (let lv = 1; lv <= 5; lv++) {
+      rows.push({ label: `Lv${lv} 價值`, fn: it => {
+        const de = (it.depth_effects || []).find(d => d.level === lv);
+        return de ? de.effect_value + 'V' : '—';
+      }});
+    }
+
+    rows.forEach(r => {
+      html += `<tr><td>${r.label}</td>`;
+      items.forEach(it => { html += `<td>${r.fn(it)}</td>`; });
+      html += '</tr>';
+    });
+    html += '</tbody>';
+    el('compareTable').innerHTML = html;
+  }
+
+  function buildRankLists() {
+    const sorted = [...compareData].filter(s => s.total_value);
+    const byValue = [...sorted].sort((a, b) => (b.total_value || 0) - (a.total_value || 0));
+    const byEfficiency = [...sorted].sort((a, b) => ((b.total_value || 0) / 6) - ((a.total_value || 0) / 6));
+
+    let html = '<div class="rank-list"><h4>Total Value Ranking</h4>';
+    byValue.slice(0, 10).forEach((s, i) => {
+      html += `<div class="rank-item"><span><span class="rank-num">#${i + 1}</span>${s.name_zh || s.code}</span><span style="font-family:'JetBrains Mono',monospace;">${s.total_value || 0}V</span></div>`;
+    });
+    html += '</div><div class="rank-list"><h4>Efficiency Ranking</h4>';
+    byEfficiency.slice(0, 10).forEach((s, i) => {
+      const eff = ((s.total_value || 0) / 6).toFixed(2);
+      html += `<div class="rank-item"><span><span class="rank-num">#${i + 1}</span>${s.name_zh || s.code}</span><span style="font-family:'JetBrains Mono',monospace;">${eff}V</span></div>`;
+    });
+    html += '</div>';
+    el('rankLists').innerHTML = html;
+  }
+
+  /* ================================================================
+     AI Generation (Gemini)
+  ================================================================ */
+  function getGeminiKey() {
+    let key = localStorage.getItem('gemini_api_key');
+    if (!key) {
+      key = prompt('請輸入 Gemini API Key：');
+      if (key) localStorage.setItem('gemini_api_key', key);
+    }
+    return key;
+  }
+
+  async function callGemini(promptText) {
+    const key = getGeminiKey();
+    if (!key) { toast('需要 Gemini API Key', false); return null; }
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }], generationConfig: { temperature: 0.8 } })
+      });
+      const json = await res.json();
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const match = text.match(/[\[{][\s\S]*[\]}]/);
+      return match ? JSON.parse(match[0]) : null;
+    } catch (e) { console.error(e); toast('AI 生成失敗: ' + e.message, false); return null; }
+  }
+
+  async function aiTranslate(srcId, dstId) {
+    const src = el(srcId).value.trim();
+    if (!src) { toast('來源欄位為空', false); return; }
+    const key = getGeminiKey();
+    if (!key) return;
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: `請將以下中文翻譯成英文，只回傳翻譯結果，不要任何解釋或引號：\n\n${src}` }] }] })
+      });
+      const json = await res.json();
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      if (text) { el(dstId).value = text; toast('翻譯完成'); } else toast('翻譯失敗', false);
+    } catch { toast('翻譯失敗', false); }
+  }
+
+  function buildSpiritContext() {
+    const name = el('f_name_zh').value || '(未知)';
+    const cat = SPIRIT_CATEGORIES[el('f_category').value]?.zh || '未分類';
+    const desc = el('f_desc_zh').value || '';
+    return `團隊精神名稱：${name}\n分類：${cat}\n描述：${desc}`;
+  }
+
+  async function aiGenDepths() {
+    if (!currentSpiritId) { toast('請先選擇精神', false); return; }
+    toast('AI 生成深度效果中...');
+    const ctx = buildSpiritContext();
+    const result = await callGemini(`你是一個克蘇魯神話合作卡牌遊戲的系統設計師。請為一個團隊精神設計 5 個深度等級效果。
+
+## 遊戲背景
+1920-30 年代偵探黑色電影 x 宇宙恐怖的合作卡牌遊戲。團隊精神是全隊共享的被動能力，隨著凝聚力投入逐步解鎖更強效果。
+
+## 當前團隊精神
+${ctx}
+
+## 效果價值參考表
+傷害/恢復：1傷害=1V, 1恐懼=3V, 1HP恢復=1.5V, 1SAN恢復=1.5V, 攻擊+1=2.5V
+卡牌/資源：抽1張=1V, 1資源=1V, 搜牌=6V, 回收棄牌=1.5V
+檢定修正：單屬性+1=0.5V/+2=1.5V/+3=3V, 萬能+1=1V/+2=3V/+3=6V
+戰鬥控制：絆倒=2V, 安全脫離=1V, 斬殺=3V+
+狀態(每層)：中毒3V, 流血2V, 燃燒3V, 冷凍3V, 護甲3V, 護盾6V, 強化3V
+特殊：快速=+1V, 額外攻擊=1.5V, 重擲=1V, 自動成功=4V
+
+## 設計規則
+- 5 個等級，每級效果比上一級更強
+- Lv1 應是簡單但有用的基礎效果（約 1-2V）
+- Lv5 應是強大的頂級效果（約 4-8V）
+- 效果應圍繞同一主題遞進
+- 總價值建議在 15-25V 之間
+
+## 輸出格式（JSON）
+[
+  { "level": 1, "effect_name_zh": "名稱", "effect_name_en": "Name", "effect_desc_zh": "描述", "effect_desc_en": "Description", "effect_value": 2, "effect_formula": "公式" },
+  ...共 5 個
+]`);
+    if (!result || !Array.isArray(result)) { toast('生成失敗', false); return; }
+    result.forEach((r, i) => {
+      if (i < 5) {
+        currentDepths[i] = { ...currentDepths[i], ...r, level: i + 1 };
+      }
+    });
+    renderDepthTable();
+    recalcStatus();
+    toast('深度效果已生成');
+  }
+
+  async function aiGenMilestone() {
+    if (!currentSpiritId) { toast('請先選擇精神', false); return; }
+    toast('AI 生成里程碑中...');
+    const ctx = buildSpiritContext();
+    const result = await callGemini(`你是一個克蘇魯神話合作卡牌遊戲的系統設計師。請為一個團隊精神設計里程碑。
+
+## 遊戲背景
+1920-30 年代偵探黑色電影 x 宇宙恐怖的合作卡牌遊戲。里程碑是團隊精神的終極成就，當條件達成時解鎖額外獎勵。
+
+## 當前團隊精神
+${ctx}
+
+## 設計要求
+- 里程碑名稱應有氣勢，符合克蘇魯主題
+- 描述達成條件（例如：全隊累計消滅 X 個怪物）
+- 效果應該是強大的一次性或持續性獎勵
+- 效果描述要具體可執行
+
+## 輸出格式（JSON）
+{
+  "milestone_name_zh": "名稱",
+  "milestone_name_en": "Name",
+  "milestone_desc": "達成條件描述",
+  "milestone_effect_zh": "效果描述中文",
+  "milestone_effect_en": "Effect description English"
+}`);
+    if (!result) { toast('生成失敗', false); return; }
+    el('f_ms_name_zh').value = result.milestone_name_zh || '';
+    el('f_ms_name_en').value = result.milestone_name_en || '';
+    el('f_ms_desc').value = result.milestone_desc || '';
+    el('f_ms_effect_zh').value = result.milestone_effect_zh || '';
+    el('f_ms_effect_en').value = result.milestone_effect_en || '';
+    recalcStatus();
+    toast('里程碑已生成');
+  }
+
+  async function aiGenFull() {
+    if (!currentSpiritId) { toast('請先選擇精神', false); return; }
+    toast('AI 全套生成中...');
+    const ctx = buildSpiritContext();
+    const result = await callGemini(`你是一個克蘇魯神話合作卡牌遊戲的系統設計師。請為一個團隊精神做全套設計。
+
+## 遊戲背景
+1920-30 年代偵探黑色電影 x 宇宙恐怖的合作卡牌遊戲。團隊精神是全隊共享的被動能力系統。
+
+## 當前團隊精神
+${ctx}
+
+## 效果價值參考
+傷害/恢復：1傷害=1V, 1恐懼=3V, 1HP恢復=1.5V, 1SAN恢復=1.5V, 攻擊+1=2.5V
+卡牌/資源：抽1張=1V, 1資源=1V, 搜牌=6V, 回收棄牌=1.5V
+檢定修正：單屬性+1=0.5V/+2=1.5V/+3=3V, 萬能+1=1V/+2=3V/+3=6V
+
+## 需要設計的內容
+1. 採納效果（團隊選擇此精神時的基礎被動效果）
+2. 滿級效果（全部 5 點深度都升滿後的額外被動效果）
+3. 五個深度等級效果（遞進式增強）
+4. 里程碑（終極成就及獎勵）
+5. 效果標籤（從以下選擇 1-3 個：${Object.entries(EFFECT_TAGS).map(([k,v]) => k + '=' + v.zh).join(', ')}）
+
+## 輸出格式（JSON）
+{
+  "adopt_effect_zh": "採納效果中文",
+  "adopt_effect_en": "Adopt effect English",
+  "maxed_effect_zh": "滿級效果中文",
+  "maxed_effect_en": "Maxed effect English",
+  "depth_effects": [
+    { "level": 1, "effect_name_zh": "名稱", "effect_name_en": "Name", "effect_desc_zh": "描述", "effect_desc_en": "Desc", "effect_value": 2, "effect_formula": "" },
+    ...共 5 個（Lv1~5，逐級增強，總價值 15-25V）
+  ],
+  "milestone_name_zh": "里程碑名稱",
+  "milestone_name_en": "Milestone Name",
+  "milestone_desc": "達成條件",
+  "milestone_effect_zh": "里程碑效果中文",
+  "milestone_effect_en": "Milestone effect English",
+  "effect_tags": ["tag1", "tag2"]
+}`);
+    if (!result) { toast('生成失敗', false); return; }
+
+    // Fill adopt / maxed
+    if (result.adopt_effect_zh) el('f_adopt_zh').value = result.adopt_effect_zh;
+    if (result.adopt_effect_en) el('f_adopt_en').value = result.adopt_effect_en;
+    if (result.maxed_effect_zh) el('f_maxed_zh').value = result.maxed_effect_zh;
+    if (result.maxed_effect_en) el('f_maxed_en').value = result.maxed_effect_en;
+
+    // Fill depths
+    if (Array.isArray(result.depth_effects)) {
+      result.depth_effects.forEach((r, i) => {
+        if (i < 5) currentDepths[i] = { ...currentDepths[i], ...r, level: i + 1 };
+      });
+      renderDepthTable();
+    }
+
+    // Fill milestone
+    if (result.milestone_name_zh) el('f_ms_name_zh').value = result.milestone_name_zh;
+    if (result.milestone_name_en) el('f_ms_name_en').value = result.milestone_name_en;
+    if (result.milestone_desc) el('f_ms_desc').value = result.milestone_desc;
+    if (result.milestone_effect_zh) el('f_ms_effect_zh').value = result.milestone_effect_zh;
+    if (result.milestone_effect_en) el('f_ms_effect_en').value = result.milestone_effect_en;
+
+    // Fill tags
+    if (Array.isArray(result.effect_tags)) {
+      el('tagGrid').querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.checked = result.effect_tags.includes(cb.value);
+      });
+    }
+
+    recalcStatus();
+    toast('全套生成完成');
+  }
+
+  /* ================================================================
+     Utility
+  ================================================================ */
+  function escHtml(str) { return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escAttr(str) { return (str || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
 </body>
 </html>

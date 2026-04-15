@@ -196,6 +196,57 @@ EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 `;
 
+const MIGRATION_005_SQL = `
+-- ============================================
+-- Migration 005: Book/Relic system + Upgrade path
+-- ============================================
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN is_book BOOLEAN NOT NULL DEFAULT FALSE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN is_relic BOOLEAN NOT NULL DEFAULT FALSE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN study_method VARCHAR(16);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN study_required INTEGER;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN study_test_attribute VARCHAR(16);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN study_test_dc INTEGER;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN study_difficulty_tier INTEGER;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN study_upgrade_card VARCHAR(32);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN upgrades JSONB NOT NULL DEFAULT '{}';
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -204,6 +255,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_002_SQL);
     await client.query(MIGRATION_003_SQL);
     await client.query(MIGRATION_004_SQL);
+    await client.query(MIGRATION_005_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

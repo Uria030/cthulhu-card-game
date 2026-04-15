@@ -230,6 +230,7 @@
               <div class="check-row"><input type="checkbox" id="f_is_signature"><label for="f_is_signature">簽名卡 — 調查員獨有</label></div>
               <div class="check-row"><input type="checkbox" id="f_is_weakness"><label for="f_is_weakness">弱點 — 負面卡，強制納入牌組</label></div>
               <div class="check-row"><input type="checkbox" id="f_is_revelation"><label for="f_is_revelation">神啟卡 — 詛咒卡，抽到即觸發</label></div>
+              <div class="check-row"><input type="checkbox" id="f_is_exceptional"><label for="f_is_exceptional">Exceptional — 經驗值 ×2，額外抵扣 -2V</label></div>
             </div>
           </div>
           <!-- Signature sub-fields -->
@@ -263,6 +264,16 @@
               <div class="form-group hidden" id="studyDcGroup"><label>檢定 DC</label><input type="number" id="f_study_test_dc" value="0" min="0" max="30"></div>
               <div class="form-group"><label>難度等級 (1-5)</label><input type="number" id="f_study_difficulty_tier" value="0" min="0" max="5"></div>
               <div class="form-group"><label>升級版卡片代碼</label><input type="text" id="f_study_upgrade_card" placeholder="升級後的卡片 code"></div>
+            </div>
+          </div>
+
+          <!-- Transform fields -->
+          <div id="transformFields" class="hidden">
+            <div class="section-label">變形設定（Transform）</div>
+            <div class="form-grid" style="margin-top:0.5rem;">
+              <div class="form-group full"><label>變形目標卡片代碼</label><input type="text" id="f_transform_to" placeholder="card_code 或 code1,code2（多型態）"></div>
+              <div class="form-group"><label>變形條件</label><select id="f_transform_condition"><option value="">無</option><option value="study_complete">研究完成</option><option value="hp_zero">HP 歸零</option><option value="on_success">檢定成功</option><option value="on_play">打出時</option><option value="manual">手動觸發</option></select></div>
+              <div class="form-group"><div class="check-row"><input type="checkbox" id="f_transform_reversible"><label for="f_transform_reversible">可逆（雙向切換）</label></div></div>
             </div>
           </div>
 
@@ -446,7 +457,7 @@
         <div class="balance-row"><span class="bal-label">等級抵扣</span><span class="bal-val" id="balLevelDisc">0</span></div>
         <div class="balance-row"><span class="bal-label">消耗類型修正</span><span class="bal-val" id="balConsumeMod">0</span></div>
         <div class="balance-row"><span class="bal-label">留場修正</span><span class="bal-val" id="balStayMod">0</span></div>
-        <div class="balance-row" id="balSpecialRow" style="display:none;"><span class="bal-label">簽名/獨特修正</span><span class="bal-val" id="balSpecialMod">0</span></div>
+        <div class="balance-row" id="balSpecialRow" style="display:none;"><span class="bal-label">特殊修正</span><span class="bal-val" id="balSpecialMod">0</span></div>
         <hr class="balance-divider">
         <div class="balance-row"><span class="bal-label">小計</span><span class="bal-val" id="balSubtotal">0V</span></div>
         <div class="balance-row"><span class="bal-label">費用設定</span><span class="bal-val" id="balCost">0</span></div>
@@ -454,6 +465,16 @@
         <hr class="balance-divider">
         <div class="balance-row"><span class="bal-label">需要稀有度抵扣</span><span class="bal-val" id="balRarityDisc">0V</span></div>
         <div class="balance-result ok" id="balResult">—</div>
+        <details style="margin-top:0.5rem;font-size:0.6875rem;color:var(--text-tertiary);">
+          <summary style="cursor:pointer;color:var(--text-secondary);">負面副作用參考表</summary>
+          <div style="margin-top:0.25rem;line-height:1.6;">
+            離場時棄牌庫 X 張：<b>-0.5V × X</b><br>
+            離場時失去所有資源：<b>-3V</b><br>
+            混沌袋風險（失去 X 資源）：<b>-1V × X</b>（按觸發率折算）<br>
+            友傷風險：<b>-1V ~ -2V</b><br>
+            放置毀滅標記：<b>-4V</b>
+          </div>
+        </details>
       </div>
     </div>
     <div class="preview-card" id="previewCard">
@@ -566,6 +587,15 @@
     remove_curse: () => 0,
     look_chaos_bag: () => 0.5,
     manipulate_chaos_bag: () => 1,
+    // v1.1 修正案新增效果
+    teleport: () => 3,
+    stabilize_ally: () => 0.5,
+    revive_ally: () => 1.5,
+    fast_play: () => 1,
+    target_other: () => 2,
+    direct_deploy: () => 2,
+    gain_use: (p) => (p.amount || 0) * 0.5,
+    transform: () => 2,
     add_keyword: () => 0,
     remove_keyword: () => 0,
     reveal_tile: () => 0,
@@ -845,7 +875,8 @@
 
     const isSig = el('f_is_signature').checked;
     const isUnique = el('f_is_unique').checked;
-    const specialMod = (isSig ? -3 : 0) + (isUnique ? -1 : 0);
+    const isExceptional = el('f_is_exceptional')?.checked;
+    const specialMod = (isSig ? -3 : 0) + (isUnique ? -1 : 0) + (isExceptional ? -2 : 0);
 
     let totalValue, stayMod, ratio, rarityDisc, rarity, status, msg;
 
@@ -933,7 +964,11 @@
     el('balLevelDisc').textContent = b.levelDisc > 0 ? `-${b.levelDisc}V` : '0';
     el('balConsumeMod').textContent = b.consumeMod !== 0 ? `${b.consumeMod}V` : '0';
     el('balStayMod').textContent = b.stayMod !== 0 ? `${b.stayMod}V` : '0';
-    el('balSpecialMod').textContent = b.specialMod !== 0 ? `${b.specialMod}V` : '0';
+    const specialParts = [];
+    if (el('f_is_signature').checked) specialParts.push('簽名-3');
+    if (el('f_is_unique').checked) specialParts.push('獨特-1');
+    if (el('f_is_exceptional')?.checked) specialParts.push('Exc.-2');
+    el('balSpecialMod').textContent = b.specialMod !== 0 ? `${b.specialMod}V（${specialParts.join('+')}）` : '0';
     el('balSpecialRow').style.display = b.specialMod !== 0 ? '' : 'none';
     const subtotal = b.totalValue + (b.stayMod || 0) + (b.consumeMod || 0) + (b.specialMod || 0) - b.levelDisc;
     el('balSubtotal').textContent = subtotal.toFixed(1) + 'V';
@@ -1134,6 +1169,7 @@
       let badges = '';
       if (c.is_signature) badges += '<span class="mini-tag" style="border-color:var(--gold);color:var(--gold)">簽名</span>';
       if (c.is_weakness) badges += '<span class="mini-tag" style="border-color:var(--danger);color:var(--danger)">弱點</span>';
+      if (c.is_exceptional) badges += '<span class="mini-tag" style="border-color:var(--gold-dim);color:var(--gold-dim)">Exceptional</span>';
       if (c.is_revelation) badges += '<span class="mini-tag" style="border-color:var(--oracle);color:var(--oracle)">神啟</span>';
       return `<div class="card-list-item${isActive}" onclick="loadCard('${c.id}')">
         <div class="item-name">${c.name_zh || '(未命名)'}</div>
@@ -1163,6 +1199,7 @@
     el('f_level').value = c.level || 0;
     el('f_is_signature').checked = !!c.is_signature;
     el('f_is_weakness').checked = !!c.is_weakness;
+    el('f_is_exceptional').checked = !!c.is_exceptional;
     el('f_is_revelation').checked = !!c.is_revelation;
     el('f_owner_investigator').value = c.owner_investigator || '';
     el('f_removable').checked = !!c.removable;
@@ -1191,6 +1228,9 @@
     loadCommitIcons(c.commit_icons || {});
     el('f_commit_bonus').value = c.commit_bonus || '';
     loadConsumeEffect(c.consume_enabled, c.consume_effect);
+    el('f_transform_to').value = c.transform_to || '';
+    el('f_transform_condition').value = c.transform_condition || '';
+    el('f_transform_reversible').checked = !!c.transform_reversible;
     el('f_flavor_text').value = c.flavor_text || '';
     // Migrate old effect format if needed
     const effects = (c.effects || []).map(e => {
@@ -1226,6 +1266,7 @@
       level: intVal('f_level'),
       is_signature: el('f_is_signature').checked,
       is_weakness: el('f_is_weakness').checked,
+      is_exceptional: el('f_is_exceptional').checked,
       is_revelation: el('f_is_revelation').checked,
       owner_investigator: el('f_owner_investigator').value.trim() || null,
       removable: el('f_removable').checked,
@@ -1263,6 +1304,9 @@
       study_test_dc: intVal('f_study_test_dc') || null,
       study_difficulty_tier: intVal('f_study_difficulty_tier') || null,
       study_upgrade_card: el('f_study_upgrade_card')?.value?.trim() || null,
+      transform_to: el('f_transform_to')?.value?.trim() || null,
+      transform_condition: el('f_transform_condition')?.value || null,
+      transform_reversible: el('f_transform_reversible')?.checked || false,
       effects: collectEffects(),
       upgrades: (() => { saveUpgradeLevelSilent(); return Object.keys(currentUpgrades).length > 0 ? currentUpgrades : {}; })(),
       flavor_text: el('f_flavor_text').value.trim(),
@@ -1871,6 +1915,14 @@
       case 'add_curse': return `在混沌袋放入 ${p.amount || '?'} 個詛咒`;
       case 'create_light': return `創造光源（半徑 ${p.radius || '?'}）`;
       case 'jump': return `跳躍移動 ${p.distance || '?'} 個板塊（不觸發交戰）`;
+      case 'teleport': return `${t}傳送到任意地點`;
+      case 'stabilize_ally': return `${t}穩定一名瀕死隊友`;
+      case 'revive_ally': return `${t}讓一名瀕死者直接站起`;
+      case 'fast_play': return `快速（不用行動點打出）`;
+      case 'target_other': return `可指定其他調查員`;
+      case 'direct_deploy': return `直接進場（省費用+行動點）`;
+      case 'gain_use': return `獲得 ${p.amount || '?'} 使用次數`;
+      case 'transform': return `${t}變形為 ${p.target_card || '?'}`;
       default: {
         const allCodes = Object.values(EL.effect_codes).flat();
         const def = allCodes.find(c => c.code === code);
@@ -1983,6 +2035,10 @@
     const studyMethod = el('f_study_method')?.value;
     toggle('studyTestGroup', studyMethod === 'count_and_test');
     toggle('studyDcGroup', studyMethod === 'count_and_test');
+
+    // Transform fields — show when asset/ally has transform_to or book/relic
+    const hasTransform = !!(el('f_transform_to')?.value?.trim()) || hasBookRelic;
+    toggle('transformFields', (isAsset || isAlly) && hasTransform);
 
     // Play section fields — weapon/combat only when relevant
     toggle('allyHpGroup', isAlly);
@@ -2114,6 +2170,7 @@
     el('f_slot').addEventListener('change', () => { el('slotNote').textContent = SLOTS[el('f_slot').value]?.note || ''; });
     el('f_is_signature').addEventListener('change', () => { toggleConditionalFields(); updatePreview(); });
     el('f_is_unique').addEventListener('change', () => updatePreview());
+    el('f_is_exceptional').addEventListener('change', () => updatePreview());
     el('f_is_revelation').addEventListener('change', toggleConditionalFields);
     if (el('f_is_book')) el('f_is_book').addEventListener('change', toggleConditionalFields);
     if (el('f_is_relic')) el('f_is_relic').addEventListener('change', toggleConditionalFields);
@@ -2146,6 +2203,7 @@
     let badges = '';
     if (el('f_is_signature').checked) badges += '<span class="pv-badge pv-badge-signature">簽名</span>';
     if (el('f_is_weakness').checked) badges += '<span class="pv-badge pv-badge-weakness">弱點</span>';
+    if (el('f_is_exceptional').checked) badges += '<span class="pv-badge" style="background:var(--gold-dim);color:#000">Exceptional</span>';
     if (el('f_is_revelation').checked) badges += '<span class="pv-badge pv-badge-revelation">神啟</span>';
     const ct = el('f_consume_type').value;
     if (ct === 'long_rest') badges += '<span class="pv-badge pv-badge-consume pv-badge-long_rest">長休息回復</span>';
@@ -2533,7 +2591,8 @@ ${userDescription}
     'place_clue','discover_clue','place_doom','remove_doom','seal_gate','spawn_enemy','remove_enemy','execute_enemy',
     'reveal_tile','place_tile','remove_tile','place_haunting','remove_haunting','advance_act','advance_agenda','connect_tiles','disconnect_tiles',
     'create_light','extinguish_light','create_darkness','remove_darkness','create_fire','extinguish_fire',
-    'add_keyword','remove_keyword','add_bless','add_curse','remove_bless','remove_curse','look_chaos_bag','manipulate_chaos_bag'
+    'add_keyword','remove_keyword','add_bless','add_curse','remove_bless','remove_curse','look_chaos_bag','manipulate_chaos_bag',
+    'teleport','stabilize_ally','revive_ally','fast_play','target_other','direct_deploy','gain_use','transform'
   ]);
 
   function validateAndFixCardData(d) {
@@ -2664,6 +2723,7 @@ ${userDescription}
     el('f_level').value = d.level ?? 0;
     el('f_is_signature').checked = !!d.is_signature;
     el('f_is_weakness').checked = !!d.is_weakness;
+    el('f_is_exceptional').checked = !!d.is_exceptional;
     el('f_is_revelation').checked = !!d.is_revelation;
     el('f_owner_investigator').value = d.owner_investigator || '';
     el('f_removable').checked = !!d.removable;
@@ -2701,6 +2761,10 @@ ${userDescription}
     if (el('f_study_test_dc')) el('f_study_test_dc').value = d.study_test_dc ?? 0;
     if (el('f_study_difficulty_tier')) el('f_study_difficulty_tier').value = d.study_difficulty_tier ?? 0;
     if (el('f_study_upgrade_card')) el('f_study_upgrade_card').value = d.study_upgrade_card || '';
+    // Transform fields
+    el('f_transform_to').value = d.transform_to || '';
+    el('f_transform_condition').value = d.transform_condition || '';
+    el('f_transform_reversible').checked = !!d.transform_reversible;
     loadUpgrades(d.upgrades);
     el('f_flavor_text').value = d.flavor_text || '';
     // Migrate old effect format if needed

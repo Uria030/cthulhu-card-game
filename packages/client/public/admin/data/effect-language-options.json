@@ -160,7 +160,8 @@
       { "code": "move_enemy", "zh": "移動敵人", "en": "Move Enemy" },
       { "code": "swap_position", "zh": "交換位置", "en": "Swap Position" },
       { "code": "place_enemy", "zh": "放置敵人", "en": "Place Enemy" },
-      { "code": "jump", "zh": "跳躍移動", "en": "Jump" }
+      { "code": "jump", "zh": "跳躍移動", "en": "Jump" },
+      { "code": "teleport", "zh": "傳送（任意地點）", "en": "Teleport" }
     ],
     "狀態類": [
       { "code": "engage_enemy", "zh": "進入交戰", "en": "Engage Enemy" },
@@ -227,7 +228,15 @@
       { "code": "forge_item", "zh": "鍛造物品", "en": "Forge Item" },
       { "code": "craft_item", "zh": "製作物品", "en": "Craft Item" },
       { "code": "read_book", "zh": "閱讀書籍", "en": "Read Book" },
-      { "code": "research_relic", "zh": "研究遺跡", "en": "Research Relic" }
+      { "code": "research_relic", "zh": "研究遺跡", "en": "Research Relic" },
+      { "code": "teleport", "zh": "傳送（任意地點）", "en": "Teleport" },
+      { "code": "stabilize_ally", "zh": "穩定瀕死隊友", "en": "Stabilize Ally" },
+      { "code": "revive_ally", "zh": "讓瀕死者站起", "en": "Revive Ally" },
+      { "code": "fast_play", "zh": "快速（不用行動點）", "en": "Fast Play" },
+      { "code": "target_other", "zh": "可指定其他調查員", "en": "Target Other" },
+      { "code": "direct_deploy", "zh": "直接進場（省費用+行動點）", "en": "Direct Deploy" },
+      { "code": "gain_use", "zh": "獲得使用次數", "en": "Gain Use" },
+      { "code": "transform", "zh": "變形（卡片替換）", "en": "Transform" }
     ]
   },
 
@@ -624,6 +633,16 @@
     "research_relic": {
       "required": [
         { "key": "progress", "type": "number", "zh": "累積進度", "en": "Progress", "min": 1, "max": 10 }
+      ]
+    },
+    "gain_use": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "次數", "en": "Amount", "min": 1, "max": 10 }
+      ]
+    },
+    "transform": {
+      "required": [
+        { "key": "target_card", "type": "text", "zh": "變形目標卡片代碼", "en": "Target Card Code" }
       ]
     }
   },

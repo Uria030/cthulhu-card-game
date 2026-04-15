@@ -247,6 +247,29 @@ EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 `;
 
+// Migration 006: Exceptional flag + Transform system (v1.1 修正案)
+const MIGRATION_006_SQL = `
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN is_exceptional BOOLEAN NOT NULL DEFAULT FALSE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN transform_to TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN transform_condition VARCHAR(64);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN transform_reversible BOOLEAN NOT NULL DEFAULT FALSE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -256,6 +279,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_003_SQL);
     await client.query(MIGRATION_004_SQL);
     await client.query(MIGRATION_005_SQL);
+    await client.query(MIGRATION_006_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

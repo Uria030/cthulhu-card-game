@@ -8,6 +8,7 @@ import { teamSpiritRoutes } from './routes/team-spirits.js';
 import { talentTreeRoutes } from './routes/talent-trees.js';
 import { monsterRoutes } from './routes/monsters.js';
 import { locationRoutes } from './routes/locations.js';
+import { keeperRoutes } from './routes/keeper.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -33,6 +34,7 @@ export async function buildApp() {
   await app.register(talentTreeRoutes);
   await app.register(monsterRoutes);
   await app.register(locationRoutes);
+  await app.register(keeperRoutes);
 
   return app;
 }

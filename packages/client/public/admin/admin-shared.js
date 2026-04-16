@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.7.0';
+const ADMIN_VERSION = '0.8.0';
 
 // ============================================
 // API 設定
@@ -493,6 +493,151 @@ const TAG_CATEGORY_LABELS = {
   outdoor: { name_zh: '室外類', name_en: 'Outdoor' },
   special: { name_zh: '特殊類', name_en: 'Special' },
   custom:  { name_zh: '自訂類', name_en: 'Custom' },
+};
+
+// ============================================
+// 城主設計器常數 (MOD-10)
+// ============================================
+const MYTHOS_ACTIVATION_TIMINGS = {
+  investigator_phase_reaction: { name_zh: '調查員階段響應', name_en: 'Investigator Phase Reaction', note: '只能在調查員行動時響應觸發' },
+  keeper_phase:                { name_zh: '敵人階段使用',   name_en: 'Keeper Phase',                note: '城主在敵人階段主動打出' },
+  both:                        { name_zh: '兩者皆可',       name_en: 'Both',                        note: '任一階段都可使用' },
+};
+
+const MYTHOS_CATEGORIES = {
+  summon:      { name_zh: '召喚類',     name_en: 'Summon',      icon: '👁' },
+  environment: { name_zh: '環境類',     name_en: 'Environment', icon: '🌫' },
+  status:      { name_zh: '狀態類',     name_en: 'Status',      icon: '☠' },
+  global:      { name_zh: '全場類',     name_en: 'Global',      icon: '🌀' },
+  agenda:      { name_zh: '議程類',     name_en: 'Agenda',      icon: '⏰' },
+  chaos_bag:   { name_zh: '混沌袋類',   name_en: 'Chaos Bag',   icon: '🎲' },
+  encounter:   { name_zh: '遭遇牌堆類', name_en: 'Encounter',   icon: '🃏' },
+  cancel:      { name_zh: '響應取消類', name_en: 'Cancel',      icon: '✋' },
+  narrative:   { name_zh: '純敘事',     name_en: 'Narrative',   icon: '📖' },
+  general:     { name_zh: '其他/混合',  name_en: 'General',     icon: '❓' },
+};
+
+const MYTHOS_INTENSITIES = {
+  small:  { name_zh: '小型事件', name_en: 'Small',  cost_range: '1-2', color: '#5A5A52' },
+  medium: { name_zh: '中型事件', name_en: 'Medium', cost_range: '3-4', color: '#4A7C9B' },
+  large:  { name_zh: '大型事件', name_en: 'Large',  cost_range: '5-6', color: '#C9A84C' },
+  epic:   { name_zh: '史詩事件', name_en: 'Epic',   cost_range: '7+',  color: '#B84C4C' },
+};
+
+const ENCOUNTER_TYPES = {
+  thriller:  { name_zh: '驚悚',     name_en: 'Thriller',  desc_zh: '陷阱、突發事件' },
+  choice:    { name_zh: '選擇困境', name_en: 'Choice',    desc_zh: '道德抉擇' },
+  trade:     { name_zh: '交易',     name_en: 'Trade',     desc_zh: '提供交換機會' },
+  puzzle:    { name_zh: '謎題',     name_en: 'Puzzle',    desc_zh: '智力挑戰' },
+  social:    { name_zh: '社交',     name_en: 'Social',    desc_zh: 'NPC 互動' },
+  discovery: { name_zh: '發現',     name_en: 'Discovery', desc_zh: '揭露隱藏資訊' },
+};
+
+// 神話卡動作代碼（每個動作有自己的 params 結構）
+const MYTHOS_ACTION_CODES = {
+  // 召喚類
+  summon_monster:         { category: 'summon',      name_zh: '召喚怪物',          params: ['family_code','quantity','base_tier','location_rule'] },
+  spawn_at_location:      { category: 'summon',      name_zh: '在地點生成標記',     params: ['token_type','location_rule'] },
+  // 議程類
+  advance_agenda:         { category: 'agenda',      name_zh: '推進議程',          params: ['doom_tokens'] },
+  reveal_act:             { category: 'agenda',      name_zh: '強制翻面目標牌堆',   params: [] },
+  // 環境類
+  environment_change:     { category: 'environment', name_zh: '環境改變',          params: ['change_type','target_location_rule'] },
+  disconnect_location:    { category: 'environment', name_zh: '斷開地點連接',      params: ['location_rule'] },
+  // 狀態類
+  inflict_status:         { category: 'status',      name_zh: '施加狀態',          params: ['status_code','value','target_rule'] },
+  remove_buff:            { category: 'status',      name_zh: '移除正面狀態',      params: ['buff_code','target_rule'] },
+  // 全場類
+  damage_all:             { category: 'global',      name_zh: '全場傷害',          params: ['damage_physical','damage_horror','target_rule'] },
+  force_check_all:        { category: 'global',      name_zh: '全場強制檢定',      params: ['check_attribute','check_dc','failure_effect'] },
+  // 混沌袋類
+  modify_chaos_bag:       { category: 'chaos_bag',   name_zh: '混沌袋操作',        params: ['operation','token_type','quantity'] },
+  // 遭遇牌堆類
+  draw_encounter:         { category: 'encounter',   name_zh: '強制抽遭遇卡',      params: ['count','resolve_immediately'] },
+  shuffle_encounter_deck: { category: 'encounter',   name_zh: '重洗遭遇牌堆',      params: [] },
+  // 響應取消類
+  cancel_player_action:   { category: 'cancel',      name_zh: '取消玩家行動',      params: ['action_type','additional_penalty'] },
+  force_reroll:           { category: 'cancel',      name_zh: '強制重擲',          params: ['target_rule','use_worse_result'] },
+  // 敘事類
+  narrative_only:         { category: 'narrative',   name_zh: '純敘事',            params: ['text'] },
+  set_flag:               { category: 'narrative',   name_zh: '設定旗標',          params: ['flag_key','flag_value'] },
+};
+
+// 目標規則
+const TARGET_RULES = {
+  all_investigators:      { name_zh: '所有調查員',           scope: 'investigator' },
+  nearest_investigator:   { name_zh: '最近的調查員',         scope: 'investigator' },
+  lowest_hp:              { name_zh: '血量最低的調查員',      scope: 'investigator' },
+  lowest_san:             { name_zh: '理智最低的調查員',      scope: 'investigator' },
+  most_clues:             { name_zh: '線索最多的調查員',      scope: 'investigator' },
+  random_investigator:    { name_zh: '隨機調查員',           scope: 'investigator' },
+  last_attacker:          { name_zh: '最後攻擊者',           scope: 'investigator' },
+  all_locations:          { name_zh: '所有地點',             scope: 'location' },
+  nearest_to_clue:        { name_zh: '最靠近線索的地點',      scope: 'location' },
+  random_location:        { name_zh: '隨機地點',             scope: 'location' },
+  connected_locations:    { name_zh: '所有相連地點',         scope: 'location' },
+  keeper_choice:          { name_zh: '城主選擇',             scope: 'both' },
+};
+
+// 遭遇卡選項效果代碼
+const ENCOUNTER_EFFECT_CODES = {
+  gain_clue:       { name_zh: '獲得線索',       params: ['amount'] },
+  lose_clue:       { name_zh: '失去線索',       params: ['amount'] },
+  gain_resource:   { name_zh: '獲得資源',       params: ['amount'] },
+  lose_resource:   { name_zh: '失去資源',       params: ['amount'] },
+  damage:          { name_zh: '承受物理傷害',   params: ['amount'] },
+  horror:          { name_zh: '承受恐懼傷害',   params: ['amount'] },
+  heal_damage:     { name_zh: '回復 HP',       params: ['amount'] },
+  heal_horror:     { name_zh: '回復 SAN',      params: ['amount'] },
+  draw_card:       { name_zh: '抽牌',           params: ['amount'] },
+  discard_card:    { name_zh: '棄牌',           params: ['amount','rule'] },
+  gain_card:       { name_zh: '獲得特定卡片',   params: ['card_def_id'] },
+  inflict_status:  { name_zh: '施加狀態',       params: ['status_code','value'] },
+  remove_status:   { name_zh: '移除狀態',       params: ['status_code'] },
+  set_flag:        { name_zh: '設定劇情旗標',   params: ['flag_key','flag_value'] },
+  advance_agenda:  { name_zh: '推進議程',       params: ['doom_tokens'] },
+  gain_xp:         { name_zh: '獲得經驗值',     params: ['amount'] },
+  custom:          { name_zh: '自訂效果',       params: ['description'] },
+};
+
+// 環境改變類型
+const ENVIRONMENT_CHANGE_TYPES = {
+  darkness:   { name_zh: '黑暗',     name_en: 'Darkness' },
+  fire:       { name_zh: '失火',     name_en: 'Fire' },
+  haunting:   { name_zh: '鬧鬼',     name_en: 'Haunting' },
+  disconnect: { name_zh: '斷開連接', name_en: 'Disconnect' },
+  flood:      { name_zh: '淹水',     name_en: 'Flood' },
+  collapse:   { name_zh: '崩塌',     name_en: 'Collapse' },
+};
+
+// 混沌袋標記類型（用於 modify_chaos_bag）
+const CHAOS_BAG_TOKENS = {
+  cultist:        { name_zh: '邪教徒',     name_en: 'Cultist' },
+  skull:          { name_zh: '骷髏',       name_en: 'Skull' },
+  tablet:         { name_zh: '石版',       name_en: 'Tablet' },
+  elder_thing:    { name_zh: '遠古邪物',   name_en: 'Elder Thing' },
+  elder_sign:     { name_zh: '遠古印記',   name_en: 'Elder Sign' },
+  auto_fail:      { name_zh: '自動失敗',   name_en: 'Auto Fail' },
+  bless:          { name_zh: '祝福',       name_en: 'Bless' },
+  curse:          { name_zh: '詛咒',       name_en: 'Curse' },
+  zero:           { name_zh: '0',          name_en: '0' },
+  minus_one:      { name_zh: '-1',         name_en: '-1' },
+  minus_two:      { name_zh: '-2',         name_en: '-2' },
+  minus_three:    { name_zh: '-3',         name_en: '-3' },
+  minus_four:     { name_zh: '-4',         name_en: '-4' },
+  minus_five:     { name_zh: '-5',         name_en: '-5' },
+};
+
+// 響應觸發條件
+const RESPONSE_TRIGGERS = {
+  investigator_attacks:    { name_zh: '調查員攻擊時' },
+  investigator_moves:      { name_zh: '調查員移動時' },
+  investigator_investigates:{ name_zh: '調查員調查時' },
+  investigator_draws_card: { name_zh: '調查員抽牌時' },
+  investigator_succeeds:   { name_zh: '調查員檢定成功時' },
+  investigator_fails:      { name_zh: '調查員檢定失敗時' },
+  monster_defeated:        { name_zh: '怪物被擊敗時' },
+  agenda_advance:          { name_zh: '議程推進時' },
 };
 
 /* ── 工具函數 ── */

@@ -1,0 +1,2559 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>城主設計器 — Admin Module</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    /* ── Layout ── */
+    .main-layout { display: flex; gap: 0; min-height: calc(100vh - 50px); }
+    .panel-left {
+      position: fixed; top: 50px; left: 0; bottom: 0; width: 320px;
+      background: var(--bg-secondary); border-right: 1px solid var(--border);
+      overflow-y: auto; z-index: 50; transition: transform 0.25s ease;
+      display: flex; flex-direction: column;
+    }
+    .panel-left.collapsed { transform: translateX(-100%); }
+    .panel-main { flex: 1; margin-left: 320px; padding: 1rem 1.5rem 5rem; overflow-y: auto; transition: margin-left 0.25s ease; }
+    .panel-main.expanded { margin-left: 0; }
+
+    /* ── Library Switcher ── */
+    .lib-switcher { display: flex; gap: 0; padding: 0.5rem; border-bottom: 1px solid var(--border); }
+    .lib-btn {
+      flex: 1; padding: 0.6rem; border: 1px solid var(--border); background: var(--bg-card);
+      color: var(--text-secondary); cursor: pointer; font-family: 'Noto Sans TC', sans-serif;
+      font-size: 0.875rem; transition: all 0.2s;
+    }
+    .lib-btn:first-child { border-radius: 6px 0 0 6px; }
+    .lib-btn:last-child { border-radius: 0 6px 6px 0; }
+    .lib-btn.active { background: var(--gold); color: var(--bg-primary); border-color: var(--gold); font-weight: 500; }
+
+    /* ── Toolbar tabs ── */
+    .toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+    .toolbar .spacer { flex: 1; }
+    .tab-group { display: flex; gap: 0; }
+    .tab-btn { padding: 0.45rem 1.25rem; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary);
+      cursor: pointer; font-size: 0.875rem; font-family: 'Noto Sans TC', sans-serif; transition: all 0.2s; }
+    .tab-btn:first-child { border-radius: 6px 0 0 6px; }
+    .tab-btn:last-child { border-radius: 0 6px 6px 0; }
+    .tab-btn.active { background: var(--gold); color: var(--bg-primary); border-color: var(--gold); font-weight: 500; }
+
+    /* ── Filter ── */
+    .filter-block { padding: 0.875rem 1rem; border-bottom: 1px solid var(--border); }
+    .filter-block label { font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 0.25rem; display: block; }
+    .filter-block input, .filter-block select { font-size: 0.8125rem; padding: 0.4rem 0.625rem; margin-bottom: 0.5rem; }
+    .filter-block .range-row { display: flex; gap: 0.375rem; align-items: center; }
+    .filter-block .range-row input { flex: 1; margin: 0; }
+
+    /* ── Card list ── */
+    .card-list { flex: 1; overflow-y: auto; padding: 0.5rem; }
+    .lib-card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.625rem 0.75rem; margin-bottom: 0.5rem; cursor: pointer; transition: all 0.15s;
+    }
+    .lib-card:hover { border-color: var(--gold-dim); background: var(--bg-card-hover); }
+    .lib-card.active { border-color: var(--gold); box-shadow: 0 0 12px var(--gold-glow); }
+    .lib-card-name { font-size: 0.875rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.375rem; }
+    .lib-card-icon { font-size: 1rem; }
+    .lib-card-meta { font-size: 0.6875rem; color: var(--text-tertiary); line-height: 1.5; font-family: 'JetBrains Mono', monospace; }
+    .lib-card-tags { font-size: 0.6875rem; color: var(--text-secondary); margin-top: 0.25rem; }
+    .lib-card-status { font-size: 0.6875rem; margin-top: 0.25rem; font-family: 'JetBrains Mono', monospace; }
+    .status-draft { color: var(--text-tertiary); }
+    .status-review { color: var(--warning); }
+    .status-approved { color: var(--success); }
+
+    .list-empty { padding: 2rem 1rem; text-align: center; color: var(--text-tertiary); font-size: 0.875rem; }
+
+    .add-block { padding: 0.75rem; border-top: 1px solid var(--border); }
+    .add-block .btn { width: 100%; justify-content: center; }
+
+    /* ── Section ── */
+    .section-card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+      padding: 1.25rem; margin-bottom: 1rem;
+    }
+    .section-title {
+      font-family: 'Cinzel', serif; font-size: 0.9375rem; color: var(--gold);
+      margin: 0 0 1rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+      cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .section-title::before { content: '\25BE'; font-size: 0.75rem; transition: transform 0.15s; color: var(--gold-dim); }
+    .section-title.collapsed::before { transform: rotate(-90deg); }
+    .section-content { transition: max-height 0.25s ease; overflow: hidden; }
+    .section-content.collapsed { max-height: 0 !important; padding: 0; margin: 0; }
+
+    /* ── Form ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group label { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; }
+    .form-row { display: flex; gap: 0.5rem; align-items: center; }
+
+    /* ── Stat box ── */
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; }
+    .stat-box {
+      background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.75rem; text-align: center;
+    }
+    .stat-box label { font-size: 0.6875rem; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-box input { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 1.125rem; padding: 0.375rem; margin-top: 0.375rem; }
+    .stat-box select { font-size: 0.8125rem; margin-top: 0.375rem; }
+    .stat-hint { font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem; }
+
+    /* ── Radio rows ── */
+    .radio-row { display: flex; flex-wrap: wrap; gap: 0.75rem; padding: 0.25rem 0; }
+    .radio-row label { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.8125rem; cursor: pointer; }
+    .radio-row input[type="radio"] { width: auto; }
+
+    /* ── Action card (mythos card effect) ── */
+    .action-card {
+      background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.875rem 1rem; margin-bottom: 0.625rem;
+    }
+    .action-card-header {
+      display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;
+    }
+    .action-card-num {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
+      color: var(--gold-dim); background: var(--bg-primary); padding: 0.125rem 0.5rem; border-radius: 3px;
+    }
+    .action-card-type { font-weight: 500; flex: 1; }
+    .action-card-actions { display: flex; gap: 0.25rem; }
+    .action-card-actions .btn { padding: 0.2rem 0.5rem; font-size: 0.75rem; }
+    .action-card-params { font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 0.375rem; font-family: 'JetBrains Mono', monospace; }
+    .action-card-desc { font-size: 0.8125rem; color: var(--text-secondary); padding: 0.375rem 0; border-top: 1px dashed var(--border); }
+
+    /* ── Tag chip ── */
+    .tag-chip {
+      display: inline-flex; align-items: center; gap: 0.25rem;
+      padding: 0.25rem 0.625rem; border-radius: 14px;
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      font-size: 0.75rem; margin: 0.125rem; cursor: pointer; transition: all 0.15s;
+    }
+    .tag-chip:hover { border-color: var(--gold-dim); background: var(--bg-card-hover); }
+    .tag-chip.selected { background: var(--gold-glow); border-color: var(--gold); color: var(--gold); }
+    .tag-chip .tag-x { color: var(--text-tertiary); margin-left: 0.25rem; }
+    .tag-cat-block { margin-bottom: 0.75rem; }
+    .tag-cat-label { font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 0.25rem; font-family: 'Cinzel', serif; }
+    .tag-cat-empty { font-size: 0.75rem; color: var(--text-tertiary); font-style: italic; padding: 0.25rem 0; }
+
+    /* ── Encounter option card ── */
+    .option-card {
+      background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px;
+      padding: 1rem; margin-bottom: 0.875rem;
+    }
+    .option-card-header {
+      display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.625rem;
+    }
+    .option-label-badge {
+      font-family: 'Cinzel', serif; font-size: 1.125rem; color: var(--gold);
+      background: var(--bg-primary); padding: 0.125rem 0.625rem; border-radius: 4px; min-width: 32px; text-align: center;
+    }
+    .option-card-actions { margin-left: auto; display: flex; gap: 0.375rem; }
+    .result-block {
+      background: var(--bg-primary); border-left: 3px solid var(--gold-dim);
+      padding: 0.625rem 0.875rem; border-radius: 4px; margin-bottom: 0.5rem;
+    }
+    .result-block-title { font-size: 0.8125rem; color: var(--gold-dim); margin-bottom: 0.375rem; font-family: 'Cinzel', serif; }
+    .result-block.success { border-left-color: var(--success); }
+    .result-block.success .result-block-title { color: var(--success); }
+    .result-block.failure { border-left-color: var(--danger); }
+    .result-block.failure .result-block-title { color: var(--danger); }
+    .effect-chip {
+      display: inline-flex; align-items: center; gap: 0.25rem;
+      padding: 0.25rem 0.5rem; background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 4px; font-size: 0.75rem; margin: 0.125rem;
+    }
+    .effect-chip .x { color: var(--text-tertiary); cursor: pointer; margin-left: 0.25rem; }
+    .effect-chip .x:hover { color: var(--danger); }
+
+    /* ── Floating Save ── */
+    .floating-save {
+      position: fixed; bottom: 1.5rem; right: 2rem; z-index: 100;
+      padding: 0.75rem 1.5rem; font-weight: 500;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      transition: all 0.2s;
+    }
+    .floating-save.dirty { animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 16px var(--gold-glow), 0 4px 16px rgba(0,0,0,0.5); }
+      50% { box-shadow: 0 0 32px var(--gold-glow), 0 4px 16px rgba(0,0,0,0.5); }
+    }
+
+    /* ── Dialog ── */
+    .dialog-bg {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.75); z-index: 200; align-items: center; justify-content: center;
+    }
+    .dialog-bg.open { display: flex; }
+    .dialog {
+      background: var(--bg-secondary); border: 1px solid var(--border-hover); border-radius: 10px;
+      padding: 1.5rem; max-width: 600px; width: 90vw; max-height: 90vh; overflow-y: auto;
+    }
+    .dialog.dialog-wide { max-width: 800px; }
+    .dialog-title { font-family: 'Cinzel', serif; color: var(--gold); margin-bottom: 1rem; font-size: 1.0625rem; }
+    .dialog-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+
+    /* ── Action picker ── */
+    .action-picker-cat {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.625rem 0.875rem; margin-bottom: 0.5rem;
+    }
+    .action-picker-cat-name {
+      font-family: 'Cinzel', serif; font-size: 0.8125rem; color: var(--gold-dim); margin-bottom: 0.375rem;
+    }
+    .action-picker-item {
+      display: block; padding: 0.375rem 0.5rem; cursor: pointer; border-radius: 4px;
+      font-size: 0.8125rem; margin: 0.125rem 0;
+    }
+    .action-picker-item:hover { background: var(--bg-card-hover); }
+    .action-picker-item.selected { background: var(--gold-glow); color: var(--gold); }
+    .action-picker-item input[type="radio"] { margin-right: 0.5rem; }
+
+    /* ── Overview ── */
+    .overview-block { margin-bottom: 1.25rem; }
+    .overview-bar { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.8125rem; }
+    .overview-bar-label { width: 110px; color: var(--text-secondary); }
+    .overview-bar-fill { background: var(--gold-glow); border-left: 3px solid var(--gold-dim); padding: 0.125rem 0.5rem; font-size: 0.75rem; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; min-width: 24px; }
+    .overview-progress { width: 100%; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 0.375rem 0; }
+    .overview-progress-fill { height: 100%; background: var(--gold); transition: width 0.3s; }
+    .quality-row { padding: 0.5rem 0; font-size: 0.875rem; border-bottom: 1px solid var(--border); }
+    .quality-row:last-child { border-bottom: none; }
+    .quality-ok { color: var(--success); }
+    .quality-warn { color: var(--warning); }
+    .quality-err { color: var(--danger); }
+
+    /* ── Balance settings ── */
+    .balance-row {
+      display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .balance-row-label { flex: 1; font-size: 0.875rem; }
+    .balance-row-input { width: 80px; }
+    .balance-row-input input { text-align: center; font-family: 'JetBrains Mono', monospace; }
+    .balance-row-desc { font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.125rem; }
+    .sim-result {
+      background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.875rem 1rem; margin-top: 0.75rem; font-size: 0.875rem;
+    }
+    .sim-result-formula { font-family: 'JetBrains Mono', monospace; color: var(--gold); font-size: 0.8125rem; margin-bottom: 0.5rem; }
+    .sim-result-table { font-family: 'JetBrains Mono', monospace; font-size: 0.8125rem; margin-top: 0.5rem; }
+    .sim-result-analysis { font-size: 0.8125rem; color: var(--text-secondary); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--border); }
+
+    /* ── Empty state ── */
+    .empty-main { text-align: center; padding: 6rem 2rem; color: var(--text-tertiary); }
+    .empty-main .icon { font-size: 4rem; opacity: 0.3; margin-bottom: 1rem; }
+    .empty-main .text { font-family: 'Cinzel', serif; color: var(--text-secondary); font-size: 1.0625rem; }
+
+    /* ── Completeness ── */
+    .completeness {
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem;
+    }
+    .completeness-title { font-size: 0.8125rem; color: var(--gold-dim); margin-bottom: 0.5rem; font-family: 'Cinzel', serif; }
+    .completeness-row { font-size: 0.8125rem; padding: 0.125rem 0; }
+
+    /* ── Responsive ── */
+    @media (max-width: 1024px) {
+      .panel-left { width: 280px; }
+      .panel-main { margin-left: 280px; }
+      .form-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .panel-left { transform: translateX(-100%); }
+      .panel-left.collapsed { transform: translateX(0); }
+      .panel-main { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="admin-nav">
+    <a href="index.html" class="nav-back">&larr; 返回首頁</a>
+    <button class="btn" onclick="toggleLeftPanel()" style="padding:0.25rem 0.5rem;font-size:0.75rem;" title="切換面板">&#9776;</button>
+    <span class="nav-title">城主設計器</span>
+    <span class="nav-code">MOD-10</span>
+  </nav>
+
+  <div class="main-layout">
+    <!-- Left Panel -->
+    <div class="panel-left" id="panelLeft">
+      <div class="lib-switcher">
+        <button class="lib-btn active" id="libBtnMythos" onclick="switchLibrary('mythos')">👁 神話卡</button>
+        <button class="lib-btn" id="libBtnEncounter" onclick="switchLibrary('encounter')">🃏 遭遇卡</button>
+      </div>
+
+      <!-- Mythos filters -->
+      <div class="filter-block" id="filterMythos">
+        <label>🔍 搜尋神話卡</label>
+        <input id="mSearch" placeholder="名稱或描述..." oninput="loadMythosCards()">
+        <label>類型</label>
+        <select id="mFilterCategory" onchange="loadMythosCards()">
+          <option value="">全部</option>
+        </select>
+        <label>時機</label>
+        <select id="mFilterTiming" onchange="loadMythosCards()">
+          <option value="">全部</option>
+        </select>
+        <label>強度</label>
+        <select id="mFilterIntensity" onchange="loadMythosCards()">
+          <option value="">全部</option>
+        </select>
+        <label>行動點範圍</label>
+        <div class="range-row">
+          <input id="mFilterCostMin" type="number" min="0" max="10" placeholder="最低" onchange="loadMythosCards()">
+          <span>-</span>
+          <input id="mFilterCostMax" type="number" min="0" max="10" placeholder="最高" onchange="loadMythosCards()">
+        </div>
+        <label>狀態</label>
+        <select id="mFilterStatus" onchange="loadMythosCards()">
+          <option value="">全部</option>
+          <option value="draft">草稿</option>
+          <option value="review">審核</option>
+          <option value="approved">定稿</option>
+        </select>
+      </div>
+
+      <!-- Encounter filters -->
+      <div class="filter-block" id="filterEncounter" style="display:none;">
+        <label>🔍 搜尋遭遇卡</label>
+        <input id="eSearch" placeholder="名稱或描述..." oninput="loadEncounterCards()">
+        <label>類型</label>
+        <select id="eFilterType" onchange="loadEncounterCards()">
+          <option value="">全部</option>
+        </select>
+        <label>地點風格</label>
+        <select id="eFilterTag" onchange="loadEncounterCards()">
+          <option value="">全部標籤</option>
+        </select>
+        <label>狀態</label>
+        <select id="eFilterStatus" onchange="loadEncounterCards()">
+          <option value="">全部</option>
+          <option value="draft">草稿</option>
+          <option value="review">審核</option>
+          <option value="approved">定稿</option>
+        </select>
+      </div>
+
+      <div class="card-list" id="cardList"></div>
+
+      <div class="add-block">
+        <button class="btn btn-primary" onclick="openCreateDialog()">+ 新增卡片 (Ctrl+N)</button>
+      </div>
+    </div>
+
+    <!-- Main Panel -->
+    <div class="panel-main" id="panelMain">
+      <div class="toolbar">
+        <div class="tab-group">
+          <button class="tab-btn active" data-tab="editor" onclick="switchTab('editor')">🃏 卡片編輯</button>
+          <button class="tab-btn" data-tab="overview" onclick="switchTab('overview')">📊 總覽</button>
+          <button class="tab-btn" data-tab="balance" onclick="switchTab('balance')">⚙ 遊戲平衡</button>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn" onclick="promptApiKey()">🤖 設定 Gemini Key</button>
+      </div>
+
+      <!-- ──────────── Tab 1: Editor ──────────── -->
+      <div id="tabEditor">
+        <div id="editorEmpty" class="empty-main">
+          <div class="icon">🃏</div>
+          <div class="text">從左側選擇一張卡片，或新增一張來開始設計</div>
+        </div>
+
+        <!-- Mythos Card Editor -->
+        <div id="editorMythos" style="display:none;">
+          <div class="completeness" id="mCompleteness"></div>
+
+          <div style="text-align:right;margin-bottom:0.75rem;">
+            <button class="btn" onclick="openAIGenMythos()">🤖 AI 生成填入</button>
+          </div>
+
+          <!-- 5.1 基本資訊 -->
+          <div class="section-card">
+            <div class="section-title" onclick="toggleSection('mSecBasic')">📝 基本資訊</div>
+            <div class="section-content" id="mSecBasic">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>代碼（不可改）</label>
+                  <input id="m_code" readonly style="font-family:'JetBrains Mono',monospace;background:var(--bg-secondary);color:var(--text-tertiary);">
+                </div>
+                <div class="form-group">
+                  <label>設計狀態</label>
+                  <select id="m_design_status" onchange="markDirty()">
+                    <option value="draft">草稿 (draft)</option>
+                    <option value="review">審核 (review)</option>
+                    <option value="approved">定稿 (approved)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>中文名</label>
+                  <input id="m_name_zh" oninput="markDirty()">
+                </div>
+                <div class="form-group">
+                  <label>英文名</label>
+                  <input id="m_name_en" oninput="markDirty()">
+                </div>
+                <div class="form-group full">
+                  <label>描述（中文，僅城主/設計師看得到）</label>
+                  <textarea id="m_description_zh" rows="2" oninput="markDirty()"></textarea>
+                </div>
+                <div class="form-group full">
+                  <label>描述（英文）</label>
+                  <div class="form-row">
+                    <textarea id="m_description_en" rows="2" style="flex:1;" oninput="markDirty()"></textarea>
+                    <button class="btn" onclick="aiTranslate('m_description_zh','m_description_en')" style="white-space:nowrap;align-self:flex-start;">AI 翻譯</button>
+                  </div>
+                </div>
+                <div class="form-group full">
+                  <label>風味文字（中文，城主朗讀給玩家聽）</label>
+                  <textarea id="m_flavor_text_zh" rows="2" oninput="markDirty()"></textarea>
+                </div>
+                <div class="form-group full">
+                  <label>風味文字（英文）</label>
+                  <div class="form-row">
+                    <textarea id="m_flavor_text_en" rows="2" style="flex:1;" oninput="markDirty()"></textarea>
+                    <button class="btn" onclick="aiTranslate('m_flavor_text_zh','m_flavor_text_en')" style="white-space:nowrap;align-self:flex-start;">AI 翻譯</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5.2 機制屬性 -->
+          <div class="section-card">
+            <div class="section-title" onclick="toggleSection('mSecMech')">⚙ 機制屬性</div>
+            <div class="section-content" id="mSecMech">
+              <div class="stat-grid">
+                <div class="stat-box">
+                  <label>行動點花費</label>
+                  <input id="m_action_cost" type="number" min="0" max="10" oninput="onActionCostChange()">
+                  <div class="stat-hint" id="costHint">0-10</div>
+                </div>
+                <div class="stat-box">
+                  <label>強度標籤</label>
+                  <select id="m_intensity_tag" onchange="markDirty()"></select>
+                  <div class="stat-hint" id="intensityHint">小:1-2 中:3-4 大:5-6 史詩:7+</div>
+                </div>
+                <div class="stat-box">
+                  <label>卡片類型</label>
+                  <select id="m_card_category" onchange="onCategoryChange()"></select>
+                </div>
+              </div>
+
+              <div style="margin-top:1rem;">
+                <label style="font-size:0.75rem;color:var(--text-secondary);">發動時機</label>
+                <div class="radio-row" id="m_timing_radios"></div>
+              </div>
+
+              <div id="m_response_block" style="margin-top:0.875rem;display:none;">
+                <label style="font-size:0.75rem;color:var(--text-secondary);">響應觸發條件（僅響應類）</label>
+                <select id="m_response_trigger" onchange="markDirty()">
+                  <option value="">未設定</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5.3 動作列表（核心） -->
+          <div class="section-card">
+            <div class="section-title" onclick="toggleSection('mSecActions')">⚡ 動作列表 <span id="mActionCountBadge" style="font-size:0.75rem;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;margin-left:0.5rem;">(0)</span></div>
+            <div class="section-content" id="mSecActions">
+              <div id="mActionList"></div>
+              <button class="btn" onclick="openAddActionDialog()">+ 新增動作</button>
+            </div>
+          </div>
+
+          <!-- 5.4 視覺素材 -->
+          <div class="section-card">
+            <div class="section-title collapsed" onclick="toggleSection('mSecArt')">🎨 視覺素材</div>
+            <div class="section-content collapsed" id="mSecArt">
+              <div class="form-group full">
+                <label>圖片 URL</label>
+                <input id="m_art_url" placeholder="圖片 URL（建議用穩定的 CDN 連結）" oninput="markDirty()">
+              </div>
+            </div>
+          </div>
+
+          <!-- 5.5 設計備註 -->
+          <div class="section-card">
+            <div class="section-title collapsed" onclick="toggleSection('mSecNotes')">📝 設計備註</div>
+            <div class="section-content collapsed" id="mSecNotes">
+              <textarea id="m_design_notes" rows="3" oninput="markDirty()"></textarea>
+            </div>
+          </div>
+
+          <div style="margin-top:1rem;display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;">
+            <button class="btn" onclick="duplicateCurrent()">📋 複製 (Ctrl+D)</button>
+            <button class="btn btn-danger" onclick="deleteCurrent()">🗑 刪除卡片</button>
+          </div>
+        </div>
+
+        <!-- Encounter Card Editor -->
+        <div id="editorEncounter" style="display:none;">
+          <div class="completeness" id="eCompleteness"></div>
+
+          <div style="text-align:right;margin-bottom:0.75rem;">
+            <button class="btn" onclick="openAIGenEncounter()">🤖 AI 生成填入</button>
+          </div>
+
+          <!-- 6.1 基本資訊 -->
+          <div class="section-card">
+            <div class="section-title" onclick="toggleSection('eSecBasic')">📝 基本資訊</div>
+            <div class="section-content" id="eSecBasic">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>代碼（不可改）</label>
+                  <input id="e_code" readonly style="font-family:'JetBrains Mono',monospace;background:var(--bg-secondary);color:var(--text-tertiary);">
+                </div>
+                <div class="form-group">
+                  <label>設計狀態</label>
+                  <select id="e_design_status" onchange="markDirty()">
+                    <option value="draft">草稿</option>
+                    <option value="review">審核</option>
+                    <option value="approved">定稿</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>中文名</label>
+                  <input id="e_name_zh" oninput="markDirty()">
+                </div>
+                <div class="form-group">
+                  <label>英文名</label>
+                  <input id="e_name_en" oninput="markDirty()">
+                </div>
+                <div class="form-group full">
+                  <label>遭遇類型</label>
+                  <select id="e_encounter_type" onchange="markDirty()"></select>
+                </div>
+                <div class="form-group full">
+                  <label>情境描述（中文，玩家看到）</label>
+                  <textarea id="e_scenario_text_zh" rows="4" oninput="markDirty()"></textarea>
+                </div>
+                <div class="form-group full">
+                  <label>情境描述（英文）</label>
+                  <div class="form-row">
+                    <textarea id="e_scenario_text_en" rows="3" style="flex:1;" oninput="markDirty()"></textarea>
+                    <button class="btn" onclick="aiTranslate('e_scenario_text_zh','e_scenario_text_en')" style="white-space:nowrap;align-self:flex-start;">AI 翻譯</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6.2 地點風格標籤 -->
+          <div class="section-card">
+            <div class="section-title" onclick="toggleSection('eSecTags')">🏷 地點風格標籤 <span id="eTagCountBadge" style="font-size:0.75rem;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;margin-left:0.5rem;">(0)</span></div>
+            <div class="section-content" id="eSecTags">
+              <div style="margin-bottom:0.75rem;">
+                <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.375rem;">已選標籤</div>
+                <div id="eSelectedTags" style="min-height:32px;padding:0.25rem 0;">
+                  <span style="color:var(--text-tertiary);font-size:0.8125rem;">尚未選擇標籤</span>
+                </div>
+              </div>
+              <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.375rem;">新增標籤（從 MOD-08 地點設計器的標籤庫取得，如需新增請至地點設計器）</div>
+              <div id="eAvailableTags"></div>
+            </div>
+          </div>
+
+          <!-- 6.3 選項編輯（核心） -->
+          <div class="section-card">
+            <div class="section-title" onclick="toggleSection('eSecOptions')">🎭 選項編輯 <span id="eOptionCountBadge" style="font-size:0.75rem;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;margin-left:0.5rem;">(0)</span></div>
+            <div class="section-content" id="eSecOptions">
+              <div id="eOptionList"></div>
+              <button class="btn" id="btnAddOption" onclick="addEncounterOption()">+ 新增選項</button>
+              <span style="font-size:0.75rem;color:var(--text-tertiary);margin-left:0.5rem;">最少 2 個，最多 3 個</span>
+            </div>
+          </div>
+
+          <!-- 6.4 視覺素材 -->
+          <div class="section-card">
+            <div class="section-title collapsed" onclick="toggleSection('eSecArt')">🎨 視覺素材</div>
+            <div class="section-content collapsed" id="eSecArt">
+              <div class="form-group full">
+                <label>圖片 URL</label>
+                <input id="e_art_url" placeholder="圖片 URL" oninput="markDirty()">
+              </div>
+            </div>
+          </div>
+
+          <!-- 6.5 設計備註 -->
+          <div class="section-card">
+            <div class="section-title collapsed" onclick="toggleSection('eSecNotes')">📝 設計備註</div>
+            <div class="section-content collapsed" id="eSecNotes">
+              <textarea id="e_design_notes" rows="3" oninput="markDirty()"></textarea>
+            </div>
+          </div>
+
+          <div style="margin-top:1rem;display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;">
+            <button class="btn" onclick="duplicateCurrent()">📋 複製 (Ctrl+D)</button>
+            <button class="btn btn-danger" onclick="deleteCurrent()">🗑 刪除卡片</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ──────────── Tab 2: Overview ──────────── -->
+      <div id="tabOverview" style="display:none;">
+        <div class="section-card">
+          <h2 style="font-size:1.125rem;margin:0 0 1rem;">📊 城主卡片庫總覽</h2>
+          <div id="overviewBody"></div>
+        </div>
+      </div>
+
+      <!-- ──────────── Tab 3: Balance ──────────── -->
+      <div id="tabBalance" style="display:none;">
+        <div class="section-card">
+          <h2 style="font-size:1.125rem;margin:0 0 0.5rem;">⚙ 遊戲平衡設定</h2>
+          <div style="font-size:0.8125rem;color:var(--warning);background:rgba(201,168,76,0.1);padding:0.625rem 0.875rem;border-radius:6px;margin-bottom:1rem;">
+            ⚠ 警告：這些參數影響整個遊戲的平衡。修改前請先用模擬器驗證。
+          </div>
+          <div id="balanceBody"></div>
+        </div>
+
+        <div class="section-card">
+          <h3 style="font-size:1rem;margin:0 0 0.75rem;color:var(--gold);">🧮 行動點模擬器</h3>
+          <div class="form-grid-3" style="margin-bottom:0.75rem;">
+            <div class="form-group">
+              <label>關卡難度</label>
+              <select id="sim_difficulty">
+                <option value="1">1 - 簡單</option>
+                <option value="2">2 - 標準</option>
+                <option value="3" selected>3 - 困難</option>
+                <option value="4">4 - 專家</option>
+                <option value="5">5 - 噩夢</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>玩家人數</label>
+              <select id="sim_players">
+                <option value="1">1 人</option>
+                <option value="2">2 人</option>
+                <option value="3">3 人</option>
+                <option value="4" selected>4 人</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>模擬回合數</label>
+              <input id="sim_rounds" type="number" min="1" max="20" value="5">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="runSimulation()">▶ 計算</button>
+          <div id="simResult"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Floating Save -->
+  <button class="btn btn-primary floating-save" id="floatingSaveBtn" onclick="saveCurrent()" style="display:none;">💾 儲存 (Ctrl+S)</button>
+
+  <!-- ────────── Dialogs ────────── -->
+
+  <!-- Create Mythos Dialog -->
+  <div class="dialog-bg" id="dlgCreateMythos">
+    <div class="dialog">
+      <div class="dialog-title">新增神話卡</div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>代碼</label>
+          <input id="cm_code" placeholder="例如：mc_summon_dagon" style="font-family:'JetBrains Mono',monospace;">
+        </div>
+        <div class="form-group">
+          <label>中文名</label>
+          <input id="cm_name_zh">
+        </div>
+        <div class="form-group">
+          <label>英文名</label>
+          <input id="cm_name_en">
+        </div>
+        <div class="form-group">
+          <label>類型</label>
+          <select id="cm_category"></select>
+        </div>
+        <div class="form-group">
+          <label>時機</label>
+          <select id="cm_timing"></select>
+        </div>
+        <div class="form-group">
+          <label>行動點</label>
+          <input id="cm_action_cost" type="number" min="0" max="10" value="2">
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgCreateMythos')">取消</button>
+        <button class="btn btn-primary" onclick="confirmCreateMythos()">建立</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Encounter Dialog -->
+  <div class="dialog-bg" id="dlgCreateEncounter">
+    <div class="dialog">
+      <div class="dialog-title">新增遭遇卡</div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>代碼</label>
+          <input id="ce_code" placeholder="例如：ec_library_secrets" style="font-family:'JetBrains Mono',monospace;">
+        </div>
+        <div class="form-group">
+          <label>中文名</label>
+          <input id="ce_name_zh">
+        </div>
+        <div class="form-group">
+          <label>英文名</label>
+          <input id="ce_name_en">
+        </div>
+        <div class="form-group full">
+          <label>遭遇類型</label>
+          <select id="ce_type"></select>
+        </div>
+        <div class="form-group full">
+          <label>情境描述</label>
+          <textarea id="ce_scenario" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgCreateEncounter')">取消</button>
+        <button class="btn btn-primary" onclick="confirmCreateEncounter()">建立</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Action Dialog -->
+  <div class="dialog-bg" id="dlgAddAction">
+    <div class="dialog dialog-wide">
+      <div class="dialog-title">新增動作</div>
+      <div id="actionPickerList" style="max-height:50vh;overflow-y:auto;"></div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgAddAction')">取消</button>
+        <button class="btn btn-primary" onclick="confirmAddAction()">下一步：填參數</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Action Params Dialog -->
+  <div class="dialog-bg" id="dlgActionParams">
+    <div class="dialog dialog-wide">
+      <div class="dialog-title" id="dlgActionParamsTitle">填寫動作參數</div>
+      <input type="hidden" id="ap_effect_id">
+      <input type="hidden" id="ap_action_code">
+      <div id="actionParamsForm"></div>
+      <div style="margin-top:0.875rem;">
+        <label style="font-size:0.75rem;color:var(--text-secondary);">📖 文字描述（自動生成，可編輯）</label>
+        <textarea id="ap_description" rows="2" style="font-size:0.8125rem;"></textarea>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgActionParams')">取消</button>
+        <button class="btn btn-primary" onclick="saveActionParams()">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Effect Dialog (encounter option) -->
+  <div class="dialog-bg" id="dlgAddEffect">
+    <div class="dialog">
+      <div class="dialog-title">新增效果</div>
+      <input type="hidden" id="ae_option_id">
+      <input type="hidden" id="ae_branch">
+      <div class="form-group">
+        <label>效果類型</label>
+        <select id="ae_code" onchange="renderEffectParamsForm()"></select>
+      </div>
+      <div id="effectParamsForm" style="margin-top:0.5rem;"></div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgAddEffect')">取消</button>
+        <button class="btn btn-primary" onclick="confirmAddEffect()">新增</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Gen Mythos Dialog -->
+  <div class="dialog-bg" id="dlgAIMythos">
+    <div class="dialog">
+      <div class="dialog-title">🤖 AI 生成神話卡</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>類型</label>
+          <select id="aim_category"></select>
+        </div>
+        <div class="form-group">
+          <label>時機</label>
+          <select id="aim_timing"></select>
+        </div>
+        <div class="form-group">
+          <label>強度</label>
+          <select id="aim_intensity"></select>
+        </div>
+        <div class="form-group">
+          <label>行動點</label>
+          <input id="aim_cost" type="number" min="0" max="10" value="2">
+        </div>
+        <div class="form-group full">
+          <label>額外要求（選填）</label>
+          <textarea id="aim_note" rows="2" placeholder="例如：主題是深潛者入侵"></textarea>
+        </div>
+      </div>
+      <div id="aiMythosStatus" style="font-size:0.75rem;color:var(--text-tertiary);margin-top:0.5rem;min-height:1em;"></div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgAIMythos')">取消</button>
+        <button class="btn btn-primary" id="btnAIMythosGen" onclick="generateMythosCard()">🤖 生成（覆寫當前卡片）</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Gen Encounter Dialog -->
+  <div class="dialog-bg" id="dlgAIEncounter">
+    <div class="dialog">
+      <div class="dialog-title">🤖 AI 生成遭遇卡</div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>遭遇類型</label>
+          <select id="aie_type"></select>
+        </div>
+        <div class="form-group full">
+          <label>地點風格（取自當前卡片已選標籤）</label>
+          <div id="aie_tags" style="font-size:0.8125rem;color:var(--text-secondary);">尚未選擇標籤</div>
+        </div>
+        <div class="form-group full">
+          <label>額外要求（選填）</label>
+          <textarea id="aie_note" rows="2" placeholder="例如：主題是禁忌知識誘惑"></textarea>
+        </div>
+      </div>
+      <div id="aiEncounterStatus" style="font-size:0.75rem;color:var(--text-tertiary);margin-top:0.5rem;min-height:1em;"></div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgAIEncounter')">取消</button>
+        <button class="btn btn-primary" id="btnAIEncounterGen" onclick="generateEncounterCard()">🤖 生成（覆寫當前卡片）</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Dialog -->
+  <div class="dialog-bg" id="dlgDelete">
+    <div class="dialog">
+      <div class="dialog-title">⚠ 確認刪除</div>
+      <div id="dlgDeleteBody" style="font-size:0.9375rem;color:var(--text-secondary);line-height:1.6;"></div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgDelete')">取消</button>
+        <button class="btn btn-danger" onclick="confirmDelete()">確認刪除</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="admin-shared.js"></script>
+  <script>
+    // ════════════════════════════════════════════════════════════
+    //  STATE
+    // ════════════════════════════════════════════════════════════
+    let currentLib = 'mythos';      // 'mythos' | 'encounter'
+    let mythosList = [];
+    let encounterList = [];
+    let selectedId = null;
+    let currentCard = null;          // 完整資料
+    let allTags = { indoor: [], outdoor: [], special: [], custom: [] };
+    let monsterFamilies = [];        // 從 MOD-03 抓
+    let isDirty = false;
+    let pendingDelete = null;        // { type, id }
+    let pickedActionCode = null;
+    let cachedAIResult = null;       // { type: 'mythos'|'encounter', data }
+
+    // ════════════════════════════════════════════════════════════
+    //  UTILITIES
+    // ════════════════════════════════════════════════════════════
+    const el = (id) => document.getElementById(id);
+    const intVal = (id) => parseInt(el(id)?.value) || 0;
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+    function toggleLeftPanel() { el('panelLeft').classList.toggle('collapsed'); el('panelMain').classList.toggle('expanded'); }
+    function toggleSection(id) {
+      const c = el(id); const t = c.previousElementSibling;
+      c.classList.toggle('collapsed'); t.classList.toggle('collapsed');
+    }
+    function openDialog(id) { el(id).classList.add('open'); }
+    function closeDialog(id) { el(id).classList.remove('open'); }
+    function markDirty() { isDirty = true; el('floatingSaveBtn').classList.add('dirty'); }
+    function clearDirty() { isDirty = false; el('floatingSaveBtn').classList.remove('dirty'); }
+    function showToast(msg, color) {
+      const t = document.createElement('div');
+      t.textContent = msg;
+      t.style.cssText = `position:fixed;bottom:5rem;right:2rem;z-index:300;background:${color || 'var(--success)'};color:var(--bg-primary);padding:0.625rem 1.25rem;border-radius:6px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,0.5);`;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2200);
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  GEMINI
+    // ════════════════════════════════════════════════════════════
+    function promptApiKey() {
+      const cur = localStorage.getItem('gemini_api_key') || '';
+      const key = prompt('輸入 Gemini API Key（會儲存在這台裝置）', cur);
+      if (key !== null) {
+        if (key.trim() === '') localStorage.removeItem('gemini_api_key');
+        else localStorage.setItem('gemini_api_key', key.trim());
+        alert('已更新');
+      }
+    }
+    async function callGemini(promptText, opts = {}) {
+      const key = localStorage.getItem('gemini_api_key');
+      if (!key) { alert('請先設定 Gemini API Key（右上角按鈕）'); throw new Error('no_api_key'); }
+      const body = {
+        contents: [{ parts: [{ text: promptText }] }],
+        generationConfig: {
+          temperature: opts.temperature ?? 0.7,
+          maxOutputTokens: opts.maxOutputTokens ?? 8192,
+        }
+      };
+      if (opts.responseMimeType) body.generationConfig.responseMimeType = opts.responseMimeType;
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Gemini API 錯誤 ${res.status}: ${errText.slice(0, 200)}`);
+      }
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('Gemini 回傳格式異常');
+      return text;
+    }
+    async function aiTranslate(srcId, dstId) {
+      const zh = el(srcId).value.trim();
+      if (!zh) { alert('請先輸入中文'); return; }
+      try {
+        const prompt = `請將以下克蘇魯神話冒險遊戲的文字翻譯成英文，保留 1920-30 年代偵探黑色電影 × 宇宙恐怖的氛圍。只輸出英文翻譯，不加任何說明或引號。\n\n中文：${zh}`;
+        const res = await callGemini(prompt, { temperature: 0.4 });
+        el(dstId).value = res.trim().replace(/^["']|["']$/g, '');
+        markDirty();
+      } catch (e) { alert('翻譯失敗：' + e.message); }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  POPULATE STATIC SELECTS
+    // ════════════════════════════════════════════════════════════
+    function populateSelect(selectEl, dict, includeAll = false, allLabel = '全部') {
+      if (!selectEl) return;
+      selectEl.innerHTML = '';
+      if (includeAll) {
+        const opt = document.createElement('option');
+        opt.value = ''; opt.textContent = allLabel;
+        selectEl.appendChild(opt);
+      }
+      for (const [k, v] of Object.entries(dict)) {
+        const opt = document.createElement('option');
+        opt.value = k; opt.textContent = v.name_zh || v.zh || k;
+        selectEl.appendChild(opt);
+      }
+    }
+
+    function populateAllStaticSelects() {
+      // Filter selects
+      populateSelect(el('mFilterCategory'), MYTHOS_CATEGORIES, true);
+      populateSelect(el('mFilterTiming'), MYTHOS_ACTIVATION_TIMINGS, true);
+      populateSelect(el('mFilterIntensity'), MYTHOS_INTENSITIES, true);
+      populateSelect(el('eFilterType'), ENCOUNTER_TYPES, true);
+
+      // Editor selects
+      populateSelect(el('m_intensity_tag'), MYTHOS_INTENSITIES, false);
+      populateSelect(el('m_card_category'), MYTHOS_CATEGORIES, false);
+      populateSelect(el('e_encounter_type'), ENCOUNTER_TYPES, false);
+
+      // Create dialogs
+      populateSelect(el('cm_category'), MYTHOS_CATEGORIES, false);
+      populateSelect(el('cm_timing'), MYTHOS_ACTIVATION_TIMINGS, false);
+      populateSelect(el('ce_type'), ENCOUNTER_TYPES, false);
+
+      // AI dialogs
+      populateSelect(el('aim_category'), MYTHOS_CATEGORIES, false);
+      populateSelect(el('aim_timing'), MYTHOS_ACTIVATION_TIMINGS, false);
+      populateSelect(el('aim_intensity'), MYTHOS_INTENSITIES, false);
+      populateSelect(el('aie_type'), ENCOUNTER_TYPES, false);
+
+      // Effect code select
+      populateSelect(el('ae_code'), ENCOUNTER_EFFECT_CODES, false);
+
+      // Response trigger
+      const respSel = el('m_response_trigger');
+      respSel.innerHTML = '<option value="">未設定</option>';
+      for (const [k, v] of Object.entries(RESPONSE_TRIGGERS)) {
+        const opt = document.createElement('option');
+        opt.value = k; opt.textContent = v.name_zh;
+        respSel.appendChild(opt);
+      }
+
+      // Timing radios
+      const tBox = el('m_timing_radios');
+      tBox.innerHTML = '';
+      for (const [k, v] of Object.entries(MYTHOS_ACTIVATION_TIMINGS)) {
+        tBox.innerHTML += `<label><input type="radio" name="m_timing" value="${k}" onchange="onTimingChange()"> ${v.name_zh}</label>`;
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  LOAD TAGS (from MOD-08)
+    // ════════════════════════════════════════════════════════════
+    async function loadTags() {
+      try {
+        const res = await adminFetch('/api/admin/locations/tags');
+        const data = await res.json();
+        allTags = data.tags || { indoor: [], outdoor: [], special: [], custom: [] };
+        // populate filter
+        const sel = el('eFilterTag');
+        sel.innerHTML = '<option value="">全部標籤</option>';
+        for (const cat of ['indoor','outdoor','special','custom']) {
+          const arr = allTags[cat] || [];
+          if (arr.length === 0) continue;
+          const grp = document.createElement('optgroup');
+          grp.label = TAG_CATEGORY_LABELS[cat].name_zh;
+          arr.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.code; opt.textContent = t.name_zh;
+            grp.appendChild(opt);
+          });
+          sel.appendChild(grp);
+        }
+      } catch (e) { console.error('load tags failed', e); }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  LOAD MONSTER FAMILIES (from MOD-03)
+    // ════════════════════════════════════════════════════════════
+    async function loadMonsterFamilies() {
+      try {
+        const res = await adminFetch('/api/monsters/families');
+        const data = await res.json();
+        monsterFamilies = (data.data || data.families || []).filter(f => f.is_active);
+      } catch (e) {
+        console.warn('Load monster families failed (MOD-03 not available?):', e);
+        monsterFamilies = [];
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  LIBRARY SWITCHING
+    // ════════════════════════════════════════════════════════════
+    function switchLibrary(lib) {
+      if (isDirty && !confirm('有未儲存的變更，是否放棄？')) return;
+      currentLib = lib;
+      el('libBtnMythos').classList.toggle('active', lib === 'mythos');
+      el('libBtnEncounter').classList.toggle('active', lib === 'encounter');
+      el('filterMythos').style.display = lib === 'mythos' ? '' : 'none';
+      el('filterEncounter').style.display = lib === 'encounter' ? '' : 'none';
+      selectedId = null;
+      currentCard = null;
+      el('editorEmpty').style.display = '';
+      el('editorMythos').style.display = 'none';
+      el('editorEncounter').style.display = 'none';
+      el('floatingSaveBtn').style.display = 'none';
+      clearDirty();
+      if (lib === 'mythos') loadMythosCards();
+      else loadEncounterCards();
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+      el('tabEditor').style.display = name === 'editor' ? '' : 'none';
+      el('tabOverview').style.display = name === 'overview' ? '' : 'none';
+      el('tabBalance').style.display = name === 'balance' ? '' : 'none';
+      el('floatingSaveBtn').style.display = (name === 'editor' && currentCard) ? '' : 'none';
+      if (name === 'overview') loadOverview();
+      if (name === 'balance') loadBalance();
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  LOAD LISTS
+    // ════════════════════════════════════════════════════════════
+    async function loadMythosCards() {
+      try {
+        const params = new URLSearchParams();
+        if (el('mSearch').value.trim()) params.set('search', el('mSearch').value.trim());
+        if (el('mFilterCategory').value) params.set('card_category', el('mFilterCategory').value);
+        if (el('mFilterTiming').value) params.set('activation_timing', el('mFilterTiming').value);
+        if (el('mFilterIntensity').value) params.set('intensity_tag', el('mFilterIntensity').value);
+        if (el('mFilterStatus').value) params.set('design_status', el('mFilterStatus').value);
+        if (el('mFilterCostMin').value) params.set('action_cost_min', el('mFilterCostMin').value);
+        if (el('mFilterCostMax').value) params.set('action_cost_max', el('mFilterCostMax').value);
+
+        const res = await adminFetch('/api/admin/keeper/mythos-cards?' + params.toString());
+        const data = await res.json();
+        mythosList = data.mythos_cards || [];
+        renderList();
+      } catch (e) {
+        console.error(e);
+        el('cardList').innerHTML = '<div class="list-empty">載入失敗</div>';
+      }
+    }
+
+    async function loadEncounterCards() {
+      try {
+        const params = new URLSearchParams();
+        if (el('eSearch').value.trim()) params.set('search', el('eSearch').value.trim());
+        if (el('eFilterType').value) params.set('encounter_type', el('eFilterType').value);
+        if (el('eFilterStatus').value) params.set('design_status', el('eFilterStatus').value);
+        if (el('eFilterTag').value) params.set('style_tag_code', el('eFilterTag').value);
+
+        const res = await adminFetch('/api/admin/keeper/encounter-cards?' + params.toString());
+        const data = await res.json();
+        encounterList = data.encounter_cards || [];
+        renderList();
+      } catch (e) {
+        console.error(e);
+        el('cardList').innerHTML = '<div class="list-empty">載入失敗</div>';
+      }
+    }
+
+    function renderList() {
+      const list = currentLib === 'mythos' ? mythosList : encounterList;
+      const box = el('cardList');
+      if (list.length === 0) {
+        box.innerHTML = '<div class="list-empty">無符合條件的卡片</div>';
+        return;
+      }
+      if (currentLib === 'mythos') {
+        box.innerHTML = list.map(c => {
+          const cat = MYTHOS_CATEGORIES[c.card_category] || { name_zh: c.card_category, icon: '❓' };
+          const tim = MYTHOS_ACTIVATION_TIMINGS[c.activation_timing]?.name_zh || c.activation_timing;
+          const intName = MYTHOS_INTENSITIES[c.intensity_tag]?.name_zh || c.intensity_tag;
+          const stColor = c.design_status === 'approved' ? 'status-approved' : (c.design_status === 'review' ? 'status-review' : 'status-draft');
+          return `
+            <div class="lib-card ${c.id === selectedId ? 'active' : ''}" onclick="selectCard('${c.id}')">
+              <div class="lib-card-name"><span class="lib-card-icon">${cat.icon}</span> ${escapeHtml(c.name_zh)}</div>
+              <div class="lib-card-meta">${escapeHtml(cat.name_zh)} · ${escapeHtml(tim)} · ${c.action_cost} 點 (${escapeHtml(intName)})</div>
+              <div class="lib-card-status ${stColor}">${c.design_status} · 動作 ${c.effect_count || 0}</div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        box.innerHTML = list.map(c => {
+          const t = ENCOUNTER_TYPES[c.encounter_type]?.name_zh || c.encounter_type;
+          const tagsTxt = c.tags && c.tags.length > 0
+            ? c.tags.slice(0, 3).map(tg => escapeHtml(tg.name_zh)).join('・') + (c.tags.length > 3 ? `・+${c.tags.length - 3}` : '')
+            : '<span style="color:var(--text-tertiary);">無標籤</span>';
+          const stColor = c.design_status === 'approved' ? 'status-approved' : (c.design_status === 'review' ? 'status-review' : 'status-draft');
+          return `
+            <div class="lib-card ${c.id === selectedId ? 'active' : ''}" onclick="selectCard('${c.id}')">
+              <div class="lib-card-name"><span class="lib-card-icon">🃏</span> ${escapeHtml(c.name_zh)}</div>
+              <div class="lib-card-meta">${escapeHtml(t)} · 選項 ${c.option_count || 0}</div>
+              <div class="lib-card-tags">${tagsTxt}</div>
+              <div class="lib-card-status ${stColor}">${c.design_status}</div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  CREATE CARD
+    // ════════════════════════════════════════════════════════════
+    function openCreateDialog() {
+      if (currentLib === 'mythos') {
+        el('cm_code').value = ''; el('cm_name_zh').value = ''; el('cm_name_en').value = '';
+        el('cm_action_cost').value = 2;
+        openDialog('dlgCreateMythos');
+        setTimeout(() => el('cm_code').focus(), 100);
+      } else {
+        el('ce_code').value = ''; el('ce_name_zh').value = ''; el('ce_name_en').value = '';
+        el('ce_scenario').value = '';
+        openDialog('dlgCreateEncounter');
+        setTimeout(() => el('ce_code').focus(), 100);
+      }
+    }
+
+    async function confirmCreateMythos() {
+      const code = el('cm_code').value.trim();
+      const name_zh = el('cm_name_zh').value.trim();
+      if (!code || !name_zh) { alert('代碼與中文名為必填'); return; }
+      if (!/^[a-z0-9_]+$/.test(code)) { alert('代碼僅可使用小寫字母、數字、底線'); return; }
+      try {
+        const res = await adminFetch('/api/admin/keeper/mythos-cards', {
+          method: 'POST',
+          body: JSON.stringify({
+            code, name_zh,
+            name_en: el('cm_name_en').value.trim(),
+            card_category: el('cm_category').value,
+            activation_timing: el('cm_timing').value,
+            action_cost: intVal('cm_action_cost'),
+            intensity_tag: suggestIntensity(intVal('cm_action_cost')),
+          }),
+        });
+        if (res.status === 409) { alert('此代碼已存在'); return; }
+        if (!res.ok) { alert('建立失敗'); return; }
+        const data = await res.json();
+        closeDialog('dlgCreateMythos');
+        await loadMythosCards();
+        selectCard(data.mythos_card.id);
+      } catch (e) { alert('建立失敗：' + e.message); }
+    }
+
+    async function confirmCreateEncounter() {
+      const code = el('ce_code').value.trim();
+      const name_zh = el('ce_name_zh').value.trim();
+      if (!code || !name_zh) { alert('代碼與中文名為必填'); return; }
+      if (!/^[a-z0-9_]+$/.test(code)) { alert('代碼僅可使用小寫字母、數字、底線'); return; }
+      try {
+        const res = await adminFetch('/api/admin/keeper/encounter-cards', {
+          method: 'POST',
+          body: JSON.stringify({
+            code, name_zh,
+            name_en: el('ce_name_en').value.trim(),
+            encounter_type: el('ce_type').value,
+            scenario_text_zh: el('ce_scenario').value.trim(),
+          }),
+        });
+        if (res.status === 409) { alert('此代碼已存在'); return; }
+        if (!res.ok) { alert('建立失敗'); return; }
+        const data = await res.json();
+        closeDialog('dlgCreateEncounter');
+        await loadEncounterCards();
+        selectCard(data.encounter_card.id);
+      } catch (e) { alert('建立失敗：' + e.message); }
+    }
+
+    function suggestIntensity(cost) {
+      if (cost <= 2) return 'small';
+      if (cost <= 4) return 'medium';
+      if (cost <= 6) return 'large';
+      return 'epic';
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  SELECT CARD
+    // ════════════════════════════════════════════════════════════
+    async function selectCard(id) {
+      if (isDirty && !confirm('有未儲存的變更，是否放棄？')) return;
+      selectedId = id;
+      renderList();
+      try {
+        const url = currentLib === 'mythos'
+          ? `/api/admin/keeper/mythos-cards/${id}`
+          : `/api/admin/keeper/encounter-cards/${id}`;
+        const res = await adminFetch(url);
+        const data = await res.json();
+        currentCard = currentLib === 'mythos' ? data.mythos_card : data.encounter_card;
+        renderEditor();
+        clearDirty();
+      } catch (e) { console.error(e); alert('載入失敗'); }
+    }
+
+    function renderEditor() {
+      el('editorEmpty').style.display = 'none';
+      el('floatingSaveBtn').style.display = '';
+      if (currentLib === 'mythos') {
+        el('editorMythos').style.display = '';
+        el('editorEncounter').style.display = 'none';
+        renderMythosEditor();
+      } else {
+        el('editorMythos').style.display = 'none';
+        el('editorEncounter').style.display = '';
+        renderEncounterEditor();
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  MYTHOS EDITOR
+    // ════════════════════════════════════════════════════════════
+    function renderMythosEditor() {
+      const c = currentCard;
+      el('m_code').value = c.code;
+      el('m_design_status').value = c.design_status;
+      el('m_name_zh').value = c.name_zh || '';
+      el('m_name_en').value = c.name_en || '';
+      el('m_description_zh').value = c.description_zh || '';
+      el('m_description_en').value = c.description_en || '';
+      el('m_flavor_text_zh').value = c.flavor_text_zh || '';
+      el('m_flavor_text_en').value = c.flavor_text_en || '';
+      el('m_action_cost').value = c.action_cost;
+      el('m_intensity_tag').value = c.intensity_tag;
+      el('m_card_category').value = c.card_category;
+      el('m_art_url').value = c.art_url || '';
+      el('m_design_notes').value = c.design_notes || '';
+      el('m_response_trigger').value = c.response_trigger || '';
+
+      // timing radio
+      document.querySelectorAll('input[name="m_timing"]').forEach(r => {
+        r.checked = (r.value === c.activation_timing);
+      });
+      onTimingChange();
+      onCategoryChange();
+
+      renderActionList();
+      renderMythosCompleteness();
+    }
+
+    function onActionCostChange() {
+      const cost = intVal('m_action_cost');
+      const newIntensity = suggestIntensity(cost);
+      el('m_intensity_tag').value = newIntensity;
+      markDirty();
+    }
+    function onCategoryChange() {
+      const cat = el('m_card_category').value;
+      // 響應取消類強制設為調查員階段響應
+      if (cat === 'cancel') {
+        document.querySelectorAll('input[name="m_timing"]').forEach(r => {
+          r.checked = (r.value === 'investigator_phase_reaction');
+        });
+        onTimingChange();
+      }
+      markDirty();
+    }
+    function onTimingChange() {
+      const v = document.querySelector('input[name="m_timing"]:checked')?.value;
+      el('m_response_block').style.display = v === 'investigator_phase_reaction' ? '' : 'none';
+      markDirty();
+    }
+
+    function renderActionList() {
+      const effects = currentCard.effects || [];
+      el('mActionCountBadge').textContent = `(${effects.length})`;
+      const box = el('mActionList');
+      if (effects.length === 0) {
+        box.innerHTML = '<div style="color:var(--text-tertiary);font-size:0.8125rem;padding:0.5rem 0 0.75rem;">尚無動作</div>';
+        return;
+      }
+      box.innerHTML = effects.map((e, idx) => {
+        const meta = MYTHOS_ACTION_CODES[e.action_code];
+        const name = meta ? meta.name_zh : e.action_code;
+        const paramTxt = JSON.stringify(e.action_params || {}).slice(0, 80);
+        return `
+          <div class="action-card">
+            <div class="action-card-header">
+              <span class="action-card-num">#${idx + 1}</span>
+              <span class="action-card-type">${escapeHtml(name)}</span>
+              <div class="action-card-actions">
+                <button class="btn" onclick="editAction('${e.id}')">編輯</button>
+                <button class="btn btn-danger" onclick="deleteAction('${e.id}')">🗑</button>
+              </div>
+            </div>
+            <div class="action-card-params">${escapeHtml(paramTxt)}</div>
+            <div class="action-card-desc">${escapeHtml(e.description_zh || '')}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ── Action picker ──
+    function openAddActionDialog() {
+      pickedActionCode = null;
+      const grouped = {};
+      for (const [code, meta] of Object.entries(MYTHOS_ACTION_CODES)) {
+        if (!grouped[meta.category]) grouped[meta.category] = [];
+        grouped[meta.category].push({ code, ...meta });
+      }
+      let html = '';
+      for (const [cat, items] of Object.entries(grouped)) {
+        const catName = MYTHOS_CATEGORIES[cat]?.name_zh || cat;
+        html += `<div class="action-picker-cat"><div class="action-picker-cat-name">${escapeHtml(catName)}</div>`;
+        items.forEach(it => {
+          html += `<label class="action-picker-item"><input type="radio" name="picked_action" value="${it.code}" onchange="pickedActionCode='${it.code}'"> ${escapeHtml(it.name_zh)} <span style="color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;font-size:0.6875rem;margin-left:0.5rem;">${it.code}</span></label>`;
+        });
+        html += `</div>`;
+      }
+      el('actionPickerList').innerHTML = html;
+      openDialog('dlgAddAction');
+    }
+
+    function confirmAddAction() {
+      if (!pickedActionCode) { alert('請選擇一個動作'); return; }
+      closeDialog('dlgAddAction');
+      el('ap_effect_id').value = '';
+      el('ap_action_code').value = pickedActionCode;
+      el('dlgActionParamsTitle').textContent = `填寫參數：${MYTHOS_ACTION_CODES[pickedActionCode].name_zh}`;
+      renderActionParamsForm(pickedActionCode, {});
+      openDialog('dlgActionParams');
+    }
+
+    function editAction(effectId) {
+      const e = (currentCard.effects || []).find(x => x.id === effectId);
+      if (!e) return;
+      el('ap_effect_id').value = effectId;
+      el('ap_action_code').value = e.action_code;
+      el('dlgActionParamsTitle').textContent = `編輯參數：${MYTHOS_ACTION_CODES[e.action_code]?.name_zh || e.action_code}`;
+      renderActionParamsForm(e.action_code, e.action_params || {});
+      el('ap_description').value = e.description_zh || '';
+      openDialog('dlgActionParams');
+    }
+
+    function renderActionParamsForm(actionCode, params) {
+      const meta = MYTHOS_ACTION_CODES[actionCode];
+      if (!meta) { el('actionParamsForm').innerHTML = '<div style="color:var(--danger);">未知的動作代碼</div>'; return; }
+      const box = el('actionParamsForm');
+      let html = '<div class="form-grid">';
+
+      // 依參數列表動態產生欄位
+      for (const p of meta.params) {
+        const v = params[p];
+        html += '<div class="form-group">';
+        html += `<label>${escapeHtml(p)}</label>`;
+        if (p === 'family_code') {
+          const opts = monsterFamilies.map(f => `<option value="${f.code}" ${v === f.code ? 'selected' : ''}>${escapeHtml(f.name_zh)}</option>`).join('');
+          html += `<select id="ap_${p}">${opts || '<option value="">（無可用家族 — 請先在 MOD-03 建立）</option>'}</select>`;
+        } else if (p === 'base_tier') {
+          html += `<select id="ap_${p}">
+            <option value="1" ${v === 1 ? 'selected' : ''}>1 - 雜兵</option>
+            <option value="2" ${v === 2 ? 'selected' : ''}>2 - 威脅</option>
+            <option value="3" ${v === 3 ? 'selected' : ''}>3 - 精英</option>
+            <option value="4" ${v === 4 ? 'selected' : ''}>4 - 頭目</option>
+          </select>`;
+        } else if (p === 'location_rule' || p === 'target_location_rule') {
+          let opts = '';
+          for (const [k, vv] of Object.entries(TARGET_RULES)) {
+            if (vv.scope !== 'location' && vv.scope !== 'both') continue;
+            opts += `<option value="${k}" ${v === k ? 'selected' : ''}>${escapeHtml(vv.name_zh)}</option>`;
+          }
+          html += `<select id="ap_${p}">${opts}</select>`;
+        } else if (p === 'target_rule') {
+          let opts = '';
+          for (const [k, vv] of Object.entries(TARGET_RULES)) {
+            opts += `<option value="${k}" ${v === k ? 'selected' : ''}>${escapeHtml(vv.name_zh)} (${vv.scope})</option>`;
+          }
+          html += `<select id="ap_${p}">${opts}</select>`;
+        } else if (p === 'status_code') {
+          let opts = '';
+          for (const [k, vv] of Object.entries(NEGATIVE_STATUSES)) {
+            opts += `<option value="${k}" ${v === k ? 'selected' : ''}>${escapeHtml(vv.name_zh)}</option>`;
+          }
+          html += `<select id="ap_${p}">${opts}</select>`;
+        } else if (p === 'buff_code') {
+          let opts = '';
+          for (const [k, vv] of Object.entries(POSITIVE_STATUSES)) {
+            opts += `<option value="${k}" ${v === k ? 'selected' : ''}>${escapeHtml(vv.name_zh)}</option>`;
+          }
+          html += `<select id="ap_${p}">${opts}</select>`;
+        } else if (p === 'check_attribute') {
+          let opts = '';
+          for (const [k, vv] of Object.entries(ATTRIBUTES)) {
+            opts += `<option value="${k}" ${v === k ? 'selected' : ''}>${escapeHtml(vv.zh)}</option>`;
+          }
+          html += `<select id="ap_${p}">${opts}</select>`;
+        } else if (p === 'change_type') {
+          let opts = '';
+          for (const [k, vv] of Object.entries(ENVIRONMENT_CHANGE_TYPES)) {
+            opts += `<option value="${k}" ${v === k ? 'selected' : ''}>${escapeHtml(vv.name_zh)}</option>`;
+          }
+          html += `<select id="ap_${p}">${opts}</select>`;
+        } else if (p === 'token_type') {
+          let opts = '';
+          for (const [k, vv] of Object.entries(CHAOS_BAG_TOKENS)) {
+            opts += `<option value="${k}" ${v === k ? 'selected' : ''}>${escapeHtml(vv.name_zh)}</option>`;
+          }
+          html += `<select id="ap_${p}">${opts}</select>`;
+        } else if (p === 'operation') {
+          html += `<select id="ap_${p}">
+            <option value="add" ${v === 'add' ? 'selected' : ''}>add（加入）</option>
+            <option value="remove" ${v === 'remove' ? 'selected' : ''}>remove（移除）</option>
+            <option value="replace" ${v === 'replace' ? 'selected' : ''}>replace（替換）</option>
+          </select>`;
+        } else if (p === 'action_type') {
+          html += `<select id="ap_${p}">
+            <option value="attack" ${v === 'attack' ? 'selected' : ''}>attack（攻擊）</option>
+            <option value="investigate" ${v === 'investigate' ? 'selected' : ''}>investigate（調查）</option>
+            <option value="move" ${v === 'move' ? 'selected' : ''}>move（移動）</option>
+            <option value="any" ${v === 'any' ? 'selected' : ''}>any（任意）</option>
+          </select>`;
+        } else if (p === 'use_worse_result' || p === 'resolve_immediately') {
+          html += `<select id="ap_${p}">
+            <option value="true" ${v === true ? 'selected' : ''}>是</option>
+            <option value="false" ${v === false ? 'selected' : ''}>否</option>
+          </select>`;
+        } else if (['quantity','doom_tokens','value','damage_physical','damage_horror','count','check_dc'].includes(p)) {
+          html += `<input id="ap_${p}" type="number" min="0" max="20" value="${v != null ? v : 1}">`;
+        } else {
+          // 通用文字
+          html += `<input id="ap_${p}" type="text" value="${escapeHtml(v != null ? String(v) : '')}">`;
+        }
+        html += '</div>';
+      }
+      if (meta.params.length === 0) {
+        html += '<div class="full" style="color:var(--text-tertiary);font-size:0.8125rem;">此動作沒有參數</div>';
+      }
+      html += '</div>';
+      box.innerHTML = html;
+
+      // 自動生成描述
+      el('ap_description').value = generateActionDescription(actionCode, params);
+
+      // 監聽變化更新自動描述
+      box.addEventListener('change', updateAutoDescription);
+      box.addEventListener('input', updateAutoDescription);
+    }
+
+    function collectActionParams() {
+      const code = el('ap_action_code').value;
+      const meta = MYTHOS_ACTION_CODES[code];
+      const params = {};
+      for (const p of meta.params) {
+        const elInput = el(`ap_${p}`);
+        if (!elInput) continue;
+        let v = elInput.value;
+        if (['quantity','doom_tokens','value','damage_physical','damage_horror','count','check_dc','base_tier'].includes(p)) {
+          v = parseInt(v) || 0;
+        } else if (['use_worse_result','resolve_immediately'].includes(p)) {
+          v = v === 'true' || v === true;
+        }
+        params[p] = v;
+      }
+      return params;
+    }
+
+    function updateAutoDescription() {
+      const code = el('ap_action_code').value;
+      const params = collectActionParams();
+      el('ap_description').value = generateActionDescription(code, params);
+    }
+
+    function generateActionDescription(code, params) {
+      const familyName = (c) => monsterFamilies.find(f => f.code === c)?.name_zh || c;
+      const tierName = (t) => ({1:'雜兵',2:'威脅',3:'精英',4:'頭目',5:'巨頭'})[t] || `位階${t}`;
+      const targetName = (r) => TARGET_RULES[r]?.name_zh || r;
+      const statusName = (s) => NEGATIVE_STATUSES[s]?.name_zh || POSITIVE_STATUSES[s]?.name_zh || s;
+      const attrName = (a) => ATTRIBUTES[a]?.zh || a;
+      const envName = (e) => ENVIRONMENT_CHANGE_TYPES[e]?.name_zh || e;
+      const tokenName = (t) => CHAOS_BAG_TOKENS[t]?.name_zh || t;
+      switch (code) {
+        case 'summon_monster':
+          return `從${familyName(params.family_code)}池中召喚 ${params.quantity || 1} 隻${tierName(params.base_tier || 1)}級怪物於${targetName(params.location_rule)}`;
+        case 'spawn_at_location':
+          return `在${targetName(params.location_rule)}生成 ${params.token_type} 標記`;
+        case 'advance_agenda':
+          return `議程牌堆放置 ${params.doom_tokens || 1} 個毀滅標記`;
+        case 'reveal_act':
+          return '強制翻面目標牌堆';
+        case 'environment_change':
+          return `${targetName(params.target_location_rule)}進入${envName(params.change_type)}狀態`;
+        case 'disconnect_location':
+          return `斷開${targetName(params.location_rule)}的連接`;
+        case 'inflict_status':
+          return `對${targetName(params.target_rule)}施加 ${params.value || 1} 點${statusName(params.status_code)}狀態`;
+        case 'remove_buff':
+          return `移除${targetName(params.target_rule)}的${statusName(params.buff_code)}狀態`;
+        case 'damage_all':
+          return `對${targetName(params.target_rule)}造成 ${params.damage_physical || 0} 物理 + ${params.damage_horror || 0} 恐懼傷害`;
+        case 'force_check_all':
+          return `全場${attrName(params.check_attribute)}檢定 DC ${params.check_dc}，失敗時${params.failure_effect || '受懲'}`;
+        case 'modify_chaos_bag':
+          return `混沌袋${params.operation === 'add' ? '加入' : (params.operation === 'remove' ? '移除' : '替換為')} ${params.quantity || 1} 個${tokenName(params.token_type)}標記`;
+        case 'draw_encounter':
+          return `強制抽 ${params.count || 1} 張遭遇卡${params.resolve_immediately ? '並立即結算' : ''}`;
+        case 'shuffle_encounter_deck':
+          return '重洗遭遇牌堆';
+        case 'cancel_player_action':
+          return `取消玩家的${params.action_type || ''}行動${params.additional_penalty ? '（附加懲罰：' + params.additional_penalty + '）' : ''}`;
+        case 'force_reroll':
+          return `強制${targetName(params.target_rule)}重擲，${params.use_worse_result ? '取較差結果' : '取較佳結果'}`;
+        case 'narrative_only':
+          return params.text || '純敘事事件';
+        case 'set_flag':
+          return `設定旗標 ${params.flag_key} = ${params.flag_value}`;
+        default:
+          return code + ': ' + JSON.stringify(params);
+      }
+    }
+
+    async function saveActionParams() {
+      const code = el('ap_action_code').value;
+      const effectId = el('ap_effect_id').value;
+      const params = collectActionParams();
+      const desc = el('ap_description').value.trim();
+      try {
+        let res;
+        if (effectId) {
+          res = await adminFetch(`/api/admin/keeper/mythos-effects/${effectId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ action_code: code, action_params: params, description_zh: desc }),
+          });
+        } else {
+          res = await adminFetch(`/api/admin/keeper/mythos-cards/${currentCard.id}/effects`, {
+            method: 'POST',
+            body: JSON.stringify({ action_code: code, action_params: params, description_zh: desc }),
+          });
+        }
+        if (!res.ok) { alert('儲存失敗'); return; }
+        closeDialog('dlgActionParams');
+        await reloadCurrent();
+      } catch (e) { alert('儲存失敗：' + e.message); }
+    }
+
+    async function deleteAction(effectId) {
+      if (!confirm('確認刪除此動作？')) return;
+      try {
+        const res = await adminFetch(`/api/admin/keeper/mythos-effects/${effectId}`, { method: 'DELETE' });
+        if (!res.ok) { alert('刪除失敗'); return; }
+        await reloadCurrent();
+      } catch (e) { alert('刪除失敗：' + e.message); }
+    }
+
+    function renderMythosCompleteness() {
+      const c = currentCard;
+      const checks = [
+        { ok: !!(c.code && c.name_zh), label: '基本資訊完整' },
+        { ok: c.action_cost != null && c.activation_timing && c.card_category, label: '機制屬性已設定' },
+        { ok: (c.effects || []).length > 0, label: '至少一個動作' },
+        { ok: !!(c.flavor_text_zh && c.flavor_text_zh.trim()), label: '風味文字已填寫' },
+        { ok: !(c.card_category === 'cancel' || c.activation_timing === 'investigator_phase_reaction') || !!c.response_trigger, label: '響應類已設觸發條件' },
+      ];
+      let html = '<div class="completeness-title">設計完整度檢查</div>';
+      for (const ch of checks) {
+        html += `<div class="completeness-row">${ch.ok ? '<span class="quality-ok">✅</span>' : '<span class="quality-warn">⚠</span>'} ${ch.label}</div>`;
+      }
+      el('mCompleteness').innerHTML = html;
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  ENCOUNTER EDITOR
+    // ════════════════════════════════════════════════════════════
+    function renderEncounterEditor() {
+      const c = currentCard;
+      el('e_code').value = c.code;
+      el('e_design_status').value = c.design_status;
+      el('e_name_zh').value = c.name_zh || '';
+      el('e_name_en').value = c.name_en || '';
+      el('e_encounter_type').value = c.encounter_type;
+      el('e_scenario_text_zh').value = c.scenario_text_zh || '';
+      el('e_scenario_text_en').value = c.scenario_text_en || '';
+      el('e_art_url').value = c.art_url || '';
+      el('e_design_notes').value = c.design_notes || '';
+      renderEncounterTagsSection();
+      renderEncounterOptions();
+      renderEncounterCompleteness();
+    }
+
+    function renderEncounterTagsSection() {
+      const selected = currentCard.tags || [];
+      const selectedIds = new Set(selected.map(t => t.id));
+      el('eTagCountBadge').textContent = `(${selected.length})`;
+
+      const selBox = el('eSelectedTags');
+      if (selected.length === 0) {
+        selBox.innerHTML = '<span style="color:var(--text-tertiary);font-size:0.8125rem;">尚未選擇標籤</span>';
+      } else {
+        selBox.innerHTML = selected.map(t =>
+          `<span class="tag-chip selected" onclick="removeETag('${t.id}')">${escapeHtml(t.name_zh)} <span class="tag-x">×</span></span>`
+        ).join('');
+      }
+
+      const availBox = el('eAvailableTags');
+      let html = '';
+      for (const cat of ['indoor','outdoor','special','custom']) {
+        const arr = (allTags[cat] || []).filter(t => !selectedIds.has(t.id));
+        const allInCat = (allTags[cat] || []).length;
+        html += '<div class="tag-cat-block">';
+        html += `<div class="tag-cat-label">${TAG_CATEGORY_LABELS[cat].name_zh}（${allInCat} 個）</div>`;
+        if (arr.length === 0) {
+          html += `<div class="tag-cat-empty">${allInCat === 0 ? '尚無此類標籤' : '已全部選用'}</div>`;
+        } else {
+          html += arr.map(t => `<span class="tag-chip" onclick="addETag('${t.id}')">${escapeHtml(t.name_zh)}</span>`).join('');
+        }
+        html += '</div>';
+      }
+      availBox.innerHTML = html;
+    }
+
+    function addETag(tagId) {
+      let tag = null;
+      for (const cat of Object.values(allTags)) { tag = cat.find(t => t.id === tagId); if (tag) break; }
+      if (!tag) return;
+      currentCard.tags = currentCard.tags || [];
+      if (currentCard.tags.some(t => t.id === tagId)) return;
+      currentCard.tags.push(tag);
+      renderEncounterTagsSection();
+      renderEncounterCompleteness();
+      markDirty();
+    }
+    function removeETag(tagId) {
+      currentCard.tags = (currentCard.tags || []).filter(t => t.id !== tagId);
+      renderEncounterTagsSection();
+      renderEncounterCompleteness();
+      markDirty();
+    }
+
+    function renderEncounterOptions() {
+      const opts = currentCard.options || [];
+      el('eOptionCountBadge').textContent = `(${opts.length})`;
+      const box = el('eOptionList');
+      if (opts.length === 0) {
+        box.innerHTML = '<div style="color:var(--text-tertiary);font-size:0.8125rem;padding:0.5rem 0 0.75rem;">尚無選項，請至少新增 2 個</div>';
+        el('btnAddOption').disabled = false;
+        return;
+      }
+      box.innerHTML = opts.map(o => renderOptionCard(o)).join('');
+      el('btnAddOption').disabled = (opts.length >= 3);
+    }
+
+    function renderOptionCard(o) {
+      const successEffectsHtml = renderEffectChips(o.success_effects, o.id, 'success');
+      const failureEffectsHtml = renderEffectChips(o.failure_effects, o.id, 'failure');
+      const noCheckEffectsHtml = renderEffectChips(o.no_check_effects, o.id, 'no_check');
+      const attrSel = Object.entries(ATTRIBUTES).map(([k,v]) =>
+        `<option value="${k}" ${o.check_attribute === k ? 'selected' : ''}>${v.zh}</option>`).join('');
+      return `
+        <div class="option-card">
+          <div class="option-card-header">
+            <span class="option-label-badge">${o.option_label}</span>
+            <div style="flex:1;">
+              <input type="text" placeholder="選項文字（動詞開頭）" value="${escapeHtml(o.option_text_zh || '')}" oninput="updateOptionField('${o.id}', 'option_text_zh', this.value)">
+            </div>
+            <div class="option-card-actions">
+              <button class="btn btn-danger" onclick="deleteEncounterOption('${o.id}')">🗑</button>
+            </div>
+          </div>
+          <div class="check-row" style="display:flex;gap:1rem;align-items:center;font-size:0.8125rem;margin-bottom:0.5rem;">
+            <label style="display:inline-flex;align-items:center;gap:0.375rem;cursor:pointer;">
+              <input type="checkbox" style="width:auto" ${o.requires_check ? 'checked' : ''} onchange="toggleOptionCheck('${o.id}', this.checked)">
+              需要檢定
+            </label>
+            <div id="check_block_${o.id}" style="display:${o.requires_check ? 'flex' : 'none'};gap:0.5rem;align-items:center;">
+              <label style="font-size:0.75rem;">屬性</label>
+              <select onchange="updateOptionField('${o.id}', 'check_attribute', this.value)" style="width:auto;padding:0.25rem 0.5rem;font-size:0.75rem;">${attrSel}</select>
+              <label style="font-size:0.75rem;">DC</label>
+              <input type="number" min="1" max="20" value="${o.check_dc || 4}" oninput="updateOptionField('${o.id}', 'check_dc', parseInt(this.value))" style="width:60px;padding:0.25rem;font-size:0.75rem;text-align:center;">
+            </div>
+          </div>
+          ${o.requires_check ? `
+            <div class="result-block success">
+              <div class="result-block-title">✓ 成功結果</div>
+              <textarea placeholder="成功敘事..." rows="2" oninput="updateOptionField('${o.id}', 'success_narrative_zh', this.value)" style="font-size:0.8125rem;margin-bottom:0.375rem;">${escapeHtml(o.success_narrative_zh || '')}</textarea>
+              <div>${successEffectsHtml}</div>
+              <button class="btn" style="padding:0.2rem 0.5rem;font-size:0.75rem;margin-top:0.25rem;" onclick="openAddEffectDialog('${o.id}', 'success')">+ 效果</button>
+            </div>
+            <div class="result-block failure">
+              <div class="result-block-title">✗ 失敗結果</div>
+              <textarea placeholder="失敗敘事..." rows="2" oninput="updateOptionField('${o.id}', 'failure_narrative_zh', this.value)" style="font-size:0.8125rem;margin-bottom:0.375rem;">${escapeHtml(o.failure_narrative_zh || '')}</textarea>
+              <div>${failureEffectsHtml}</div>
+              <button class="btn" style="padding:0.2rem 0.5rem;font-size:0.75rem;margin-top:0.25rem;" onclick="openAddEffectDialog('${o.id}', 'failure')">+ 效果</button>
+            </div>
+          ` : `
+            <div class="result-block">
+              <div class="result-block-title">📖 結果（無檢定）</div>
+              <textarea placeholder="結果敘事..." rows="2" oninput="updateOptionField('${o.id}', 'no_check_narrative_zh', this.value)" style="font-size:0.8125rem;margin-bottom:0.375rem;">${escapeHtml(o.no_check_narrative_zh || '')}</textarea>
+              <div>${noCheckEffectsHtml}</div>
+              <button class="btn" style="padding:0.2rem 0.5rem;font-size:0.75rem;margin-top:0.25rem;" onclick="openAddEffectDialog('${o.id}', 'no_check')">+ 效果</button>
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    function renderEffectChips(effects, optionId, branch) {
+      const arr = effects || [];
+      if (arr.length === 0) return '<span style="color:var(--text-tertiary);font-size:0.75rem;">無效果</span>';
+      return arr.map((e, idx) => {
+        const meta = ENCOUNTER_EFFECT_CODES[e.action_code];
+        const name = meta ? meta.name_zh : e.action_code;
+        const txt = formatEffectText(e);
+        return `<span class="effect-chip">${escapeHtml(txt)} <span class="x" onclick="removeEffect('${optionId}', '${branch}', ${idx})">×</span></span>`;
+      }).join('');
+    }
+
+    function formatEffectText(e) {
+      const meta = ENCOUNTER_EFFECT_CODES[e.action_code];
+      const name = meta ? meta.name_zh : e.action_code;
+      const p = e.params || {};
+      if (p.amount != null) return `${name} ${p.amount}`;
+      if (p.status_code) return `${name} ${NEGATIVE_STATUSES[p.status_code]?.name_zh || p.status_code} ×${p.value || 1}`;
+      if (p.doom_tokens) return `${name} ${p.doom_tokens}`;
+      if (p.description) return `${name}：${p.description.slice(0, 20)}`;
+      return name;
+    }
+
+    function updateOptionField(optionId, field, value) {
+      const opt = (currentCard.options || []).find(o => o.id === optionId);
+      if (!opt) return;
+      opt[field] = value;
+      // 立即送 PUT 儲存（選項層級獨立儲存）
+      debouncedSaveOption(optionId);
+      markDirty();
+    }
+
+    let saveOptionTimers = {};
+    function debouncedSaveOption(optionId) {
+      if (saveOptionTimers[optionId]) clearTimeout(saveOptionTimers[optionId]);
+      saveOptionTimers[optionId] = setTimeout(() => savEncounterOption(optionId), 800);
+    }
+
+    async function savEncounterOption(optionId) {
+      const opt = (currentCard.options || []).find(o => o.id === optionId);
+      if (!opt) return;
+      try {
+        await adminFetch(`/api/admin/keeper/encounter-options/${optionId}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            option_text_zh: opt.option_text_zh,
+            option_text_en: opt.option_text_en,
+            requires_check: opt.requires_check,
+            check_attribute: opt.check_attribute,
+            check_dc: opt.check_dc,
+            success_narrative_zh: opt.success_narrative_zh,
+            success_narrative_en: opt.success_narrative_en,
+            success_effects: opt.success_effects || [],
+            failure_narrative_zh: opt.failure_narrative_zh,
+            failure_narrative_en: opt.failure_narrative_en,
+            failure_effects: opt.failure_effects || [],
+            no_check_narrative_zh: opt.no_check_narrative_zh,
+            no_check_narrative_en: opt.no_check_narrative_en,
+            no_check_effects: opt.no_check_effects || [],
+          }),
+        });
+      } catch (e) { console.error('save option failed', e); }
+    }
+
+    function toggleOptionCheck(optionId, checked) {
+      const opt = (currentCard.options || []).find(o => o.id === optionId);
+      if (!opt) return;
+      opt.requires_check = checked;
+      // 提供預設值
+      if (checked && !opt.check_attribute) { opt.check_attribute = 'willpower'; opt.check_dc = 4; }
+      renderEncounterOptions();
+      debouncedSaveOption(optionId);
+      markDirty();
+    }
+
+    async function addEncounterOption() {
+      try {
+        const res = await adminFetch(`/api/admin/keeper/encounter-cards/${currentCard.id}/options`, {
+          method: 'POST',
+          body: JSON.stringify({}),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || '新增失敗');
+          return;
+        }
+        await reloadCurrent();
+      } catch (e) { alert('新增失敗：' + e.message); }
+    }
+
+    async function deleteEncounterOption(optionId) {
+      if (!confirm('確認刪除此選項？')) return;
+      try {
+        const res = await adminFetch(`/api/admin/keeper/encounter-options/${optionId}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || '刪除失敗');
+          return;
+        }
+        await reloadCurrent();
+      } catch (e) { alert('刪除失敗：' + e.message); }
+    }
+
+    // ── Effect dialog ──
+    let pendingEffectTarget = null; // { optionId, branch }
+    function openAddEffectDialog(optionId, branch) {
+      pendingEffectTarget = { optionId, branch };
+      el('ae_option_id').value = optionId;
+      el('ae_branch').value = branch;
+      el('ae_code').value = 'gain_clue';
+      renderEffectParamsForm();
+      openDialog('dlgAddEffect');
+    }
+
+    function renderEffectParamsForm() {
+      const code = el('ae_code').value;
+      const meta = ENCOUNTER_EFFECT_CODES[code];
+      const box = el('effectParamsForm');
+      if (!meta || meta.params.length === 0) { box.innerHTML = ''; return; }
+      let html = '';
+      for (const p of meta.params) {
+        html += `<div class="form-group" style="margin-top:0.5rem;"><label>${escapeHtml(p)}</label>`;
+        if (p === 'amount' || p === 'doom_tokens' || p === 'value') {
+          html += `<input id="ef_${p}" type="number" min="0" max="20" value="1">`;
+        } else if (p === 'status_code') {
+          let opts = '';
+          for (const [k, vv] of Object.entries(NEGATIVE_STATUSES)) {
+            opts += `<option value="${k}">${escapeHtml(vv.name_zh)}</option>`;
+          }
+          html += `<select id="ef_${p}">${opts}</select>`;
+        } else if (p === 'rule') {
+          html += `<select id="ef_${p}"><option value="random">隨機</option><option value="choice">玩家選擇</option></select>`;
+        } else if (p === 'description') {
+          html += `<textarea id="ef_${p}" rows="2" placeholder="自訂效果描述"></textarea>`;
+        } else {
+          html += `<input id="ef_${p}" type="text">`;
+        }
+        html += '</div>';
+      }
+      box.innerHTML = html;
+    }
+
+    function confirmAddEffect() {
+      const code = el('ae_code').value;
+      const meta = ENCOUNTER_EFFECT_CODES[code];
+      const params = {};
+      for (const p of meta.params) {
+        let v = el(`ef_${p}`)?.value;
+        if (['amount','doom_tokens','value'].includes(p)) v = parseInt(v) || 0;
+        params[p] = v;
+      }
+      const opt = (currentCard.options || []).find(o => o.id === pendingEffectTarget.optionId);
+      if (!opt) return;
+      const branchKey = pendingEffectTarget.branch + '_effects';
+      opt[branchKey] = opt[branchKey] || [];
+      opt[branchKey].push({ action_code: code, params });
+      renderEncounterOptions();
+      debouncedSaveOption(opt.id);
+      markDirty();
+      closeDialog('dlgAddEffect');
+    }
+
+    function removeEffect(optionId, branch, idx) {
+      const opt = (currentCard.options || []).find(o => o.id === optionId);
+      if (!opt) return;
+      const key = branch + '_effects';
+      opt[key] = (opt[key] || []).filter((_, i) => i !== idx);
+      renderEncounterOptions();
+      debouncedSaveOption(optionId);
+      markDirty();
+    }
+
+    function renderEncounterCompleteness() {
+      const c = currentCard;
+      const opts = c.options || [];
+      const allHaveText = opts.every(o => o.option_text_zh && o.option_text_zh.trim());
+      const atLeastOneCheck = opts.some(o => o.requires_check);
+      const checks = [
+        { ok: !!(c.scenario_text_zh && c.scenario_text_zh.trim()), label: '情境描述完整' },
+        { ok: (c.tags || []).length > 0, label: '至少一個地點風格標籤' },
+        { ok: opts.length >= 2, label: '至少 2 個選項' },
+        { ok: allHaveText, label: '所有選項的文字已填寫' },
+        { ok: atLeastOneCheck, label: '至少一個選項需要檢定' },
+      ];
+      let html = '<div class="completeness-title">設計完整度檢查</div>';
+      for (const ch of checks) {
+        html += `<div class="completeness-row">${ch.ok ? '<span class="quality-ok">✅</span>' : '<span class="quality-warn">⚠</span>'} ${ch.label}</div>`;
+      }
+      el('eCompleteness').innerHTML = html;
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  SAVE CURRENT
+    // ════════════════════════════════════════════════════════════
+    async function saveCurrent() {
+      if (!currentCard) return;
+      try {
+        if (currentLib === 'mythos') {
+          const timing = document.querySelector('input[name="m_timing"]:checked')?.value;
+          const body = {
+            name_zh: el('m_name_zh').value.trim(),
+            name_en: el('m_name_en').value.trim(),
+            description_zh: el('m_description_zh').value.trim() || null,
+            description_en: el('m_description_en').value.trim() || null,
+            action_cost: intVal('m_action_cost'),
+            activation_timing: timing,
+            card_category: el('m_card_category').value,
+            intensity_tag: el('m_intensity_tag').value,
+            response_trigger: el('m_response_trigger').value || null,
+            flavor_text_zh: el('m_flavor_text_zh').value.trim() || null,
+            flavor_text_en: el('m_flavor_text_en').value.trim() || null,
+            art_url: el('m_art_url').value.trim() || null,
+            design_notes: el('m_design_notes').value.trim() || null,
+            design_status: el('m_design_status').value,
+          };
+          const res = await adminFetch(`/api/admin/keeper/mythos-cards/${currentCard.id}`, {
+            method: 'PUT', body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            alert(data.message || '儲存失敗');
+            return;
+          }
+        } else {
+          const body = {
+            name_zh: el('e_name_zh').value.trim(),
+            name_en: el('e_name_en').value.trim(),
+            scenario_text_zh: el('e_scenario_text_zh').value.trim(),
+            scenario_text_en: el('e_scenario_text_en').value.trim() || null,
+            encounter_type: el('e_encounter_type').value,
+            art_url: el('e_art_url').value.trim() || null,
+            design_notes: el('e_design_notes').value.trim() || null,
+            design_status: el('e_design_status').value,
+          };
+          const res = await adminFetch(`/api/admin/keeper/encounter-cards/${currentCard.id}`, {
+            method: 'PUT', body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            alert(data.message || '儲存失敗');
+            return;
+          }
+          // 同步標籤
+          const tagIds = (currentCard.tags || []).map(t => t.id);
+          await adminFetch(`/api/admin/keeper/encounter-cards/${currentCard.id}/tags`, {
+            method: 'PUT', body: JSON.stringify({ tag_ids: tagIds }),
+          });
+          // 同步所有選項
+          for (const opt of (currentCard.options || [])) {
+            await savEncounterOption(opt.id);
+          }
+        }
+        clearDirty();
+        showToast('✓ 已儲存');
+        if (currentLib === 'mythos') await loadMythosCards();
+        else await loadEncounterCards();
+        await reloadCurrent();
+      } catch (e) { alert('儲存失敗：' + e.message); }
+    }
+
+    async function reloadCurrent() {
+      if (!currentCard) return;
+      const url = currentLib === 'mythos'
+        ? `/api/admin/keeper/mythos-cards/${currentCard.id}`
+        : `/api/admin/keeper/encounter-cards/${currentCard.id}`;
+      const res = await adminFetch(url);
+      const data = await res.json();
+      currentCard = currentLib === 'mythos' ? data.mythos_card : data.encounter_card;
+      renderEditor();
+      clearDirty();
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  DUPLICATE / DELETE
+    // ════════════════════════════════════════════════════════════
+    async function duplicateCurrent() {
+      if (!currentCard) return;
+      if (!confirm(`複製「${currentCard.name_zh}」？`)) return;
+      try {
+        const url = currentLib === 'mythos'
+          ? `/api/admin/keeper/mythos-cards/${currentCard.id}/duplicate`
+          : `/api/admin/keeper/encounter-cards/${currentCard.id}/duplicate`;
+        const res = await adminFetch(url, { method: 'POST' });
+        if (!res.ok) { alert('複製失敗'); return; }
+        const data = await res.json();
+        const newId = currentLib === 'mythos' ? data.mythos_card.id : data.encounter_card.id;
+        if (currentLib === 'mythos') await loadMythosCards();
+        else await loadEncounterCards();
+        selectCard(newId);
+      } catch (e) { alert('複製失敗：' + e.message); }
+    }
+
+    function deleteCurrent() {
+      if (!currentCard) return;
+      pendingDelete = { type: currentLib + '_card', id: currentCard.id };
+      el('dlgDeleteBody').innerHTML = `即將刪除${currentLib === 'mythos' ? '神話卡' : '遭遇卡'}「${escapeHtml(currentCard.name_zh)}」<br>連帶刪除所有${currentLib === 'mythos' ? '動作' : '選項與標籤關聯'}。<br><br>此操作不可復原。`;
+      openDialog('dlgDelete');
+    }
+
+    async function confirmDelete() {
+      if (!pendingDelete) return;
+      try {
+        const url = pendingDelete.type === 'mythos_card'
+          ? `/api/admin/keeper/mythos-cards/${pendingDelete.id}`
+          : `/api/admin/keeper/encounter-cards/${pendingDelete.id}`;
+        const res = await adminFetch(url, { method: 'DELETE' });
+        if (!res.ok) { alert('刪除失敗'); return; }
+        closeDialog('dlgDelete');
+        currentCard = null;
+        selectedId = null;
+        el('editorEmpty').style.display = '';
+        el('editorMythos').style.display = 'none';
+        el('editorEncounter').style.display = 'none';
+        el('floatingSaveBtn').style.display = 'none';
+        if (currentLib === 'mythos') await loadMythosCards();
+        else await loadEncounterCards();
+      } catch (e) { alert('刪除失敗：' + e.message); }
+      finally { pendingDelete = null; }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  AI GENERATION
+    // ════════════════════════════════════════════════════════════
+    function openAIGenMythos() {
+      if (!currentCard) { alert('請先選擇/新增一張神話卡'); return; }
+      // 預填當前卡片設定
+      el('aim_category').value = currentCard.card_category;
+      el('aim_timing').value = currentCard.activation_timing;
+      el('aim_intensity').value = currentCard.intensity_tag;
+      el('aim_cost').value = currentCard.action_cost;
+      el('aim_note').value = '';
+      el('aiMythosStatus').textContent = '';
+      openDialog('dlgAIMythos');
+    }
+
+    function buildMythosPrompt(category, timing, intensity, cost, userNote) {
+      const familyList = monsterFamilies.map(f => `- ${f.code}: ${f.name_zh}`).join('\n') ||
+        '- house_cthulhu: 克蘇魯眷族\n- house_hastur: 哈斯塔眷族\n- house_shub: 莎布·尼古拉絲眷族\n- fallen: 凡人墮落者';
+      return `你是一個克蘇魯神話 TRPG 遊戲的城主卡片設計師。請為以下參數生成一張神話卡。
+
+## 卡片參數
+- 類型：${category} (${MYTHOS_CATEGORIES[category]?.name_zh || category})
+- 發動時機：${timing} (${MYTHOS_ACTIVATION_TIMINGS[timing]?.name_zh || timing})
+- 強度：${intensity} (行動點範圍：${MYTHOS_INTENSITIES[intensity]?.cost_range || ''})
+- 行動點花費：${cost}
+
+## 可用動作代碼
+${Object.entries(MYTHOS_ACTION_CODES).map(([k, v]) => `- ${k}: ${v.name_zh}（params: ${v.params.join(', ') || '無'}）`).join('\n')}
+
+## 可用怪物家族代碼
+${familyList}
+
+## 可用狀態代碼
+${Object.keys(NEGATIVE_STATUSES).join(', ')}
+
+## 可用目標規則
+${Object.keys(TARGET_RULES).join(', ')}
+
+## 可用環境改變類型
+${Object.keys(ENVIRONMENT_CHANGE_TYPES).join(', ')}
+
+## 設計原則
+1. 行動點與強度要匹配：小型事件（1-2 點）通常 1 個動作，大型事件（5-6 點）可包含 2-3 個動作
+2. 「召喚類」通常用 summon_monster
+3. 「響應取消類」必須是 cancel_player_action 或 force_reroll
+4. 風味文字要有克蘇魯神話的恐怖氛圍，一至兩句話，第二人稱對玩家說
+${userNote ? `5. 額外要求：${userNote}` : ''}
+
+## 輸出格式（嚴格 JSON，不要包裹在 markdown 中）
+{
+  "name_zh": "卡片中文名",
+  "name_en": "卡片英文名",
+  "description_zh": "機制描述（設計師看的）",
+  "description_en": "英文機制描述",
+  "flavor_text_zh": "風味文字（城主朗讀的敘事）",
+  "flavor_text_en": "英文風味文字",
+  "effects": [
+    {
+      "action_code": "動作代碼",
+      "action_params": { ... },
+      "description_zh": "此動作的人類可讀描述"
+    }
+  ],
+  "response_trigger": "僅響應類填寫，否則為 null"
+}`;
+    }
+
+    async function generateMythosCard() {
+      const btn = el('btnAIMythosGen');
+      btn.disabled = true;
+      const oldText = btn.textContent;
+      btn.textContent = '⏳ 生成中...';
+      el('aiMythosStatus').textContent = '呼叫 Gemini 中...';
+      el('aiMythosStatus').style.color = 'var(--text-tertiary)';
+      try {
+        const promptText = buildMythosPrompt(
+          el('aim_category').value, el('aim_timing').value,
+          el('aim_intensity').value, intVal('aim_cost'), el('aim_note').value.trim()
+        );
+        const raw = await callGemini(promptText, { temperature: 0.85, responseMimeType: 'application/json' });
+        const data = JSON.parse(raw);
+
+        // 填入表單
+        el('m_name_zh').value = data.name_zh || '';
+        el('m_name_en').value = data.name_en || '';
+        el('m_description_zh').value = data.description_zh || '';
+        el('m_description_en').value = data.description_en || '';
+        el('m_flavor_text_zh').value = data.flavor_text_zh || '';
+        el('m_flavor_text_en').value = data.flavor_text_en || '';
+        el('m_action_cost').value = intVal('aim_cost');
+        el('m_card_category').value = el('aim_category').value;
+        el('m_intensity_tag').value = el('aim_intensity').value;
+        document.querySelectorAll('input[name="m_timing"]').forEach(r => {
+          r.checked = (r.value === el('aim_timing').value);
+        });
+        if (data.response_trigger) el('m_response_trigger').value = data.response_trigger;
+        onTimingChange();
+
+        // 動作（先全刪舊的，再插新的）
+        for (const e of (currentCard.effects || [])) {
+          await adminFetch(`/api/admin/keeper/mythos-effects/${e.id}`, { method: 'DELETE' });
+        }
+        for (const eff of (data.effects || [])) {
+          await adminFetch(`/api/admin/keeper/mythos-cards/${currentCard.id}/effects`, {
+            method: 'POST',
+            body: JSON.stringify({
+              action_code: eff.action_code,
+              action_params: eff.action_params || {},
+              description_zh: eff.description_zh || '',
+            }),
+          });
+        }
+
+        el('aiMythosStatus').textContent = '✓ 生成完成（記得按右下儲存基本資訊）';
+        el('aiMythosStatus').style.color = 'var(--success)';
+        await reloadCurrent();
+        markDirty();
+        setTimeout(() => closeDialog('dlgAIMythos'), 1500);
+      } catch (e) {
+        el('aiMythosStatus').textContent = '❌ ' + e.message;
+        el('aiMythosStatus').style.color = 'var(--danger)';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
+    }
+
+    function openAIGenEncounter() {
+      if (!currentCard) { alert('請先選擇/新增一張遭遇卡'); return; }
+      el('aie_type').value = currentCard.encounter_type;
+      const tags = (currentCard.tags || []).map(t => t.name_zh).join('、') || '尚未選擇標籤';
+      el('aie_tags').textContent = tags;
+      el('aie_note').value = '';
+      el('aiEncounterStatus').textContent = '';
+      openDialog('dlgAIEncounter');
+    }
+
+    function buildEncounterPrompt(encType, tagNames, userNote) {
+      return `你是一個克蘇魯神話 TRPG 遊戲的遭遇事件設計師。請為以下參數生成一張遭遇卡。
+
+## 卡片參數
+- 遭遇類型：${encType} (${ENCOUNTER_TYPES[encType]?.name_zh || encType} - ${ENCOUNTER_TYPES[encType]?.desc_zh || ''})
+- 地點風格：${tagNames || '不限'}
+
+## 可用效果代碼
+${Object.entries(ENCOUNTER_EFFECT_CODES).map(([k, v]) => `- ${k}: ${v.name_zh}（params: ${v.params.join(', ') || '無'}）`).join('\n')}
+
+## 可用狀態代碼（用於 inflict_status）
+${Object.keys(NEGATIVE_STATUSES).join(', ')}
+
+## 七大屬性（檢定用）
+${Object.keys(ATTRIBUTES).join(', ')}
+
+## 設計原則
+1. 情境描述要有畫面感，一至兩段敘事
+2. 選項 2-3 個，每個選項代表不同的應對策略
+3. 至少一個選項需要檢定，製造張力
+4. 成功/失敗的敘事是「故事的後半段」，要讓玩家感受到選擇的重量
+5. 效果強度：小獎勵（1 線索/資源）、中獎勵（2 線索 + 1 經驗值）、小懲罰（1 傷害/恐懼）、中懲罰（2 傷害 + 1 狀態）
+${userNote ? `6. 額外要求：${userNote}` : ''}
+
+## 輸出格式（嚴格 JSON）
+{
+  "name_zh": "遭遇卡中文名",
+  "name_en": "遭遇卡英文名",
+  "scenario_text_zh": "情境描述（中文）",
+  "scenario_text_en": "情境描述（英文）",
+  "options": [
+    {
+      "option_label": "A",
+      "option_text_zh": "選項文字（動詞開頭）",
+      "option_text_en": "英文選項文字",
+      "requires_check": true,
+      "check_attribute": "willpower",
+      "check_dc": 4,
+      "success_narrative_zh": "成功敘事",
+      "success_narrative_en": "英文成功敘事",
+      "success_effects": [{ "action_code": "gain_clue", "params": { "amount": 2 } }],
+      "failure_narrative_zh": "失敗敘事",
+      "failure_narrative_en": "英文失敗敘事",
+      "failure_effects": [{ "action_code": "horror", "params": { "amount": 2 } }]
+    }
+  ]
+}`;
+    }
+
+    async function generateEncounterCard() {
+      const btn = el('btnAIEncounterGen');
+      btn.disabled = true;
+      const oldText = btn.textContent;
+      btn.textContent = '⏳ 生成中...';
+      el('aiEncounterStatus').textContent = '呼叫 Gemini 中...';
+      el('aiEncounterStatus').style.color = 'var(--text-tertiary)';
+      try {
+        const tagNames = (currentCard.tags || []).map(t => t.name_zh).join('、');
+        const promptText = buildEncounterPrompt(el('aie_type').value, tagNames, el('aie_note').value.trim());
+        const raw = await callGemini(promptText, { temperature: 0.85, responseMimeType: 'application/json' });
+        const data = JSON.parse(raw);
+
+        // 填表單
+        el('e_name_zh').value = data.name_zh || '';
+        el('e_name_en').value = data.name_en || '';
+        el('e_scenario_text_zh').value = data.scenario_text_zh || '';
+        el('e_scenario_text_en').value = data.scenario_text_en || '';
+        el('e_encounter_type').value = el('aie_type').value;
+
+        // 刪除舊選項，新增 AI 生成的選項
+        for (const o of (currentCard.options || [])) {
+          await adminFetch(`/api/admin/keeper/encounter-options/${o.id}`, { method: 'DELETE' }).catch(() => {});
+        }
+        for (const opt of (data.options || [])) {
+          // 新增空選項
+          const createRes = await adminFetch(`/api/admin/keeper/encounter-cards/${currentCard.id}/options`, {
+            method: 'POST', body: JSON.stringify({}),
+          });
+          if (!createRes.ok) continue;
+          const newOpt = (await createRes.json()).option;
+          // 用 PUT 把 AI 內容塞進去
+          await adminFetch(`/api/admin/keeper/encounter-options/${newOpt.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              option_text_zh: opt.option_text_zh,
+              option_text_en: opt.option_text_en,
+              requires_check: opt.requires_check ?? true,
+              check_attribute: opt.check_attribute || null,
+              check_dc: opt.check_dc || null,
+              success_narrative_zh: opt.success_narrative_zh,
+              success_narrative_en: opt.success_narrative_en,
+              success_effects: opt.success_effects || [],
+              failure_narrative_zh: opt.failure_narrative_zh,
+              failure_narrative_en: opt.failure_narrative_en,
+              failure_effects: opt.failure_effects || [],
+              no_check_narrative_zh: opt.no_check_narrative_zh,
+              no_check_narrative_en: opt.no_check_narrative_en,
+              no_check_effects: opt.no_check_effects || [],
+            }),
+          });
+        }
+
+        el('aiEncounterStatus').textContent = '✓ 生成完成（記得按右下儲存基本資訊）';
+        el('aiEncounterStatus').style.color = 'var(--success)';
+        await reloadCurrent();
+        markDirty();
+        setTimeout(() => closeDialog('dlgAIEncounter'), 1500);
+      } catch (e) {
+        el('aiEncounterStatus').textContent = '❌ ' + e.message;
+        el('aiEncounterStatus').style.color = 'var(--danger)';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  OVERVIEW
+    // ════════════════════════════════════════════════════════════
+    async function loadOverview() {
+      try {
+        const res = await adminFetch('/api/admin/keeper/stats/overview');
+        const data = await res.json();
+        renderOverview(data);
+      } catch (e) {
+        console.error(e);
+        el('overviewBody').innerHTML = '<div style="color:var(--danger);">載入失敗</div>';
+      }
+    }
+
+    function renderOverview(d) {
+      const m = d.mythos_cards;
+      const e = d.encounter_cards;
+      let html = '';
+
+      // 神話卡進度
+      const mApproved = m.by_status.approved || 0;
+      const mPct = m.total > 0 ? Math.round(mApproved / m.total * 100) : 0;
+      html += `<div class="overview-block">
+        <h3 style="font-size:1rem;color:var(--gold);margin-bottom:0.5rem;">👁 神話卡統計</h3>
+        <div>總數：<strong>${m.total}</strong></div>
+        <div style="font-size:0.875rem;color:var(--text-secondary);">草稿 ${m.by_status.draft||0} · 審核 ${m.by_status.review||0} · 定稿 ${mApproved}</div>
+        <div class="overview-progress"><div class="overview-progress-fill" style="width:${mPct}%;"></div></div>
+        <div style="font-size:0.8125rem;color:var(--text-tertiary);">完成度 ${mPct}%</div>
+      </div>`;
+
+      // 神話卡類型分佈
+      html += `<div class="overview-block"><h3 style="font-size:1rem;color:var(--gold-dim);margin-bottom:0.5rem;">類型分佈</h3>`;
+      const maxCat = Math.max(1, ...Object.values(m.by_category || {}));
+      for (const [k, v] of Object.entries(m.by_category)) {
+        const w = Math.round(v / maxCat * 100);
+        html += `<div class="overview-bar"><span class="overview-bar-label">${MYTHOS_CATEGORIES[k]?.name_zh || k}</span><span class="overview-bar-fill" style="width:${Math.max(8, w)}%;">${v}</span></div>`;
+      }
+      html += '</div>';
+
+      // 強度分佈
+      html += `<div class="overview-block"><h3 style="font-size:1rem;color:var(--gold-dim);margin-bottom:0.5rem;">強度分佈</h3>`;
+      const maxInt = Math.max(1, ...Object.values(m.by_intensity || {}));
+      for (const [k, v] of Object.entries(m.by_intensity)) {
+        const w = Math.round(v / maxInt * 100);
+        html += `<div class="overview-bar"><span class="overview-bar-label">${MYTHOS_INTENSITIES[k]?.name_zh || k}</span><span class="overview-bar-fill" style="width:${Math.max(8, w)}%;">${v}</span></div>`;
+      }
+      html += '</div>';
+
+      // 時機分佈
+      html += `<div class="overview-block"><h3 style="font-size:1rem;color:var(--gold-dim);margin-bottom:0.5rem;">發動時機分佈</h3>`;
+      const maxTim = Math.max(1, ...Object.values(m.by_timing || {}));
+      for (const [k, v] of Object.entries(m.by_timing)) {
+        const w = Math.round(v / maxTim * 100);
+        html += `<div class="overview-bar"><span class="overview-bar-label">${MYTHOS_ACTIVATION_TIMINGS[k]?.name_zh || k}</span><span class="overview-bar-fill" style="width:${Math.max(8, w)}%;">${v}</span></div>`;
+      }
+      html += '</div>';
+
+      // 遭遇卡進度
+      const eApproved = e.by_status.approved || 0;
+      const ePct = e.total > 0 ? Math.round(eApproved / e.total * 100) : 0;
+      html += `<div class="overview-block">
+        <h3 style="font-size:1rem;color:var(--gold);margin-bottom:0.5rem;">🃏 遭遇卡統計</h3>
+        <div>總數：<strong>${e.total}</strong></div>
+        <div style="font-size:0.875rem;color:var(--text-secondary);">草稿 ${e.by_status.draft||0} · 審核 ${e.by_status.review||0} · 定稿 ${eApproved}</div>
+        <div class="overview-progress"><div class="overview-progress-fill" style="width:${ePct}%;"></div></div>
+        <div style="font-size:0.8125rem;color:var(--text-tertiary);">完成度 ${ePct}%</div>
+      </div>`;
+
+      // 遭遇卡類型
+      html += `<div class="overview-block"><h3 style="font-size:1rem;color:var(--gold-dim);margin-bottom:0.5rem;">遭遇類型分佈</h3>`;
+      const maxET = Math.max(1, ...Object.values(e.by_type || {}));
+      for (const [k, v] of Object.entries(e.by_type)) {
+        const w = Math.round(v / maxET * 100);
+        html += `<div class="overview-bar"><span class="overview-bar-label">${ENCOUNTER_TYPES[k]?.name_zh || k}</span><span class="overview-bar-fill" style="width:${Math.max(8, w)}%;">${v}</span></div>`;
+      }
+      html += '</div>';
+
+      // 地點風格覆蓋
+      html += `<div class="overview-block"><h3 style="font-size:1rem;color:var(--gold-dim);margin-bottom:0.5rem;">地點風格覆蓋</h3>`;
+      for (const cat of ['indoor','outdoor','special','custom']) {
+        const tags = (allTags[cat] || []);
+        if (tags.length === 0) continue;
+        html += `<div style="margin-top:0.5rem;font-size:0.8125rem;color:var(--text-tertiary);">${TAG_CATEGORY_LABELS[cat].name_zh}</div>`;
+        for (const t of tags) {
+          const c = e.tag_coverage[t.code] || 0;
+          html += `<div class="overview-bar"><span class="overview-bar-label" style="width:90px;font-size:0.75rem;">${escapeHtml(t.name_zh)}</span><span class="overview-bar-fill" style="width:${Math.max(8, c * 12)}%;">${c}</span></div>`;
+        }
+      }
+      html += '</div>';
+
+      // 品質檢查
+      html += `<div class="overview-block"><h3 style="font-size:1rem;color:var(--gold-dim);margin-bottom:0.5rem;">品質檢查</h3>`;
+      const noLarge = (m.by_intensity.large || 0) === 0;
+      const noEpic = (m.by_intensity.epic || 0) === 0;
+      const uncoveredTags = Object.keys(e.tag_coverage || {}).filter(k => e.tag_coverage[k] === 0).length;
+      html += `<div class="quality-row">${noLarge ? '<span class="quality-warn">⚠</span>' : '<span class="quality-ok">✅</span>'} 大型神話卡（5-6 點）：${m.by_intensity.large || 0} 張</div>`;
+      html += `<div class="quality-row">${noEpic ? '<span class="quality-warn">⚠</span>' : '<span class="quality-ok">✅</span>'} 史詩神話卡（7+ 點）：${m.by_intensity.epic || 0} 張</div>`;
+      html += `<div class="quality-row">${uncoveredTags > 0 ? '<span class="quality-warn">⚠</span>' : '<span class="quality-ok">✅</span>'} ${uncoveredTags} 個地點風格標籤尚無對應遭遇卡</div>`;
+      html += `<div class="quality-row">${m.missing_flavor > 0 ? '<span class="quality-warn">⚠</span>' : '<span class="quality-ok">✅</span>'} ${m.missing_flavor} 張神話卡無風味文字</div>`;
+      html += `<div class="quality-row">${e.insufficient_options > 0 ? '<span class="quality-err">❌</span>' : '<span class="quality-ok">✅</span>'} ${e.insufficient_options} 張遭遇卡選項數不足 2 個</div>`;
+      html += '</div>';
+
+      el('overviewBody').innerHTML = html;
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  BALANCE SETTINGS
+    // ════════════════════════════════════════════════════════════
+    let balanceData = {};
+
+    async function loadBalance() {
+      try {
+        const res = await adminFetch('/api/admin/keeper/balance');
+        const data = await res.json();
+        balanceData = data.groups || {};
+        renderBalance();
+      } catch (e) {
+        console.error(e);
+        el('balanceBody').innerHTML = '<div style="color:var(--danger);">載入失敗</div>';
+      }
+    }
+
+    function renderBalance() {
+      let html = '';
+      const groupOrder = ['keeper_action_points', 'monster_upgrade_costs'];
+      const groupTitles = {
+        keeper_action_points: '城主行動點公式',
+        monster_upgrade_costs: '怪物升階成本',
+      };
+      for (const g of groupOrder) {
+        const items = balanceData[g] || [];
+        if (items.length === 0) continue;
+        html += `<div class="overview-block"><h3 style="font-size:1rem;color:var(--gold);margin-bottom:0.5rem;">${groupTitles[g] || g}</h3>`;
+        for (const item of items) {
+          const v = item.value?.value;
+          const isBoolean = item.value_type === 'boolean' || typeof v === 'boolean';
+          html += `<div class="balance-row">
+            <div style="flex:1;">
+              <div class="balance-row-label">${escapeHtml(item.name_zh)}</div>
+              <div class="balance-row-desc">${escapeHtml(item.description_zh || '')}</div>
+            </div>
+            <div class="balance-row-input">`;
+          if (isBoolean) {
+            html += `<select onchange="updateBalanceSetting('${item.setting_key}', this.value === 'true')">
+              <option value="true" ${v === true ? 'selected' : ''}>是</option>
+              <option value="false" ${v === false ? 'selected' : ''}>否</option>
+            </select>`;
+          } else {
+            html += `<input type="number" min="0" max="50" value="${v}" onchange="updateBalanceSetting('${item.setting_key}', parseInt(this.value))">`;
+          }
+          html += `</div></div>`;
+        }
+        html += '</div>';
+      }
+      el('balanceBody').innerHTML = html;
+    }
+
+    async function updateBalanceSetting(key, value) {
+      try {
+        const res = await adminFetch(`/api/admin/keeper/balance/${key}`, {
+          method: 'PUT', body: JSON.stringify({ value: { value } }),
+        });
+        if (!res.ok) { alert('更新失敗'); return; }
+        showToast('✓ 已儲存');
+      } catch (e) { alert('更新失敗：' + e.message); }
+    }
+
+    async function runSimulation() {
+      try {
+        const res = await adminFetch('/api/admin/keeper/balance/simulate', {
+          method: 'POST',
+          body: JSON.stringify({
+            difficulty: parseInt(el('sim_difficulty').value),
+            player_count: parseInt(el('sim_players').value),
+            rounds: parseInt(el('sim_rounds').value) || 5,
+          }),
+        });
+        const d = await res.json();
+        let html = `<div class="sim-result">
+          <div class="sim-result-formula">${escapeHtml(d.formula_text)}</div>
+          <div class="sim-result-table">`;
+        if (d.accumulation_enabled) {
+          html += '跨回合累積模擬（若不花費）：<br>';
+          d.accumulated_after_rounds.forEach((acc, i) => {
+            html += `&nbsp;&nbsp;第 ${i+1} 回合結束：${acc} 點<br>`;
+          });
+        } else {
+          html += `每回合固定 ${d.per_round_total} 點（不累積）`;
+        }
+        html += '</div>';
+
+        // 智慧分析
+        const total = d.accumulated_after_rounds[d.accumulated_after_rounds.length - 1];
+        let analysis = `⚠ ${total} 點夠城主在最後回合：<br>`;
+        analysis += `&nbsp;&nbsp;• 打出 ${Math.floor(total / 2)} 張 2 點神話卡（小型）<br>`;
+        analysis += `&nbsp;&nbsp;• 打出 ${Math.floor(total / 4)} 張 4 點神話卡（中型）<br>`;
+        if (total >= 11) {
+          analysis += `&nbsp;&nbsp;• 召喚 1 隻頭目級怪物（基礎 2 + 升階 9 = 11 點）`;
+        }
+        html += `<div class="sim-result-analysis">${analysis}</div>`;
+        html += '</div>';
+
+        el('simResult').innerHTML = html;
+      } catch (e) {
+        alert('模擬失敗：' + e.message);
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  SHORTCUTS
+    // ════════════════════════════════════════════════════════════
+    document.addEventListener('keydown', (e) => {
+      if ((e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && !e.ctrlKey) return;
+
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        if (currentCard) saveCurrent();
+      } else if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        openCreateDialog();
+      } else if (e.ctrlKey && e.key === 'd') {
+        e.preventDefault();
+        if (currentCard) duplicateCurrent();
+      } else if (e.key === 'Escape') {
+        document.querySelectorAll('.dialog-bg.open').forEach(d => d.classList.remove('open'));
+      } else if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+        if (e.key === '1') { switchTab('editor'); }
+        else if (e.key === '2') { switchTab('overview'); }
+        else if (e.key === '3') { switchTab('balance'); }
+      }
+    });
+
+    window.addEventListener('beforeunload', (e) => {
+      if (isDirty) { e.preventDefault(); e.returnValue = '有未儲存的變更，確定離開？'; }
+    });
+
+    // ════════════════════════════════════════════════════════════
+    //  INIT
+    // ════════════════════════════════════════════════════════════
+    (async function init() {
+      populateAllStaticSelects();
+      await Promise.all([loadTags(), loadMonsterFamilies()]);
+      await loadMythosCards();
+    })();
+  </script>
+</body>
+</html>

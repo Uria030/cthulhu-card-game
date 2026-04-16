@@ -1104,6 +1104,295 @@ UPDATE location_style_tags SET
   usage_count = (SELECT COUNT(*) FROM location_tag_map WHERE tag_id = location_style_tags.id);
 `;
 
+// Migration 012: Keeper Designer system (MOD-10)
+const MIGRATION_012_SQL = `
+-- ============================================
+-- Migration 012: Keeper Designer system (MOD-10)
+-- ============================================
+
+-- 神話卡主表
+CREATE TABLE IF NOT EXISTS mythos_cards (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code              VARCHAR(64) UNIQUE NOT NULL,
+  name_zh           VARCHAR(128) NOT NULL,
+  name_en           VARCHAR(128) NOT NULL DEFAULT '',
+  description_zh    TEXT,
+  description_en    TEXT,
+  action_cost       INTEGER NOT NULL DEFAULT 1 CHECK (action_cost >= 0 AND action_cost <= 10),
+  activation_timing VARCHAR(32) NOT NULL DEFAULT 'keeper_phase'
+                    CHECK (activation_timing IN ('investigator_phase_reaction','keeper_phase','both')),
+  card_category     VARCHAR(32) NOT NULL DEFAULT 'general'
+                    CHECK (card_category IN (
+                      'summon','environment','status','global','agenda',
+                      'chaos_bag','encounter','cancel','narrative','general'
+                    )),
+  intensity_tag     VARCHAR(16) NOT NULL DEFAULT 'small'
+                    CHECK (intensity_tag IN ('small','medium','large','epic')),
+  response_trigger  VARCHAR(64),
+  flavor_text_zh    TEXT,
+  flavor_text_en    TEXT,
+  art_url           TEXT,
+  design_notes      TEXT,
+  effect_count      INTEGER NOT NULL DEFAULT 0,
+  sort_order        INTEGER NOT NULL DEFAULT 0,
+  design_status     VARCHAR(16) NOT NULL DEFAULT 'draft'
+                    CHECK (design_status IN ('draft','review','approved')),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mythos_category ON mythos_cards(card_category);
+CREATE INDEX IF NOT EXISTS idx_mythos_timing ON mythos_cards(activation_timing);
+CREATE INDEX IF NOT EXISTS idx_mythos_intensity ON mythos_cards(intensity_tag);
+CREATE INDEX IF NOT EXISTS idx_mythos_status ON mythos_cards(design_status);
+
+-- 神話卡動作子表
+CREATE TABLE IF NOT EXISTS mythos_card_effects (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  mythos_card_id    UUID NOT NULL REFERENCES mythos_cards(id) ON DELETE CASCADE,
+  action_code       VARCHAR(64) NOT NULL,
+  action_params     JSONB NOT NULL DEFAULT '{}',
+  sort_order        INTEGER NOT NULL DEFAULT 0,
+  description_zh    TEXT,
+  description_en    TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mythos_effects_card ON mythos_card_effects(mythos_card_id);
+CREATE INDEX IF NOT EXISTS idx_mythos_effects_action ON mythos_card_effects(action_code);
+
+-- 遭遇卡主表
+CREATE TABLE IF NOT EXISTS encounter_cards (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code              VARCHAR(64) UNIQUE NOT NULL,
+  name_zh           VARCHAR(128) NOT NULL,
+  name_en           VARCHAR(128) NOT NULL DEFAULT '',
+  scenario_text_zh  TEXT NOT NULL DEFAULT '',
+  scenario_text_en  TEXT,
+  encounter_type    VARCHAR(32) NOT NULL DEFAULT 'choice'
+                    CHECK (encounter_type IN ('thriller','choice','trade','puzzle','social','discovery')),
+  art_url           TEXT,
+  design_notes      TEXT,
+  option_count      INTEGER NOT NULL DEFAULT 0,
+  tag_count         INTEGER NOT NULL DEFAULT 0,
+  sort_order        INTEGER NOT NULL DEFAULT 0,
+  design_status     VARCHAR(16) NOT NULL DEFAULT 'draft'
+                    CHECK (design_status IN ('draft','review','approved')),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_encounter_type ON encounter_cards(encounter_type);
+CREATE INDEX IF NOT EXISTS idx_encounter_status ON encounter_cards(design_status);
+
+-- 遭遇卡選項子表
+CREATE TABLE IF NOT EXISTS encounter_card_options (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  encounter_card_id UUID NOT NULL REFERENCES encounter_cards(id) ON DELETE CASCADE,
+  option_label      VARCHAR(4) NOT NULL,
+  option_text_zh    TEXT NOT NULL DEFAULT '',
+  option_text_en    TEXT,
+  requires_check    BOOLEAN NOT NULL DEFAULT TRUE,
+  check_attribute   VARCHAR(16),
+  check_dc          INTEGER,
+  success_narrative_zh  TEXT,
+  success_narrative_en  TEXT,
+  success_effects       JSONB NOT NULL DEFAULT '[]',
+  failure_narrative_zh  TEXT,
+  failure_narrative_en  TEXT,
+  failure_effects       JSONB NOT NULL DEFAULT '[]',
+  no_check_narrative_zh TEXT,
+  no_check_narrative_en TEXT,
+  no_check_effects      JSONB NOT NULL DEFAULT '[]',
+  sort_order        INTEGER NOT NULL DEFAULT 0,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (encounter_card_id, option_label)
+);
+
+CREATE INDEX IF NOT EXISTS idx_encounter_options_card ON encounter_card_options(encounter_card_id);
+
+-- 遭遇卡 ↔ 地點風格標籤多對多（FK 到 MOD-08 的 location_style_tags）
+CREATE TABLE IF NOT EXISTS encounter_card_tag_map (
+  encounter_card_id UUID NOT NULL REFERENCES encounter_cards(id) ON DELETE CASCADE,
+  tag_id            UUID NOT NULL REFERENCES location_style_tags(id) ON DELETE CASCADE,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (encounter_card_id, tag_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_encounter_tag_map_card ON encounter_card_tag_map(encounter_card_id);
+CREATE INDEX IF NOT EXISTS idx_encounter_tag_map_tag ON encounter_card_tag_map(tag_id);
+
+-- 全域遊戲平衡參數
+CREATE TABLE IF NOT EXISTS game_balance_settings (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  setting_key     VARCHAR(64) UNIQUE NOT NULL,
+  setting_group   VARCHAR(32) NOT NULL,
+  name_zh         VARCHAR(128) NOT NULL,
+  name_en         VARCHAR(128),
+  description_zh  TEXT,
+  description_en  TEXT,
+  value           JSONB NOT NULL,
+  value_type      VARCHAR(16) NOT NULL DEFAULT 'number'
+                  CHECK (value_type IN ('number','formula','table','text','boolean')),
+  is_editable     BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order      INTEGER NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_balance_group ON game_balance_settings(setting_group);
+
+-- ============================================
+-- Seed: 12 平衡參數
+-- ============================================
+INSERT INTO game_balance_settings (setting_key, setting_group, name_zh, description_zh, value, value_type, sort_order) VALUES
+  ('keeper_action_base_difficulty_1', 'keeper_action_points', '難度 1（簡單）基礎點數', '關卡難度為 1 時，城主每回合獲得的基礎行動點', '{"value": 2}'::jsonb, 'number', 1),
+  ('keeper_action_base_difficulty_2', 'keeper_action_points', '難度 2（標準）基礎點數', '關卡難度為 2 時，城主每回合獲得的基礎行動點', '{"value": 3}'::jsonb, 'number', 2),
+  ('keeper_action_base_difficulty_3', 'keeper_action_points', '難度 3（困難）基礎點數', '關卡難度為 3 時，城主每回合獲得的基礎行動點', '{"value": 4}'::jsonb, 'number', 3),
+  ('keeper_action_base_difficulty_4', 'keeper_action_points', '難度 4（專家）基礎點數', '關卡難度為 4 時，城主每回合獲得的基礎行動點', '{"value": 5}'::jsonb, 'number', 4),
+  ('keeper_action_base_difficulty_5', 'keeper_action_points', '難度 5（噩夢）基礎點數', '關卡難度為 5 時，城主每回合獲得的基礎行動點', '{"value": 6}'::jsonb, 'number', 5),
+  ('keeper_action_per_player', 'keeper_action_points', '人數加成', '每多一名玩家（從第 2 人開始），城主每回合額外獲得的行動點', '{"value": 2}'::jsonb, 'number', 6),
+  ('keeper_action_accumulation', 'keeper_action_points', '跨回合累積', '城主未花費的行動點是否可跨回合累積', '{"value": true}'::jsonb, 'boolean', 7),
+  ('keeper_action_max_accumulation', 'keeper_action_points', '累積上限', '城主行動點的累積上限（0 = 無上限）', '{"value": 0}'::jsonb, 'number', 8),
+  ('monster_upgrade_minion_to_threat', 'monster_upgrade_costs', '雜兵 → 威脅', '將召喚的怪物從雜兵升階為威脅，需額外支付的行動點', '{"value": 2}'::jsonb, 'number', 1),
+  ('monster_upgrade_threat_to_elite', 'monster_upgrade_costs', '威脅 → 精英', '將召喚的怪物從威脅升階為精英，需額外支付的行動點', '{"value": 3}'::jsonb, 'number', 2),
+  ('monster_upgrade_elite_to_boss', 'monster_upgrade_costs', '精英 → 頭目', '將召喚的怪物從精英升階為頭目，需額外支付的行動點', '{"value": 4}'::jsonb, 'number', 3),
+  ('monster_upgrade_boss_to_titan', 'monster_upgrade_costs', '頭目 → 巨頭', '將召喚的怪物從頭目升階為巨頭，需額外支付的行動點（巨頭級需關卡設計允許）', '{"value": 5}'::jsonb, 'number', 4)
+ON CONFLICT (setting_key) DO NOTHING;
+
+-- ============================================
+-- Seed: 5 範例神話卡
+-- ============================================
+INSERT INTO mythos_cards (code, name_zh, name_en, description_zh, action_cost, activation_timing, card_category, intensity_tag, flavor_text_zh, design_status) VALUES
+  ('mc_deep_call', '深淵呼喚', 'Call of the Deep', '從深淵中召喚一隻克蘇魯眷族的怪物。', 2, 'keeper_phase', 'summon', 'small', '鹹濕的風從遠方吹來，海浪聲中夾雜著某種古老的節奏——牠們來了。', 'approved'),
+  ('mc_doom_advance', '末日推進', 'Doom Advance', '加速議程推進速度。', 1, 'keeper_phase', 'agenda', 'small', '時鐘指針加速轉動，某種不祥的計畫正在成熟。', 'approved'),
+  ('mc_darkness_falls', '黑暗降臨', 'Darkness Falls', '全場地點陷入黑暗，並對理智最低的調查員施加發瘋狀態。', 3, 'keeper_phase', 'environment', 'medium', '光源一個接一個熄滅，彷彿被無形之物吞噬。有人開始聽見不該聽見的聲音。', 'approved'),
+  ('mc_creeping_madness', '瀰漫的瘋狂', 'Creeping Madness', '所有調查員承受 1 點恐懼傷害。', 4, 'keeper_phase', 'global', 'medium', '某種不可名狀的低語同時在每個人的耳邊響起，用的是他們最親近之人的聲音。', 'approved')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO mythos_cards (code, name_zh, name_en, description_zh, action_cost, activation_timing, card_category, intensity_tag, response_trigger, flavor_text_zh, design_status) VALUES
+  ('mc_ill_omen', '不祥預感', 'Ill Omen', '響應調查員的攻擊行動，強制其重擲並取較差結果。', 2, 'investigator_phase_reaction', 'cancel', 'small', 'investigator_attacks', '就在扣下扳機的瞬間，一股寒意從脊椎竄上。時間彷彿慢了下來，你聽見了自己的心跳，以及——另一個東西的心跳。', 'approved')
+ON CONFLICT (code) DO NOTHING;
+
+-- 神話卡的動作（用 SELECT WHERE NOT EXISTS 確保冪等）
+INSERT INTO mythos_card_effects (mythos_card_id, action_code, action_params, description_zh, sort_order)
+SELECT id, 'summon_monster', '{"family_code":"house_cthulhu","quantity":1,"base_tier":1,"location_rule":"nearest_to_clue"}'::jsonb,
+  '從克蘇魯眷族池中召喚 1 隻雜兵級怪物於最靠近線索的地點', 0
+FROM mythos_cards WHERE code='mc_deep_call'
+  AND NOT EXISTS (SELECT 1 FROM mythos_card_effects WHERE mythos_card_id = mythos_cards.id);
+
+INSERT INTO mythos_card_effects (mythos_card_id, action_code, action_params, description_zh, sort_order)
+SELECT id, 'advance_agenda', '{"doom_tokens":2}'::jsonb, '議程牌堆放置 2 個毀滅標記', 0
+FROM mythos_cards WHERE code='mc_doom_advance'
+  AND NOT EXISTS (SELECT 1 FROM mythos_card_effects WHERE mythos_card_id = mythos_cards.id);
+
+INSERT INTO mythos_card_effects (mythos_card_id, action_code, action_params, description_zh, sort_order)
+SELECT id, 'environment_change', '{"change_type":"darkness","target_location_rule":"all_locations"}'::jsonb, '所有地點進入黑暗狀態', 0
+FROM mythos_cards WHERE code='mc_darkness_falls'
+  AND NOT EXISTS (SELECT 1 FROM mythos_card_effects WHERE mythos_card_id = mythos_cards.id);
+
+INSERT INTO mythos_card_effects (mythos_card_id, action_code, action_params, description_zh, sort_order)
+SELECT id, 'inflict_status', '{"status_code":"madness","value":1,"target_rule":"lowest_san"}'::jsonb, '對理智最低的調查員施加 1 點發瘋狀態', 1
+FROM mythos_cards WHERE code='mc_darkness_falls'
+  AND NOT EXISTS (SELECT 1 FROM mythos_card_effects WHERE mythos_card_id = mythos_cards.id AND sort_order=1);
+
+INSERT INTO mythos_card_effects (mythos_card_id, action_code, action_params, description_zh, sort_order)
+SELECT id, 'damage_all', '{"damage_physical":0,"damage_horror":1,"target_rule":"all_investigators"}'::jsonb, '所有調查員承受 1 點恐懼傷害', 0
+FROM mythos_cards WHERE code='mc_creeping_madness'
+  AND NOT EXISTS (SELECT 1 FROM mythos_card_effects WHERE mythos_card_id = mythos_cards.id);
+
+INSERT INTO mythos_card_effects (mythos_card_id, action_code, action_params, description_zh, sort_order)
+SELECT id, 'force_reroll', '{"target_rule":"last_attacker","use_worse_result":true}'::jsonb, '強制攻擊方重擲，取較差結果', 0
+FROM mythos_cards WHERE code='mc_ill_omen'
+  AND NOT EXISTS (SELECT 1 FROM mythos_card_effects WHERE mythos_card_id = mythos_cards.id);
+
+-- ============================================
+-- Seed: 2 範例遭遇卡（依賴 MOD-08 的 location_style_tags 已 seed 過 23 個標籤）
+-- ============================================
+INSERT INTO encounter_cards (code, name_zh, name_en, scenario_text_zh, encounter_type, design_status) VALUES
+  ('ec_library_whispers', '書架間的低語', 'Whispers Between the Shelves',
+   '你正在書架之間尋找線索，忽然從深處傳來若有似無的低語。仔細一聽，那聲音用的是你某位已故親人的口吻。',
+   'choice', 'approved'),
+  ('ec_graveyard_call', '墓地的呼喚', 'Call from the Grave',
+   '當你走過墓碑之間，一座新翻的墳墓突然開始震動。泥土從墓碑旁滑落，某種東西正從下方掙扎著要出來。',
+   'thriller', 'approved')
+ON CONFLICT (code) DO NOTHING;
+
+-- 標籤關聯
+INSERT INTO encounter_card_tag_map (encounter_card_id, tag_id)
+SELECT (SELECT id FROM encounter_cards WHERE code='ec_library_whispers'), id
+FROM location_style_tags WHERE code IN ('indoor_library','indoor_mansion')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO encounter_card_tag_map (encounter_card_id, tag_id)
+SELECT (SELECT id FROM encounter_cards WHERE code='ec_graveyard_call'), id
+FROM location_style_tags WHERE code='outdoor_graveyard'
+ON CONFLICT DO NOTHING;
+
+-- 選項：書架間的低語（A/B/C）
+INSERT INTO encounter_card_options (encounter_card_id, option_label, option_text_zh, requires_check, check_attribute, check_dc,
+  success_narrative_zh, success_effects, failure_narrative_zh, failure_effects, sort_order)
+SELECT id, 'A', '上前傾聽聲音的來源', TRUE, 'willpower', 4,
+  '你穩住心神，靠近那個聲音。在書架最深處的地上，你發現了一張泛黃的紙條——上面記載著某個你一直在追查的線索。',
+  '[{"action_code":"gain_clue","params":{"amount":2}}]'::jsonb,
+  '那聲音越來越清晰，開始呼喚你的名字。你試圖逃離，但某種無形的存在已經在你心裡扎根。',
+  '[{"action_code":"horror","params":{"amount":2}},{"action_code":"inflict_status","params":{"status_code":"madness","value":1}}]'::jsonb,
+  0
+FROM encounter_cards WHERE code='ec_library_whispers'
+  AND NOT EXISTS (SELECT 1 FROM encounter_card_options WHERE encounter_card_id=encounter_cards.id AND option_label='A');
+
+INSERT INTO encounter_card_options (encounter_card_id, option_label, option_text_zh, requires_check, check_attribute, check_dc,
+  success_narrative_zh, success_effects, failure_narrative_zh, failure_effects, sort_order)
+SELECT id, 'B', '大聲念出驅魔咒文，驅趕這個幻象', TRUE, 'willpower', 6,
+  '你的聲音響徹圖書館，低語戛然而止。你感覺到某種東西被迫退去，同時你的精神也得到了鍛鍊。',
+  '[{"action_code":"heal_horror","params":{"amount":1}},{"action_code":"gain_xp","params":{"amount":1}}]'::jsonb,
+  '你的咒文失敗了，而那個聲音現在在笑。笑聲充滿整個圖書館，其他調查員也聽見了。',
+  '[{"action_code":"advance_agenda","params":{"doom_tokens":1}}]'::jsonb,
+  1
+FROM encounter_cards WHERE code='ec_library_whispers'
+  AND NOT EXISTS (SELECT 1 FROM encounter_card_options WHERE encounter_card_id=encounter_cards.id AND option_label='B');
+
+INSERT INTO encounter_card_options (encounter_card_id, option_label, option_text_zh, requires_check,
+  no_check_narrative_zh, no_check_effects, sort_order)
+SELECT id, 'C', '什麼都不聽，立刻離開這區域', FALSE,
+  '你強迫自己轉身離開，耳邊的低語逐漸遠去。你感到一陣疲憊，但至少保住了理智。',
+  '[{"action_code":"inflict_status","params":{"status_code":"fatigue","value":1}}]'::jsonb,
+  2
+FROM encounter_cards WHERE code='ec_library_whispers'
+  AND NOT EXISTS (SELECT 1 FROM encounter_card_options WHERE encounter_card_id=encounter_cards.id AND option_label='C');
+
+-- 選項：墓地的呼喚（A/B）
+INSERT INTO encounter_card_options (encounter_card_id, option_label, option_text_zh, requires_check, check_attribute, check_dc,
+  success_narrative_zh, success_effects, failure_narrative_zh, failure_effects, sort_order)
+SELECT id, 'A', '拿起武器準備戰鬥', TRUE, 'agility', 4,
+  '你迅速抽出武器擺好架式。從墳墓爬出的食屍鬼被你的氣勢震懾，轉身逃入夜色中。',
+  '[{"action_code":"gain_xp","params":{"amount":1}}]'::jsonb,
+  '你的反應太慢了。食屍鬼撲上來給了你一下，然後遁入地底。',
+  '[{"action_code":"damage","params":{"amount":2}}]'::jsonb,
+  0
+FROM encounter_cards WHERE code='ec_graveyard_call'
+  AND NOT EXISTS (SELECT 1 FROM encounter_card_options WHERE encounter_card_id=encounter_cards.id AND option_label='A');
+
+INSERT INTO encounter_card_options (encounter_card_id, option_label, option_text_zh, requires_check, check_attribute, check_dc,
+  success_narrative_zh, success_effects, failure_narrative_zh, failure_effects, sort_order)
+SELECT id, 'B', '嘗試與它溝通', TRUE, 'charisma', 5,
+  '令人意外地，它對你的話語有了反應。它用破碎的語言告訴你一些這片墓地的秘密。',
+  '[{"action_code":"gain_clue","params":{"amount":2}},{"action_code":"horror","params":{"amount":1}}]'::jsonb,
+  '它對你發出刺耳的嘶吼，然後撲向你的臉。',
+  '[{"action_code":"damage","params":{"amount":1}},{"action_code":"horror","params":{"amount":2}}]'::jsonb,
+  1
+FROM encounter_cards WHERE code='ec_graveyard_call'
+  AND NOT EXISTS (SELECT 1 FROM encounter_card_options WHERE encounter_card_id=encounter_cards.id AND option_label='B');
+
+-- 同步計數
+UPDATE mythos_cards SET effect_count = (SELECT COUNT(*) FROM mythos_card_effects WHERE mythos_card_id = mythos_cards.id);
+UPDATE encounter_cards SET
+  option_count = (SELECT COUNT(*) FROM encounter_card_options WHERE encounter_card_id = encounter_cards.id),
+  tag_count = (SELECT COUNT(*) FROM encounter_card_tag_map WHERE encounter_card_id = encounter_cards.id);
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -1119,6 +1408,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_009_SQL);
     await client.query(MIGRATION_010_SQL);
     await client.query(MIGRATION_011_SQL);
+    await client.query(MIGRATION_012_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

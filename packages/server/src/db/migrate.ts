@@ -918,6 +918,192 @@ INSERT INTO monster_species (family_id,code,name_zh,name_en,description_zh,tier_
 ON CONFLICT (code) DO NOTHING;
 `;
 
+// Migration 011: Location library system (MOD-08)
+const MIGRATION_011_SQL = `
+-- ============================================
+-- Migration 011: Location library system (MOD-08)
+-- ============================================
+
+-- 重建 locations：從 v0.1 schema 掛在 scenarios 底下，獨立成「地點庫」
+DROP TABLE IF EXISTS locations CASCADE;
+
+CREATE TABLE locations (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code            VARCHAR(64) UNIQUE NOT NULL,
+  name_zh         VARCHAR(128) NOT NULL,
+  name_en         VARCHAR(128) NOT NULL DEFAULT '',
+  description_zh  TEXT,
+  description_en  TEXT,
+
+  -- 視覺素材
+  art_url         TEXT,
+  svg_code        TEXT,
+  art_type        VARCHAR(16) NOT NULL DEFAULT 'none'
+                  CHECK (art_type IN ('none','image_url','svg_generated','svg_custom')),
+
+  -- 尺度標籤
+  scale_tag       VARCHAR(32),
+
+  -- 地點屬性
+  shroud          INTEGER NOT NULL DEFAULT 2,
+  clues_base      INTEGER NOT NULL DEFAULT 1,
+  clues_per_player BOOLEAN NOT NULL DEFAULT TRUE,
+  travel_cost     INTEGER NOT NULL DEFAULT 1,
+  travel_cost_type VARCHAR(16) NOT NULL DEFAULT 'action_point'
+                  CHECK (travel_cost_type IN ('action_point','time')),
+
+  -- 可發現的卡片資源
+  discoverable_card_ids UUID[] NOT NULL DEFAULT '{}',
+
+  -- 設計備註
+  design_notes    TEXT,
+
+  -- 中繼資料
+  hidden_info_count INTEGER NOT NULL DEFAULT 0,
+  tag_count       INTEGER NOT NULL DEFAULT 0,
+  usage_count     INTEGER NOT NULL DEFAULT 0,
+  sort_order      INTEGER NOT NULL DEFAULT 0,
+  design_status   VARCHAR(16) NOT NULL DEFAULT 'draft'
+                  CHECK (design_status IN ('draft','review','approved')),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_locations_code ON locations(code);
+CREATE INDEX IF NOT EXISTS idx_locations_scale ON locations(scale_tag);
+CREATE INDEX IF NOT EXISTS idx_locations_status ON locations(design_status);
+
+-- 隱藏資訊子表
+CREATE TABLE IF NOT EXISTS location_hidden_info (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  location_id       UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  title_zh          VARCHAR(128),
+  title_en          VARCHAR(128),
+  description_zh    TEXT NOT NULL DEFAULT '',
+  description_en    TEXT,
+  reveal_condition_type VARCHAR(32) NOT NULL DEFAULT 'perception_threshold'
+                    CHECK (reveal_condition_type IN ('perception_threshold','investigation_count','manual','none')),
+  reveal_condition_params JSONB NOT NULL DEFAULT '{}',
+  reward_type       VARCHAR(32) NOT NULL DEFAULT 'narrative_only'
+                    CHECK (reward_type IN ('narrative_only','clue','card','effect')),
+  reward_params     JSONB NOT NULL DEFAULT '{}',
+  sort_order        INTEGER NOT NULL DEFAULT 0,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_hidden_info_location ON location_hidden_info(location_id);
+
+-- 風格標籤主表
+CREATE TABLE IF NOT EXISTS location_style_tags (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code            VARCHAR(64) UNIQUE NOT NULL,
+  name_zh         VARCHAR(64) NOT NULL,
+  name_en         VARCHAR(64) NOT NULL DEFAULT '',
+  category        VARCHAR(16) NOT NULL DEFAULT 'custom'
+                  CHECK (category IN ('indoor','outdoor','special','custom')),
+  description     TEXT,
+  usage_count     INTEGER NOT NULL DEFAULT 0,
+  sort_order      INTEGER NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_style_tags_category ON location_style_tags(category);
+
+-- 地點 ↔ 標籤多對多
+CREATE TABLE IF NOT EXISTS location_tag_map (
+  location_id     UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  tag_id          UUID NOT NULL REFERENCES location_style_tags(id) ON DELETE CASCADE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (location_id, tag_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tag_map_location ON location_tag_map(location_id);
+CREATE INDEX IF NOT EXISTS idx_tag_map_tag ON location_tag_map(tag_id);
+
+-- Seed: 23 預設風格標籤（室內 9 + 室外 8 + 特殊 6）
+INSERT INTO location_style_tags (code, name_zh, name_en, category, sort_order) VALUES
+  ('indoor_mansion',    '宅邸',     'Mansion',         'indoor',  1),
+  ('indoor_library',    '圖書館',   'Library',         'indoor',  2),
+  ('indoor_lab',        '實驗室',   'Laboratory',      'indoor',  3),
+  ('indoor_church',     '教堂',     'Church',          'indoor',  4),
+  ('indoor_tavern',     '酒館',     'Tavern',          'indoor',  5),
+  ('indoor_theater',    '劇院',     'Theater',         'indoor',  6),
+  ('indoor_basement',   '地下室',   'Basement',        'indoor',  7),
+  ('indoor_hospital',   '醫院',     'Hospital',        'indoor',  8),
+  ('indoor_museum',     '博物館',   'Museum',          'indoor',  9),
+  ('outdoor_street',    '街道',     'Street',          'outdoor', 10),
+  ('outdoor_forest',    '森林',     'Forest',          'outdoor', 11),
+  ('outdoor_seaside',   '海邊',     'Seaside',         'outdoor', 12),
+  ('outdoor_graveyard', '墓地',     'Graveyard',       'outdoor', 13),
+  ('outdoor_farmland',  '農田',     'Farmland',        'outdoor', 14),
+  ('outdoor_mountain',  '山區',     'Mountain',        'outdoor', 15),
+  ('outdoor_harbor',    '港口',     'Harbor',          'outdoor', 16),
+  ('outdoor_pier',      '碼頭',     'Pier',            'outdoor', 17),
+  ('special_gate',      '次元門',   'Dimensional Gate','special', 18),
+  ('special_ritual',    '儀式場',   'Ritual Site',     'special', 19),
+  ('special_dreamland', '幻夢境',   'Dreamland',       'special', 20),
+  ('special_ruins',     '遺跡',     'Ruins',           'special', 21),
+  ('special_ship',      '船上',     'Ship',            'special', 22),
+  ('special_dream',     '夢境',     'Dream',           'special', 23)
+ON CONFLICT (code) DO NOTHING;
+
+-- Seed: 3 範例地點
+INSERT INTO locations (code, name_zh, name_en, description_zh, scale_tag, shroud, clues_base, clues_per_player, travel_cost, travel_cost_type, art_type, design_status) VALUES
+('miskatonic_library', '密斯卡塔尼克大學圖書館', 'Miskatonic University Library',
+ '阿卡姆最古老的學術機構，藏有無數禁忌典籍。圖書館的深處據說有只有少數人知道的秘密書庫。',
+ 'room', 3, 2, TRUE, 1, 'action_point', 'none', 'draft'),
+('innsmouth_pier', '印斯茅斯碼頭', 'Innsmouth Pier',
+ '腐朽的木板在海風中發出呻吟。遠處的礁石上，隱約可見類人生物的輪廓在月光下移動。',
+ 'block', 2, 1, TRUE, 1, 'action_point', 'none', 'draft'),
+('arkham_downtown', '阿卡姆市中心', 'Arkham Downtown',
+ '麻州東北部最古老的城鎮，充斥著殖民時期的老建築與現代文明的奇異混合。',
+ 'city', 2, 1, FALSE, 1, 'time', 'none', 'draft')
+ON CONFLICT (code) DO NOTHING;
+
+-- 為範例地點掛上標籤
+INSERT INTO location_tag_map (location_id, tag_id)
+SELECT (SELECT id FROM locations WHERE code='miskatonic_library'), id
+FROM location_style_tags WHERE code IN ('indoor_library','indoor_mansion')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO location_tag_map (location_id, tag_id)
+SELECT (SELECT id FROM locations WHERE code='innsmouth_pier'), id
+FROM location_style_tags WHERE code IN ('outdoor_pier','outdoor_seaside','outdoor_harbor')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO location_tag_map (location_id, tag_id)
+SELECT (SELECT id FROM locations WHERE code='arkham_downtown'), id
+FROM location_style_tags WHERE code='outdoor_street'
+ON CONFLICT DO NOTHING;
+
+-- 範例隱藏資訊
+INSERT INTO location_hidden_info (location_id, title_zh, description_zh, reveal_condition_type, reveal_condition_params, reward_type, reward_params)
+SELECT id, '禁書區的暗門',
+  '你在書架最深處發現一塊與周圍不同的磚石。輕輕按下，一道暗門緩緩開啟，露出通往地下的石階。',
+  'perception_threshold', '{"threshold": 4}'::jsonb,
+  'clue', '{"amount": 2}'::jsonb
+FROM locations WHERE code='miskatonic_library'
+  AND NOT EXISTS (SELECT 1 FROM location_hidden_info WHERE location_id = locations.id AND title_zh='禁書區的暗門');
+
+INSERT INTO location_hidden_info (location_id, title_zh, description_zh, reveal_condition_type, reveal_condition_params, reward_type, reward_params)
+SELECT id, '漂流瓶中的紙條',
+  '你在礁石縫隙中發現一個發黃的漂流瓶，裡面是一張用血跡斑斑的字跡寫成的求救信。',
+  'investigation_count', '{"count": 2}'::jsonb,
+  'narrative_only', '{}'::jsonb
+FROM locations WHERE code='innsmouth_pier'
+  AND NOT EXISTS (SELECT 1 FROM location_hidden_info WHERE location_id = locations.id AND title_zh='漂流瓶中的紙條');
+
+-- 同步中繼計數
+UPDATE locations SET
+  hidden_info_count = (SELECT COUNT(*) FROM location_hidden_info WHERE location_id = locations.id),
+  tag_count = (SELECT COUNT(*) FROM location_tag_map WHERE location_id = locations.id);
+
+UPDATE location_style_tags SET
+  usage_count = (SELECT COUNT(*) FROM location_tag_map WHERE tag_id = location_style_tags.id);
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -932,6 +1118,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_008_SQL);
     await client.query(MIGRATION_009_SQL);
     await client.query(MIGRATION_010_SQL);
+    await client.query(MIGRATION_011_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

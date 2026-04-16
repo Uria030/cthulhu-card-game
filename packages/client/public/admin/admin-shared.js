@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.6.1';
+const ADMIN_VERSION = '0.7.0';
 
 // ============================================
 // API 設定
@@ -450,6 +450,49 @@ const FACTION_ATTRIBUTES = {
   F: { primary: 'willpower',    secondary: 'charisma',   zh: '聖燼', en: 'Ember',   color: '#B84C4C' },
   J: { primary: 'constitution', secondary: 'strength',   zh: '鐵壁', en: 'Bastion', color: '#6B6B6B' },
   P: { primary: 'agility',      secondary: 'perception', zh: '流影', en: 'Flux',    color: '#2D8B6F' },
+};
+
+// ============================================
+// 地點設計器常數 (MOD-08)
+// ============================================
+const LOCATION_SCALES = {
+  room:    { name_zh: '房間級', name_en: 'Room',    example: '宅邸的各個房間' },
+  block:   { name_zh: '街區級', name_en: 'Block',   example: '城鎮的各個區域' },
+  city:    { name_zh: '城市級', name_en: 'City',    example: '不同城鎮之間' },
+  country: { name_zh: '跨國級', name_en: 'Country', example: '不同國家之間' },
+};
+
+const TRAVEL_COST_TYPES = {
+  action_point: { name_zh: '行動點', name_en: 'Action Point', note: '地點內行動' },
+  time:         { name_zh: '時間',   name_en: 'Time',         note: '大尺度場景的地點間移動' },
+};
+
+const LOCATION_ART_TYPES = {
+  none:          { name_zh: '無視覺素材',     name_en: 'None' },
+  image_url:     { name_zh: '上傳圖片',       name_en: 'Uploaded Image' },
+  svg_generated: { name_zh: 'AI 生成 SVG',   name_en: 'AI Generated SVG' },
+  svg_custom:    { name_zh: '自訂 SVG',      name_en: 'Custom SVG' },
+};
+
+const REVEAL_CONDITION_TYPES = {
+  perception_threshold: { name_zh: '感知門檻',     name_en: 'Perception Threshold', note: '進入地點時自動檢查' },
+  investigation_count:  { name_zh: '調查次數',     name_en: 'Investigation Count',  note: '累積調查成功 N 次' },
+  manual:               { name_zh: '手動揭露',     name_en: 'Manual',               note: '關卡編輯器指定觸發條件' },
+  none:                 { name_zh: '無條件',       name_en: 'None',                 note: '進入地點即顯示' },
+};
+
+const REVEAL_REWARD_TYPES = {
+  narrative_only: { name_zh: '純敘事', name_en: 'Narrative Only', note: '無機制效果' },
+  clue:           { name_zh: '線索',   name_en: 'Clue',           note: '給予線索' },
+  card:           { name_zh: '卡片',   name_en: 'Card',           note: '給予特定卡片' },
+  effect:         { name_zh: '效果',   name_en: 'Effect',         note: '觸發其他效果' },
+};
+
+const TAG_CATEGORY_LABELS = {
+  indoor:  { name_zh: '室內類', name_en: 'Indoor' },
+  outdoor: { name_zh: '室外類', name_en: 'Outdoor' },
+  special: { name_zh: '特殊類', name_en: 'Special' },
+  custom:  { name_zh: '自訂類', name_en: 'Custom' },
 };
 
 /* ── 工具函數 ── */

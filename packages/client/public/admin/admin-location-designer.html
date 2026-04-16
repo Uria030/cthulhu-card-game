@@ -1,0 +1,1921 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>地點設計器 — Admin Module</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    /* ── Layout ── */
+    .main-layout { display: flex; gap: 0; min-height: calc(100vh - 50px); }
+    .panel-left {
+      position: fixed; top: 50px; left: 0; bottom: 0; width: 320px;
+      background: var(--bg-secondary); border-right: 1px solid var(--border);
+      overflow-y: auto; z-index: 50; transition: transform 0.25s ease;
+      display: flex; flex-direction: column;
+    }
+    .panel-left.collapsed { transform: translateX(-100%); }
+    .panel-main { flex: 1; margin-left: 320px; padding: 1rem 1.5rem 5rem; overflow-y: auto; transition: margin-left 0.25s ease; }
+    .panel-main.expanded { margin-left: 0; }
+
+    /* ── Toolbar ── */
+    .toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+    .toolbar .spacer { flex: 1; }
+    .tab-group { display: flex; gap: 0; }
+    .tab-btn { padding: 0.45rem 1.25rem; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary);
+      cursor: pointer; font-size: 0.875rem; font-family: 'Noto Sans TC', sans-serif; transition: all 0.2s; }
+    .tab-btn:first-child { border-radius: 6px 0 0 6px; }
+    .tab-btn:last-child { border-radius: 0 6px 6px 0; }
+    .tab-btn.active { background: var(--gold); color: var(--bg-primary); border-color: var(--gold); font-weight: 500; }
+
+    /* ── Left Panel — search + filter ── */
+    .filter-block { padding: 0.875rem 1rem; border-bottom: 1px solid var(--border); }
+    .filter-block label { font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 0.25rem; display: block; }
+    .filter-block input, .filter-block select { font-size: 0.8125rem; padding: 0.4rem 0.625rem; margin-bottom: 0.5rem; }
+    .filter-block input:last-of-type, .filter-block select:last-of-type { margin-bottom: 0; }
+
+    /* ── Left Panel — location list ── */
+    .loc-list { flex: 1; overflow-y: auto; padding: 0.5rem; }
+    .loc-card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.625rem 0.75rem; margin-bottom: 0.5rem; cursor: pointer; transition: all 0.15s;
+    }
+    .loc-card:hover { border-color: var(--gold-dim); background: var(--bg-card-hover); }
+    .loc-card.active { border-color: var(--gold); box-shadow: 0 0 12px var(--gold-glow); }
+    .loc-thumb {
+      width: 100%; height: 80px; background: var(--bg-primary); border-radius: 4px;
+      margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center;
+      color: var(--text-tertiary); font-size: 1.5rem; overflow: hidden;
+    }
+    .loc-thumb svg, .loc-thumb img { max-width: 100%; max-height: 100%; }
+    .loc-name { font-size: 0.875rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.25rem; }
+    .loc-meta { font-size: 0.6875rem; color: var(--text-tertiary); line-height: 1.5; font-family: 'JetBrains Mono', monospace; }
+    .loc-tags { font-size: 0.6875rem; color: var(--text-secondary); margin-top: 0.25rem; }
+
+    .loc-empty { padding: 2rem 1rem; text-align: center; color: var(--text-tertiary); font-size: 0.875rem; }
+
+    .add-block { padding: 0.75rem; border-top: 1px solid var(--border); }
+    .add-block .btn { width: 100%; justify-content: center; }
+
+    /* ── Section ── */
+    .section-card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+      padding: 1.25rem; margin-bottom: 1rem;
+    }
+    .section-title {
+      font-family: 'Cinzel', serif; font-size: 0.9375rem; color: var(--gold);
+      margin: 0 0 1rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+      cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .section-title::before { content: '\25BE'; font-size: 0.75rem; transition: transform 0.15s; color: var(--gold-dim); }
+    .section-title.collapsed::before { transform: rotate(-90deg); }
+    .section-content { transition: max-height 0.25s ease; overflow: hidden; }
+    .section-content.collapsed { max-height: 0 !important; padding: 0; margin: 0; }
+
+    /* ── Form ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .form-grid .triple { grid-column: span 1; }
+    .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group label { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; }
+    .form-row { display: flex; gap: 0.5rem; align-items: center; }
+    .check-row { display: flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0; }
+    .check-row input[type="checkbox"] { width: auto; }
+
+    /* ── Stat box ── */
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; }
+    .stat-box {
+      background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.75rem; text-align: center;
+    }
+    .stat-box label { font-size: 0.6875rem; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-box input { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 1.125rem; padding: 0.375rem; margin-top: 0.375rem; }
+    .stat-box select { font-size: 0.8125rem; margin-top: 0.375rem; }
+    .stat-hint { font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem; }
+
+    /* ── Tag chip ── */
+    .tag-chip {
+      display: inline-flex; align-items: center; gap: 0.25rem;
+      padding: 0.25rem 0.625rem; border-radius: 14px;
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      font-size: 0.75rem; margin: 0.125rem; cursor: pointer; transition: all 0.15s;
+    }
+    .tag-chip:hover { border-color: var(--gold-dim); background: var(--bg-card-hover); }
+    .tag-chip.selected { background: var(--gold-glow); border-color: var(--gold); color: var(--gold); }
+    .tag-chip .tag-x { color: var(--text-tertiary); margin-left: 0.25rem; }
+    .tag-chip:hover .tag-x { color: var(--danger); }
+    .tag-cat-block { margin-bottom: 0.75rem; }
+    .tag-cat-label { font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 0.25rem; font-family: 'Cinzel', serif; }
+    .tag-cat-empty { font-size: 0.75rem; color: var(--text-tertiary); font-style: italic; padding: 0.25rem 0; }
+
+    /* ── SVG Preview ── */
+    .svg-preview {
+      width: 100%; min-height: 280px; max-height: 420px; background: white; border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.5rem; display: flex; align-items: center; justify-content: center;
+      margin: 0.75rem 0; overflow: hidden;
+    }
+    .svg-preview svg { max-width: 100%; max-height: 400px; display: block; }
+    .svg-preview img { max-width: 100%; max-height: 400px; display: block; }
+    .svg-preview .placeholder {
+      color: #999; font-size: 0.875rem; text-align: center;
+    }
+    .art-type-radios { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.5rem; }
+    .art-type-radios label { display: inline-flex; align-items: center; gap: 0.25rem; cursor: pointer; font-size: 0.8125rem; }
+    .art-type-radios input[type="radio"] { width: auto; }
+
+    /* ── Hidden info card ── */
+    .hidden-card {
+      background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.75rem 1rem; margin-bottom: 0.5rem;
+    }
+    .hidden-card .hc-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.375rem; }
+    .hidden-card .hc-title { font-weight: 500; font-size: 0.9375rem; flex: 1; }
+    .hidden-card .hc-meta { font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 0.25rem; }
+    .hidden-card .hc-desc { font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 0.375rem; line-height: 1.5; }
+    .hidden-card .hc-actions { display: flex; gap: 0.375rem; justify-content: flex-end; }
+
+    /* ── Card chip (for discoverable cards) ── */
+    .card-chip {
+      display: inline-flex; align-items: center; gap: 0.25rem;
+      padding: 0.25rem 0.625rem; border-radius: 4px;
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      font-size: 0.75rem; margin: 0.125rem;
+    }
+
+    /* ── Floating Save Button ── */
+    .floating-save {
+      position: fixed; bottom: 1.5rem; right: 2rem; z-index: 100;
+      padding: 0.75rem 1.5rem; font-weight: 500;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      transition: all 0.2s;
+    }
+    .floating-save.dirty { box-shadow: 0 0 24px var(--gold-glow), 0 4px 16px rgba(0,0,0,0.5); animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 16px var(--gold-glow), 0 4px 16px rgba(0,0,0,0.5); }
+      50% { box-shadow: 0 0 32px var(--gold-glow), 0 4px 16px rgba(0,0,0,0.5); }
+    }
+
+    /* ── Dialog ── */
+    .dialog-bg {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.75); z-index: 200; align-items: center; justify-content: center;
+    }
+    .dialog-bg.open { display: flex; }
+    .dialog {
+      background: var(--bg-secondary); border: 1px solid var(--border-hover); border-radius: 10px;
+      padding: 1.5rem; max-width: 600px; width: 90vw; max-height: 90vh; overflow-y: auto;
+    }
+    .dialog.dialog-wide { max-width: 900px; }
+    .dialog-title { font-family: 'Cinzel', serif; color: var(--gold); margin-bottom: 1rem; font-size: 1.0625rem; }
+    .dialog-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+
+    /* ── Tag manage list ── */
+    .tag-manage-row {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);
+    }
+    .tag-manage-row:hover { background: var(--bg-secondary); }
+    .tag-manage-name { flex: 1; }
+    .tag-manage-code { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); margin-left: 0.5rem; }
+    .tag-manage-usage { font-size: 0.75rem; color: var(--text-tertiary); }
+
+    /* ── Overview ── */
+    .overview-block { margin-bottom: 1.25rem; }
+    .overview-bar { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; }
+    .overview-bar-label { width: 80px; font-size: 0.8125rem; color: var(--text-secondary); }
+    .overview-bar-fill { background: var(--gold-glow); border-left: 3px solid var(--gold-dim); padding: 0.125rem 0.5rem; font-size: 0.75rem; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; }
+    .overview-progress { width: 100%; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 0.375rem 0; }
+    .overview-progress-fill { height: 100%; background: var(--gold); transition: width 0.3s; }
+    .quality-row { padding: 0.5rem 0; font-size: 0.875rem; border-bottom: 1px solid var(--border); }
+    .quality-row:last-child { border-bottom: none; }
+    .quality-ok { color: var(--success); }
+    .quality-warn { color: var(--warning); }
+    .quality-err { color: var(--danger); }
+
+    /* ── Empty State ── */
+    .empty-main {
+      text-align: center; padding: 6rem 2rem; color: var(--text-tertiary);
+    }
+    .empty-main .icon { font-size: 4rem; opacity: 0.3; margin-bottom: 1rem; }
+    .empty-main .text { font-family: 'Cinzel', serif; color: var(--text-secondary); font-size: 1.0625rem; }
+
+    /* ── Completeness Check ── */
+    .completeness {
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem;
+    }
+    .completeness-title { font-size: 0.8125rem; color: var(--gold-dim); margin-bottom: 0.5rem; font-family: 'Cinzel', serif; }
+    .completeness-row { font-size: 0.8125rem; padding: 0.125rem 0; }
+    .completeness-suggest {
+      margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);
+      font-size: 0.8125rem; color: var(--gold);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 1024px) {
+      .panel-left { width: 280px; }
+      .panel-main { margin-left: 280px; }
+      .form-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .panel-left { transform: translateX(-100%); width: 280px; }
+      .panel-left.collapsed { transform: translateX(0); }
+      .panel-main { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="admin-nav">
+    <a href="index.html" class="nav-back">&larr; 返回首頁</a>
+    <button class="btn" onclick="toggleLeftPanel()" style="padding:0.25rem 0.5rem;font-size:0.75rem;" title="切換面板">&#9776;</button>
+    <span class="nav-title">地點設計器</span>
+    <span class="nav-code">MOD-08</span>
+  </nav>
+
+  <div class="main-layout">
+    <!-- Left Panel -->
+    <div class="panel-left" id="panelLeft">
+      <div class="filter-block">
+        <label>🔍 搜尋地點</label>
+        <input id="searchInput" placeholder="名稱或描述..." oninput="onFilterChange()">
+        <label>尺度</label>
+        <select id="filterScale" onchange="onFilterChange()">
+          <option value="">全部</option>
+          <option value="room">房間級</option>
+          <option value="block">街區級</option>
+          <option value="city">城市級</option>
+          <option value="country">跨國級</option>
+          <option value="__unset">未設定</option>
+        </select>
+        <label>風格</label>
+        <select id="filterTag" onchange="onFilterChange()">
+          <option value="">全部標籤</option>
+        </select>
+        <label>狀態</label>
+        <select id="filterStatus" onchange="onFilterChange()">
+          <option value="">全部</option>
+          <option value="draft">草稿</option>
+          <option value="review">審核</option>
+          <option value="approved">定稿</option>
+        </select>
+      </div>
+      <div class="loc-list" id="locList"></div>
+      <div class="add-block">
+        <button class="btn btn-primary" onclick="openCreateDialog()">+ 新增地點 (Ctrl+N)</button>
+      </div>
+    </div>
+
+    <!-- Main Panel -->
+    <div class="panel-main" id="panelMain">
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="tab-group">
+          <button class="tab-btn active" data-tab="editor" onclick="switchTab('editor')">🗺 地點編輯</button>
+          <button class="tab-btn" data-tab="tags" onclick="switchTab('tags')">🏷 標籤管理</button>
+          <button class="tab-btn" data-tab="overview" onclick="switchTab('overview')">📊 總覽</button>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn" onclick="promptApiKey()">🤖 設定 Gemini Key</button>
+      </div>
+
+      <!-- ──────────── Tab 1: Editor ──────────── -->
+      <div id="tabEditor">
+        <div id="editorEmpty" class="empty-main">
+          <div class="icon">🗺</div>
+          <div class="text">從左側選擇一個地點，或新增一個來開始設計</div>
+        </div>
+
+        <div id="editorBody" style="display:none;">
+          <!-- Completeness check -->
+          <div class="completeness" id="completenessBox"></div>
+
+          <!-- Section 1: Basic Info -->
+          <div class="section-card">
+            <div class="section-title" onclick="toggleSection('secBasic')">📝 基本資訊</div>
+            <div class="section-content" id="secBasic">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>代碼（不可改）</label>
+                  <input id="f_code" readonly style="font-family:'JetBrains Mono',monospace;background:var(--bg-secondary);color:var(--text-tertiary);">
+                </div>
+                <div class="form-group">
+                  <label>設計狀態</label>
+                  <select id="f_design_status" onchange="markDirty()">
+                    <option value="draft">草稿 (draft)</option>
+                    <option value="review">審核 (review)</option>
+                    <option value="approved">定稿 (approved)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>中文名</label>
+                  <input id="f_name_zh" oninput="markDirty()">
+                </div>
+                <div class="form-group">
+                  <label>英文名</label>
+                  <input id="f_name_en" oninput="markDirty()">
+                </div>
+                <div class="form-group">
+                  <label>尺度標籤</label>
+                  <div class="form-row">
+                    <select id="f_scale_select" onchange="onScaleSelectChange()" style="flex:1">
+                      <option value="">未設定</option>
+                      <option value="room">房間級 (room)</option>
+                      <option value="block">街區級 (block)</option>
+                      <option value="city">城市級 (city)</option>
+                      <option value="country">跨國級 (country)</option>
+                      <option value="__custom">自訂...</option>
+                    </select>
+                    <input id="f_scale_custom" placeholder="自訂尺度文字" style="flex:1;display:none;" oninput="markDirty()">
+                  </div>
+                </div>
+                <div class="form-group full">
+                  <label>描述（中文）</label>
+                  <textarea id="f_description_zh" rows="3" oninput="markDirty()"></textarea>
+                </div>
+                <div class="form-group full">
+                  <label>描述（英文）</label>
+                  <div class="form-row">
+                    <textarea id="f_description_en" rows="3" style="flex:1" oninput="markDirty()"></textarea>
+                    <button class="btn" onclick="aiTranslateDesc()" style="white-space:nowrap;align-self:flex-start;">AI 翻譯</button>
+                  </div>
+                </div>
+                <div class="form-group full">
+                  <label>設計備註</label>
+                  <textarea id="f_design_notes" rows="2" oninput="markDirty()"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Core Attributes -->
+          <div class="section-card">
+            <div class="section-title" onclick="toggleSection('secAttrs')">⚙ 核心屬性</div>
+            <div class="section-content" id="secAttrs">
+              <div class="stat-grid">
+                <div class="stat-box">
+                  <label>調查 DC</label>
+                  <input id="f_shroud" type="number" min="0" max="20" oninput="markDirty()">
+                  <div class="stat-hint">建議：1–6</div>
+                </div>
+                <div class="stat-box">
+                  <label>基礎線索</label>
+                  <input id="f_clues_base" type="number" min="0" max="10" oninput="markDirty()">
+                  <div class="stat-hint">建議：0–4</div>
+                </div>
+                <div class="stat-box">
+                  <label>按人數縮放</label>
+                  <select id="f_clues_per_player" onchange="markDirty()">
+                    <option value="true">是</option>
+                    <option value="false">否</option>
+                  </select>
+                  <div class="stat-hint">×玩家數</div>
+                </div>
+                <div class="stat-box">
+                  <label>移動費用</label>
+                  <input id="f_travel_cost" type="number" min="0" max="10" oninput="markDirty()">
+                  <div class="stat-hint">建議：1–3</div>
+                </div>
+                <div class="stat-box">
+                  <label>費用類型</label>
+                  <select id="f_travel_cost_type" onchange="markDirty()">
+                    <option value="action_point">行動點</option>
+                    <option value="time">時間</option>
+                  </select>
+                  <div class="stat-hint">大尺度→時間</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: Style Tags -->
+          <div class="section-card">
+            <div class="section-title" onclick="toggleSection('secTags')">🏷 風格標籤</div>
+            <div class="section-content" id="secTags">
+              <div style="margin-bottom:0.75rem;">
+                <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.375rem;">已選標籤</div>
+                <div id="selectedTagsBox" style="min-height:32px;padding:0.25rem 0;">
+                  <span style="color:var(--text-tertiary);font-size:0.8125rem;">尚未選擇標籤</span>
+                </div>
+              </div>
+              <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.375rem;">新增標籤（點擊加入）</div>
+              <div id="availableTagsBox"></div>
+            </div>
+          </div>
+
+          <!-- Section 4: Visual Asset -->
+          <div class="section-card">
+            <div class="section-title" onclick="toggleSection('secArt')">🎨 視覺素材</div>
+            <div class="section-content" id="secArt">
+              <div class="art-type-radios">
+                <label><input type="radio" name="art_type" value="none" onchange="onArtTypeChange()"> 無視覺素材</label>
+                <label><input type="radio" name="art_type" value="image_url" onchange="onArtTypeChange()"> 上傳圖片</label>
+                <label><input type="radio" name="art_type" value="svg_generated" onchange="onArtTypeChange()"> AI 生成 SVG</label>
+                <label><input type="radio" name="art_type" value="svg_custom" onchange="onArtTypeChange()"> 自訂 SVG</label>
+              </div>
+
+              <div id="artImageBlock" style="display:none;">
+                <input id="f_art_url" placeholder="圖片 URL（建議用穩定的 CDN 連結）" oninput="markDirty();updateSvgPreview();">
+              </div>
+
+              <div id="artSvgBlock" style="display:none;">
+                <div class="form-row" style="margin-bottom:0.5rem;">
+                  <input id="f_svg_prompt" placeholder="輸入地點描述（例如：圖書館，有大量書架、一張書桌、一個壁爐）" style="flex:1;">
+                  <button class="btn" onclick="generateSVG()" id="btnGenSVG">🤖 生成 SVG (Ctrl+G)</button>
+                  <button class="btn" onclick="openSvgEditor()">✏ 編輯</button>
+                  <button class="btn btn-danger" onclick="clearSVG()">🗑 清除</button>
+                </div>
+                <div id="svgGenStatus" style="font-size:0.75rem;color:var(--text-tertiary);min-height:1em;margin-bottom:0.25rem;"></div>
+              </div>
+
+              <div class="svg-preview" id="svgPreview">
+                <div class="placeholder">無視覺素材</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 5: Hidden Info -->
+          <div class="section-card">
+            <div class="section-title" onclick="toggleSection('secHidden')">🔎 隱藏資訊 <span id="hiddenCountBadge" style="font-size:0.75rem;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;margin-left:0.5rem;">(0)</span></div>
+            <div class="section-content" id="secHidden">
+              <div id="hiddenList"></div>
+              <button class="btn" onclick="openHiddenInfoDialog()">+ 新增隱藏資訊</button>
+            </div>
+          </div>
+
+          <!-- Section 6: Discoverable Cards -->
+          <div class="section-card">
+            <div class="section-title" onclick="toggleSection('secCards')">🎴 可發現的卡片資源 <span id="cardsCountBadge" style="font-size:0.75rem;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;margin-left:0.5rem;">(0)</span></div>
+            <div class="section-content" id="secCards">
+              <div id="discoverableCardsBox" style="min-height:32px;margin-bottom:0.5rem;">
+                <span style="color:var(--text-tertiary);font-size:0.8125rem;">尚未指定可發現的卡片</span>
+              </div>
+              <button class="btn" onclick="openCardPickerDialog()">+ 新增卡片</button>
+            </div>
+          </div>
+
+          <!-- Bottom action bar -->
+          <div style="margin-top:1rem;display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;">
+            <button class="btn" onclick="duplicateLocation()">📋 複製 (Ctrl+D)</button>
+            <button class="btn btn-danger" onclick="deleteLocation()">🗑 刪除地點</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ──────────── Tab 2: Tags ──────────── -->
+      <div id="tabTags" style="display:none;">
+        <div class="section-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h2 style="font-size:1.125rem;margin:0;">風格標籤管理</h2>
+            <button class="btn btn-primary" onclick="openTagDialog(null)">+ 新增標籤</button>
+          </div>
+          <div id="tagsManageBody"></div>
+        </div>
+      </div>
+
+      <!-- ──────────── Tab 3: Overview ──────────── -->
+      <div id="tabOverview" style="display:none;">
+        <div class="section-card">
+          <h2 style="font-size:1.125rem;margin:0 0 1rem;">📊 地點庫總覽</h2>
+          <div id="overviewBody"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Floating Save -->
+  <button class="btn btn-primary floating-save" id="floatingSaveBtn" onclick="saveLocation()" style="display:none;">💾 儲存 (Ctrl+S)</button>
+
+  <!-- ────────── Dialogs ────────── -->
+
+  <!-- Create Dialog -->
+  <div class="dialog-bg" id="dlgCreate">
+    <div class="dialog">
+      <div class="dialog-title">新增地點</div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>代碼（小寫+底線）</label>
+          <input id="d_code" placeholder="例如：miskatonic_library" style="font-family:'JetBrains Mono',monospace;">
+        </div>
+        <div class="form-group">
+          <label>中文名</label>
+          <input id="d_name_zh">
+        </div>
+        <div class="form-group">
+          <label>英文名</label>
+          <input id="d_name_en">
+        </div>
+        <div class="form-group full">
+          <label>初始尺度</label>
+          <select id="d_scale">
+            <option value="room">房間級</option>
+            <option value="block">街區級</option>
+            <option value="city">城市級</option>
+            <option value="country">跨國級</option>
+            <option value="">未設定</option>
+          </select>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgCreate')">取消</button>
+        <button class="btn btn-primary" onclick="confirmCreate()">建立</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden Info Dialog -->
+  <div class="dialog-bg" id="dlgHidden">
+    <div class="dialog">
+      <div class="dialog-title" id="dlgHiddenTitle">編輯隱藏資訊</div>
+      <input type="hidden" id="hi_id">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>標題（中文）</label>
+          <input id="hi_title_zh">
+        </div>
+        <div class="form-group">
+          <label>標題（英文）</label>
+          <input id="hi_title_en">
+        </div>
+        <div class="form-group full">
+          <label>描述（中文）</label>
+          <textarea id="hi_description_zh" rows="3"></textarea>
+        </div>
+        <div class="form-group full">
+          <label>描述（英文）</label>
+          <textarea id="hi_description_en" rows="2"></textarea>
+        </div>
+        <div class="form-group full">
+          <label>揭露條件</label>
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+            <label style="display:inline-flex;align-items:center;gap:0.25rem;cursor:pointer;font-size:0.8125rem;"><input type="radio" name="reveal_type" value="perception_threshold" onchange="onRevealTypeChange()" style="width:auto"> 感知門檻</label>
+            <label style="display:inline-flex;align-items:center;gap:0.25rem;cursor:pointer;font-size:0.8125rem;"><input type="radio" name="reveal_type" value="investigation_count" onchange="onRevealTypeChange()" style="width:auto"> 調查次數</label>
+            <label style="display:inline-flex;align-items:center;gap:0.25rem;cursor:pointer;font-size:0.8125rem;"><input type="radio" name="reveal_type" value="manual" onchange="onRevealTypeChange()" style="width:auto"> 手動</label>
+            <label style="display:inline-flex;align-items:center;gap:0.25rem;cursor:pointer;font-size:0.8125rem;"><input type="radio" name="reveal_type" value="none" onchange="onRevealTypeChange()" style="width:auto"> 無條件</label>
+          </div>
+          <div id="revealParamPerception" style="display:none;">
+            <label style="font-size:0.75rem;">感知值門檻</label>
+            <input id="hi_threshold" type="number" min="1" max="10" value="3">
+          </div>
+          <div id="revealParamCount" style="display:none;">
+            <label style="font-size:0.75rem;">所需調查成功次數</label>
+            <input id="hi_count" type="number" min="1" max="10" value="2">
+          </div>
+        </div>
+        <div class="form-group full">
+          <label>獎勵類型</label>
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+            <label style="display:inline-flex;align-items:center;gap:0.25rem;cursor:pointer;font-size:0.8125rem;"><input type="radio" name="reward_type" value="narrative_only" onchange="onRewardTypeChange()" style="width:auto"> 純敘事</label>
+            <label style="display:inline-flex;align-items:center;gap:0.25rem;cursor:pointer;font-size:0.8125rem;"><input type="radio" name="reward_type" value="clue" onchange="onRewardTypeChange()" style="width:auto"> 線索</label>
+            <label style="display:inline-flex;align-items:center;gap:0.25rem;cursor:pointer;font-size:0.8125rem;"><input type="radio" name="reward_type" value="card" onchange="onRewardTypeChange()" style="width:auto"> 卡片</label>
+            <label style="display:inline-flex;align-items:center;gap:0.25rem;cursor:pointer;font-size:0.8125rem;"><input type="radio" name="reward_type" value="effect" onchange="onRewardTypeChange()" style="width:auto"> 效果</label>
+          </div>
+          <div id="rewardParamClue" style="display:none;">
+            <label style="font-size:0.75rem;">線索數量</label>
+            <input id="hi_clue_amount" type="number" min="1" max="10" value="1">
+          </div>
+          <div id="rewardParamCard" style="display:none;">
+            <label style="font-size:0.75rem;">卡片代碼（暫以文字輸入）</label>
+            <input id="hi_card_code" placeholder="card_def_id 或留空">
+          </div>
+          <div id="rewardParamEffect" style="display:none;">
+            <label style="font-size:0.75rem;">效果描述</label>
+            <textarea id="hi_effect_desc" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgHidden')">取消</button>
+        <button class="btn btn-primary" onclick="saveHiddenInfo()">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SVG Editor Dialog -->
+  <div class="dialog-bg" id="dlgSvg">
+    <div class="dialog dialog-wide">
+      <div class="dialog-title">編輯 SVG 程式碼</div>
+      <textarea id="svgCodeArea" rows="14" style="font-family:'JetBrains Mono',monospace;font-size:0.8125rem;" oninput="updateSvgEditorPreview()"></textarea>
+      <div style="margin-top:0.75rem;font-size:0.75rem;color:var(--text-tertiary);">即時預覽：</div>
+      <div class="svg-preview" id="svgEditorPreview" style="min-height:240px;">
+        <div class="placeholder">輸入 SVG 後預覽</div>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgSvg')">取消</button>
+        <button class="btn btn-primary" onclick="saveSvgFromEditor()">儲存 SVG</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tag Edit Dialog -->
+  <div class="dialog-bg" id="dlgTag">
+    <div class="dialog">
+      <div class="dialog-title" id="dlgTagTitle">新增標籤</div>
+      <input type="hidden" id="tag_id">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>代碼</label>
+          <input id="tag_code" placeholder="例如：custom_secret_room" style="font-family:'JetBrains Mono',monospace;">
+        </div>
+        <div class="form-group">
+          <label>中文名</label>
+          <input id="tag_name_zh">
+        </div>
+        <div class="form-group">
+          <label>英文名</label>
+          <input id="tag_name_en">
+        </div>
+        <div class="form-group">
+          <label>分類</label>
+          <select id="tag_category">
+            <option value="indoor">室內類</option>
+            <option value="outdoor">室外類</option>
+            <option value="special">特殊類</option>
+            <option value="custom">自訂類</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>排序</label>
+          <input id="tag_sort_order" type="number" value="99">
+        </div>
+        <div class="form-group full">
+          <label>描述（選填）</label>
+          <textarea id="tag_description" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgTag')">取消</button>
+        <button class="btn btn-primary" onclick="saveTag()">儲存標籤</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card Picker Dialog -->
+  <div class="dialog-bg" id="dlgCardPicker">
+    <div class="dialog dialog-wide">
+      <div class="dialog-title">選擇卡片</div>
+      <div style="margin-bottom:0.75rem;">
+        <input id="cardSearchInput" placeholder="🔍 搜尋卡片名稱..." oninput="filterCardPicker()">
+      </div>
+      <div id="cardPickerList" style="max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:0.5rem;"></div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgCardPicker')">取消</button>
+        <button class="btn btn-primary" onclick="confirmCardPick()">加入選取的卡片</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Dialog -->
+  <div class="dialog-bg" id="dlgDelete">
+    <div class="dialog">
+      <div class="dialog-title">⚠ 確認刪除</div>
+      <div id="dlgDeleteBody" style="font-size:0.9375rem;color:var(--text-secondary);line-height:1.6;"></div>
+      <div class="dialog-actions">
+        <button class="btn" onclick="closeDialog('dlgDelete')">取消</button>
+        <button class="btn btn-danger" id="dlgDeleteConfirm" onclick="confirmDelete()">確認刪除</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="admin-shared.js"></script>
+  <script>
+    // ════════════════════════════════════════════════════════════
+    //  STATE
+    // ════════════════════════════════════════════════════════════
+    let allLocations = [];     // [{ ...location, tags: [] }]
+    let allTags = { indoor: [], outdoor: [], special: [], custom: [] };
+    let selectedLocId = null;
+    let currentLocation = null; // 完整資料（含 tags + hidden_info）
+    let allCards = [];          // 卡片庫（lazy load）
+    let cardPickerSelections = new Set();
+    let isDirty = false;
+    let pendingDelete = null;   // { type, id, force?, name? }
+
+    // ════════════════════════════════════════════════════════════
+    //  UTILITIES
+    // ════════════════════════════════════════════════════════════
+    const el = (id) => document.getElementById(id);
+    const intVal = (id) => parseInt(el(id).value) || 0;
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+
+    function toggleLeftPanel() {
+      el('panelLeft').classList.toggle('collapsed');
+      el('panelMain').classList.toggle('expanded');
+    }
+
+    function toggleSection(id) {
+      const content = el(id);
+      const title = content.previousElementSibling;
+      content.classList.toggle('collapsed');
+      title.classList.toggle('collapsed');
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+      el('tabEditor').style.display = name === 'editor' ? 'block' : 'none';
+      el('tabTags').style.display = name === 'tags' ? 'block' : 'none';
+      el('tabOverview').style.display = name === 'overview' ? 'block' : 'none';
+      el('floatingSaveBtn').style.display = (name === 'editor' && currentLocation) ? '' : 'none';
+      if (name === 'tags') renderTagManage();
+      if (name === 'overview') loadOverview();
+    }
+
+    function openDialog(id) { el(id).classList.add('open'); }
+    function closeDialog(id) { el(id).classList.remove('open'); }
+
+    function markDirty() {
+      isDirty = true;
+      el('floatingSaveBtn').classList.add('dirty');
+    }
+
+    function clearDirty() {
+      isDirty = false;
+      el('floatingSaveBtn').classList.remove('dirty');
+    }
+
+    function showStatus(elId, text, color) {
+      const e = el(elId);
+      if (!e) return;
+      e.textContent = text;
+      e.style.color = color || 'var(--text-tertiary)';
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  GEMINI API KEY
+    // ════════════════════════════════════════════════════════════
+    function promptApiKey() {
+      const cur = localStorage.getItem('gemini_api_key') || '';
+      const key = prompt('輸入 Gemini API Key（會儲存在這台裝置）', cur);
+      if (key !== null) {
+        if (key.trim() === '') localStorage.removeItem('gemini_api_key');
+        else localStorage.setItem('gemini_api_key', key.trim());
+        alert('已更新');
+      }
+    }
+
+    async function callGemini(promptText, opts = {}) {
+      const key = localStorage.getItem('gemini_api_key');
+      if (!key) {
+        alert('請先設定 Gemini API Key（右上角按鈕）');
+        throw new Error('no_api_key');
+      }
+      const body = {
+        contents: [{ parts: [{ text: promptText }] }],
+        generationConfig: {
+          temperature: opts.temperature ?? 0.7,
+          maxOutputTokens: opts.maxOutputTokens ?? 8192,
+        }
+      };
+      if (opts.responseMimeType) body.generationConfig.responseMimeType = opts.responseMimeType;
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Gemini API 錯誤 ${res.status}: ${errText.slice(0, 200)}`);
+      }
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('Gemini 回傳格式異常');
+      return text;
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  LOCATIONS LIST
+    // ════════════════════════════════════════════════════════════
+    async function loadLocations() {
+      try {
+        const params = new URLSearchParams();
+        const search = el('searchInput').value.trim();
+        const scale = el('filterScale').value;
+        const tag = el('filterTag').value;
+        const status = el('filterStatus').value;
+        if (search) params.set('search', search);
+        if (scale && scale !== '__unset') params.set('scale_tag', scale);
+        if (tag) params.set('style_tag_code', tag);
+        if (status) params.set('design_status', status);
+
+        const res = await adminFetch('/api/admin/locations?' + params.toString());
+        const data = await res.json();
+        allLocations = data.locations || [];
+
+        // 「未設定」尺度的客戶端篩選
+        if (scale === '__unset') {
+          allLocations = allLocations.filter(l => !l.scale_tag);
+        }
+        renderLocList();
+      } catch (e) {
+        console.error(e);
+        el('locList').innerHTML = '<div class="loc-empty">載入失敗</div>';
+      }
+    }
+
+    function renderLocList() {
+      const box = el('locList');
+      if (allLocations.length === 0) {
+        box.innerHTML = '<div class="loc-empty">無符合條件的地點</div>';
+        return;
+      }
+      box.innerHTML = allLocations.map(l => {
+        const tagsTxt = l.tags && l.tags.length > 0
+          ? l.tags.slice(0, 2).map(t => escapeHtml(t.name_zh)).join('・') + (l.tags.length > 2 ? `・+${l.tags.length - 2}` : '')
+          : '<span style="color:var(--text-tertiary);">無標籤</span>';
+        const scale = l.scale_tag ? (LOCATION_SCALES[l.scale_tag]?.name_zh || l.scale_tag) : '未設定';
+        let thumb = '<span>🗺</span>';
+        if (l.art_type === 'image_url' && l.art_url) {
+          thumb = `<img src="${escapeHtml(l.art_url)}" alt="">`;
+        } else if ((l.art_type === 'svg_generated' || l.art_type === 'svg_custom') && l.svg_code) {
+          thumb = l.svg_code;
+        }
+        const statusZh = { draft:'草稿', review:'審核', approved:'定稿' }[l.design_status] || l.design_status;
+        return `
+          <div class="loc-card ${l.id === selectedLocId ? 'active' : ''}" onclick="selectLocation('${l.id}')">
+            <div class="loc-thumb">${thumb}</div>
+            <div class="loc-name">${escapeHtml(l.name_zh)}</div>
+            <div class="loc-meta">📍 ${escapeHtml(scale)} · 🔍 DC ${l.shroud} · 💡 ${l.clues_base}${l.clues_per_player ? '×P' : ''}</div>
+            <div class="loc-meta">🎭 ${escapeHtml(statusZh)} · 📊 用於 ${l.usage_count || 0} 關</div>
+            <div class="loc-tags">${tagsTxt}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function onFilterChange() {
+      loadLocations();
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  LOAD TAGS
+    // ════════════════════════════════════════════════════════════
+    async function loadTags() {
+      try {
+        const res = await adminFetch('/api/admin/locations/tags');
+        const data = await res.json();
+        allTags = data.tags || { indoor: [], outdoor: [], special: [], custom: [] };
+        // populate filter
+        const sel = el('filterTag');
+        sel.innerHTML = '<option value="">全部標籤</option>';
+        for (const cat of ['indoor', 'outdoor', 'special', 'custom']) {
+          const arr = allTags[cat] || [];
+          if (arr.length === 0) continue;
+          const grp = document.createElement('optgroup');
+          grp.label = TAG_CATEGORY_LABELS[cat].name_zh;
+          arr.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.code;
+            opt.textContent = t.name_zh;
+            grp.appendChild(opt);
+          });
+          sel.appendChild(grp);
+        }
+      } catch (e) {
+        console.error('Load tags failed', e);
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  CREATE LOCATION
+    // ════════════════════════════════════════════════════════════
+    function openCreateDialog() {
+      el('d_code').value = '';
+      el('d_name_zh').value = '';
+      el('d_name_en').value = '';
+      el('d_scale').value = 'room';
+      openDialog('dlgCreate');
+      setTimeout(() => el('d_code').focus(), 100);
+    }
+
+    async function confirmCreate() {
+      const code = el('d_code').value.trim();
+      const name_zh = el('d_name_zh').value.trim();
+      if (!code || !name_zh) { alert('代碼與中文名為必填'); return; }
+      if (!/^[a-z0-9_]+$/.test(code)) { alert('代碼僅可使用小寫字母、數字、底線'); return; }
+
+      try {
+        const res = await adminFetch('/api/admin/locations', {
+          method: 'POST',
+          body: JSON.stringify({
+            code, name_zh, name_en: el('d_name_en').value.trim(),
+            scale_tag: el('d_scale').value || null,
+            shroud: 2, clues_base: 1, clues_per_player: true,
+            travel_cost: 1, travel_cost_type: 'action_point',
+          })
+        });
+        if (res.status === 409) { alert('此代碼已存在'); return; }
+        if (!res.ok) { alert('建立失敗'); return; }
+        const data = await res.json();
+        closeDialog('dlgCreate');
+        await loadLocations();
+        selectLocation(data.location.id);
+      } catch (e) {
+        console.error(e);
+        alert('建立失敗：' + e.message);
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  SELECT / LOAD SINGLE LOCATION
+    // ════════════════════════════════════════════════════════════
+    async function selectLocation(id) {
+      if (isDirty && !confirm('有未儲存的變更，是否放棄？')) return;
+      selectedLocId = id;
+      renderLocList();
+      try {
+        const res = await adminFetch(`/api/admin/locations/${id}`);
+        const data = await res.json();
+        currentLocation = data.location;
+        renderEditor();
+        clearDirty();
+      } catch (e) {
+        console.error(e);
+        alert('載入地點失敗');
+      }
+    }
+
+    function renderEditor() {
+      const l = currentLocation;
+      el('editorEmpty').style.display = 'none';
+      el('editorBody').style.display = 'block';
+      el('floatingSaveBtn').style.display = '';
+
+      el('f_code').value = l.code;
+      el('f_design_status').value = l.design_status || 'draft';
+      el('f_name_zh').value = l.name_zh || '';
+      el('f_name_en').value = l.name_en || '';
+      el('f_description_zh').value = l.description_zh || '';
+      el('f_description_en').value = l.description_en || '';
+      el('f_design_notes').value = l.design_notes || '';
+      el('f_shroud').value = l.shroud ?? 2;
+      el('f_clues_base').value = l.clues_base ?? 1;
+      el('f_clues_per_player').value = String(l.clues_per_player ?? true);
+      el('f_travel_cost').value = l.travel_cost ?? 1;
+      el('f_travel_cost_type').value = l.travel_cost_type || 'action_point';
+
+      // Scale select
+      const presetScales = ['room','block','city','country'];
+      if (!l.scale_tag) {
+        el('f_scale_select').value = '';
+        el('f_scale_custom').style.display = 'none';
+      } else if (presetScales.includes(l.scale_tag)) {
+        el('f_scale_select').value = l.scale_tag;
+        el('f_scale_custom').style.display = 'none';
+      } else {
+        el('f_scale_select').value = '__custom';
+        el('f_scale_custom').style.display = '';
+        el('f_scale_custom').value = l.scale_tag;
+      }
+
+      // Art type
+      document.querySelectorAll('input[name="art_type"]').forEach(r => {
+        r.checked = (r.value === (l.art_type || 'none'));
+      });
+      el('f_art_url').value = l.art_url || '';
+      onArtTypeChange();
+      updateSvgPreview();
+
+      // Tags
+      renderTagsSection();
+
+      // Hidden info
+      renderHiddenInfo();
+
+      // Discoverable cards
+      renderDiscoverableCards();
+
+      // Completeness
+      renderCompleteness();
+    }
+
+    function onScaleSelectChange() {
+      const v = el('f_scale_select').value;
+      el('f_scale_custom').style.display = v === '__custom' ? '' : 'none';
+      markDirty();
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  TAGS SECTION (in editor)
+    // ════════════════════════════════════════════════════════════
+    function renderTagsSection() {
+      const selected = currentLocation.tags || [];
+      const selectedIds = new Set(selected.map(t => t.id));
+
+      // Selected box
+      const selBox = el('selectedTagsBox');
+      if (selected.length === 0) {
+        selBox.innerHTML = '<span style="color:var(--text-tertiary);font-size:0.8125rem;">尚未選擇標籤</span>';
+      } else {
+        selBox.innerHTML = selected.map(t =>
+          `<span class="tag-chip selected" onclick="removeTag('${t.id}')">${escapeHtml(t.name_zh)} <span class="tag-x">×</span></span>`
+        ).join('');
+      }
+
+      // Available box
+      const availBox = el('availableTagsBox');
+      let html = '';
+      for (const cat of ['indoor', 'outdoor', 'special', 'custom']) {
+        const arr = (allTags[cat] || []).filter(t => !selectedIds.has(t.id));
+        const allInCat = (allTags[cat] || []).length;
+        html += '<div class="tag-cat-block">';
+        html += `<div class="tag-cat-label">${TAG_CATEGORY_LABELS[cat].name_zh}（${allInCat} 個）</div>`;
+        if (arr.length === 0) {
+          if (allInCat === 0) {
+            html += `<div class="tag-cat-empty">${cat === 'custom' ? '可在「標籤管理」分頁新增' : '無可用標籤'}</div>`;
+          } else {
+            html += '<div class="tag-cat-empty">已全部選用</div>';
+          }
+        } else {
+          html += arr.map(t =>
+            `<span class="tag-chip" onclick="addTag('${t.id}')">${escapeHtml(t.name_zh)}</span>`
+          ).join('');
+        }
+        html += '</div>';
+      }
+      availBox.innerHTML = html;
+    }
+
+    function addTag(tagId) {
+      // 從所有 categories 找這個 tag
+      let tag = null;
+      for (const cat of Object.values(allTags)) {
+        tag = cat.find(t => t.id === tagId);
+        if (tag) break;
+      }
+      if (!tag) return;
+      currentLocation.tags = currentLocation.tags || [];
+      if (currentLocation.tags.some(t => t.id === tagId)) return;
+      currentLocation.tags.push(tag);
+      renderTagsSection();
+      renderCompleteness();
+      markDirty();
+    }
+
+    function removeTag(tagId) {
+      currentLocation.tags = (currentLocation.tags || []).filter(t => t.id !== tagId);
+      renderTagsSection();
+      renderCompleteness();
+      markDirty();
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  ART TYPE / SVG
+    // ════════════════════════════════════════════════════════════
+    function getArtType() {
+      const checked = document.querySelector('input[name="art_type"]:checked');
+      return checked ? checked.value : 'none';
+    }
+
+    function onArtTypeChange() {
+      const t = getArtType();
+      el('artImageBlock').style.display = (t === 'image_url') ? '' : 'none';
+      el('artSvgBlock').style.display = (t === 'svg_generated' || t === 'svg_custom') ? '' : 'none';
+      // 切換 art type 時，若已有舊 SVG 提示
+      if (currentLocation && currentLocation.svg_code && t !== 'svg_generated' && t !== 'svg_custom' && t !== currentLocation.art_type) {
+        if (!confirm('切換視覺類型會清除當前的 SVG 程式碼。是否繼續？')) {
+          // 還原
+          document.querySelectorAll('input[name="art_type"]').forEach(r => {
+            r.checked = (r.value === currentLocation.art_type);
+          });
+          return;
+        }
+        currentLocation.svg_code = null;
+      }
+      currentLocation.art_type = t;
+      updateSvgPreview();
+      markDirty();
+    }
+
+    function updateSvgPreview() {
+      const box = el('svgPreview');
+      const t = getArtType();
+      if (t === 'image_url') {
+        const url = el('f_art_url').value.trim();
+        if (url) {
+          box.innerHTML = `<img src="${escapeHtml(url)}" alt="預覽" onerror="this.parentNode.innerHTML='<div class=\\'placeholder\\'>圖片載入失敗</div>'">`;
+        } else {
+          box.innerHTML = '<div class="placeholder">輸入圖片 URL 後預覽</div>';
+        }
+      } else if (t === 'svg_generated' || t === 'svg_custom') {
+        if (currentLocation && currentLocation.svg_code) {
+          box.innerHTML = currentLocation.svg_code;
+        } else {
+          box.innerHTML = '<div class="placeholder">尚未生成或編輯 SVG</div>';
+        }
+      } else {
+        box.innerHTML = '<div class="placeholder">無視覺素材</div>';
+      }
+    }
+
+    function clearSVG() {
+      if (!confirm('清除 SVG 程式碼？')) return;
+      currentLocation.svg_code = null;
+      updateSvgPreview();
+      markDirty();
+    }
+
+    function buildSvgPrompt(name_zh, scale, prompt) {
+      return `你是一個 TRPG 地圖設計師，專門為克蘇魯神話冒險遊戲製作黑白線稿俯視平面圖。
+請為以下地點生成 SVG 程式碼。
+
+## 地點資訊
+- 名稱：${name_zh}
+- 尺度：${scale}  (room=房間級 / block=街區級)
+- 描述：${prompt}
+
+## SVG 規範
+
+### 畫布
+- viewBox="0 0 600 400"
+- 背景色：white（不加背景矩形）
+- 線條色：black
+- 線條粗細：2px（牆壁）、1px（家具、標籤框）
+
+### 房間輪廓
+- 使用 <rect> 或 <path> 繪製房間牆壁
+- 牆壁用實線
+- 門用線段缺口表示（在牆壁上留空）
+- 窗戶用雙線表示（兩條平行短線）
+
+### 家具與物件
+- 使用簡單幾何符號（書架、書桌、椅子、床、壁爐、樓梯、圓桌、門）
+- 家具的尺寸要合理反映與房間的比例
+
+### 文字標籤
+- 主要物件旁加 <text> 標籤
+- 字型：sans-serif
+- 字號：12px
+- 位置：避免與圖形重疊
+
+### 禁用元素
+- 不使用漸層、陰影、模糊
+- 不使用 fill 的彩色（僅限 white 或 black 或 none）
+- 不使用 filter、mask、pattern、動畫元素
+
+## 輸出格式
+僅輸出 SVG 程式碼，從 <svg ...> 開始，到 </svg> 結束。
+不要加任何其他文字、說明、Markdown 標記。
+不要使用 \`\`\`xml 或 \`\`\`svg 包裹。`;
+    }
+
+    async function generateSVG() {
+      if (!currentLocation) { alert('請先選擇一個地點'); return; }
+      const prompt = el('f_svg_prompt').value.trim();
+      if (!prompt) { alert('請先輸入地點描述'); return; }
+
+      const scale = currentLocation.scale_tag || el('f_scale_select').value || 'room';
+      if (scale && !['room', 'block'].includes(scale)) {
+        if (!confirm('測試版僅支援房間級與街區級的 SVG 生成。當前尺度可能效果不佳，仍要繼續嗎？')) return;
+      }
+
+      const btn = el('btnGenSVG');
+      btn.disabled = true;
+      const oldText = btn.textContent;
+      btn.textContent = '⏳ 生成中...';
+      showStatus('svgGenStatus', '呼叫 Gemini 中...', 'var(--text-tertiary)');
+
+      try {
+        const promptText = buildSvgPrompt(currentLocation.name_zh, scale, prompt);
+        const raw = await callGemini(promptText, { temperature: 0.6, maxOutputTokens: 4096 });
+        let svgCode = raw.trim();
+        svgCode = svgCode.replace(/^```(?:svg|xml)?\n?/, '').replace(/\n?```$/, '').trim();
+        if (!svgCode.startsWith('<svg') || !svgCode.endsWith('</svg>')) {
+          showStatus('svgGenStatus', '⚠ Gemini 回傳的不是有效 SVG，已顯示原始內容供參考', 'var(--warning)');
+          el('svgPreview').innerHTML = `<div class="placeholder" style="color:var(--danger);font-size:0.75rem;text-align:left;padding:0.5rem;white-space:pre-wrap;max-height:280px;overflow:auto;">${escapeHtml(svgCode)}</div>`;
+          return;
+        }
+        currentLocation.svg_code = svgCode;
+        currentLocation.art_type = 'svg_generated';
+        document.querySelectorAll('input[name="art_type"]').forEach(r => { r.checked = (r.value === 'svg_generated'); });
+        onArtTypeChange();
+        updateSvgPreview();
+        showStatus('svgGenStatus', '✓ 生成完成（記得按右下儲存）', 'var(--success)');
+        markDirty();
+      } catch (e) {
+        console.error(e);
+        showStatus('svgGenStatus', '❌ 生成失敗：' + e.message, 'var(--danger)');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
+    }
+
+    function openSvgEditor() {
+      el('svgCodeArea').value = currentLocation.svg_code || '';
+      updateSvgEditorPreview();
+      openDialog('dlgSvg');
+    }
+
+    function updateSvgEditorPreview() {
+      const code = el('svgCodeArea').value.trim();
+      const box = el('svgEditorPreview');
+      if (!code) {
+        box.innerHTML = '<div class="placeholder">輸入 SVG 後預覽</div>';
+        return;
+      }
+      box.innerHTML = code;
+    }
+
+    function saveSvgFromEditor() {
+      const code = el('svgCodeArea').value.trim();
+      if (code && (!code.startsWith('<svg') || !code.endsWith('</svg>'))) {
+        if (!confirm('SVG 格式可能有誤（不是 <svg>...</svg>）。仍要儲存嗎？')) return;
+      }
+      currentLocation.svg_code = code || null;
+      currentLocation.art_type = code ? 'svg_custom' : 'none';
+      document.querySelectorAll('input[name="art_type"]').forEach(r => { r.checked = (r.value === currentLocation.art_type); });
+      onArtTypeChange();
+      updateSvgPreview();
+      markDirty();
+      closeDialog('dlgSvg');
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  HIDDEN INFO
+    // ════════════════════════════════════════════════════════════
+    function renderHiddenInfo() {
+      const list = currentLocation.hidden_info || [];
+      el('hiddenCountBadge').textContent = `(${list.length})`;
+      const box = el('hiddenList');
+      if (list.length === 0) {
+        box.innerHTML = '<div style="color:var(--text-tertiary);font-size:0.8125rem;padding:0.5rem 0 0.75rem;">尚無隱藏資訊</div>';
+        return;
+      }
+      box.innerHTML = list.map((h, idx) => {
+        const condTxt = formatRevealCondition(h);
+        const rewardTxt = formatReward(h);
+        return `
+          <div class="hidden-card">
+            <div class="hc-header">
+              <span style="color:var(--gold-dim);font-family:'JetBrains Mono',monospace;font-size:0.75rem;">#${idx + 1}</span>
+              <div class="hc-title">${escapeHtml(h.title_zh || '（未命名）')}</div>
+            </div>
+            <div class="hc-meta">揭露：${condTxt} · 獎勵：${rewardTxt}</div>
+            <div class="hc-desc">${escapeHtml(h.description_zh || '')}</div>
+            <div class="hc-actions">
+              <button class="btn" onclick="editHiddenInfo('${h.id}')" style="padding:0.25rem 0.625rem;font-size:0.75rem;">編輯</button>
+              <button class="btn btn-danger" onclick="deleteHiddenInfo('${h.id}', '${escapeHtml(h.title_zh || '此筆')}')" style="padding:0.25rem 0.625rem;font-size:0.75rem;">🗑 刪除</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function formatRevealCondition(h) {
+      const t = h.reveal_condition_type;
+      const p = h.reveal_condition_params || {};
+      if (t === 'perception_threshold') return `感知 ≥ ${p.threshold || '?'}`;
+      if (t === 'investigation_count') return `調查成功 ${p.count || '?'} 次`;
+      if (t === 'manual') return '手動觸發';
+      return '無條件';
+    }
+
+    function formatReward(h) {
+      const t = h.reward_type;
+      const p = h.reward_params || {};
+      if (t === 'narrative_only') return '純敘事';
+      if (t === 'clue') return `線索 +${p.amount || 1}`;
+      if (t === 'card') return `卡片：${p.card_def_id || '未指定'}`;
+      if (t === 'effect') return `效果：${(p.description || '').slice(0, 30)}`;
+      return t;
+    }
+
+    function openHiddenInfoDialog() {
+      el('hi_id').value = '';
+      el('hi_title_zh').value = '';
+      el('hi_title_en').value = '';
+      el('hi_description_zh').value = '';
+      el('hi_description_en').value = '';
+      document.querySelector('input[name="reveal_type"][value="perception_threshold"]').checked = true;
+      document.querySelector('input[name="reward_type"][value="narrative_only"]').checked = true;
+      el('hi_threshold').value = 3;
+      el('hi_count').value = 2;
+      el('hi_clue_amount').value = 1;
+      el('hi_card_code').value = '';
+      el('hi_effect_desc').value = '';
+      onRevealTypeChange();
+      onRewardTypeChange();
+      el('dlgHiddenTitle').textContent = '新增隱藏資訊';
+      openDialog('dlgHidden');
+    }
+
+    function editHiddenInfo(id) {
+      const h = (currentLocation.hidden_info || []).find(x => x.id === id);
+      if (!h) return;
+      el('hi_id').value = h.id;
+      el('hi_title_zh').value = h.title_zh || '';
+      el('hi_title_en').value = h.title_en || '';
+      el('hi_description_zh').value = h.description_zh || '';
+      el('hi_description_en').value = h.description_en || '';
+      document.querySelector(`input[name="reveal_type"][value="${h.reveal_condition_type}"]`).checked = true;
+      document.querySelector(`input[name="reward_type"][value="${h.reward_type}"]`).checked = true;
+      const rp = h.reveal_condition_params || {};
+      el('hi_threshold').value = rp.threshold || 3;
+      el('hi_count').value = rp.count || 2;
+      const wp = h.reward_params || {};
+      el('hi_clue_amount').value = wp.amount || 1;
+      el('hi_card_code').value = wp.card_def_id || '';
+      el('hi_effect_desc').value = wp.description || '';
+      onRevealTypeChange();
+      onRewardTypeChange();
+      el('dlgHiddenTitle').textContent = '編輯隱藏資訊';
+      openDialog('dlgHidden');
+    }
+
+    function onRevealTypeChange() {
+      const v = document.querySelector('input[name="reveal_type"]:checked')?.value;
+      el('revealParamPerception').style.display = v === 'perception_threshold' ? '' : 'none';
+      el('revealParamCount').style.display = v === 'investigation_count' ? '' : 'none';
+    }
+
+    function onRewardTypeChange() {
+      const v = document.querySelector('input[name="reward_type"]:checked')?.value;
+      el('rewardParamClue').style.display = v === 'clue' ? '' : 'none';
+      el('rewardParamCard').style.display = v === 'card' ? '' : 'none';
+      el('rewardParamEffect').style.display = v === 'effect' ? '' : 'none';
+    }
+
+    async function saveHiddenInfo() {
+      const id = el('hi_id').value;
+      const revealType = document.querySelector('input[name="reveal_type"]:checked').value;
+      const rewardType = document.querySelector('input[name="reward_type"]:checked').value;
+
+      let revealParams = {};
+      if (revealType === 'perception_threshold') revealParams = { threshold: intVal('hi_threshold') };
+      if (revealType === 'investigation_count') revealParams = { count: intVal('hi_count') };
+
+      let rewardParams = {};
+      if (rewardType === 'clue') rewardParams = { amount: intVal('hi_clue_amount') };
+      if (rewardType === 'card') rewardParams = { card_def_id: el('hi_card_code').value.trim() || null };
+      if (rewardType === 'effect') rewardParams = { description: el('hi_effect_desc').value.trim() };
+
+      const body = {
+        title_zh: el('hi_title_zh').value.trim() || null,
+        title_en: el('hi_title_en').value.trim() || null,
+        description_zh: el('hi_description_zh').value.trim() || '',
+        description_en: el('hi_description_en').value.trim() || null,
+        reveal_condition_type: revealType,
+        reveal_condition_params: revealParams,
+        reward_type: rewardType,
+        reward_params: rewardParams,
+      };
+
+      try {
+        let res;
+        if (id) {
+          res = await adminFetch(`/api/admin/locations/hidden-info/${id}`, {
+            method: 'PUT', body: JSON.stringify(body)
+          });
+        } else {
+          res = await adminFetch(`/api/admin/locations/${currentLocation.id}/hidden-info`, {
+            method: 'POST', body: JSON.stringify(body)
+          });
+        }
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || '儲存失敗');
+          return;
+        }
+        closeDialog('dlgHidden');
+        await reloadCurrentLocation();
+      } catch (e) {
+        console.error(e);
+        alert('儲存失敗：' + e.message);
+      }
+    }
+
+    function deleteHiddenInfo(id, name) {
+      pendingDelete = { type: 'hidden_info', id, name };
+      el('dlgDeleteBody').innerHTML = `即將刪除隱藏資訊「${escapeHtml(name)}」<br>此操作不可復原。`;
+      openDialog('dlgDelete');
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  DISCOVERABLE CARDS
+    // ════════════════════════════════════════════════════════════
+    function renderDiscoverableCards() {
+      const ids = currentLocation.discoverable_card_ids || [];
+      el('cardsCountBadge').textContent = `(${ids.length})`;
+      const box = el('discoverableCardsBox');
+      if (ids.length === 0) {
+        box.innerHTML = '<span style="color:var(--text-tertiary);font-size:0.8125rem;">尚未指定可發現的卡片</span>';
+        return;
+      }
+      box.innerHTML = ids.map(id => {
+        const card = allCards.find(c => c.id === id);
+        const name = card ? card.name_zh : `(${id.slice(0, 8)}...)`;
+        return `<span class="card-chip">🎴 ${escapeHtml(name)} <span style="cursor:pointer;color:var(--text-tertiary);" onclick="removeDiscoverableCard('${id}')">×</span></span>`;
+      }).join('');
+    }
+
+    function removeDiscoverableCard(id) {
+      currentLocation.discoverable_card_ids = (currentLocation.discoverable_card_ids || []).filter(x => x !== id);
+      renderDiscoverableCards();
+      markDirty();
+    }
+
+    async function openCardPickerDialog() {
+      cardPickerSelections = new Set();
+      if (allCards.length === 0) {
+        try {
+          const res = await adminFetch('/api/cards');
+          const data = await res.json();
+          // /api/cards 回傳格式可能 {success,data} 或 {cards}
+          allCards = data.data || data.cards || data || [];
+        } catch (e) {
+          console.error(e);
+          alert('載入卡片庫失敗');
+          return;
+        }
+      }
+      el('cardSearchInput').value = '';
+      renderCardPicker(allCards);
+      openDialog('dlgCardPicker');
+    }
+
+    function renderCardPicker(list) {
+      const existing = new Set(currentLocation.discoverable_card_ids || []);
+      const available = list.filter(c => !existing.has(c.id));
+      if (available.length === 0) {
+        el('cardPickerList').innerHTML = '<div style="padding:1rem;color:var(--text-tertiary);">無更多可選卡片</div>';
+        return;
+      }
+      el('cardPickerList').innerHTML = available.map(c => `
+        <label style="display:flex;align-items:center;gap:0.5rem;padding:0.375rem 0.5rem;cursor:pointer;font-size:0.8125rem;border-bottom:1px solid var(--border);">
+          <input type="checkbox" style="width:auto;" data-id="${c.id}" onchange="toggleCardPick('${c.id}', this.checked)">
+          <span style="flex:1;">🎴 ${escapeHtml(c.name_zh || '(無名)')} <span style="color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;font-size:0.6875rem;">${escapeHtml(c.code || '')}</span></span>
+          <span style="color:var(--text-tertiary);font-size:0.75rem;">${escapeHtml(c.card_type || '')}</span>
+        </label>
+      `).join('');
+    }
+
+    function filterCardPicker() {
+      const q = el('cardSearchInput').value.trim().toLowerCase();
+      if (!q) { renderCardPicker(allCards); return; }
+      renderCardPicker(allCards.filter(c =>
+        (c.name_zh || '').toLowerCase().includes(q) ||
+        (c.name_en || '').toLowerCase().includes(q) ||
+        (c.code || '').toLowerCase().includes(q)
+      ));
+    }
+
+    function toggleCardPick(id, checked) {
+      if (checked) cardPickerSelections.add(id);
+      else cardPickerSelections.delete(id);
+    }
+
+    function confirmCardPick() {
+      const ids = currentLocation.discoverable_card_ids || [];
+      cardPickerSelections.forEach(id => { if (!ids.includes(id)) ids.push(id); });
+      currentLocation.discoverable_card_ids = ids;
+      renderDiscoverableCards();
+      markDirty();
+      closeDialog('dlgCardPicker');
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  AI TRANSLATE (中→英 desc)
+    // ════════════════════════════════════════════════════════════
+    async function aiTranslateDesc() {
+      const zh = el('f_description_zh').value.trim();
+      if (!zh) { alert('請先輸入中文描述'); return; }
+      try {
+        const prompt = `請將以下克蘇魯神話冒險遊戲的地點描述翻譯成英文，保留 1920-30 年代偵探黑色電影 × 宇宙恐怖的氛圍。只輸出英文翻譯，不加任何說明或引號。
+
+中文：${zh}`;
+        const result = await callGemini(prompt, { temperature: 0.4 });
+        el('f_description_en').value = result.trim().replace(/^["']|["']$/g, '');
+        markDirty();
+      } catch (e) {
+        alert('翻譯失敗：' + e.message);
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  COMPLETENESS CHECK
+    // ════════════════════════════════════════════════════════════
+    function renderCompleteness() {
+      const l = currentLocation;
+      const checks = [
+        { ok: !!(l.code && l.name_zh && l.shroud != null && l.clues_base != null), label: '基本資訊完整' },
+        { ok: (l.tags || []).length > 0, label: '至少一個風格標籤' },
+        { ok: l.art_type && l.art_type !== 'none' && (l.art_url || l.svg_code), label: '視覺素材' },
+        { ok: (l.hidden_info || []).length > 0, label: '至少一個隱藏資訊' },
+        { ok: !!(l.design_notes && l.design_notes.trim()), label: '設計備註已填寫' },
+      ];
+      let html = '<div class="completeness-title">設計完整度檢查</div>';
+      for (const c of checks) {
+        html += `<div class="completeness-row">${c.ok ? '<span class="quality-ok">✅</span>' : '<span class="quality-warn">⚠</span>'} ${c.label}</div>`;
+      }
+      const passedCore = checks[0].ok && checks[1].ok && checks[2].ok && checks[3].ok;
+      const allPass = checks.every(c => c.ok);
+      if (allPass) {
+        html += '<div class="completeness-suggest">✦ 此地點設計完整，建議狀態改為 approved</div>';
+      } else if (passedCore) {
+        html += '<div class="completeness-suggest">✦ 核心要素完整，可改為 review</div>';
+      }
+      el('completenessBox').innerHTML = html;
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  SAVE LOCATION
+    // ════════════════════════════════════════════════════════════
+    async function saveLocation() {
+      if (!currentLocation) return;
+      const status = el('f_design_status').value;
+
+      // 客戶端檢查 review/approved 須有標籤
+      if ((status === 'review' || status === 'approved') && (!currentLocation.tags || currentLocation.tags.length === 0)) {
+        alert('狀態改為 review/approved 前需至少一個風格標籤');
+        return;
+      }
+
+      // 組合 scale_tag
+      let scaleTag = el('f_scale_select').value;
+      if (scaleTag === '__custom') scaleTag = el('f_scale_custom').value.trim() || null;
+      if (scaleTag === '') scaleTag = null;
+
+      const body = {
+        name_zh: el('f_name_zh').value.trim(),
+        name_en: el('f_name_en').value.trim(),
+        description_zh: el('f_description_zh').value.trim() || null,
+        description_en: el('f_description_en').value.trim() || null,
+        scale_tag: scaleTag,
+        shroud: intVal('f_shroud'),
+        clues_base: intVal('f_clues_base'),
+        clues_per_player: el('f_clues_per_player').value === 'true',
+        travel_cost: intVal('f_travel_cost'),
+        travel_cost_type: el('f_travel_cost_type').value,
+        art_type: getArtType(),
+        art_url: el('f_art_url').value.trim() || null,
+        design_status: status,
+        design_notes: el('f_design_notes').value.trim() || null,
+        discoverable_card_ids: currentLocation.discoverable_card_ids || [],
+      };
+
+      try {
+        // 1. PUT 主資料
+        const res = await adminFetch(`/api/admin/locations/${currentLocation.id}`, {
+          method: 'PUT', body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || '儲存基本資訊失敗');
+          return;
+        }
+
+        // 2. PUT 標籤（覆寫）
+        const tagIds = (currentLocation.tags || []).map(t => t.id);
+        const tagRes = await adminFetch(`/api/admin/locations/${currentLocation.id}/tags`, {
+          method: 'PUT', body: JSON.stringify({ tag_ids: tagIds })
+        });
+        if (!tagRes.ok) {
+          alert('儲存標籤失敗');
+          return;
+        }
+
+        // 3. PUT SVG（若是 svg_generated 或 svg_custom）
+        const artType = getArtType();
+        if (artType === 'svg_generated' || artType === 'svg_custom') {
+          await adminFetch(`/api/admin/locations/${currentLocation.id}/svg`, {
+            method: 'PUT', body: JSON.stringify({ svg_code: currentLocation.svg_code, art_type: artType })
+          });
+        } else if (currentLocation.svg_code && (artType === 'none' || artType === 'image_url')) {
+          await adminFetch(`/api/admin/locations/${currentLocation.id}/svg`, {
+            method: 'PUT', body: JSON.stringify({ svg_code: null, art_type: artType })
+          });
+          currentLocation.svg_code = null;
+        }
+
+        clearDirty();
+        await loadLocations();
+        await reloadCurrentLocation();
+        showToast('✓ 已儲存');
+      } catch (e) {
+        console.error(e);
+        alert('儲存失敗：' + e.message);
+      }
+    }
+
+    function showToast(msg) {
+      const t = document.createElement('div');
+      t.textContent = msg;
+      t.style.cssText = 'position:fixed;bottom:5rem;right:2rem;z-index:300;background:var(--success);color:var(--bg-primary);padding:0.625rem 1.25rem;border-radius:6px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,0.5);';
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2000);
+    }
+
+    async function reloadCurrentLocation() {
+      if (!currentLocation) return;
+      const res = await adminFetch(`/api/admin/locations/${currentLocation.id}`);
+      const data = await res.json();
+      currentLocation = data.location;
+      renderEditor();
+      clearDirty();
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  DUPLICATE / DELETE LOCATION
+    // ════════════════════════════════════════════════════════════
+    async function duplicateLocation() {
+      if (!currentLocation) return;
+      if (!confirm(`複製「${currentLocation.name_zh}」？`)) return;
+      try {
+        const res = await adminFetch(`/api/admin/locations/${currentLocation.id}/duplicate`, { method: 'POST' });
+        if (!res.ok) { alert('複製失敗'); return; }
+        const data = await res.json();
+        await loadLocations();
+        selectLocation(data.location.id);
+      } catch (e) {
+        alert('複製失敗：' + e.message);
+      }
+    }
+
+    function deleteLocation() {
+      if (!currentLocation) return;
+      const usage = currentLocation.usage_count || 0;
+      const hidden = (currentLocation.hidden_info || []).length;
+      const tags = (currentLocation.tags || []).length;
+      let html = `即將刪除「${escapeHtml(currentLocation.name_zh)}」及其：<br>`;
+      html += `<ul style="margin:0.5rem 0 0.5rem 1.5rem;padding:0;font-size:0.875rem;">`;
+      html += `<li>${hidden} 個隱藏資訊</li>`;
+      html += `<li>${tags} 個標籤關聯</li>`;
+      html += `</ul>`;
+      if (usage > 0) {
+        html += `<div style="color:var(--danger);margin:0.5rem 0;">⚠ 此地點正在被 ${usage} 個關卡使用！<br>刪除將導致這些關卡失去此地點的引用。</div>`;
+      }
+      html += `<div style="color:var(--text-tertiary);font-size:0.8125rem;margin-top:0.5rem;">此操作不可復原。</div>`;
+      pendingDelete = { type: 'location', id: currentLocation.id, force: usage > 0 };
+      el('dlgDeleteBody').innerHTML = html;
+      openDialog('dlgDelete');
+    }
+
+    async function confirmDelete() {
+      if (!pendingDelete) return;
+      try {
+        if (pendingDelete.type === 'location') {
+          const url = `/api/admin/locations/${pendingDelete.id}` + (pendingDelete.force ? '?force=true' : '');
+          const res = await adminFetch(url, { method: 'DELETE' });
+          if (res.status === 409) {
+            const data = await res.json();
+            alert(data.message);
+            return;
+          }
+          if (!res.ok) { alert('刪除失敗'); return; }
+          closeDialog('dlgDelete');
+          currentLocation = null;
+          selectedLocId = null;
+          el('editorEmpty').style.display = '';
+          el('editorBody').style.display = 'none';
+          el('floatingSaveBtn').style.display = 'none';
+          await loadLocations();
+        } else if (pendingDelete.type === 'hidden_info') {
+          const res = await adminFetch(`/api/admin/locations/hidden-info/${pendingDelete.id}`, { method: 'DELETE' });
+          if (!res.ok) { alert('刪除失敗'); return; }
+          closeDialog('dlgDelete');
+          await reloadCurrentLocation();
+        } else if (pendingDelete.type === 'tag') {
+          const res = await adminFetch(`/api/admin/locations/tags/${pendingDelete.id}`, { method: 'DELETE' });
+          if (res.status === 409) {
+            const data = await res.json();
+            const list = (data.using_locations || []).map(l => `- ${l.name_zh}`).join('\n');
+            alert(`${data.message}\n\n使用中的地點：\n${list}`);
+            return;
+          }
+          if (!res.ok) { alert('刪除失敗'); return; }
+          closeDialog('dlgDelete');
+          await loadTags();
+          renderTagManage();
+        }
+      } catch (e) {
+        alert('刪除失敗：' + e.message);
+      } finally {
+        pendingDelete = null;
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  TAG MANAGEMENT TAB
+    // ════════════════════════════════════════════════════════════
+    function renderTagManage() {
+      const box = el('tagsManageBody');
+      let html = '';
+      for (const cat of ['indoor', 'outdoor', 'special', 'custom']) {
+        const arr = allTags[cat] || [];
+        html += `<div class="overview-block">`;
+        html += `<h3 style="font-size:1rem;color:var(--gold-dim);margin-bottom:0.5rem;">${TAG_CATEGORY_LABELS[cat].name_zh}（${arr.length} 個）</h3>`;
+        if (arr.length === 0) {
+          html += `<div style="color:var(--text-tertiary);font-size:0.875rem;padding:0.5rem 0;">尚無此類標籤</div>`;
+        } else {
+          for (const t of arr) {
+            html += `
+              <div class="tag-manage-row">
+                <span class="tag-manage-name">${escapeHtml(t.name_zh)}</span>
+                <span class="tag-manage-code">${escapeHtml(t.code)}</span>
+                <span class="tag-manage-usage">被 ${t.usage_count || 0} 個地點使用</span>
+                <button class="btn" onclick="openTagDialog('${t.id}')" style="padding:0.2rem 0.5rem;font-size:0.75rem;">✏</button>
+                <button class="btn btn-danger" onclick="deleteTag('${t.id}', '${escapeHtml(t.name_zh)}')" style="padding:0.2rem 0.5rem;font-size:0.75rem;">🗑</button>
+              </div>
+            `;
+          }
+        }
+        html += `<div style="margin-top:0.5rem;"><button class="btn" onclick="openTagDialog(null, '${cat}')">+ 新增${TAG_CATEGORY_LABELS[cat].name_zh}標籤</button></div>`;
+        html += `</div>`;
+      }
+      box.innerHTML = html;
+    }
+
+    function openTagDialog(tagId, defaultCat) {
+      el('tag_id').value = tagId || '';
+      if (tagId) {
+        let tag = null;
+        for (const cat of Object.values(allTags)) {
+          tag = cat.find(t => t.id === tagId);
+          if (tag) break;
+        }
+        if (!tag) return;
+        el('dlgTagTitle').textContent = '編輯標籤';
+        el('tag_code').value = tag.code;
+        el('tag_code').readOnly = true;
+        el('tag_name_zh').value = tag.name_zh;
+        el('tag_name_en').value = tag.name_en || '';
+        el('tag_category').value = tag.category;
+        el('tag_sort_order').value = tag.sort_order || 99;
+        el('tag_description').value = tag.description || '';
+      } else {
+        el('dlgTagTitle').textContent = '新增標籤';
+        el('tag_code').value = '';
+        el('tag_code').readOnly = false;
+        el('tag_name_zh').value = '';
+        el('tag_name_en').value = '';
+        el('tag_category').value = defaultCat || 'custom';
+        el('tag_sort_order').value = 99;
+        el('tag_description').value = '';
+      }
+      openDialog('dlgTag');
+    }
+
+    async function saveTag() {
+      const id = el('tag_id').value;
+      const code = el('tag_code').value.trim();
+      const name_zh = el('tag_name_zh').value.trim();
+      if (!code || !name_zh) { alert('代碼與中文名為必填'); return; }
+      const body = {
+        code, name_zh,
+        name_en: el('tag_name_en').value.trim(),
+        category: el('tag_category').value,
+        description: el('tag_description').value.trim() || null,
+        sort_order: intVal('tag_sort_order') || 99,
+      };
+      try {
+        let res;
+        if (id) {
+          res = await adminFetch(`/api/admin/locations/tags/${id}`, {
+            method: 'PUT', body: JSON.stringify(body)
+          });
+        } else {
+          res = await adminFetch('/api/admin/locations/tags', {
+            method: 'POST', body: JSON.stringify(body)
+          });
+        }
+        if (res.status === 409) { alert('代碼已存在'); return; }
+        if (!res.ok) { alert('儲存失敗'); return; }
+        closeDialog('dlgTag');
+        await loadTags();
+        renderTagManage();
+      } catch (e) {
+        alert('儲存失敗：' + e.message);
+      }
+    }
+
+    function deleteTag(id, name) {
+      pendingDelete = { type: 'tag', id, name };
+      el('dlgDeleteBody').innerHTML = `即將刪除標籤「${escapeHtml(name)}」<br>若有地點正在使用此標籤，將拒絕刪除。`;
+      openDialog('dlgDelete');
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  OVERVIEW TAB
+    // ════════════════════════════════════════════════════════════
+    async function loadOverview() {
+      try {
+        const res = await adminFetch('/api/admin/locations/stats/overview');
+        const data = await res.json();
+        renderOverview(data);
+      } catch (e) {
+        console.error(e);
+        el('overviewBody').innerHTML = '<div style="color:var(--danger);">載入失敗</div>';
+      }
+    }
+
+    function renderOverview(d) {
+      const total = d.total_locations || 0;
+      const completed = d.by_status.approved || 0;
+      const pct = total > 0 ? Math.round(completed / total * 100) : 0;
+
+      let html = '';
+
+      // 設計進度
+      html += '<div class="overview-block">';
+      html += '<h3 style="font-size:1rem;color:var(--gold-dim);margin-bottom:0.5rem;">設計進度</h3>';
+      html += `<div style="margin-bottom:0.25rem;">總地點數：<strong>${total}</strong></div>`;
+      html += `<div style="font-size:0.875rem;color:var(--text-secondary);margin-bottom:0.5rem;">草稿 ${d.by_status.draft||0}　·　審核 ${d.by_status.review||0}　·　定稿 ${d.by_status.approved||0}</div>`;
+      html += `<div class="overview-progress"><div class="overview-progress-fill" style="width:${pct}%;"></div></div>`;
+      html += `<div style="font-size:0.8125rem;color:var(--text-tertiary);">完成度 ${pct}%</div>`;
+      html += '</div>';
+
+      // 尺度分佈
+      html += '<div class="overview-block">';
+      html += '<h3 style="font-size:1rem;color:var(--gold-dim);margin-bottom:0.5rem;">尺度分佈</h3>';
+      const maxScale = Math.max(1, ...Object.values(d.by_scale || {}));
+      for (const k of ['room','block','city','country','unset']) {
+        const v = d.by_scale[k] || 0;
+        const w = Math.round(v / maxScale * 100);
+        const labelZh = k === 'unset' ? '未設定' : (LOCATION_SCALES[k]?.name_zh || k);
+        html += `<div class="overview-bar"><span class="overview-bar-label">${labelZh}</span><span class="overview-bar-fill" style="width:${Math.max(8, w)}%;">${v}</span></div>`;
+      }
+      html += '</div>';
+
+      // 標籤分類分佈
+      html += '<div class="overview-block">';
+      html += '<h3 style="font-size:1rem;color:var(--gold-dim);margin-bottom:0.5rem;">標籤分類分佈</h3>';
+      for (const k of ['indoor','outdoor','special','custom']) {
+        const v = d.by_tag_category[k] || 0;
+        html += `<div style="font-size:0.875rem;padding:0.25rem 0;">${TAG_CATEGORY_LABELS[k].name_zh}：<strong>${v}</strong> 地點次</div>`;
+      }
+      html += `<div style="font-size:0.8125rem;color:var(--text-tertiary);margin-top:0.5rem;">標籤庫總數：${d.total_tags || 0} 個</div>`;
+      html += '</div>';
+
+      // 品質檢查
+      html += '<div class="overview-block">';
+      html += '<h3 style="font-size:1rem;color:var(--gold-dim);margin-bottom:0.5rem;">品質檢查</h3>';
+      const noArt = d.locations_without_art || 0;
+      const noHidden = d.locations_without_hidden_info || 0;
+      const noTag = d.locations_without_tag || 0;
+      html += `<div class="quality-row">${noArt > 0 ? '<span class="quality-warn">⚠</span>' : '<span class="quality-ok">✅</span>'} 缺少視覺素材：${noArt} 個地點</div>`;
+      html += `<div class="quality-row">${noHidden > 0 ? '<span class="quality-warn">⚠</span>' : '<span class="quality-ok">✅</span>'} 缺少隱藏資訊：${noHidden} 個地點</div>`;
+      html += `<div class="quality-row">${noTag > 0 ? '<span class="quality-err">❌</span>' : '<span class="quality-ok">✅</span>'} 缺少標籤：${noTag} 個地點</div>`;
+      html += `<div class="quality-row" style="border-bottom:none;color:var(--text-tertiary);">隱藏資訊總計：${d.total_hidden_info || 0} 條</div>`;
+      html += '</div>';
+
+      el('overviewBody').innerHTML = html;
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  SHORTCUTS
+    // ════════════════════════════════════════════════════════════
+    document.addEventListener('keydown', (e) => {
+      // 在輸入框中時，只有 Ctrl 組合鍵生效
+      if ((e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && !e.ctrlKey) return;
+
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        if (currentLocation) saveLocation();
+      } else if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        openCreateDialog();
+      } else if (e.ctrlKey && e.key === 'd') {
+        e.preventDefault();
+        if (currentLocation) duplicateLocation();
+      } else if (e.ctrlKey && e.key === 'g') {
+        e.preventDefault();
+        if (currentLocation && (getArtType() === 'svg_generated' || getArtType() === 'svg_custom')) {
+          generateSVG();
+        }
+      } else if (e.key === 'Escape') {
+        // 關閉開啟的 dialog
+        document.querySelectorAll('.dialog-bg.open').forEach(d => d.classList.remove('open'));
+      }
+    });
+
+    // 離開頁面前提示
+    window.addEventListener('beforeunload', (e) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '有未儲存的變更，確定離開？';
+      }
+    });
+
+    // 監聽 art_url 變化更新預覽
+    document.addEventListener('DOMContentLoaded', () => {
+      const artUrl = el('f_art_url');
+      if (artUrl) artUrl.addEventListener('input', updateSvgPreview);
+    });
+
+    // ════════════════════════════════════════════════════════════
+    //  INIT
+    // ════════════════════════════════════════════════════════════
+    (async function init() {
+      await loadTags();
+      await loadLocations();
+    })();
+  </script>
+</body>
+</html>

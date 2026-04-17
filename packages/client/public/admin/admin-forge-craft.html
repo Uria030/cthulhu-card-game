@@ -149,6 +149,8 @@
       <button class="top-tab" data-tab="recipes" onclick="switchTopTab('recipes')">📜 製作配方</button>
       <button class="top-tab" data-tab="materials" onclick="switchTopTab('materials')">💎 素材庫</button>
       <button class="top-tab" data-tab="overview" onclick="switchTopTab('overview')">📊 總覽統計</button>
+      <div style="flex:1"></div>
+      <button class="top-tab" onclick="openGeminiKeyDialog()" title="設定 Gemini API Key" style="color:var(--text-tertiary)">🔑 API Key</button>
     </div>
 
     <!-- ======================================= -->
@@ -285,6 +287,7 @@
           <div id="materialList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.6rem"></div>
           <div class="btn-row" style="margin-top:1rem">
             <button class="btn btn-primary" onclick="createMaterial()">+ 新增素材</button>
+            <button class="btn" onclick="aiSuggestMaterialNames()">✨ AI 批次命名</button>
           </div>
         </div>
       </div>
@@ -340,6 +343,17 @@
       <div class="modal-actions">
         <button class="btn" onclick="closeTierModal()">取消</button>
         <button class="btn btn-primary" onclick="saveAllTiers()">儲存所有變更</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI 結果 modal -->
+  <div class="modal-overlay" id="aiModal">
+    <div class="modal" style="max-width:720px">
+      <h3 id="aiModalTitle">AI 敘事建議</h3>
+      <div id="aiModalBody" style="max-height:60vh;overflow-y:auto"></div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeAIModal()">關閉</button>
       </div>
     </div>
   </div>
@@ -547,7 +561,7 @@
               ${Object.entries(AFFIX_DESIGN_STATUS).map(([k, v]) => `<option value="${k}" ${a.design_status === k ? 'selected' : ''}>${v.zh}</option>`).join('')}
             </select>
           </div>
-          <div class="form-group full"><label>效果敘述（中）</label><input id="aff_effect_zh" value="${escapeHtml(a.effect_description_zh || '')}" oninput="setDirty(true)"></div>
+          <div class="form-group full"><label>效果敘述（中） <button class="btn btn-sm" style="float:right;margin-top:-.1rem" onclick="aiSuggestAffix()">✨ AI 建議</button></label><input id="aff_effect_zh" value="${escapeHtml(a.effect_description_zh || '')}" oninput="setDirty(true)"></div>
           <div class="form-group full"><label>效果敘述（英）</label><input id="aff_effect_en" value="${escapeHtml(a.effect_description_en || '')}" oninput="setDirty(true)"></div>
           <div class="form-group full"><label>備註</label><textarea id="aff_notes" rows="2" oninput="setDirty(true)">${escapeHtml(a.notes || '')}</textarea></div>
         </div>
@@ -1115,7 +1129,7 @@
         <div class="form-grid">
           <div class="form-group"><label>解鎖類型</label><select id="rec_unlock_type" onchange="setRecipeDirty(true)">${unlockOpts}</select></div>
           <div class="form-group"></div>
-          <div class="form-group full"><label>敘事說明</label><textarea id="rec_unlock_narr" rows="3" oninput="setRecipeDirty(true)">${escapeHtml(r.unlock_narrative || '')}</textarea></div>
+          <div class="form-group full"><label>敘事說明 <button class="btn btn-sm" style="float:right;margin-top:-.1rem" onclick="aiSuggestRecipeNarrative()">✨ AI 建議</button></label><textarea id="rec_unlock_narr" rows="3" oninput="setRecipeDirty(true)">${escapeHtml(r.unlock_narrative || '')}</textarea></div>
           <div class="form-group full"><label>備註</label><textarea id="rec_notes" rows="2" oninput="setRecipeDirty(true)">${escapeHtml(r.notes || '')}</textarea></div>
         </div>
       </div>
@@ -1494,6 +1508,268 @@
       const d = await r.json();
       if (d.success) allCards = d.data || [];
     } catch (e) { console.error(e); }
+  }
+
+  // ============================================================
+  // Gemini AI（Stage C）
+  // ============================================================
+  function getGeminiKey() {
+    return localStorage.getItem('gemini_api_key') || '';
+  }
+
+  function openGeminiKeyDialog() {
+    const current = getGeminiKey();
+    const k = prompt('請輸入 Gemini API Key（儲存在 localStorage）', current);
+    if (k !== null) {
+      localStorage.setItem('gemini_api_key', k);
+      toast(k ? '已儲存 API Key' : '已清除 API Key');
+    }
+  }
+
+  async function callGemini(systemPrompt) {
+    let key = getGeminiKey();
+    if (!key) {
+      openGeminiKeyDialog();
+      key = getGeminiKey();
+      if (!key) throw new Error('尚未設定 Gemini API Key');
+    }
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
+        generationConfig: { temperature: 0.85, maxOutputTokens: 2000, responseMimeType: 'application/json' },
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      throw new Error(`Gemini API 失敗：${res.status} ${err.slice(0, 200)}`);
+    }
+    const j = await res.json();
+    const txt = j?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!txt) throw new Error('Gemini 回應為空');
+    return JSON.parse(txt);
+  }
+
+  function showAIModal(title, html) {
+    document.getElementById('aiModalTitle').textContent = title;
+    document.getElementById('aiModalBody').innerHTML = html;
+    document.getElementById('aiModal').classList.add('show');
+  }
+
+  function closeAIModal() {
+    document.getElementById('aiModal').classList.remove('show');
+  }
+
+  // ── 模式 A：詞條敘事 ──────────────────────────────
+  async function aiSuggestAffix() {
+    if (!currentAffix) return;
+    const a = currentAffix;
+    const c = MATERIAL_CATEGORIES[a.category_code];
+    const tiersStr = (a.tiers || []).map(t => `${t.tier_label}（V=${t.affix_value}）`).join('、') || '尚未定義';
+    const subtypesZh = (a.applicable_subtypes || []).map(s => APPLICABLE_SUBTYPES[s]?.zh || s).join('、') || '未指定';
+    const hint = prompt('可選：提示 AI 這個詞條的設計意圖（留空即依現有資料推測）', '') || '';
+    showAIModal('AI 敘事建議', '<div style="padding:2rem;text-align:center;color:var(--text-tertiary)">生成中…</div>');
+    const prompt_text = `你是克蘇魯神話卡牌遊戲的鍛造系統文案設計師。請為一個鍛造詞條生成名稱與效果敘述。
+
+詞條基本資訊：
+- 現有代碼：${a.code}
+- 現有中文名：${a.name_zh}
+- 素材類別：${c ? c.zh + '（' + c.theme + '）' : a.category_code}
+- 階級模式：${AFFIX_TIER_MODES[a.tier_mode]?.zh || a.tier_mode}
+- 階級資訊：${tiersStr}
+- 適用卡片：${subtypesZh}
+- 使用者提示：${hint || '（無）'}
+
+【風格要求】
+- 1920-30 年代氛圍，克蘇魯神話
+- 不輕佻、不戲謔
+- 機制敘述使用明確詞彙（如「+X 傷害」「使用時獲得護甲 X 層」），避免空泛詞彙
+- 中文名 2-4 字
+
+輸出格式（JSON）：
+{
+  "suggested_names": [
+    { "name_zh": "利刃", "name_en": "Blade", "reason": "強調鋒利的本質" },
+    { "name_zh": "銳化", "name_en": "Sharpen", "reason": "…" },
+    { "name_zh": "磨礪", "name_en": "Hone", "reason": "…" }
+  ],
+  "suggested_descriptions": [
+    { "description_zh": "傷害 +X", "description_en": "Damage +X", "tone": "直接機制描述" }
+  ]
+}`;
+    try {
+      const data = await callGemini(prompt_text);
+      const namesHtml = (data.suggested_names || []).map(n => `
+        <div style="padding:.5rem .75rem;border:1px solid var(--border);border-radius:6px;margin-bottom:.4rem;background:var(--bg-card)">
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <span style="font-family:'Cinzel',serif;color:var(--gold);font-size:1rem">${escapeHtml(n.name_zh)}</span>
+            <span style="color:var(--text-tertiary);font-size:.85rem">${escapeHtml(n.name_en || '')}</span>
+            <button class="btn btn-sm" style="margin-left:auto" onclick="applyAIName('${encodeURIComponent(n.name_zh)}','${encodeURIComponent(n.name_en || '')}')">套用</button>
+          </div>
+          <div style="color:var(--text-tertiary);font-size:.8rem;margin-top:.2rem">${escapeHtml(n.reason || '')}</div>
+        </div>
+      `).join('');
+      const descHtml = (data.suggested_descriptions || []).map(d => `
+        <div style="padding:.5rem .75rem;border:1px solid var(--border);border-radius:6px;margin-bottom:.4rem;background:var(--bg-card)">
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <span>${escapeHtml(d.description_zh)}</span>
+            <button class="btn btn-sm" style="margin-left:auto" onclick="applyAIDesc('${encodeURIComponent(d.description_zh)}','${encodeURIComponent(d.description_en || '')}')">套用</button>
+          </div>
+          <div style="color:var(--text-tertiary);font-size:.75rem;margin-top:.2rem">${escapeHtml(d.description_en || '')} · ${escapeHtml(d.tone || '')}</div>
+        </div>
+      `).join('');
+      showAIModal('AI 敘事建議', `
+        <h4 style="color:var(--gold-dim);font-family:'Cinzel',serif;font-size:.85rem;margin:.5rem 0">名稱建議</h4>
+        ${namesHtml || '<div style="color:var(--text-tertiary)">（無）</div>'}
+        <h4 style="color:var(--gold-dim);font-family:'Cinzel',serif;font-size:.85rem;margin:1rem 0 .5rem">效果敘述建議</h4>
+        ${descHtml || '<div style="color:var(--text-tertiary)">（無）</div>'}
+      `);
+    } catch (e) {
+      showAIModal('AI 敘事建議', `<div style="color:#d67a7a;padding:1rem">${escapeHtml(e.message)}</div>`);
+    }
+  }
+
+  function applyAIName(zhEncoded, enEncoded) {
+    const nameZh = decodeURIComponent(zhEncoded);
+    const nameEn = decodeURIComponent(enEncoded);
+    document.getElementById('aff_name_zh').value = nameZh;
+    document.getElementById('aff_name_en').value = nameEn;
+    setDirty(true);
+    toast('已套用，記得按儲存');
+  }
+
+  function applyAIDesc(zhEncoded, enEncoded) {
+    const zh = decodeURIComponent(zhEncoded);
+    const en = decodeURIComponent(enEncoded);
+    document.getElementById('aff_effect_zh').value = zh;
+    document.getElementById('aff_effect_en').value = en;
+    setDirty(true);
+    toast('已套用，記得按儲存');
+  }
+
+  // ── 模式 B：配方解鎖敘事 ──────────────────────────
+  async function aiSuggestRecipeNarrative() {
+    if (!currentRecipe) return;
+    const r = currentRecipe;
+    const card = allCards.find(c => c.id === r.output_card_id);
+    const mats = (r.materials || []).map(m => {
+      if (m.specific_material_id) {
+        const mat = allMaterialsData.find(x => x.id === m.specific_material_id);
+        return mat ? `${mat.name_zh} LV${mat.material_level} × ${m.quantity}` : '具體素材';
+      }
+      return `${MATERIAL_CATEGORIES[m.category_code]?.zh || m.category_code}${m.min_material_level ? ' LV' + m.min_material_level + '+' : ''} × ${m.quantity}`;
+    }).join('、');
+    const hint = prompt('可選：提示 AI 這個配方應該在什麼場景取得', '') || '';
+    showAIModal('配方解鎖敘事', '<div style="padding:2rem;text-align:center;color:var(--text-tertiary)">生成中…</div>');
+    const prompt_text = `你是克蘇魯神話冒險遊戲的敘事設計師。請為一個製作配方撰寫解鎖敘事，描述玩家在遊戲中如何取得此配方的故事情境。
+
+配方資訊：
+- 配方名稱：${r.name_zh}
+- 產出：${card ? card.name_zh : '（未指定）'}
+- 素材需求：${mats || '（無）'}
+- 解鎖類型：${RECIPE_UNLOCK_TYPES[r.unlock_type]?.zh || '（未定）'}
+- 使用者提示：${hint || '（無）'}
+
+【敘事要求】
+- 40–80 字中文
+- 提供具體場景或情境（不要抽象）
+- 1920-30 年代氛圍
+- 不直接說「你得到配方」，描述取得過程
+- 留白大於填滿
+
+輸出 JSON：{ "narrative": "..." }`;
+    try {
+      const data = await callGemini(prompt_text);
+      const narr = data.narrative || '';
+      showAIModal('配方解鎖敘事', `
+        <div style="padding:1rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;line-height:1.7">${escapeHtml(narr)}</div>
+        <div class="btn-row" style="margin-top:.75rem">
+          <button class="btn btn-primary" onclick="applyAINarrative('${encodeURIComponent(narr)}')">套用</button>
+        </div>
+      `);
+    } catch (e) {
+      showAIModal('配方解鎖敘事', `<div style="color:#d67a7a;padding:1rem">${escapeHtml(e.message)}</div>`);
+    }
+  }
+
+  function applyAINarrative(narrEncoded) {
+    document.getElementById('rec_unlock_narr').value = decodeURIComponent(narrEncoded);
+    setRecipeDirty(true);
+    closeAIModal();
+    toast('已套用，記得按儲存');
+  }
+
+  // ── 模式 C：素材命名批次 ──────────────────────────
+  async function aiSuggestMaterialNames() {
+    const cat = currentMatCategory || 'mineral';
+    const catInfo = MATERIAL_CATEGORIES[cat];
+    if (!catInfo) return toast('請先選擇素材類別', true);
+    const hint = prompt(`可選：提示 AI 「${catInfo.zh}」這一類素材的風格`, '') || '';
+    showAIModal('素材命名批次', '<div style="padding:2rem;text-align:center;color:var(--text-tertiary)">生成中…</div>');
+    const prompt_text = `你是克蘇魯神話世界觀的名稱設計師。請為 ${catInfo.zh}（${catInfo.en}，主題：${catInfo.theme}）這類素材的 10 個等級各命名一個具體素材（中文+英文）。
+
+【命名原則】
+- LV1-3：低階、常見
+- LV4-6：中階、帶特殊性質
+- LV7-9：高階、稀有或禁忌
+- LV10：終極、接近神話本體
+- 1920-30 年代氛圍
+- 符合該類別的主題
+- 使用台灣 TRPG 社群慣用譯名
+- 使用者提示：${hint || '（無）'}
+
+輸出 JSON：
+{
+  "suggestions": [
+    { "level": 1, "name_zh": "…", "name_en": "…" },
+    { "level": 2, "name_zh": "…", "name_en": "…" },
+    …
+  ]
+}`;
+    try {
+      const data = await callGemini(prompt_text);
+      const sugs = data.suggestions || [];
+      const html = sugs.map(s => `
+        <div style="display:flex;gap:.5rem;align-items:center;padding:.4rem .5rem;border:1px solid var(--border);border-radius:4px;margin-bottom:.3rem;background:var(--bg-card)">
+          <span class="tier-badge tier-plus-${Math.min(Math.ceil(s.level / 3), 3)}">LV${s.level}</span>
+          <span style="flex:1">
+            <div style="color:var(--gold)">${escapeHtml(s.name_zh)}</div>
+            <div style="color:var(--text-tertiary);font-size:.75rem">${escapeHtml(s.name_en || '')}</div>
+          </span>
+          <button class="btn btn-sm" onclick="applyAIMaterialName('${cat}',${s.level},'${encodeURIComponent(s.name_zh)}','${encodeURIComponent(s.name_en || '')}')">套用此 LV</button>
+        </div>
+      `).join('');
+      showAIModal(`素材命名建議（${catInfo.zh}）`, `
+        <div style="color:var(--text-tertiary);font-size:.8rem;margin-bottom:.5rem">點「套用此 LV」會更新對應等級的第一個素材骨架</div>
+        ${html || '<div style="color:var(--text-tertiary)">（無建議）</div>'}
+      `);
+    } catch (e) {
+      showAIModal('素材命名批次', `<div style="color:#d67a7a;padding:1rem">${escapeHtml(e.message)}</div>`);
+    }
+  }
+
+  async function applyAIMaterialName(categoryCode, level, zhEncoded, enEncoded) {
+    const nameZh = decodeURIComponent(zhEncoded);
+    const nameEn = decodeURIComponent(enEncoded);
+    // 找出該類別+等級的第一個「無名」素材
+    const target = allMaterialsData.find(m => m.category_code === categoryCode && m.material_level === level && (!m.name_zh || !m.name_zh.trim()));
+    if (!target) {
+      // 若該等級已有命名素材，新增一筆
+      if (!confirm(`LV${level} 已有命名素材。是否建立一筆新的「${nameZh}」？`)) return;
+      try {
+        const r = await adminFetch('/api/materials', { method: 'POST', body: JSON.stringify({ category_code: categoryCode, material_level: level, name_zh: nameZh, name_en: nameEn }) });
+        const d = await r.json();
+        if (d.success) { await loadMaterials(); toast(`已新增 ${nameZh}`); }
+      } catch (e) { console.error(e); toast('新增失敗', true); }
+      return;
+    }
+    try {
+      const r = await adminFetch('/api/materials/' + target.id, { method: 'PATCH', body: JSON.stringify({ name_zh: nameZh, name_en: nameEn }) });
+      const d = await r.json();
+      if (d.success) { await loadMaterials(); toast(`LV${level} → ${nameZh}`); }
+    } catch (e) { console.error(e); toast('套用失敗', true); }
   }
 
   // ============================================================

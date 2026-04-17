@@ -7,3 +7,4 @@ export { talentTreeRoutes } from './talent-trees.js';
 export { monsterRoutes } from './monsters.js';
 export { locationRoutes } from './locations.js';
 export { keeperRoutes } from './keeper.js';
+export { investigatorRoutes } from './investigators.js';

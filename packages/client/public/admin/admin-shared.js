@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.8.0';
+const ADMIN_VERSION = '0.9.0';
 
 // ============================================
 // API 設定
@@ -114,6 +114,57 @@ const FACTIONS = {
   J: { code: 'J', zh: '鐵壁', en: 'The Bastion', color: '#6B6B6B' },
   P: { code: 'P', zh: '流影', en: 'The Flux',    color: '#2D8B6F' },
 };
+
+// 依支柱五 §1.2 修正案：I 與 T 共享 intellect（八陣營對七屬性必有一組共享）
+const FACTION_ATTRIBUTE_MAP = {
+  E: { attribute: 'charisma',     isShared: false },
+  I: { attribute: 'intellect',    isShared: true  },
+  S: { attribute: 'perception',   isShared: false },
+  N: { attribute: 'willpower',    isShared: false },
+  T: { attribute: 'intellect',    isShared: true  },
+  F: { attribute: 'strength',     isShared: false },
+  J: { attribute: 'constitution', isShared: false },
+  P: { attribute: 'agility',      isShared: false },
+};
+
+const MBTI_TYPES = {
+  INTJ: { code: 'INTJ', zh: '建築師',   en: 'Architect',    group: 'Analysts' },
+  INTP: { code: 'INTP', zh: '邏輯學家', en: 'Logician',     group: 'Analysts' },
+  ENTJ: { code: 'ENTJ', zh: '指揮官',   en: 'Commander',    group: 'Analysts' },
+  ENTP: { code: 'ENTP', zh: '辯論家',   en: 'Debater',      group: 'Analysts' },
+  INFJ: { code: 'INFJ', zh: '提倡者',   en: 'Advocate',     group: 'Diplomats' },
+  INFP: { code: 'INFP', zh: '調停者',   en: 'Mediator',     group: 'Diplomats' },
+  ENFJ: { code: 'ENFJ', zh: '主人公',   en: 'Protagonist',  group: 'Diplomats' },
+  ENFP: { code: 'ENFP', zh: '競選者',   en: 'Campaigner',   group: 'Diplomats' },
+  ISTJ: { code: 'ISTJ', zh: '物流師',   en: 'Logistician',  group: 'Sentinels' },
+  ISFJ: { code: 'ISFJ', zh: '守衛者',   en: 'Defender',     group: 'Sentinels' },
+  ESTJ: { code: 'ESTJ', zh: '總經理',   en: 'Executive',    group: 'Sentinels' },
+  ESFJ: { code: 'ESFJ', zh: '執政官',   en: 'Consul',       group: 'Sentinels' },
+  ISTP: { code: 'ISTP', zh: '鑑賞家',   en: 'Virtuoso',     group: 'Explorers' },
+  ISFP: { code: 'ISFP', zh: '探險家',   en: 'Adventurer',   group: 'Explorers' },
+  ESTP: { code: 'ESTP', zh: '企業家',   en: 'Entrepreneur', group: 'Explorers' },
+  ESFP: { code: 'ESFP', zh: '表演者',   en: 'Entertainer',  group: 'Explorers' },
+};
+
+// 依四字碼計算屬性基礎 13 點：基礎 7 + 主陣營主屬性 +3 + 三副陣營各 +1
+// 回傳：{ attrs, totalAllocated, freePoints } — freePoints 為剩餘自由分配點數（目標 18）
+function calculateBaseAttributes(mbti) {
+  if (!mbti || mbti.length !== 4) return null;
+  const attrs = {
+    strength: 1, agility: 1, constitution: 1,
+    intellect: 1, willpower: 1, perception: 1, charisma: 1
+  };
+  const letters = mbti.split('');
+  const mainAttr = FACTION_ATTRIBUTE_MAP[letters[0]]?.attribute;
+  if (mainAttr) attrs[mainAttr] += 3;
+  for (let i = 1; i < 4; i++) {
+    const subAttr = FACTION_ATTRIBUTE_MAP[letters[i]]?.attribute;
+    if (subAttr) attrs[subAttr] += 1;
+  }
+  const totalAllocated = Object.values(attrs).reduce((a, b) => a + b, 0);
+  const freePoints = 18 - totalAllocated;
+  return { attrs, totalAllocated, freePoints };
+}
 
 const ENEMY_TIERS = {
   1: { name: '雜兵', en: 'Minion', dc: 12, hpRange: [3, 5],   dmgRange: [1, 2],  regen: 0,     spellDef: [0, 1], attacks: 1 },

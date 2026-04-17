@@ -1393,6 +1393,475 @@ UPDATE encounter_cards SET
   tag_count = (SELECT COUNT(*) FROM encounter_card_tag_map WHERE encounter_card_id = encounter_cards.id);
 `;
 
+const MIGRATION_013_SQL = `
+-- ============================================
+-- Migration 013: Investigator Designer (MOD-11)
+-- Part 1 基礎表 + 64 預設模板 seed + Part 4 V 值系統
+-- ============================================
+
+-- 0. 陣營主屬性對照表（支柱五 §1.2 修正案）
+CREATE TABLE IF NOT EXISTS faction_attribute_map (
+  faction_code    VARCHAR(1) PRIMARY KEY,
+  faction_name_zh VARCHAR(16) NOT NULL,
+  main_attribute  VARCHAR(16) NOT NULL,
+  is_shared       BOOLEAN NOT NULL DEFAULT FALSE,
+  note            TEXT
+);
+
+INSERT INTO faction_attribute_map (faction_code, faction_name_zh, main_attribute, is_shared, note) VALUES
+  ('E', '號令', 'charisma',     FALSE, '領導者靠社交影響力'),
+  ('I', '深淵', 'intellect',    TRUE,  '凝視深淵需要深邃思維；與 T 共享智力'),
+  ('S', '鐵證', 'perception',   FALSE, '實證派靠觀察、搜索、敵人觀察'),
+  ('N', '天啟', 'willpower',    FALSE, '法術施放、精神防禦、神秘學家核心'),
+  ('T', '解析', 'intellect',    TRUE,  '純粹智力運用；與 I 共享智力'),
+  ('F', '聖燼', 'strength',     FALSE, '燃燒肉身的魄力，替人擋傷害的身體本錢'),
+  ('J', '鐵壁', 'constitution', FALSE, '成為防線、承受傷害的肉體堡壘'),
+  ('P', '流影', 'agility',      FALSE, '在縫隙中穿梭、反應與閃避')
+ON CONFLICT (faction_code) DO NOTHING;
+
+-- 1. 輔助函數：判斷 MBTI 主陣營主屬性
+CREATE OR REPLACE FUNCTION main_attr_is(target_attr TEXT, mbti TEXT) RETURNS BOOLEAN AS $$
+DECLARE
+  main_letter CHAR(1);
+  main_attr TEXT;
+BEGIN
+  main_letter := SUBSTRING(mbti, 1, 1);
+  SELECT main_attribute INTO main_attr FROM faction_attribute_map WHERE faction_code = main_letter;
+  RETURN main_attr = target_attr;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- 輔助函數：計算副陣營主屬性出現次數（I 與 T 共享時會累加）
+CREATE OR REPLACE FUNCTION sub_attr_count(target_attr TEXT, mbti TEXT) RETURNS INTEGER AS $$
+DECLARE
+  c INTEGER := 0;
+  sl CHAR(1);
+  sa TEXT;
+  i INTEGER;
+BEGIN
+  FOR i IN 2..4 LOOP
+    sl := SUBSTRING(mbti, i, 1);
+    SELECT main_attribute INTO sa FROM faction_attribute_map WHERE faction_code = sl;
+    IF sa = target_attr THEN c := c + 1; END IF;
+  END LOOP;
+  RETURN c;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- 2. investigator_templates 主表（新建，直接含 Part 4 V 值欄位）
+CREATE TABLE IF NOT EXISTS investigator_templates (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code                  VARCHAR(32) UNIQUE NOT NULL,
+  name_zh               VARCHAR(64),
+  name_en               VARCHAR(64),
+  title_zh              VARCHAR(64),
+  title_en              VARCHAR(64),
+  faction_code          VARCHAR(2) CHECK (faction_code IS NULL OR faction_code IN ('E','I','S','N','T','F','J','P')),
+  mbti_code             VARCHAR(4),
+  career_index          INTEGER CHECK (career_index IS NULL OR (career_index BETWEEN 1 AND 4)),
+  dominant_letter       VARCHAR(1),
+  attr_strength         INTEGER NOT NULL DEFAULT 1 CHECK (attr_strength BETWEEN 1 AND 5),
+  attr_agility          INTEGER NOT NULL DEFAULT 1 CHECK (attr_agility BETWEEN 1 AND 5),
+  attr_constitution     INTEGER NOT NULL DEFAULT 1 CHECK (attr_constitution BETWEEN 1 AND 5),
+  attr_intellect        INTEGER NOT NULL DEFAULT 1 CHECK (attr_intellect BETWEEN 1 AND 5),
+  attr_willpower        INTEGER NOT NULL DEFAULT 1 CHECK (attr_willpower BETWEEN 1 AND 5),
+  attr_perception       INTEGER NOT NULL DEFAULT 1 CHECK (attr_perception BETWEEN 1 AND 5),
+  attr_charisma         INTEGER NOT NULL DEFAULT 1 CHECK (attr_charisma BETWEEN 1 AND 5),
+  proficiency_ids       UUID[] NOT NULL DEFAULT '{}',
+  backstory             TEXT,
+  ability_text_zh       TEXT,
+  ability_text_en       TEXT,
+  era_tags              TEXT,
+  portrait_url          TEXT,
+  is_preset             BOOLEAN NOT NULL DEFAULT FALSE,
+  is_completed          BOOLEAN NOT NULL DEFAULT FALSE,
+
+  -- Part 4 V 值欄位
+  attribute_value       DECIMAL(6,1) NOT NULL DEFAULT 0,
+  hp_value              DECIMAL(6,1) NOT NULL DEFAULT 0,
+  san_value             DECIMAL(6,1) NOT NULL DEFAULT 0,
+  baseline_value        DECIMAL(6,1) NOT NULL DEFAULT 0,
+  proficiency_value     DECIMAL(6,1) NOT NULL DEFAULT 0,
+  ability_text_value    DECIMAL(6,1) NOT NULL DEFAULT 0,
+  ability_value         DECIMAL(6,1) NOT NULL DEFAULT 0,
+  signature_total_value DECIMAL(6,1) NOT NULL DEFAULT 0,
+  weakness_value        DECIMAL(6,1) NOT NULL DEFAULT 0,
+  total_value           DECIMAL(6,1) NOT NULL DEFAULT 0,
+  value_grade           VARCHAR(16)
+                        CHECK (value_grade IS NULL OR value_grade IN
+                          ('underpowered','below_average','balanced','above_average','overpowered','incomplete')),
+  value_last_calculated TIMESTAMPTZ,
+  ability_value_source  VARCHAR(16) DEFAULT 'manual'
+                        CHECK (ability_value_source IN ('manual','ai_estimated','ai_confirmed')),
+
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  -- CHECK 約束：完成時 7 屬性總和必須 18；骨架狀態允許 13-18
+  CONSTRAINT chk_inv_total_points CHECK (
+    CASE WHEN is_completed THEN
+      (attr_strength + attr_agility + attr_constitution + attr_intellect +
+       attr_willpower + attr_perception + attr_charisma) = 18
+    ELSE
+      (attr_strength + attr_agility + attr_constitution + attr_intellect +
+       attr_willpower + attr_perception + attr_charisma) BETWEEN 13 AND 18
+    END
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_inv_templates_mbti ON investigator_templates(mbti_code);
+CREATE INDEX IF NOT EXISTS idx_inv_templates_preset ON investigator_templates(is_preset);
+CREATE INDEX IF NOT EXISTS idx_inv_templates_completed ON investigator_templates(is_completed);
+CREATE INDEX IF NOT EXISTS idx_inv_templates_faction ON investigator_templates(faction_code);
+CREATE INDEX IF NOT EXISTS idx_inv_total_value ON investigator_templates(total_value);
+CREATE INDEX IF NOT EXISTS idx_inv_value_grade ON investigator_templates(value_grade);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_inv_mbti_career
+  ON investigator_templates(mbti_code, career_index)
+  WHERE is_preset = TRUE;
+
+-- 3. investigator_signature_cards 表
+CREATE TABLE IF NOT EXISTS investigator_signature_cards (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  investigator_id    UUID NOT NULL REFERENCES investigator_templates(id) ON DELETE CASCADE,
+  card_order         INTEGER NOT NULL CHECK (card_order BETWEEN 1 AND 3),
+  name_zh            VARCHAR(64) NOT NULL,
+  name_en            VARCHAR(64),
+  card_type          VARCHAR(16) NOT NULL CHECK (card_type IN ('asset','event','ally','skill')),
+  card_style         VARCHAR(8),
+  rarity             VARCHAR(16) DEFAULT 'signature',
+  cost               INTEGER DEFAULT 0 CHECK (cost BETWEEN 0 AND 6),
+  commit_icons       JSONB DEFAULT '[]',
+  consume_effect     TEXT,
+  play_effect        TEXT,
+  play_effect_code   JSONB DEFAULT '[]',
+  flavor_text        TEXT,
+  illustration_url   TEXT,
+  effect_value       DECIMAL(5,1) NOT NULL DEFAULT 0,
+  value_breakdown    JSONB NOT NULL DEFAULT '[]',
+  value_source       VARCHAR(16) DEFAULT 'manual'
+                     CHECK (value_source IN ('manual','ai_estimated','ai_confirmed')),
+  value_last_updated TIMESTAMPTZ,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (investigator_id, card_order)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sig_cards_investigator ON investigator_signature_cards(investigator_id);
+
+-- 4. investigator_weaknesses 表
+CREATE TABLE IF NOT EXISTS investigator_weaknesses (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  investigator_id     UUID NOT NULL UNIQUE REFERENCES investigator_templates(id) ON DELETE CASCADE,
+  name_zh             VARCHAR(64) NOT NULL,
+  name_en             VARCHAR(64),
+  weakness_type       VARCHAR(32) NOT NULL,
+  trigger_condition   TEXT NOT NULL,
+  negative_effect     TEXT NOT NULL,
+  removal_condition   TEXT,
+  backstory           TEXT,
+  flavor_text         TEXT,
+  effect_value        DECIMAL(5,1) NOT NULL DEFAULT 0,
+  trigger_probability DECIMAL(4,3) NOT NULL DEFAULT 0.067,
+  expected_rounds     INTEGER NOT NULL DEFAULT 5,
+  final_value         DECIMAL(5,1) NOT NULL DEFAULT 0,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_weakness_investigator ON investigator_weaknesses(investigator_id);
+
+-- 5. investigator_starting_deck 表
+CREATE TABLE IF NOT EXISTS investigator_starting_deck (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  investigator_id    UUID NOT NULL REFERENCES investigator_templates(id) ON DELETE CASCADE,
+  card_definition_id UUID REFERENCES card_definitions(id),
+  signature_card_id  UUID REFERENCES investigator_signature_cards(id) ON DELETE CASCADE,
+  weakness_id        UUID REFERENCES investigator_weaknesses(id) ON DELETE CASCADE,
+  quantity           INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 1),
+  slot_order         INTEGER,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_exactly_one_source CHECK (
+    (CASE WHEN card_definition_id IS NOT NULL THEN 1 ELSE 0 END) +
+    (CASE WHEN signature_card_id IS NOT NULL THEN 1 ELSE 0 END) +
+    (CASE WHEN weakness_id IS NOT NULL THEN 1 ELSE 0 END) = 1
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_starting_deck_investigator ON investigator_starting_deck(investigator_id);
+
+-- 6. investigator_value_config — V 值計算參數表
+CREATE TABLE IF NOT EXISTS investigator_value_config (
+  key            VARCHAR(64) PRIMARY KEY,
+  value_numeric  DECIMAL(8,3),
+  value_text     TEXT,
+  description    TEXT,
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO investigator_value_config (key, value_numeric, description) VALUES
+  ('attribute_per_point_v',       2.0,   '每點屬性值換算 V 值（0.5V × 每屬性 4 次檢定）'),
+  ('hp_per_point_v',              1.5,   'HP 上限每點 V 值（heal_hp 基準）'),
+  ('san_per_point_v',             1.5,   'SAN 上限每點 V 值（heal_san 基準）'),
+  ('proficiency_per_slot_v',      7.5,   '每個戰鬥熟練 V 值（+1 × 15 次戰鬥檢定 × 0.5V）'),
+  ('hp_base',                     7.0,   'HP 基礎值（不計入 V 值）'),
+  ('san_base',                    7.0,   'SAN 基礎值（不計入 V 值）'),
+  ('weakness_default_prob',       0.067, '弱點預設抽到機率（1/15 牌組）'),
+  ('weakness_default_rounds',     5.0,   '弱點預設預期觸發回合數'),
+  ('zscore_threshold_warn',       1.5,   '過強/過弱的 z-score 閾值（黃色警告）'),
+  ('zscore_threshold_alert',      2.0,   '嚴重過強/過弱的 z-score 閾值（紅色警告）'),
+  ('faction_imbalance_threshold', 0.10,  '偏重字母分組平均偏離整體的閾值（10%）')
+ON CONFLICT (key) DO NOTHING;
+
+-- 7. V 值計算函數
+CREATE OR REPLACE FUNCTION calc_attribute_value(
+  p_str INT, p_agi INT, p_con INT, p_int INT,
+  p_wil INT, p_per INT, p_cha INT
+) RETURNS DECIMAL(6,1) AS $$
+DECLARE coeff DECIMAL;
+BEGIN
+  SELECT value_numeric INTO coeff FROM investigator_value_config WHERE key='attribute_per_point_v';
+  RETURN (p_str + p_agi + p_con + p_int + p_wil + p_per + p_cha) * COALESCE(coeff, 2.0);
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+CREATE OR REPLACE FUNCTION calc_hp_value(p_con INT) RETURNS DECIMAL(6,1) AS $$
+DECLARE coeff DECIMAL;
+BEGIN
+  SELECT value_numeric INTO coeff FROM investigator_value_config WHERE key='hp_per_point_v';
+  RETURN (p_con * 2) * COALESCE(coeff, 1.5);
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+CREATE OR REPLACE FUNCTION calc_san_value(p_wil INT) RETURNS DECIMAL(6,1) AS $$
+DECLARE coeff DECIMAL;
+BEGIN
+  SELECT value_numeric INTO coeff FROM investigator_value_config WHERE key='san_per_point_v';
+  RETURN (p_wil * 2) * COALESCE(coeff, 1.5);
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+CREATE OR REPLACE FUNCTION calc_proficiency_value(p_inv_id UUID) RETURNS DECIMAL(6,1) AS $$
+DECLARE prof_count INT; coeff DECIMAL;
+BEGIN
+  SELECT COALESCE(array_length(proficiency_ids, 1), 0) INTO prof_count
+    FROM investigator_templates WHERE id = p_inv_id;
+  SELECT value_numeric INTO coeff FROM investigator_value_config WHERE key='proficiency_per_slot_v';
+  RETURN prof_count * COALESCE(coeff, 7.5);
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+CREATE OR REPLACE FUNCTION calc_signature_total_value(p_inv_id UUID) RETURNS DECIMAL(6,1) AS $$
+DECLARE total DECIMAL(6,1);
+BEGIN
+  SELECT COALESCE(SUM(effect_value), 0) INTO total
+    FROM investigator_signature_cards WHERE investigator_id = p_inv_id;
+  RETURN total;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+CREATE OR REPLACE FUNCTION calc_weakness_final_value(p_inv_id UUID) RETURNS DECIMAL(6,1) AS $$
+DECLARE ev DECIMAL(5,1); prob DECIMAL(4,3); rnds INT;
+BEGIN
+  SELECT effect_value, trigger_probability, expected_rounds
+    INTO ev, prob, rnds
+    FROM investigator_weaknesses WHERE investigator_id = p_inv_id;
+  IF ev IS NULL THEN RETURN 0; END IF;
+  RETURN ev * prob * rnds;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- 分級計算（z-score）
+CREATE OR REPLACE FUNCTION recalculate_value_grade(p_inv_id UUID) RETURNS VOID AS $$
+DECLARE
+  t_value DECIMAL(6,1); mean_v DECIMAL(6,1); stddev_v DECIMAL(6,1);
+  warn_t DECIMAL(3,2); alert_t DECIMAL(3,2); z DECIMAL(6,2);
+  grade_val VARCHAR(16); is_complete BOOLEAN; completed_count INT;
+BEGIN
+  SELECT total_value, is_completed INTO t_value, is_complete
+    FROM investigator_templates WHERE id = p_inv_id;
+  IF NOT is_complete THEN
+    UPDATE investigator_templates SET value_grade='incomplete' WHERE id = p_inv_id;
+    RETURN;
+  END IF;
+  SELECT COUNT(*) INTO completed_count FROM investigator_templates WHERE is_completed = TRUE;
+  IF completed_count < 5 THEN
+    UPDATE investigator_templates SET value_grade='balanced' WHERE id = p_inv_id;
+    RETURN;
+  END IF;
+  SELECT AVG(total_value), STDDEV(total_value) INTO mean_v, stddev_v
+    FROM investigator_templates WHERE is_completed = TRUE;
+  IF stddev_v > 0 THEN z := (t_value - mean_v) / stddev_v; ELSE z := 0; END IF;
+  SELECT value_numeric INTO warn_t FROM investigator_value_config WHERE key='zscore_threshold_warn';
+  SELECT value_numeric INTO alert_t FROM investigator_value_config WHERE key='zscore_threshold_alert';
+  IF z >= alert_t THEN grade_val := 'overpowered';
+  ELSIF z >= warn_t THEN grade_val := 'above_average';
+  ELSIF z <= -alert_t THEN grade_val := 'underpowered';
+  ELSIF z <= -warn_t THEN grade_val := 'below_average';
+  ELSE grade_val := 'balanced';
+  END IF;
+  UPDATE investigator_templates SET value_grade = grade_val WHERE id = p_inv_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 綜合 V 值計算（主函數）
+CREATE OR REPLACE FUNCTION calc_total_investigator_value(p_inv_id UUID) RETURNS VOID AS $$
+DECLARE
+  t RECORD;
+  v_attr DECIMAL(6,1); v_hp DECIMAL(6,1); v_san DECIMAL(6,1); v_baseline DECIMAL(6,1);
+  v_prof DECIMAL(6,1); v_abtext DECIMAL(6,1); v_ability DECIMAL(6,1);
+  v_sig DECIMAL(6,1); v_weak DECIMAL(6,1); v_total DECIMAL(6,1);
+BEGIN
+  SELECT * INTO t FROM investigator_templates WHERE id = p_inv_id;
+  IF NOT FOUND THEN RETURN; END IF;
+  v_attr := calc_attribute_value(t.attr_strength, t.attr_agility, t.attr_constitution,
+    t.attr_intellect, t.attr_willpower, t.attr_perception, t.attr_charisma);
+  v_hp := calc_hp_value(t.attr_constitution);
+  v_san := calc_san_value(t.attr_willpower);
+  v_baseline := v_attr + v_hp + v_san;
+  v_prof := calc_proficiency_value(p_inv_id);
+  v_abtext := COALESCE(t.ability_text_value, 0);
+  v_ability := v_prof + v_abtext;
+  v_sig := calc_signature_total_value(p_inv_id);
+  v_weak := calc_weakness_final_value(p_inv_id);
+  v_total := v_baseline + v_ability + v_sig + v_weak;
+  UPDATE investigator_templates SET
+    attribute_value = v_attr,
+    hp_value = v_hp,
+    san_value = v_san,
+    baseline_value = v_baseline,
+    proficiency_value = v_prof,
+    ability_value = v_ability,
+    signature_total_value = v_sig,
+    weakness_value = v_weak,
+    total_value = v_total,
+    value_last_calculated = NOW()
+  WHERE id = p_inv_id;
+  PERFORM recalculate_value_grade(p_inv_id);
+END;
+$$ LANGUAGE plpgsql;
+
+-- 全庫重算
+CREATE OR REPLACE FUNCTION recalculate_all_investigator_values() RETURNS INTEGER AS $$
+DECLARE inv_id UUID; cnt INT := 0;
+BEGIN
+  FOR inv_id IN SELECT id FROM investigator_templates LOOP
+    PERFORM calc_total_investigator_value(inv_id);
+    cnt := cnt + 1;
+  END LOOP;
+  RETURN cnt;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 8. 觸發器
+CREATE OR REPLACE FUNCTION trigger_recalc_investigator_value() RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM calc_total_investigator_value(NEW.id);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_inv_recalc_on_update ON investigator_templates;
+CREATE TRIGGER trg_inv_recalc_on_update
+  AFTER UPDATE OF
+    attr_strength, attr_agility, attr_constitution, attr_intellect,
+    attr_willpower, attr_perception, attr_charisma,
+    proficiency_ids, ability_text_value, is_completed
+  ON investigator_templates
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_recalc_investigator_value();
+
+CREATE OR REPLACE FUNCTION trigger_recalc_from_signature_card() RETURNS TRIGGER AS $$
+DECLARE inv_id UUID;
+BEGIN
+  inv_id := COALESCE(NEW.investigator_id, OLD.investigator_id);
+  PERFORM calc_total_investigator_value(inv_id);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sig_card_recalc ON investigator_signature_cards;
+CREATE TRIGGER trg_sig_card_recalc
+  AFTER INSERT OR UPDATE OR DELETE ON investigator_signature_cards
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_recalc_from_signature_card();
+
+CREATE OR REPLACE FUNCTION trigger_recalc_from_weakness() RETURNS TRIGGER AS $$
+DECLARE inv_id UUID;
+BEGIN
+  IF TG_OP <> 'DELETE' THEN
+    NEW.final_value := NEW.effect_value * NEW.trigger_probability * NEW.expected_rounds;
+  END IF;
+  inv_id := COALESCE(NEW.investigator_id, OLD.investigator_id);
+  PERFORM calc_total_investigator_value(inv_id);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_weakness_recalc_bi ON investigator_weaknesses;
+CREATE TRIGGER trg_weakness_recalc_bi
+  BEFORE INSERT OR UPDATE ON investigator_weaknesses
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_recalc_from_weakness();
+
+DROP TRIGGER IF EXISTS trg_weakness_recalc_ad ON investigator_weaknesses;
+CREATE TRIGGER trg_weakness_recalc_ad
+  AFTER DELETE ON investigator_weaknesses
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_recalc_from_weakness();
+
+-- 9. 64 筆預設模板骨架 seed
+WITH mbti_list AS (
+  SELECT unnest(ARRAY[
+    'INTJ','INTP','ENTJ','ENTP',
+    'INFJ','INFP','ENFJ','ENFP',
+    'ISTJ','ISFJ','ESTJ','ESFJ',
+    'ISTP','ISFP','ESTP','ESFP'
+  ]) AS mbti_code
+),
+career_numbers AS (
+  SELECT generate_series(1, 4) AS career_index
+),
+skeleton AS (
+  SELECT
+    m.mbti_code,
+    c.career_index,
+    SUBSTRING(m.mbti_code, c.career_index, 1) AS dominant_letter
+  FROM mbti_list m CROSS JOIN career_numbers c
+)
+INSERT INTO investigator_templates (
+  code, faction_code, mbti_code, career_index, dominant_letter,
+  attr_strength, attr_agility, attr_constitution,
+  attr_intellect, attr_willpower, attr_perception, attr_charisma,
+  is_preset, is_completed
+)
+SELECT
+  s.mbti_code || '-' || s.career_index::text,
+  SUBSTRING(s.mbti_code, 1, 1),
+  s.mbti_code,
+  s.career_index,
+  s.dominant_letter,
+  1 + CASE WHEN main_attr_is('strength',     s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('strength',     s.mbti_code),
+  1 + CASE WHEN main_attr_is('agility',      s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('agility',      s.mbti_code),
+  1 + CASE WHEN main_attr_is('constitution', s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('constitution', s.mbti_code),
+  1 + CASE WHEN main_attr_is('intellect',    s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('intellect',    s.mbti_code),
+  1 + CASE WHEN main_attr_is('willpower',    s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('willpower',    s.mbti_code),
+  1 + CASE WHEN main_attr_is('perception',   s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('perception',   s.mbti_code),
+  1 + CASE WHEN main_attr_is('charisma',     s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('charisma',     s.mbti_code),
+  TRUE,
+  FALSE
+FROM skeleton s
+ON CONFLICT (code) DO NOTHING;
+
+-- Seed 完成後對 64 筆預設模板跑一次初始 V 值計算
+DO $seed$
+DECLARE inv_id UUID;
+BEGIN
+  FOR inv_id IN SELECT id FROM investigator_templates WHERE is_preset = TRUE AND value_last_calculated IS NULL LOOP
+    PERFORM calc_total_investigator_value(inv_id);
+  END LOOP;
+END $seed$;
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -1409,6 +1878,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_010_SQL);
     await client.query(MIGRATION_011_SQL);
     await client.query(MIGRATION_012_SQL);
+    await client.query(MIGRATION_013_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

@@ -1862,6 +1862,349 @@ BEGIN
 END $seed$;
 `;
 
+const MIGRATION_014_SQL = `
+-- ============================================
+-- Migration 014: MOD-09 鍛造與製作 — 資料表 + 函數
+-- ============================================
+
+-- 擴充 card_definitions.is_temporary（Part 2 §8.1）
+DO $$ BEGIN
+  ALTER TABLE card_definitions ADD COLUMN is_temporary BOOLEAN NOT NULL DEFAULT FALSE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- 1.1 素材類別
+CREATE TABLE IF NOT EXISTS material_categories (
+  code              VARCHAR(16) PRIMARY KEY,
+  name_zh           VARCHAR(16) NOT NULL,
+  name_en           VARCHAR(32) NOT NULL,
+  theme_description TEXT,
+  source_type       VARCHAR(16) NOT NULL,
+  display_color     VARCHAR(8),
+  icon_code         VARCHAR(32),
+  sort_order        INTEGER NOT NULL DEFAULT 0,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 1.2 具體素材
+CREATE TABLE IF NOT EXISTS material_definitions (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  category_code     VARCHAR(16) NOT NULL REFERENCES material_categories(code),
+  material_level    INTEGER NOT NULL CHECK (material_level BETWEEN 1 AND 10),
+  name_zh           VARCHAR(32) NOT NULL,
+  name_en           VARCHAR(64),
+  material_value    INTEGER NOT NULL DEFAULT 1,
+  monster_family_id UUID,
+  description       TEXT,
+  flavor_text       TEXT,
+  icon_url          TEXT,
+  sort_order        INTEGER NOT NULL DEFAULT 0,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_materials_category ON material_definitions(category_code);
+CREATE INDEX IF NOT EXISTS idx_materials_level ON material_definitions(material_level);
+CREATE INDEX IF NOT EXISTS idx_materials_family ON material_definitions(monster_family_id)
+  WHERE monster_family_id IS NOT NULL;
+
+-- 依等級自動填入 material_value
+CREATE OR REPLACE FUNCTION auto_fill_material_value() RETURNS TRIGGER AS $fn$
+BEGIN
+  NEW.material_value := CASE
+    WHEN NEW.material_level BETWEEN 1 AND 2 THEN 1
+    WHEN NEW.material_level BETWEEN 3 AND 4 THEN 2
+    WHEN NEW.material_level BETWEEN 5 AND 6 THEN 3
+    WHEN NEW.material_level BETWEEN 7 AND 8 THEN 5
+    WHEN NEW.material_level BETWEEN 9 AND 10 THEN 8
+    ELSE 1
+  END;
+  RETURN NEW;
+END;
+$fn$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_auto_fill_material_value ON material_definitions;
+CREATE TRIGGER trg_auto_fill_material_value
+  BEFORE INSERT OR UPDATE OF material_level ON material_definitions
+  FOR EACH ROW EXECUTE FUNCTION auto_fill_material_value();
+
+-- 1.3 鍛造詞條
+CREATE TABLE IF NOT EXISTS forging_affixes (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code              VARCHAR(48) UNIQUE NOT NULL,
+  name_zh           VARCHAR(32) NOT NULL,
+  name_en           VARCHAR(64),
+  category_code     VARCHAR(16) NOT NULL REFERENCES material_categories(code),
+  effect_description_zh TEXT NOT NULL,
+  effect_description_en TEXT,
+  applicable_subtypes JSONB NOT NULL DEFAULT '[]',
+  tier_mode         VARCHAR(16) NOT NULL DEFAULT 'scaling'
+                    CHECK (tier_mode IN ('scaling', 'fixed', 'choice')),
+  design_status     VARCHAR(16) NOT NULL DEFAULT 'pending'
+                    CHECK (design_status IN ('pending', 'partial', 'complete')),
+  notes             TEXT,
+  sort_order        INTEGER NOT NULL DEFAULT 0,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_affixes_category ON forging_affixes(category_code);
+CREATE INDEX IF NOT EXISTS idx_affixes_status ON forging_affixes(design_status);
+
+-- 1.4 詞條階級
+CREATE TABLE IF NOT EXISTS forging_affix_tiers (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  affix_id          UUID NOT NULL REFERENCES forging_affixes(id) ON DELETE CASCADE,
+  tier_label        VARCHAR(32) NOT NULL,
+  tier_order        INTEGER NOT NULL DEFAULT 0,
+  affix_value       DECIMAL(5,1) NOT NULL DEFAULT 0,
+  effect_detail_zh  TEXT,
+  effect_detail_en  TEXT,
+  choice_payload    JSONB,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (affix_id, tier_label)
+);
+
+CREATE INDEX IF NOT EXISTS idx_affix_tiers_affix ON forging_affix_tiers(affix_id);
+
+-- 1.5 製作配方
+CREATE TABLE IF NOT EXISTS crafting_recipes (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code              VARCHAR(64) UNIQUE NOT NULL,
+  name_zh           VARCHAR(64) NOT NULL,
+  name_en           VARCHAR(128),
+  description       TEXT,
+  output_card_id    UUID REFERENCES card_definitions(id),
+  output_is_temporary BOOLEAN NOT NULL DEFAULT FALSE,
+  output_quantity   INTEGER NOT NULL DEFAULT 1 CHECK (output_quantity >= 1),
+  unlock_narrative  TEXT,
+  unlock_type       VARCHAR(32),
+  design_status     VARCHAR(16) NOT NULL DEFAULT 'pending'
+                    CHECK (design_status IN ('pending', 'partial', 'complete')),
+  notes             TEXT,
+  sort_order        INTEGER NOT NULL DEFAULT 0,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_recipes_output ON crafting_recipes(output_card_id);
+CREATE INDEX IF NOT EXISTS idx_recipes_unlock ON crafting_recipes(unlock_type);
+CREATE INDEX IF NOT EXISTS idx_recipes_status ON crafting_recipes(design_status);
+
+-- 1.6 配方素材需求
+CREATE TABLE IF NOT EXISTS crafting_recipe_materials (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipe_id         UUID NOT NULL REFERENCES crafting_recipes(id) ON DELETE CASCADE,
+  category_code     VARCHAR(16) REFERENCES material_categories(code),
+  specific_material_id UUID REFERENCES material_definitions(id),
+  min_material_level INTEGER CHECK (min_material_level BETWEEN 1 AND 10),
+  quantity          INTEGER NOT NULL CHECK (quantity >= 1),
+  sort_order        INTEGER NOT NULL DEFAULT 0,
+  CONSTRAINT chk_material_specification CHECK (
+    (category_code IS NOT NULL AND specific_material_id IS NULL) OR
+    (category_code IS NULL AND specific_material_id IS NOT NULL)
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_materials_recipe ON crafting_recipe_materials(recipe_id);
+
+-- 二、鍛造費用計算函數：V ÷ SV，向上進位
+CREATE OR REPLACE FUNCTION calc_forging_material_quantity(
+  p_affix_value DECIMAL,
+  p_material_level INTEGER
+) RETURNS INTEGER AS $fn$
+DECLARE
+  sv INTEGER;
+BEGIN
+  sv := CASE
+    WHEN p_material_level BETWEEN 1 AND 2 THEN 1
+    WHEN p_material_level BETWEEN 3 AND 4 THEN 2
+    WHEN p_material_level BETWEEN 5 AND 6 THEN 3
+    WHEN p_material_level BETWEEN 7 AND 8 THEN 5
+    WHEN p_material_level BETWEEN 9 AND 10 THEN 8
+    ELSE 1
+  END;
+  RETURN CEIL(p_affix_value / sv);
+END;
+$fn$ LANGUAGE plpgsql IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION preview_forging_cost(
+  p_affix_tier_id UUID,
+  p_material_level INTEGER
+) RETURNS TABLE (
+  affix_name TEXT,
+  tier_label TEXT,
+  affix_value DECIMAL,
+  material_sv INTEGER,
+  required_quantity INTEGER
+) AS $fn$
+BEGIN
+  RETURN QUERY
+  SELECT
+    fa.name_zh::TEXT,
+    fat.tier_label::TEXT,
+    fat.affix_value,
+    (CASE
+      WHEN p_material_level BETWEEN 1 AND 2 THEN 1
+      WHEN p_material_level BETWEEN 3 AND 4 THEN 2
+      WHEN p_material_level BETWEEN 5 AND 6 THEN 3
+      WHEN p_material_level BETWEEN 7 AND 8 THEN 5
+      WHEN p_material_level BETWEEN 9 AND 10 THEN 8
+      ELSE 1
+    END)::INTEGER,
+    calc_forging_material_quantity(fat.affix_value, p_material_level)
+  FROM forging_affix_tiers fat
+  JOIN forging_affixes fa ON fa.id = fat.affix_id
+  WHERE fat.id = p_affix_tier_id;
+END;
+$fn$ LANGUAGE plpgsql STABLE;
+`;
+
+const MIGRATION_015_SQL = `
+-- ============================================
+-- Migration 015: MOD-09 鍛造與製作 — Seed Data
+-- ============================================
+
+-- 2.1 五個素材類別
+INSERT INTO material_categories (code, name_zh, name_en, theme_description, source_type, display_color, sort_order) VALUES
+  ('mineral', '礦物',     'Mineral',      '堅硬、鋒利、防護',    'exploration',  '#8B7355', 1),
+  ('wood',    '木材',     'Wood',         '結構、支撐、效率',    'exploration',  '#6B4423', 2),
+  ('insect',  '蟲類',     'Insect',       '毒素、寄生、腐蝕',    'exploration',  '#556B2F', 3),
+  ('fish',    '魚類',     'Fish',         '滑溜、適應、恢復',    'exploration',  '#4A7C9B', 4),
+  ('monster', '怪物素材', 'Monster Part', '超自然、力量、恐懼',  'monster_drop', '#7B4EA3', 5)
+ON CONFLICT (code) DO NOTHING;
+
+-- 2.2 40 筆非怪物素材骨架（僅於首次 seed 時插入）
+DO $seed$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM material_definitions
+    WHERE monster_family_id IS NULL AND name_zh = '' LIMIT 1
+  ) THEN
+    INSERT INTO material_definitions (category_code, material_level, name_zh, name_en, sort_order)
+    SELECT c.code, lv.level, '', '', lv.level
+    FROM (SELECT code FROM material_categories WHERE source_type = 'exploration') c
+    CROSS JOIN (SELECT generate_series(1, 10) AS level) lv;
+  END IF;
+END
+$seed$;
+
+-- 3.x 23 個鍛造詞條
+INSERT INTO forging_affixes (code, name_zh, name_en, category_code, effect_description_zh, applicable_subtypes, tier_mode, design_status, notes) VALUES
+  ('blade',          '利刃',       'Blade',           'mineral', '傷害 +X',                    '["weapon_melee","weapon_ranged"]'::JSONB,             'scaling', 'complete', NULL),
+  ('sturdy',         '堅固',       'Sturdy',          'mineral', '資產 HP +X',                 '["all_asset"]'::JSONB,                                'scaling', 'complete', NULL),
+  ('armor_forge',    '護甲鍛造',   'Armor Forging',   'mineral', '使用時獲得護甲 X 層',        '["all_asset"]'::JSONB,                                'scaling', 'complete', NULL),
+  ('counter_strike', '反擊',       'Counter Strike',  'mineral', '被攻擊時攻擊者受 X 點傷害',  '["weapon_melee","weapon_ranged"]'::JSONB,             'scaling', 'complete', NULL),
+  ('multi_attack',   '多重攻擊',   'Multi Attack',    'mineral', '額外攻擊 X 次',              '["weapon_melee","weapon_ranged"]'::JSONB,             'scaling', 'complete', NULL),
+  ('supply',         '補給',       'Supply',          'wood',    '使用次數 +X',                '["weapon_ranged","weapon_arcane","item","arcane_item"]'::JSONB, 'scaling', 'complete', NULL),
+  ('lightweight',    '輕量化',     'Lightweight',     'wood',    '費用 -X',                    '["all_asset"]'::JSONB,                                'scaling', 'complete', NULL),
+  ('swift',          '快速',       'Swift',           'wood',    '打出時不用行動點',           '["all_asset"]'::JSONB,                                'fixed',   'complete', NULL),
+  ('extra_draw',     '附加：抽牌', 'Added: Draw',     'wood',    '使用時抽 X 張卡',            '["all_asset"]'::JSONB,                                'scaling', 'complete', NULL),
+  ('extra_recycle',  '附加：回收', 'Added: Recycle',  'wood',    '進入棄牌堆時回收 X 張棄牌堆的卡', '["all_asset"]'::JSONB,                           'scaling', 'complete', NULL),
+  ('insect_venom_1', '蟲淬 I',     'Insect Venom I',  'insect',  '攻擊時施加指定的 1 層負面狀態', '["weapon_melee","weapon_ranged","weapon_arcane"]'::JSONB, 'choice', 'complete', '選項：流血、脆弱、潮濕'),
+  ('insect_venom_2', '蟲淬 II',    'Insect Venom II', 'insect',  '攻擊時施加指定的 1 層負面狀態', '["weapon_melee","weapon_ranged","weapon_arcane"]'::JSONB, 'choice', 'complete', '選項：中毒、燃燒、冷凍、弱化'),
+  ('insect_venom_3', '蟲淬 III',   'Insect Venom III','insect',  '攻擊時施加指定的 1 層負面狀態', '["weapon_melee","weapon_ranged","weapon_arcane"]'::JSONB, 'choice', 'complete', '選項：繳械、疲勞、沈默'),
+  ('mend',           '修補',       'Mend',            'fish',    '使用時回復 X HP',            '["all_asset"]'::JSONB,                                'scaling', 'complete', NULL),
+  ('soothe',         '安撫',       'Soothe',          'fish',    '使用時回復 X SAN',           '["all_asset"]'::JSONB,                                'scaling', 'complete', NULL),
+  ('resilience',     '韌性',       'Resilience',      'fish',    '使用時取消 X 點傷害',        '["all_asset"]'::JSONB,                                'scaling', 'complete', NULL),
+  ('extra_shield',   '附加：護盾', 'Added: Shield',   'fish',    '使用時獲得護盾 X 層',        '["all_asset"]'::JSONB,                                'scaling', 'complete', NULL),
+  ('extra_regen',    '附加：再生', 'Added: Regen',    'fish',    '使用時獲得再生 X 層',        '["all_asset"]'::JSONB,                                'scaling', 'complete', NULL),
+  ('sharpen',        '銳化',       'Sharpen',         'monster', '單屬性檢定 +X',              '["weapon_melee","weapon_ranged","weapon_arcane"]'::JSONB, 'scaling', 'complete', NULL),
+  ('intimidate',     '恐嚇',       'Intimidate',      'monster', '命中時造成 X 點恐懼傷害',    '["weapon_melee","weapon_ranged","weapon_arcane"]'::JSONB, 'scaling', 'complete', NULL),
+  ('element_enchant','元素附魔',   'Element Enchant', 'monster', '攻擊額外附加指定元素傷害',   '["weapon_melee","weapon_ranged","weapon_arcane"]'::JSONB, 'choice',  'complete', NULL),
+  ('extra_stealth',  '附加：隱蔽', 'Added: Stealth',  'monster', '使用時獲得隱蔽 1 層',        '["all_asset"]'::JSONB,                                'fixed',   'complete', NULL),
+  ('extra_empower',  '附加：強化', 'Added: Empower',  'monster', '使用時獲得強化 X 層',        '["all_asset"]'::JSONB,                                'scaling', 'complete', NULL)
+ON CONFLICT (code) DO NOTHING;
+
+-- 3.x tier：非 choice 模式（scaling + fixed）
+WITH tier_data(code, tier_label, tier_order, affix_value, effect_detail_zh) AS (
+  VALUES
+    ('blade',          '+1', 1, 1.0, '傷害 +1'),
+    ('blade',          '+2', 2, 2.0, '傷害 +2'),
+    ('blade',          '+3', 3, 3.0, '傷害 +3'),
+    ('sturdy',         '+1', 1, 0.5, '資產 HP +1'),
+    ('sturdy',         '+2', 2, 1.0, '資產 HP +2'),
+    ('sturdy',         '+3', 3, 1.5, '資產 HP +3'),
+    ('armor_forge',    '+1', 1, 3.0, '使用時獲得護甲 1 層'),
+    ('armor_forge',    '+2', 2, 6.0, '使用時獲得護甲 2 層'),
+    ('armor_forge',    '+3', 3, 9.0, '使用時獲得護甲 3 層'),
+    ('counter_strike', '+1', 1, 1.0, '被攻擊時攻擊者受 1 點傷害'),
+    ('counter_strike', '+2', 2, 2.0, '被攻擊時攻擊者受 2 點傷害'),
+    ('counter_strike', '+3', 3, 3.0, '被攻擊時攻擊者受 3 點傷害'),
+    ('multi_attack',   '+1', 1, 1.5, '額外攻擊 1 次'),
+    ('multi_attack',   '+2', 2, 3.0, '額外攻擊 2 次'),
+    ('multi_attack',   '+3', 3, 4.5, '額外攻擊 3 次'),
+    ('supply',         '+1', 1, 0.5, '使用次數 +1'),
+    ('supply',         '+2', 2, 1.0, '使用次數 +2'),
+    ('supply',         '+3', 3, 1.5, '使用次數 +3'),
+    ('lightweight',    '+1', 1, 1.0, '費用 -1'),
+    ('lightweight',    '+2', 2, 2.0, '費用 -2'),
+    ('lightweight',    '+3', 3, 3.0, '費用 -3'),
+    ('swift',          'fixed', 1, 1.0, '打出時不用行動點'),
+    ('extra_draw',     '+1', 1, 1.0, '使用時抽 1 張卡'),
+    ('extra_draw',     '+2', 2, 2.0, '使用時抽 2 張卡'),
+    ('extra_draw',     '+3', 3, 3.0, '使用時抽 3 張卡'),
+    ('extra_recycle',  '+1', 1, 1.5, '進入棄牌堆時回收 1 張棄牌堆的卡'),
+    ('extra_recycle',  '+2', 2, 3.0, '進入棄牌堆時回收 2 張棄牌堆的卡'),
+    ('extra_recycle',  '+3', 3, 4.5, '進入棄牌堆時回收 3 張棄牌堆的卡'),
+    ('mend',           '+1', 1, 1.5, '使用時回復 1 HP'),
+    ('mend',           '+2', 2, 3.0, '使用時回復 2 HP'),
+    ('mend',           '+3', 3, 4.5, '使用時回復 3 HP'),
+    ('soothe',         '+1', 1, 1.5, '使用時回復 1 SAN'),
+    ('soothe',         '+2', 2, 3.0, '使用時回復 2 SAN'),
+    ('soothe',         '+3', 3, 4.5, '使用時回復 3 SAN'),
+    ('resilience',     '+1', 1, 0.5, '使用時取消 1 點傷害'),
+    ('resilience',     '+2', 2, 1.0, '使用時取消 2 點傷害'),
+    ('resilience',     '+3', 3, 1.5, '使用時取消 3 點傷害'),
+    ('extra_shield',   '+1', 1,  6.0, '使用時獲得護盾 1 層'),
+    ('extra_shield',   '+2', 2, 12.0, '使用時獲得護盾 2 層'),
+    ('extra_shield',   '+3', 3, 18.0, '使用時獲得護盾 3 層'),
+    ('extra_regen',    '+1', 1,  6.0, '使用時獲得再生 1 層'),
+    ('extra_regen',    '+2', 2, 12.0, '使用時獲得再生 2 層'),
+    ('extra_regen',    '+3', 3, 18.0, '使用時獲得再生 3 層'),
+    ('sharpen',        '+1', 1, 0.5, '單屬性檢定 +1'),
+    ('sharpen',        '+2', 2, 1.5, '單屬性檢定 +2'),
+    ('sharpen',        '+3', 3, 3.0, '單屬性檢定 +3'),
+    ('intimidate',     '+1', 1, 3.0, '命中時造成 1 點恐懼傷害'),
+    ('intimidate',     '+2', 2, 6.0, '命中時造成 2 點恐懼傷害'),
+    ('intimidate',     '+3', 3, 9.0, '命中時造成 3 點恐懼傷害'),
+    ('extra_stealth',  'fixed', 1, 6.0, '使用時獲得隱蔽 1 層'),
+    ('extra_empower',  '+1', 1, 3.0, '使用時獲得強化 1 層'),
+    ('extra_empower',  '+2', 2, 6.0, '使用時獲得強化 2 層'),
+    ('extra_empower',  '+3', 3, 9.0, '使用時獲得強化 3 層')
+)
+INSERT INTO forging_affix_tiers (affix_id, tier_label, tier_order, affix_value, effect_detail_zh)
+SELECT fa.id, td.tier_label, td.tier_order, td.affix_value::DECIMAL(5,1), td.effect_detail_zh
+FROM tier_data td
+JOIN forging_affixes fa ON fa.code = td.code
+ON CONFLICT (affix_id, tier_label) DO NOTHING;
+
+-- 3.x tier：choice 模式（蟲類 + 元素附魔）
+WITH choice_data(code, tier_label, tier_order, affix_value, effect_detail_zh, choice_payload) AS (
+  VALUES
+    ('insect_venom_1', 'bleed',   1, 2.0, '命中施加流血 1 層', '{"status":"bleed","stacks":1}'::JSONB),
+    ('insect_venom_1', 'fragile', 2, 2.0, '命中施加脆弱 1 層', '{"status":"fragile","stacks":1}'::JSONB),
+    ('insect_venom_1', 'wet',     3, 1.0, '命中施加潮濕 1 層', '{"status":"wet","stacks":1}'::JSONB),
+    ('insect_venom_2', 'poison',  1, 3.0, '命中施加中毒 1 層', '{"status":"poison","stacks":1}'::JSONB),
+    ('insect_venom_2', 'burn',    2, 3.0, '命中施加燃燒 1 層', '{"status":"burn","stacks":1}'::JSONB),
+    ('insect_venom_2', 'freeze',  3, 3.0, '命中施加冷凍 1 層', '{"status":"freeze","stacks":1}'::JSONB),
+    ('insect_venom_2', 'weaken',  4, 3.0, '命中施加弱化 1 層', '{"status":"weaken","stacks":1}'::JSONB),
+    ('insect_venom_3', 'disarm',  1, 4.0, '命中施加繳械 1 層', '{"status":"disarm","stacks":1}'::JSONB),
+    ('insect_venom_3', 'fatigue', 2, 4.0, '命中施加疲勞 1 層', '{"status":"fatigue","stacks":1}'::JSONB),
+    ('insect_venom_3', 'silence', 3, 4.0, '命中施加沈默 1 層', '{"status":"silence","stacks":1}'::JSONB),
+    ('element_enchant','fire',     1, 2.0, '攻擊額外附加火元素傷害',   '{"element":"fire"}'::JSONB),
+    ('element_enchant','ice',      2, 2.0, '攻擊額外附加冰元素傷害',   '{"element":"ice"}'::JSONB),
+    ('element_enchant','electric', 3, 2.0, '攻擊額外附加雷元素傷害',   '{"element":"electric"}'::JSONB),
+    ('element_enchant','arcane',   4, 3.0, '攻擊額外附加神秘元素傷害', '{"element":"arcane"}'::JSONB)
+)
+INSERT INTO forging_affix_tiers (affix_id, tier_label, tier_order, affix_value, effect_detail_zh, choice_payload)
+SELECT fa.id, cd.tier_label, cd.tier_order, cd.affix_value::DECIMAL(5,1), cd.effect_detail_zh, cd.choice_payload
+FROM choice_data cd
+JOIN forging_affixes fa ON fa.code = cd.code
+ON CONFLICT (affix_id, tier_label) DO NOTHING;
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -1879,6 +2222,8 @@ export async function runMigrations() {
     await client.query(MIGRATION_011_SQL);
     await client.query(MIGRATION_012_SQL);
     await client.query(MIGRATION_013_SQL);
+    await client.query(MIGRATION_014_SQL);
+    await client.query(MIGRATION_015_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

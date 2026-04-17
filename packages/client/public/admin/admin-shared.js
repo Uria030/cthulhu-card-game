@@ -728,3 +728,76 @@ function randInt(min, max) {
 function rollD20() {
   return randInt(1, 20);
 }
+
+// ============================================
+// MOD-09 鍛造與製作
+// ============================================
+
+const MATERIAL_CATEGORIES = {
+  mineral: { code: 'mineral', zh: '礦物',     en: 'Mineral',      color: '#8B7355', icon: '🪨', theme: '堅硬、鋒利、防護' },
+  wood:    { code: 'wood',    zh: '木材',     en: 'Wood',         color: '#6B4423', icon: '🪵', theme: '結構、支撐、效率' },
+  insect:  { code: 'insect',  zh: '蟲類',     en: 'Insect',       color: '#556B2F', icon: '🐛', theme: '毒素、寄生、腐蝕' },
+  fish:    { code: 'fish',    zh: '魚類',     en: 'Fish',         color: '#4A7C9B', icon: '🐟', theme: '滑溜、適應、恢復' },
+  monster: { code: 'monster', zh: '怪物素材', en: 'Monster Part', color: '#7B4EA3', icon: '👁', theme: '超自然、力量、恐懼' },
+};
+
+const MATERIAL_VALUE_TABLE = [
+  { levelMin: 1,  levelMax: 2,  sv: 1 },
+  { levelMin: 3,  levelMax: 4,  sv: 2 },
+  { levelMin: 5,  levelMax: 6,  sv: 3 },
+  { levelMin: 7,  levelMax: 8,  sv: 5 },
+  { levelMin: 9,  levelMax: 10, sv: 8 },
+];
+
+/**
+ * 依素材等級取得 SV（素材價值）
+ * @param {number} level - 素材等級 1~10
+ * @returns {number}
+ */
+function getMaterialSV(level) {
+  const entry = MATERIAL_VALUE_TABLE.find(e => level >= e.levelMin && level <= e.levelMax);
+  return entry ? entry.sv : 1;
+}
+
+/**
+ * 鍛造費用計算：V ÷ SV，向上進位
+ * @param {number} affixValue - 詞條 V 值
+ * @param {number} materialLevel - 素材等級 1~10
+ * @returns {number} 所需素材數量
+ */
+function calcForgingQuantity(affixValue, materialLevel) {
+  const sv = getMaterialSV(materialLevel);
+  return Math.ceil(affixValue / sv);
+}
+
+const APPLICABLE_SUBTYPES = {
+  weapon_melee:  { zh: '近戰武器',     en: 'Melee Weapon' },
+  weapon_ranged: { zh: '遠程物理武器', en: 'Ranged Weapon' },
+  weapon_arcane: { zh: '戰鬥法術',     en: 'Arcane Weapon' },
+  arcane_item:   { zh: '魔法道具',     en: 'Arcane Item' },
+  item:          { zh: '一般道具',     en: 'Item' },
+  consumable:    { zh: '消耗品',       en: 'Consumable' },
+  light_source:  { zh: '光源',         en: 'Light Source' },
+  all_asset:     { zh: '全資產（通用）', en: 'All Asset' },
+};
+
+const RECIPE_UNLOCK_TYPES = {
+  default:        { zh: '初始已知',       en: 'Default' },
+  exploration:    { zh: '場景探索',       en: 'Exploration' },
+  faction_talent: { zh: '陣營天賦',       en: 'Faction Talent' },
+  story_event:    { zh: '劇情事件',       en: 'Story Event' },
+  quest_reward:   { zh: '任務獎勵',       en: 'Quest Reward' },
+  hidden:         { zh: '隱藏（待解鎖）', en: 'Hidden' },
+};
+
+const AFFIX_TIER_MODES = {
+  scaling: { zh: '階級式（+1/+2/+3）', en: 'Scaling' },
+  fixed:   { zh: '固定效果',            en: 'Fixed' },
+  choice:  { zh: '選一選項',            en: 'Choice' },
+};
+
+const AFFIX_DESIGN_STATUS = {
+  pending:  { zh: '待設計', en: 'Pending',  color: '#8b6b3a' },
+  partial:  { zh: '部分完成', en: 'Partial', color: '#c9a84c' },
+  complete: { zh: '已完成', en: 'Complete', color: '#6b9c5a' },
+};

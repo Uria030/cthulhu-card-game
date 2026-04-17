@@ -27,5 +27,302 @@
         "html": "<h3>Gemini AI 三種敘事模式</h3><p>本模組內建 Gemini AI 輔助寫作。API Key 存在瀏覽器 <em>localStorage</em>，第一次使用時系統會提示輸入。</p><h3>模式 A：詞條敘事建議</h3><p>位置：詞條編輯器的「效果敘述（中）」旁邊的「✨ AI 建議」按鈕</p><ul><li>會提供 3 組名稱建議 + 敘述選項</li><li>可填入「使用者提示」幫 AI 理解設計意圖</li><li>每個建議都有「套用」按鈕直接帶入編輯器</li></ul><h3>模式 B：配方解鎖敘事</h3><p>位置：配方編輯器的「敘事說明」旁的「✨ AI 建議」按鈕</p><ul><li>產出 40–80 字的克蘇魯氛圍敘事</li><li>會參考配方名稱、產出、素材與解鎖類型</li></ul><h3>模式 C：素材命名批次</h3><p>位置：素材庫頁面下方的「✨ AI 批次命名」按鈕</p><ul><li>選好類別後一次為 LV1–10 各生成命名建議</li><li>每個建議有獨立「套用此 LV」按鈕</li><li>若對應 LV 已有命名素材，會問你要不要新增一筆</li></ul><div class=\"tip\">AI 只負責名稱與敘事文字，<strong>不會</strong>幫你指定 V 值、階級結構或素材數量 — 這些數值決策由設計者掌握。</div><h3>設定 API Key</h3><p>頂部列右側的「🔑 API Key」按鈕，輸入 Google Gemini API Key 後即可使用。Key 僅存在本機瀏覽器，不會上傳伺服器。</p>"
       }
     ]
+  },
+  "MOD-01": {
+    "title": "卡片設計器",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個設計器是做什麼的</h3><p>MOD-01 是整個遊戲的<strong>核心資料源</strong>。所有卡片（事件／資產／盟友／技能）都在此定義，包含效果、費用、陣營歸屬、升級曲線。</p><h3>涵蓋的設計對象</h3><ul><li><strong>四大卡片類型</strong> — 事件(event)／資產(asset)／盟友(ally)／技能(skill)</li><li><strong>六大要素效果結構</strong> — trigger → condition → cost → target → effect_code(+params) → duration</li><li><strong>三合一用途系統</strong> — 打出(play)／加值(commit)／消費(consume)，同一張卡可設計三種用途（<span class=\"rule-ref\">補充 05</span>）</li><li><strong>價值計算（V 值）</strong> — 60+ 效果代碼自動加總成 V 值，即時反推稀有度</li><li><strong>書籍／遺跡／升級系統</strong> — 研究方法、升級階梯、LV0-5 存在同一筆</li><li><strong>武器/法術/盟友專屬欄位</strong> — 彈藥、使用次數、法術類型、盟友 HP/SAN</li></ul><div class=\"tip\">本模組是其他模組的<strong>上游依賴</strong>：天賦樹引用卡片、調查員牌組引用卡片、配方產出卡片。建議先在這裡建立好卡池再去做其他模組。</div>"
+      },
+      {
+        "label": "何時使用",
+        "html": "<h3>在整個設計工作流中的位置</h3><p>MOD-01 是<strong>第一個</strong>要動的模組之一。其他模組都會引用這裡的卡片。</p><h3>建議設計順序</h3><ol><li>先在 <span class=\"rule-ref\">MOD-05</span> 確認戰鬥風格與專精體系</li><li>回到本模組建立基礎卡池（每個陣營各 30-50 張）</li><li>去 <span class=\"rule-ref\">MOD-02</span> 天賦樹引用本模組的 <em>talent_card</em> 類型節點</li><li>去 <span class=\"rule-ref\">MOD-11</span> 調查員組預組牌組</li><li>去 <span class=\"rule-ref\">MOD-09</span> 配方指定產出卡片</li></ol><h3>和規則書的關聯</h3><ul><li>卡片代碼自動流水號（<em>C &lt; faction &gt; &lt; style &gt; -NN</em>）</li><li>系列欄位預設 <em>C</em>（核心）可另建擴充包</li></ul>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>建立一張新卡</h3><ol><li>左側列表上方「+ 新增卡片」或 <em>Ctrl+N</em></li><li>選擇陣營 × 風格 × 類型 → 系統自動產生代碼（<em>CN1A-01</em>）</li><li>填寫名稱（中文，英文可用 AI 翻譯）</li><li>設定費用、等級、稀有度（稀有度由 V 值反推，僅顯示）</li></ol><h3>設計效果</h3><ol><li>進入「效果」區塊</li><li>「+ 新增效果」→ 依序填 trigger、effect_code，參數會自動出現</li><li>左側<strong>價值標籤</strong>顯示此效果的 V 值</li><li>所有效果總和 → 右側平衡面板顯示推算稀有度</li></ol><h3>三合一用途</h3><p>同一張卡可同時設計三種用途（三個可收合區塊）：</p><ul><li><strong>打出</strong>：直接使用，費用從 cost 扣</li><li><strong>加值</strong>：技能檢定時當屬性貼紙（commit_icons 選 7 屬性或萬能）</li><li><strong>消費</strong>：永久移除牌組換取強力效果（consume_effect，價值須 &gt; 1.5V）</li></ul><h3>升級系統</h3><p>書籍／遺跡卡可設計 LV0-5 升級階梯，同一筆 card 用 <em>upgrades</em> JSONB 儲存各級差異。適合設計需要長期培養的卡片。</p><h3>快捷鍵</h3><ul><li><em>Ctrl+S</em> 儲存、<em>Ctrl+N</em> 新增、<em>Ctrl+D</em> 複製、<em>Ctrl+G</em> AI 生成、<em>Esc</em> 退出編輯</li></ul>"
+      },
+      {
+        "label": "關鍵欄位",
+        "html": "<h3>必填欄位</h3><ul><li><strong>card_type</strong>：event/asset/ally/skill 四擇一，決定後續欄位可見性</li><li><strong>slot</strong>：one_hand/two_hand/head/body/accessory/arcane/talent/expertise/none</li><li><strong>faction</strong>：八陣營之一或 <em>neutral</em></li><li><strong>style</strong>：陣營內的風格標籤</li></ul><h3>容易混淆的欄位</h3><ul><li><strong>commit_icons</strong> vs <strong>attribute_modifiers</strong>：<ul><li><em>commit_icons</em> — 當貼紙時提供的圖示（加值用途）</li><li><em>attribute_modifiers</em> — 卡片在場時提供的屬性修正（被動加成）</li></ul>兩者<strong>完全獨立</strong>，絕不能混用</li><li><strong>consume_enabled</strong>：必須勾選 + 同時填 consume_effect，缺一不可</li><li><strong>subtypes</strong>：物品子類型多選（11 種），<span class=\"rule-ref\">MOD-09</span> 的鍛造詞條依此判斷適用性</li><li><strong>is_temporary</strong>：臨時卡標記，玩家不可對此類卡鍵造</li><li><strong>xp_cost</strong>：XP 花費，獨立於 cost（資源）</li></ul><div class=\"warn\">技能卡的 V 值區間依 LV0-5 分級（LV0: 0-2V, LV5: 5-7V 等）。驗證失敗會擋儲存。</div>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">卡片設計規範 v0.2</span> — 全卡片類型規格 + 設計檢查清單</li><li><span class=\"rule-ref\">卡片價值計算規範 v0.1</span> — 60+ 效果價值表、費用公式、稀有度反推</li><li><span class=\"rule-ref\">補充 02 v0.2</span> — 卡片效果語言與狀態系統（堆疊減層）</li><li><span class=\"rule-ref\">補充 05 v0.1</span> — 三合一卡片用途系統</li><li><span class=\"rule-ref\">補充 04</span> — 混沌袋與法術系統（6 類型 × 5 施法）</li></ul><h3>核心公式</h3><p><strong>稀有度反推：</strong></p><ul><li>事件：總 V ÷ 費用 = 稀有度（1:1）</li><li>資產：總 V ÷ 費用 × 2 = 稀有度（2:1）</li><li>盟友：總 V ÷ 費用 = 稀有度（1:1）</li></ul><p><strong>消費效果價值門檻：</strong>consume_effect 總 V 須 &gt; 1.5V（永久移除需有足夠回報）</p><h3>狀態分類</h3><p>狀態分四類（<em>admin/data/effect-language-options.json</em> 為單一真相來源）：</p><ul><li>數值型負面：流血、中毒、燃燒等（有層數）</li><li>開關型負面：繳械、沈默等（二元）</li><li>數值型正面：護甲、護盾、再生等</li><li>特殊型正面：隱蔽、強化等</li></ul>"
+      },
+      {
+        "label": "AI 輔助",
+        "html": "<h3>Gemini AI 整合</h3><p>API Key 存在瀏覽器 <em>localStorage</em>。</p><h3>模式</h3><ul><li><strong>名稱中翻英</strong>：中文名填完後一鍵翻譯</li><li><strong>效果描述中翻英</strong>：效果中文敘述 → 英文敘述</li><li><strong>完整卡片 Prompt 整合</strong>：輸入設計意圖 → 產出卡片完整結構（含價值計算預估）</li></ul><div class=\"tip\">AI Prompt 已整合「價值系統 + 三合一 + value_calculation」的完整結構，生成的卡片直接附帶 V 值估算，省去手動計算。</div>"
+      }
+    ]
+  },
+  "MOD-02": {
+    "title": "天賦樹設計器",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個設計器是做什麼的</h3><p>MOD-02 管理<strong>八陣營</strong>各自的 12 級天賦樹。每棵樹 32 節點、3 個分支路線，總花費 16 天賦點／分支。</p><h3>核心結構</h3><ul><li><strong>Lv1-2 共通主幹</strong>：所有同陣營調查員必走</li><li><strong>Lv3 三選一分支</strong>：進入主幹後分歧</li><li><strong>Lv4-12</strong>：分支內自己的路徑</li></ul><h3>節點類型（8 種）</h3><ul><li><em>passive</em> — 被動效果</li><li><em>attribute_boost</em> — 屬性提升</li><li><em>proficiency</em> — 戰鬥風格熟練</li><li><em>branch_choice</em> — Lv3 的分支選擇點</li><li><em>milestone</em> — Lv6 的質變節點</li><li><em>talent_card</em> — 天賦卡（引用 MOD-01 的 talent 類型卡片）</li><li><em>ultimate</em> — Lv12 究極技能</li></ul><div class=\"tip\">八棵樹 × 32 節點 = 256 節點已由 migration 009 預建骨架。你只需在既有骨架上填內容。</div>"
+      },
+      {
+        "label": "何時使用",
+        "html": "<h3>在整個設計工作流中的位置</h3><p>本模組中後期處理，依賴 <span class=\"rule-ref\">MOD-01</span>（talent_card）與 <span class=\"rule-ref\">MOD-05</span>（proficiency）。</p><h3>建議順序</h3><ol><li>確保 MOD-01 已建立 8-16 張 <em>talent</em> 類型卡片（Lv9 節點要引用）</li><li>確保 MOD-05 的 30 種專精已命名好（Lv5/Lv8 節點要選）</li><li>回到本模組，選陣營 → 編輯樹</li></ol><h3>完成度判定</h3><ul><li><strong>節點</strong>：<em>pending</em>（骨架預設）→ <em>draft</em>（有名稱）→ <em>complete</em>（有名稱 + 效果描述）</li><li><strong>天賦樹</strong>：依全部 32 節點的狀態自動判定</li></ul>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>編輯既有樹</h3><ol><li>左側選陣營 → 進入樹狀編輯分頁</li><li>SVG 樹狀圖點擊任一節點 → 右側進入節點編輯</li><li>類型連動欄位：<ul><li>屬性提升 → 下拉選屬性 + 數值</li><li>專精 → 下拉選 30 種專精</li><li>天賦卡 → 搜尋 MOD-01 的卡片</li></ul></li><li>效果列表可<strong>行內編輯</strong>（點標籤直接改），自動加總 V 值</li></ol><h3>分支路線管理</h3><ol><li>進入「分支路線管理」區塊（3 張卡片）</li><li>分別設定 Branch A/B/C 的主題與敘事</li><li>Lv3 的 <em>branch_choice</em> 節點會自動對應三個分支</li></ol><h3>陣營比較</h3><p>切到「陣營比較」分頁看：</p><ul><li>八樹的 completion_rate 概覽卡片</li><li>屬性覆蓋矩陣（哪個屬性哪個陣營會提升）</li><li>戰鬥熟練覆蓋矩陣</li></ul><h3>快捷鍵</h3><ul><li><em>Ctrl+S</em> 儲存節點、<em>Ctrl+Shift+S</em> 儲存整棵樹、<em>Ctrl+G</em> AI 生成、方向鍵導航節點</li></ul>"
+      },
+      {
+        "label": "關鍵欄位",
+        "html": "<h3>節點必填</h3><ul><li><strong>level</strong>：Lv1-12，骨架已設定不可改</li><li><strong>node_type</strong>：8 種之一，切換會影響下方可見欄位</li><li><strong>branch_index</strong>：0-2（Lv4 後才有意義）</li></ul><h3>效果結構</h3><ul><li>每個節點可有多個 <em>talent_node_effects</em>（被動效果）</li><li>效果代碼與 MOD-01 共用一套（參考 <em>effect-language-options.json</em>）</li></ul><h3>天賦點花費</h3><p>每個分支路徑累計 16 點：Lv1+Lv2+Lv3+Lv4+Lv5+Lv6+Lv7+Lv8+Lv9+Lv10+Lv11+Lv12 對應不同花費。<span class=\"rule-ref\">支柱五</span> 明定每陣營可取得 18+5 = 23 點潛力（18 創角點 + 5 次屬性提升）。</p><h3>Lv2 主幹自動填入</h3><p>Lv2 的 <em>attribute_boost</em> 已由 migration 009 自動填入陣營主屬性，你可以改但建議保留預設。</p><div class=\"warn\">若 Lv6 的 milestone（質變節點）設計不出來，可用 AI 生成完整分支功能一次產出 10 節點初稿。</div>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">支柱五（成長子系統）</span> — 天賦樹 + XP 雙貨幣</li><li><span class=\"rule-ref\">支柱一</span> — 八陣營極 MBTI</li></ul><h3>八陣營與 MBTI 對應</h3><p>每陣營對應四個 MBTI 字母之一（E/I、S/N、T/F、J/P），<span class=\"rule-ref\">MOD-11</span> 調查員模板依此矩陣產生 16 × 4 = 64 組預設。</p><h3>熟練度系統</h3><p>Lv5 與 Lv8 的 proficiency 節點從 <span class=\"rule-ref\">MOD-05</span> 的 30 種專精選一個。選擇後該陣營調查員可<strong>自動熟練</strong>對應的戰鬥風格卡。</p>"
+      },
+      {
+        "label": "AI 輔助",
+        "html": "<h3>Gemini AI 整合</h3><ul><li><strong>單節點效果</strong>：選中節點 → Ctrl+G → AI 依節點類型與級別產出效果草稿</li><li><strong>完整分支</strong>：選中 branch → AI 產出 10 節點（Lv3-Lv12）初稿</li><li><strong>設計方向補充欄</strong>：寫幾行設計意圖 → AI 依此調整風格</li><li><strong>中翻英</strong>：節點名稱與效果描述翻譯</li></ul><div class=\"tip\">AI 生成的分支只是初稿，V 值可能不均衡，生成後務必檢查每個節點的 V 值並手動微調。</div>"
+      }
+    ]
+  },
+  "MOD-03": {
+    "title": "敵人設計器",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個設計器是做什麼的</h3><p>MOD-03 管理<strong>三層怪物結構</strong>：家族（family）→ 種族（species）→ 變體（variant）。變體是實際戰鬥單位。</p><h3>已預建資料</h3><p>13 家族 + 32 種族已 seed（<span class=\"rule-ref\">怪物家族設計草案 v2</span>）。變體需自行建立。</p><h3>三層結構</h3><ul><li><strong>家族</strong>：克蘇魯眷族、深潛者、猶格索托斯、幻夢境… 高層世界觀分組</li><li><strong>種族</strong>：家族內的物種（深潛者有 &quot;深潛者&quot;、&quot;半身深潛者&quot; 等）</li><li><strong>變體</strong>：同種族不同位階（1 雜兵 → 5 巨頭）的實體</li></ul>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>左側三層導航</h3><ol><li>點家族 → 展開種族列表</li><li>點種族 → 展開變體列表</li><li>點變體 → 中央編輯區顯示完整屬性</li></ol><h3>設計變體</h3><p>中央編輯區分多個可收合段落：</p><ol><li><strong>基本資訊</strong>：代碼、名稱、位階、不可擊敗（巨頭劇情怪）</li><li><strong>核心數值</strong>：HP/SAN/攻擊/防禦/速度</li><li><strong>恐懼系統</strong>：半徑 + 恐懼值 + 觸發類型</li><li><strong>移動</strong>：速度 + 類型</li><li><strong>詞綴與狀態</strong>：keywords、元素弱點/抗性/免疫、施加的負面狀態、自身正面狀態</li><li><strong>AI 行為</strong>：依位階與種族差異</li><li><strong>攻擊卡</strong>：從戰鬥風格卡池選或建立專屬</li><li><strong>敘事</strong>：戰鬥中各狀態的描述</li></ol><h3>家族總覽</h3><p>切到「家族總覽」分頁看：</p><ul><li>家族內各變體的數值對比表</li><li>防禦分佈長條圖</li></ul>"
+      },
+      {
+        "label": "關鍵欄位",
+        "html": "<h3>位階</h3><ul><li>1 雜兵 / 2 威脅 / 3 精英 / 4 頭目 / 5 巨頭</li><li>位階決定基礎數值曲線（參考 <span class=\"rule-ref\">數值規格文件 v0.1</span>）</li></ul><h3>恐懼系統</h3><ul><li><strong>半徑</strong>：0-5，玩家進入半徑內觸發</li><li><strong>恐懼值</strong>：0-10，觸發時扣玩家 SAN 的量</li><li><strong>觸發類型</strong>：遭遇/持續/一次性</li></ul><h3>詞綴繼承</h3><p>種族層設定的詞綴會<strong>繼承</strong>到變體（顯示為虛線框），變體可再加自己的。</p><h3>元素系統</h3><p>每個變體對五種元素（火/冰/雷/神秘/物理）設定弱點/抗性/免疫。影響 <span class=\"rule-ref\">MOD-01</span> 卡片的元素附魔詞條傷害計算。</p><div class=\"warn\">巨頭勾選「不可擊敗」後，玩家無法透過 HP 歸零擊敗，只能透過劇情觸發條件。</div>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">怪物家族設計草案 v2</span> — 7 家族原始設計（擴充為 13）</li><li><span class=\"rule-ref\">補充 03</span> — 瀕死系統、敵人 AI 與戰鬥風格卡</li></ul><h3>與其他模組關聯</h3><ul><li><span class=\"rule-ref\">MOD-07</span> 關卡編輯器 — 關卡選怪物家族池</li><li><span class=\"rule-ref\">MOD-09</span> 鍛造與製作 — 怪物素材綁定家族</li><li><span class=\"rule-ref\">MOD-10</span> 城主設計器 — 遭遇卡可引用變體</li></ul><h3>AI 行為模板</h3><p>每個位階有推薦的 AI 模板（<em>melee_aggro</em>/<em>ranged_kite</em>/<em>summoner</em> 等），變體可覆寫。</p>"
+      }
+    ]
+  },
+  "MOD-04": {
+    "title": "團隊精神管理",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個設計器是做什麼的</h3><p>MOD-04 管理<strong>33 個團隊精神</strong>。團隊精神由凝聚力（系統 A）驅動，是<strong>合作機制的核心資料</strong>。</p><h3>深度層級</h3><p>每個精神有 4 個深度（0/1/2/3）對應不同效果：</p><ul><li><strong>深度 0</strong>：解鎖基礎版</li><li><strong>深度 1-2</strong>：強化</li><li><strong>深度 3</strong>：極致形態</li></ul><p>凝聚力投資累計到里程碑時解鎖對應深度。</p><h3>已預建</h3><p>33 精神已由 migration 008 seed，你只需為各深度設計效果。</p>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>設計編輯</h3><ol><li>左側選精神（預設進入設計編輯分頁）</li><li>中央編輯基本資訊（名稱、類別、敘事）</li><li>「深度層級」區塊 → 為 0/1/2/3 各設計效果</li><li>「解鎖條件」區塊 → 特殊觸發（例：調查員死亡時+1 凝聚力）</li></ol><h3>價值比較</h3><p>切到「價值比較」分頁看：</p><ul><li>33 精神的 V 值散佈圖</li><li>依類別分組的強度分析</li><li>失衡警告（哪些精神太強/太弱）</li></ul><h3>鍛造/製作解鎖旗標</h3><p>勾選 <em>forge_unlock</em> / <em>craft_unlock</em> → 代表此精神會觸發 <span class=\"rule-ref\">MOD-09</span> 的鍛造或製作能力解鎖。</p>"
+      },
+      {
+        "label": "關鍵欄位",
+        "html": "<h3>必填</h3><ul><li><strong>spirit_code</strong>：精神代碼（唯一）</li><li><strong>category</strong>：分類（情感型/行為型/哲學型…）</li><li><strong>base_narrative</strong>：基礎敘事</li></ul><h3>深度效果</h3><ul><li>每個深度層級可有多個 <em>spirit_depth_effects</em></li><li>效果代碼與 <span class=\"rule-ref\">MOD-01</span> 共用</li></ul><h3>里程碑凝聚力門檻</h3><p>深度 1/2/3 對應固定的凝聚力門檻（數值尚在設計中），此欄位為<strong>顯示性</strong>參數，實際觸發由遊戲引擎運行時處理。</p>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">核心設計原則 系統 A</span> — 凝聚力與團隊精神</li></ul><h3>與其他模組關聯</h3><ul><li><span class=\"rule-ref\">MOD-09</span> 鍛造與製作 — forge_unlock/craft_unlock 旗標</li><li><span class=\"rule-ref\">MOD-11</span> 調查員設計器 — 調查員的簽名卡可能觸發特定精神</li></ul><h3>設計哲學</h3><p>33 精神不是全部都要被玩家取得 — 一個戰役通常啟用 5-8 個作為該場的「可能性」。設計時應思考各精神之間的<strong>主題張力</strong>。</p>"
+      }
+    ]
+  },
+  "MOD-05": {
+    "title": "戰鬥風格與專精管理",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個設計器是做什麼的</h3><p>MOD-05 管理<strong>8 戰鬥風格 × 30 專精</strong>的矩陣，以及每個專精對八陣營的親和度。</p><h3>戰鬥風格</h3><p>8 種風格（近戰、射擊、法術、近戰+防禦、雙持…）對應 <span class=\"rule-ref\">MOD-01</span> 卡片的 <em>combat_style</em> 欄位。</p><h3>專精</h3><p>30 個專精為風格內的子類（例：近戰風格下有 <em>single_blade</em>、<em>dual_wield</em> 等），對應 <span class=\"rule-ref\">MOD-02</span> 天賦樹 Lv5/Lv8 的 proficiency 節點。</p><h3>已預建</h3><p>8 風格 + 30 專精已由 migration 007 seed。</p>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>編輯風格</h3><ol><li>左側選風格 → 中央顯示含專精列表</li><li>填風格基本資訊：敘事、主屬性對應、代表性武器類型</li></ol><h3>編輯專精</h3><ol><li>從風格內選專精</li><li>設計該專精的效果（enhancement_code + 參數）</li><li>設定陣營親和度（哪些陣營適合選此專精）</li></ol><h3>陣營熟練對應</h3><p>可在風格層或專精層指定「這個陣營的基礎調查員會熟練本風格/專精」，直接顯示在 <span class=\"rule-ref\">MOD-11</span> 調查員模板的熟練欄位。</p>"
+      },
+      {
+        "label": "關鍵欄位",
+        "html": "<h3>戰鬥風格</h3><ul><li><strong>style_code</strong>：代碼，對應 MOD-01 的 combat_style 欄位</li><li><strong>primary_attribute</strong>：主屬性（STR/AGI/INT…）</li><li><strong>weapon_types</strong>：允許的武器類型陣列</li></ul><h3>專精</h3><ul><li><strong>spec_code</strong>：代碼，對應 MOD-02 Lv5/Lv8 的 proficiency 節點</li><li><strong>enhancement_effects</strong>：熟練後獲得的額外效果</li><li><strong>faction_affinity</strong>：{ faction_code: affinity_level }</li></ul><h3>戰鬥風格卡</h3><p>每個風格有<strong>專屬的戰鬥風格卡</strong>（參考 <span class=\"rule-ref\">補充 03</span>），屬於 MOD-01 卡池的一部分但由本模組定義對應關係。</p>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">補充 03</span> — 瀕死系統、敵人 AI 與戰鬥風格卡</li></ul><h3>與其他模組關聯</h3><ul><li><span class=\"rule-ref\">MOD-01</span> 卡片設計器 — combat_style 欄位</li><li><span class=\"rule-ref\">MOD-02</span> 天賦樹 — Lv5/Lv8 proficiency 節點</li><li><span class=\"rule-ref\">MOD-11</span> 調查員設計器 — 調查員基礎熟練</li></ul><h3>風格 × 專精 × 陣營三向矩陣</h3><p>每個陣營在每個風格下有其「慣用專精」。這個矩陣影響：</p><ul><li>MOD-11 調查員模板的熟練欄位預設</li><li>AI 生成天賦樹時 Lv5/Lv8 的推薦</li><li>戰鬥系統對「無熟練」懲罰的觸發</li></ul>"
+      }
+    ]
+  },
+  "MOD-08": {
+    "title": "地點設計器",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個設計器是做什麼的</h3><p>MOD-08 管理<strong>可重複使用的地點積木</strong>。每個地點是一個抽象實體，可在多個關卡重複使用。</p><h3>地點要素</h3><ul><li><strong>基本資訊</strong>：名稱、敘事、圖片</li><li><strong>遮蔽難度（shroud）</strong>：進入此地點需克服的視線／隱密度</li><li><strong>線索（clues）</strong>：可調查的線索點數</li><li><strong>隱藏資訊</strong>：只有特定條件下才揭露的敘事片段</li><li><strong>動作（actions）</strong>：地點特有的可執行動作</li></ul><h3>三層架構中的位置</h3><p><span class=\"rule-ref\">MOD-06</span>（戰役）→ <span class=\"rule-ref\">MOD-07</span>（關卡）→ <span class=\"rule-ref\">MOD-08</span>（地點）。本模組是<strong>最底層的積木</strong>。</p>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>三個分頁</h3><ul><li><strong>🗺 地點編輯</strong>：主工作區</li><li><strong>🏷 標籤管理</strong>：管理分類標籤系統</li><li><strong>📊 總覽</strong>：全庫地點的矩陣視圖</li></ul><h3>建立地點</h3><ol><li>「+ 新增地點」→ 填代碼與名稱</li><li>設定遮蔽、線索、隱藏資訊</li><li>新增動作（action_type + effect）</li><li>勾選適用標籤（時代/環境/風格）</li></ol><h3>標籤系統</h3><p>三大類標籤：</p><ul><li><strong>地域</strong>：阿卡姆市中心、波士頓港、野外等</li><li><strong>時代</strong>：1920s 現代、1890s 古典、夢境等</li><li><strong>風格</strong>：神秘、恐怖、社交、戰鬥</li></ul><p>標籤在「標籤管理」分頁新增、在地點編輯器勾選套用。</p><h3>總覽</h3><p>顯示所有地點的縮圖矩陣 + 標籤覆蓋熱圖，方便 <span class=\"rule-ref\">MOD-07</span> 組關卡時挑選。</p>"
+      },
+      {
+        "label": "關鍵欄位",
+        "html": "<h3>必填</h3><ul><li><strong>code</strong>：唯一代碼</li><li><strong>name_zh</strong>：中文名</li><li><strong>shroud</strong>：0-5 遮蔽難度（0 = 公開、5 = 極度隱密）</li><li><strong>clue_count</strong>：線索總量（玩家調查耗盡後才能過關）</li></ul><h3>隱藏資訊</h3><ul><li>可為多筆 <em>hidden_info</em> 紀錄</li><li>每筆可設觸發條件（特定屬性檢定成功、特定道具、特定調查員）</li></ul><h3>動作</h3><ul><li>每個 <em>action</em> 有：名稱、花費、效果代碼</li><li>例：「搜尋」：花 1 AP → 獲得 1 線索</li><li>效果代碼與 <span class=\"rule-ref\">MOD-01</span> 共用</li></ul><h3>連結資訊</h3><p>地點本身<strong>不儲存</strong>連結關係 — 那是 <span class=\"rule-ref\">MOD-07</span> 關卡層的職責。本模組純粹是積木定義。</p>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">規則書第五章</span> — 場景系統總綱</li><li><span class=\"rule-ref\">補充 07</span> — 分支路線與非線性敘事</li></ul><h3>三層架構</h3><p>本模組位於場景系統的最底層：</p><ol><li><strong>MOD-06 戰役敘事</strong>：章節分支、旗標邏輯</li><li><strong>MOD-07 關卡編輯器</strong>：組合地點成關卡、ACT/Agenda 進度</li><li><strong>MOD-08 地點設計器</strong>（本模組）：定義可重複使用的地點</li></ol><div class=\"tip\">好的積木庫 = 一個地點可在多個關卡重複用。避免為某個關卡客製專屬地點。</div>"
+      }
+    ]
+  },
+  "MOD-10": {
+    "title": "城主設計器",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個設計器是做什麼的</h3><p>MOD-10 管理<strong>城主敘事卡池</strong>：神話卡（Mythos）與遭遇卡（Encounter）。這些卡驅動<strong>敵對推進</strong>。</p><h3>神話卡（Mythos）</h3><p>每回合城主抽一張神話卡，造成全局事件。<strong>計時器</strong> — 越抽越緊迫。</p><h3>遭遇卡（Encounter）</h3><p>玩家進入特定地點或觸發條件時抽取。有<strong>分支選項</strong>：玩家的選擇影響後續發展。</p>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>三個分頁</h3><ul><li><strong>🃏 卡片編輯</strong>：建立與編輯神話/遭遇卡</li><li><strong>📊 總覽</strong>：卡池統計</li><li><strong>⚙ 遊戲平衡</strong>：各卡片難度/強度分佈</li></ul><h3>建立神話卡</h3><ol><li>「+ 新增神話卡」→ 選類型（即時/持續/雙重）</li><li>填名稱與敘事</li><li>設定觸發時機（抽取當下 / 回合末 / 特定條件）</li><li>填效果（多筆 <em>mythos_card_effects</em>）</li></ol><h3>建立遭遇卡</h3><ol><li>「+ 新增遭遇卡」</li><li>填情境敘事（80-200 字）</li><li>新增 2-4 個分支選項（<em>encounter_card_options</em>）</li><li>每個選項可要求屬性檢定 + 成功／失敗分別效果</li></ol><h3>標籤對映</h3><p>遭遇卡可對映到地點標籤 — 玩家在對應標籤的地點才會抽到此卡。這樣能做<strong>主題性的</strong>遭遇池。</p>"
+      },
+      {
+        "label": "關鍵欄位",
+        "html": "<h3>神話卡</h3><ul><li><strong>mythos_type</strong>：即時(instant)/持續(ongoing)/雙重(dual)</li><li><strong>trigger_timing</strong>：draw/turn_end/condition</li><li><strong>difficulty_tier</strong>：1-5 對應 ACT 進度</li></ul><h3>遭遇卡</h3><ul><li><strong>encounter_type</strong>：explore/social/combat/lore</li><li><strong>options</strong>：2-4 個選項（JSONB 陣列）</li><li><strong>option.test</strong>：可選，屬性檢定 + DC</li><li><strong>option.success / option.failure</strong>：結果效果</li></ul><h3>標籤對映</h3><p>透過 <em>encounter_card_tag_map</em> 將遭遇卡與 <span class=\"rule-ref\">MOD-08</span> 的地點標籤建立多對多關係。</p>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">核心設計原則 系統 C</span> — 城主敘事</li><li><span class=\"rule-ref\">補充 07</span> — 分支路線與非線性敘事</li></ul><h3>與其他模組關聯</h3><ul><li><span class=\"rule-ref\">MOD-08</span> 地點設計器 — 遭遇卡對映地點標籤</li><li><span class=\"rule-ref\">MOD-03</span> 敵人設計器 — 戰鬥型遭遇卡引用變體</li></ul><h3>ACT/Agenda 整合</h3><p>城主卡透過 difficulty_tier 對應 <span class=\"rule-ref\">MOD-07</span> 關卡的 ACT 進度。ACT 推進時卡池<strong>動態替換</strong>難度層級。</p>"
+      }
+    ]
+  },
+  "MOD-11": {
+    "title": "調查員設計器",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個設計器是做什麼的</h3><p>MOD-11 管理<strong>調查員模板</strong>：64 組預設（16 MBTI × 4 陣營位置）+ 客製模板。包含屬性、熟練、簽名卡、弱點、起始牌組。</p><h3>預設矩陣</h3><p>64 個預設模板已由 migration 013 seed，用的是 MBTI × 陣營主字母的組合，提供設計者穩定的起點。</p><h3>五分頁設計流程</h3><ol><li>① 基本資訊（名稱、職業、背景）</li><li>② 屬性配點（18 點 + V 值自動計算）</li><li>③ 戰鬥熟練（+ AI V 值估算）</li><li>④ 簽名卡 + 弱點</li><li>⑤ 起始牌組</li></ol>"
+      },
+      {
+        "label": "何時使用",
+        "html": "<h3>在整個設計工作流中的位置</h3><p>MOD-11 是<strong>最後期</strong>的整合模組，依賴：</p><ul><li><span class=\"rule-ref\">MOD-01</span> 卡片設計器 — 起始牌組、簽名卡引用</li><li><span class=\"rule-ref\">MOD-02</span> 天賦樹 — 屬性提升來源</li><li><span class=\"rule-ref\">MOD-05</span> 戰鬥風格 — 熟練</li></ul><h3>三大視圖</h3><ul><li><strong>設計器</strong>：單一模板的編輯器（預設進入）</li><li><strong>總覽面板</strong>：64 模板的完成度矩陣、時代標籤雲、偏重字母分佈</li><li><strong>V 值平衡面板</strong>：散佈圖、箱型圖、失衡警告</li></ul>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>選模板</h3><ol><li>進入設計器 → 16×4 預設矩陣（MBTI × 陣營位置 1-4）</li><li>左側陣營色彩 + 完成度視覺 + 過濾器</li><li>點任一格進入編輯</li></ol><h3>填五個分頁</h3><ol><li><strong>① 基本資訊</strong>：姓名（可 AI 生成背景）、職業、時代</li><li><strong>② 屬性配點</strong>：<ul><li>基礎 7 點（每屬性 +1）</li><li>陣營 6 點（主屬性 +3 + 副屬性 +3）</li><li>自由 5 點 → 創角總 18 點</li><li>V 值總覽條顯示即時價值</li></ul></li><li><strong>③ 戰鬥熟練</strong>：從 MOD-05 的 30 專精選 3-5 個；AI 可估算整體 V 值</li><li><strong>④ 簽名卡 + 弱點</strong>：<ul><li>簽名卡：專屬該調查員的 2-4 張卡</li><li>弱點：缺陷卡，違規時觸發</li></ul></li><li><strong>⑤ 起始牌組</strong>：從 MOD-01 卡池選 20-30 張</li></ol><h3>完成度指示</h3><p>每個分頁有進度指示，全綠才算 <em>complete</em>。</p>"
+      },
+      {
+        "label": "關鍵欄位",
+        "html": "<h3>屬性配點系統</h3><ul><li><strong>總點數 18</strong>（<span class=\"rule-ref\">支柱五 v0.1</span>，從舊版 21 降為 18，差額 3 點由天賦樹 5 次屬性提升補回至 23 點潛力）</li><li>每屬性上限 5（創角時）</li></ul><h3>簽名卡</h3><ul><li>必有 2-4 張</li><li>建議主題貼合調查員背景</li><li>V 值獨立計算，不受其他卡池影響</li></ul><h3>弱點</h3><ul><li>至少 1 張弱點</li><li>弱點為強制加入起始牌組</li><li>違規條件觸發時產生負面效果</li></ul><h3>MBTI × 陣營</h3><ul><li>MBTI 四個字母（E/I、S/N、T/F、J/P）對應陣營偏好</li><li>主字母符合陣營 → 屬性基礎自動加成</li><li>不符合 → 次字母加成</li></ul><div class=\"tip\">64 預設已由 migration 013 自動填入屬性與 V 值，你只需修改簽名卡、弱點、牌組，或整個重設。</div>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">支柱一</span> — 八陣營極 MBTI</li><li><span class=\"rule-ref\">支柱五 v0.1</span> — 創角 18 點 + 天賦樹 5 次屬性提升</li><li><span class=\"rule-ref\">核心設計原則</span> — 調查員作為「抉擇代理」的定位</li></ul><h3>V 值平衡哲學</h3><p>64 個預設的 V 值總和應<strong>落在合理區間</strong>（目標 ±10% 標準差）。V 值平衡面板會標示哪些模板過強/過弱，方便調整簽名卡 V 值或屬性分配。</p><h3>9 V 值計算函數</h3><p>資料庫內建 9 個 PL/pgSQL 函數自動計算：屬性 V、簽名卡 V、弱點 V（負值）、起始牌組 V、熟練 V、總 V… 設計時不需手算。</p>"
+      },
+      {
+        "label": "AI 輔助",
+        "html": "<h3>Gemini AI 五模式</h3><ul><li><strong>模式 A — 背景生成</strong>：輸入基本資訊 → AI 產出調查員的背景故事</li><li><strong>模式 B — 簽名卡傳敘</strong>：根據調查員背景產出簽名卡的敘事文字</li><li><strong>模式 C — 弱點敘事</strong>：產出弱點的情境描述</li><li><strong>模式 E-1 — 能力文字 V 估算</strong>：輸入能力敘述 → AI 估算 V 值（用於驗證自訂能力）</li><li><strong>模式 E-2 — 簽名卡拆解</strong>：輸入完整簽名卡文字 → AI 拆解成結構化欄位（效果、費用、觸發）</li></ul><h3>V 值平衡面板的警告</h3><p>AI 會自動標示：</p><ul><li>單一屬性 V 值偏高／偏低</li><li>簽名卡總 V 偏離 64 模板平均 ±20%</li><li>弱點 V 值（負值）過大或過小</li></ul><div class=\"tip\">AI 建議採用「先看結果再調整」的工作流：先生成完整調查員 → 檢視平衡面板警告 → 針對警告手動修正。</div>"
+      }
+    ]
+  },
+  "SIM-01": {
+    "title": "骰子機率分析器",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個工具是做什麼的</h3><p>SIM-01 分析 <strong>d20 × 屬性修正 × DC</strong> 三個變數的成功機率分佈。本遊戲所有技能檢定都是 d20，這是最底層的數值工具。</p><h3>何時使用</h3><ul><li>設計新 DC 時驗證「門檻是否符合預期難度」</li><li>平衡屬性提升的邊際效益（從 3 → 4 值不值）</li><li>評估調查員在不同屬性下的生存率</li></ul>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>基本操作</h3><ol><li>輸入屬性值（0-10）</li><li>輸入 DC（目標值）</li><li>可選：額外修正（+1/+2 各種來源）</li><li>查看即時成功機率與分佈</li></ol><h3>視圖</h3><ul><li><strong>熱力圖</strong>：屬性 × DC 矩陣，色深 = 機率高</li><li><strong>表格</strong>：精確百分比（1% 精度）</li><li><strong>曲線圖</strong>：修正變動對機率的影響曲線</li></ul>"
+      },
+      {
+        "label": "解讀結果",
+        "html": "<h3>關鍵機率門檻</h3><ul><li><strong>≥ 90%</strong>：幾乎必成，適合「簡單動作」</li><li><strong>60-80%</strong>：主流區間，大多數檢定應落此範圍</li><li><strong>40-55%</strong>：緊張感檢定</li><li><strong>&lt; 30%</strong>：困難檢定，應有明確的「失敗補救」設計</li><li><strong>&lt; 10%</strong>：接近絕望，慎用</li></ul><h3>屬性邊際效益</h3><p>屬性每 +1 通常提升 5% 機率（需 DC 在合理區間）。若某個 DC 下邊際效益 &lt; 3%，表示屬性提升「幾乎無意義」 — 應改 DC 或換別的挑戰類型。</p><h3>與其他工具搭配</h3><ul><li><span class=\"rule-ref\">SIM-05</span> 傷害曲線 — 命中機率 × 傷害 = 期望傷害</li><li><span class=\"rule-ref\">SIM-02</span> Boss 戰鬥 — 把機率代入完整戰鬥流程</li></ul>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">數值規格文件 v0.1</span> — DC 分級與屬性曲線</li><li><span class=\"rule-ref\">補充 01</span> — 遊戲規則與回合結構</li></ul><h3>基本公式</h3><p>成功機率 = max(0, min(1, (20 - DC + 屬性 + 修正 + 1) / 20))</p><h3>DC 五級</h3><ul><li>Tier 1 (DC 8)：容易</li><li>Tier 2 (DC 11)：常見</li><li>Tier 3 (DC 14)：困難</li><li>Tier 4 (DC 17)：極難</li><li>Tier 5 (DC 20)：幾乎不可能</li></ul>"
+      }
+    ]
+  },
+  "SIM-02": {
+    "title": "Boss 戰鬥模擬器",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個工具是做什麼的</h3><p>SIM-02 跑<strong>完整 boss 戰</strong>模擬（多輪蒙地卡羅），驗證 boss 變體的數值平衡。</p><h3>模擬內容</h3><ul><li>指定玩家隊伍（1-4 位調查員）</li><li>指定 boss 變體（<span class=\"rule-ref\">MOD-03</span> 來源）</li><li>跑 N 次模擬 → 輸出存活率、平均回合數、資源消耗</li></ul>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>設定</h3><ol><li>選擇玩家隊伍（從 <span class=\"rule-ref\">MOD-11</span> 調查員模板選 1-4 位）</li><li>為每位指定起始牌組（從 <span class=\"rule-ref\">MOD-01</span>）</li><li>選 boss（從 <span class=\"rule-ref\">MOD-03</span> 的變體）</li><li>設定模擬次數（建議 100-500 次）</li></ol><h3>執行</h3><ol><li>點「跑模擬」</li><li>等待結果（500 次約 10-30 秒）</li><li>查看分佈圖表</li></ol>"
+      },
+      {
+        "label": "解讀結果",
+        "html": "<h3>關鍵指標</h3><ul><li><strong>存活率</strong>：目標 60-75%（太高無挑戰、太低挫折）</li><li><strong>平均回合數</strong>：目標 8-15 回合（視 boss 位階）</li><li><strong>資源消耗曲線</strong>：看玩家是否在戰後彈盡糧絕</li><li><strong>SAN 消耗</strong>：克蘇魯遊戲特有指標</li></ul><h3>失衡徵兆</h3><div class=\"warn\">若存活率 &gt; 95% → boss 太弱；若 &lt; 20% → 太強。建議反覆微調 boss HP 或傷害後重跑。</div><h3>配合 SIM-05</h3><p>發現傷害不夠時，去 <span class=\"rule-ref\">SIM-05</span> 傷害曲線確認武器本身 DPR 是否合理，而不是盲目調 boss HP。</p>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">補充 03</span> — 瀕死系統、敵人 AI</li><li><span class=\"rule-ref\">數值規格文件 v0.1</span> — Boss 位階對應數值曲線</li></ul><h3>AI 模型</h3><p>Boss AI 使用 <span class=\"rule-ref\">MOD-03</span> 定義的 behavior_template：<em>melee_aggro</em>、<em>ranged_kite</em>、<em>summoner</em> 等。不同 AI 對同數值 boss 結果可能差很多。</p>"
+      }
+    ]
+  },
+  "SIM-03": {
+    "title": "創角點數模擬器",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個工具是做什麼的</h3><p>SIM-03 模擬創角 <strong>18 點分配</strong>的組合空間，以及與天賦樹的綜效。</p><h3>18 點組成</h3><ul><li>基礎 7 點（每屬性 +1）</li><li>陣營 6 點（主屬性 +3 + 副屬性 +3）</li><li>自由 5 點</li></ul><p>= 18 點創角 + 天賦樹 5 次屬性提升 = 23 點潛力（<span class=\"rule-ref\">支柱五 v0.1</span>）</p>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>模擬流程</h3><ol><li>選陣營 → 決定主副屬性 +3/+3</li><li>分配自由 5 點（可分散或集中）</li><li>加入天賦樹預期提升（5 次 +1，對應 Lv2/7/10/11/12）</li><li>查看 Lv1 vs Lv12 的屬性曲線</li></ol><h3>視圖</h3><ul><li><strong>雷達圖</strong>：七屬性分佈</li><li><strong>累積曲線</strong>：Lv1-12 各屬性變化</li><li><strong>V 值總覽</strong>：調查員整體 V 值</li></ul>"
+      },
+      {
+        "label": "解讀結果",
+        "html": "<h3>設計建議</h3><ul><li><strong>集中派</strong>：自由 5 全灌主屬性 → Lv12 達 8-9（極致專精但脆弱）</li><li><strong>分散派</strong>：自由 5 散到 2-3 個副屬性 → Lv12 約 5-6（全能但無突破）</li><li><strong>折衷</strong>：3 灌主、2 灌脆弱點 → 最通用的配法</li></ul><h3>屬性曲線門檻</h3><div class=\"tip\">屬性 ≥ 5 時 Tier 3 檢定（DC 14）已超過 60% 成功率。屬性 ≥ 7 時 Tier 4（DC 17）也過半 — 這是設計挑戰難度時的關鍵門檻。</div><h3>與天賦樹搭配</h3><p>天賦樹 5 次屬性提升分散在 Lv2/7/10/11/12。Lv7-12 連續三次提升同一屬性，可把某屬性從 5 拉到 8，觸發極致專精路線。</p>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">支柱五 v0.1</span> — 18 點創角 + 天賦樹 5 次提升</li><li><span class=\"rule-ref\">數值規格文件 v0.1</span>（註：仍寫 21 點，以支柱五為準）</li></ul><h3>歷史沿革</h3><p>早期版本為 21 點創角，<span class=\"rule-ref\">支柱五 v0.1</span> 改為 18 點，差額 3 點改由天賦樹 5 次屬性提升補回，總潛力提升至 23 點。此改動鼓勵<strong>長期投資</strong>而非創角一次到位。</p>"
+      }
+    ]
+  },
+  "SIM-05": {
+    "title": "傷害曲線推算器",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個工具是做什麼的</h3><p>SIM-05 計算<strong>武器 DPR</strong>（Damage Per Round，每回合期望傷害），考量命中率、屬性修正、敵人防禦。</p><h3>核心公式</h3><p>DPR = 命中率 × (基礎傷害 + 屬性修正 - 敵人防禦) × 攻擊次數</p><h3>何時使用</h3><ul><li>新武器卡設計完後驗證 DPR 是否合理</li><li>調整 Boss HP 前先確認玩家端 DPR</li><li>比較不同武器在不同屬性下的性價比</li></ul>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>設定</h3><ol><li>選武器（從 <span class=\"rule-ref\">MOD-01</span> 卡池）或輸入自訂武器數值</li><li>選敵人（從 <span class=\"rule-ref\">MOD-03</span>）或自訂</li><li>選調查員屬性（或自訂）</li></ol><h3>視圖</h3><ul><li><strong>屬性曲線</strong>：屬性 1-10 下的 DPR 變化</li><li><strong>敵人防禦曲線</strong>：敵人防禦 0-10 下的 DPR 變化</li><li><strong>擊殺回合數</strong>：DPR × 敵人 HP 推算</li></ul>"
+      },
+      {
+        "label": "解讀結果",
+        "html": "<h3>關鍵門檻</h3><ul><li><strong>DPR 1.5-2.5</strong>：Tier 1 武器正常範圍</li><li><strong>DPR 3-5</strong>：Tier 3 精良武器</li><li><strong>DPR &gt; 8</strong>：Tier 5 傳說武器 / 有破壞性詞條</li></ul><h3>與 SIM-02 搭配</h3><p>單純 DPR 數字看不出實戰效果。SIM-05 給出理論上限，<span class=\"rule-ref\">SIM-02</span> 給出實際表現（含資源限制、AI 反制）。</p><div class=\"warn\">若某武器 DPR 看似正常但 SIM-02 表現糟糕，通常是「攻擊次數需要特定條件」（如彈藥、詠唱、鍛造詞條）— 此時應回 MOD-01 檢查效果結構。</div>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">數值規格文件 v0.1</span> — DPR 分級</li><li><span class=\"rule-ref\">補充 03</span> — 戰鬥系統（傷害流程、防禦計算）</li></ul><h3>傷害鏈順序</h3><ol><li>命中檢定（d20 + 屬性 vs 敵人 EVA）</li><li>成功 → 計算原始傷害（基礎 + 屬性 + 詞條）</li><li>扣除敵人防禦（含元素抗性）</li><li>觸發狀態（流血、中毒等，由 <span class=\"rule-ref\">MOD-09</span> 鍛造詞條提供）</li></ol>"
+      }
+    ]
+  },
+  "SIM-06": {
+    "title": "卡牌經濟模擬器",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個工具是做什麼的</h3><p>SIM-06 模擬<strong>多回合牌組循環</strong>：抽卡、資源消耗、手牌上限、消費效果流失。驗證牌組經濟的穩健性。</p><h3>核心指標</h3><ul><li><strong>平均手牌大小</strong>：應穩定在 5-8 張</li><li><strong>資源曲線</strong>：每回合末的資源餘額</li><li><strong>關鍵卡出現輪次</strong>：簽名卡 / 核心連擊卡的期望抽到時機</li></ul>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>設定牌組</h3><ol><li>從 <span class=\"rule-ref\">MOD-01</span> 選卡組成 20-30 張起始牌組（或引入 <span class=\"rule-ref\">MOD-11</span> 調查員的起始牌組）</li><li>設定模擬回合數（15-30 回合）</li><li>設定模擬次數（100-500）</li></ol><h3>執行 & 視圖</h3><ul><li><strong>手牌大小曲線</strong>：平均 + 上下緣</li><li><strong>資源曲線</strong>：顯示是否會乾涸</li><li><strong>關鍵卡命中圖</strong>：哪個回合最可能抽到簽名卡</li></ul>"
+      },
+      {
+        "label": "解讀結果",
+        "html": "<h3>健康牌組特徵</h3><ul><li>手牌穩定在 5-8（不爆不空）</li><li>資源在 +2 到 -1 之間擺盪（偶爾緊張）</li><li>簽名卡在 Turn 4-8 有 &gt; 70% 抽到機率</li></ul><h3>常見問題</h3><div class=\"warn\"><strong>手牌暴跌</strong>：每回合抽 1 但用 2，通常因費用過低的卡太多。解方：加入高費但強力的卡改變節奏。</div><div class=\"warn\"><strong>資源累積</strong>：資源越累越多代表卡費平均太低，玩家沒得花。解方：加入昂貴關鍵卡或消費機制。</div>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">補充 01</span> — 回合結構、資源獲得</li><li><span class=\"rule-ref\">補充 05</span> — 三合一卡片用途（打出/加值/消費）影響牌庫循環</li></ul><h3>基礎循環</h3><ul><li><strong>起始手牌</strong>：5 張</li><li><strong>每回合抽 1 張</strong></li><li><strong>手牌上限 8 張</strong>（超過棄牌）</li><li><strong>起始資源 5 / 每回合 +1</strong></li></ul><h3>三合一系統的影響</h3><p>「消費」的卡會<strong>永久離開牌庫</strong>，長期會讓牌庫變薄循環變快。設計時要確保有足夠的「補充機制」（回收、搜牌、抽卡）。</p>"
+      }
+    ]
   }
 }

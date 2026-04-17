@@ -218,22 +218,100 @@
     </div>
 
     <!-- ======================================= -->
-    <!-- 標籤頁 2：製作配方（stub）                -->
+    <!-- 標籤頁 2：製作配方                         -->
     <!-- ======================================= -->
     <div id="viewRecipes" style="display:none">
-      <div class="empty-state">
-        <div class="icon">📜</div>
-        <div>製作配方設計器 — Stage B 開發中</div>
+      <div class="fc-layout">
+
+        <!-- 左欄：配方列表 -->
+        <div class="fc-col">
+          <h3>配方列表 <span id="recipeCount" style="color:var(--text-tertiary);font-size:.75rem;font-family:'JetBrains Mono',monospace"></span></h3>
+          <div class="filter-group">
+            <label>搜尋</label>
+            <input id="rFltSearch" placeholder="名稱或代碼" oninput="renderRecipeList()">
+          </div>
+          <div class="filter-group">
+            <label>解鎖類型</label>
+            <select id="rFltUnlock" onchange="renderRecipeList()">
+              <option value="">全部</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>設計狀態</label>
+            <select id="rFltStatus" onchange="renderRecipeList()">
+              <option value="">全部</option>
+              <option value="pending">pending</option>
+              <option value="partial">partial</option>
+              <option value="complete">complete</option>
+            </select>
+          </div>
+          <div class="affix-list" id="recipeList"></div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="createRecipe()">+ 新增配方</button>
+          </div>
+        </div>
+
+        <!-- 中欄：編輯 -->
+        <div class="fc-col">
+          <h3>配方編輯 <span class="dirty-dot" id="recipeDirtyDot"></span></h3>
+          <div id="recipeEditor">
+            <div class="empty-state"><div class="icon">📜</div><div>尚未選擇配方</div></div>
+          </div>
+        </div>
+
+        <!-- 右欄：試算 + 驗證 -->
+        <div class="fc-col">
+          <h3>試算與驗證</h3>
+          <div id="recipePreview">
+            <div class="empty-state"><div class="icon">🔍</div><div>選擇配方後顯示</div></div>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- ======================================= -->
-    <!-- 標籤頁 3：素材庫（stub）                  -->
+    <!-- 標籤頁 3：素材庫                          -->
     <!-- ======================================= -->
     <div id="viewMaterials" style="display:none">
-      <div class="empty-state">
-        <div class="icon">💎</div>
-        <div>素材庫 — Stage B 開發中</div>
+      <div style="display:grid;grid-template-columns:22% 1fr;gap:.75rem;min-height:calc(100vh - 200px)">
+
+        <div class="fc-col">
+          <h3>素材類別</h3>
+          <div class="cat-nav" id="matCatNav"></div>
+        </div>
+
+        <div class="fc-col">
+          <h3>素材清單 <span id="matCount" style="color:var(--text-tertiary);font-size:.75rem;font-family:'JetBrains Mono',monospace"></span></h3>
+          <div id="materialList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.6rem"></div>
+          <div class="btn-row" style="margin-top:1rem">
+            <button class="btn btn-primary" onclick="createMaterial()">+ 新增素材</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 素材編輯 modal -->
+    <div class="modal-overlay" id="matModal">
+      <div class="modal">
+        <h3 id="matModalTitle">素材編輯</h3>
+        <div id="matModalBody"></div>
+        <div class="modal-actions">
+          <button class="btn btn-danger" onclick="deleteMaterial()" id="matDeleteBtn" style="margin-right:auto">🗑 刪除</button>
+          <button class="btn" onclick="closeMatModal()">取消</button>
+          <button class="btn btn-primary" onclick="saveMaterial()">💾 儲存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 配方素材需求 modal -->
+    <div class="modal-overlay" id="recMatModal">
+      <div class="modal">
+        <h3 id="recMatModalTitle">素材需求</h3>
+        <div id="recMatModalBody"></div>
+        <div class="modal-actions">
+          <button class="btn" onclick="closeRecMatModal()">取消</button>
+          <button class="btn btn-primary" onclick="saveRecipeMaterial()">儲存</button>
+        </div>
       </div>
     </div>
 
@@ -908,10 +986,525 @@
   }
 
   // ============================================================
+  // 配方（Stage B）
+  // ============================================================
+  let allRecipes = [];
+  let currentRecipe = null;
+  let allCards = [];
+  let allMaterialsData = []; // 用於具體素材下拉
+  let recipeDirty = false;
+  let recMatEditState = null; // { recipeId, matReq, isNew }
+
+  function setRecipeDirty(on) {
+    recipeDirty = on;
+    document.getElementById('recipeDirtyDot').classList.toggle('on', on);
+  }
+
+  async function loadRecipes() {
+    try {
+      const r = await adminFetch('/api/recipes');
+      const d = await r.json();
+      if (d.success) {
+        allRecipes = d.data || [];
+        renderRecipeList();
+      }
+    } catch (e) { console.error(e); }
+  }
+
+  function renderRecipeUnlockOptions() {
+    const sel = document.getElementById('rFltUnlock');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">全部</option>' + Object.entries(RECIPE_UNLOCK_TYPES).map(([k, v]) => `<option value="${k}">${v.zh}</option>`).join('');
+  }
+
+  function renderRecipeList() {
+    const q = (document.getElementById('rFltSearch')?.value || '').trim().toLowerCase();
+    const unlock = document.getElementById('rFltUnlock')?.value || '';
+    const status = document.getElementById('rFltStatus')?.value || '';
+    const list = allRecipes.filter(r => {
+      if (unlock && r.unlock_type !== unlock) return false;
+      if (status && r.design_status !== status) return false;
+      if (q && !(r.name_zh.toLowerCase().includes(q) || (r.code || '').toLowerCase().includes(q))) return false;
+      return true;
+    });
+    document.getElementById('recipeCount').textContent = `(${list.length}/${allRecipes.length})`;
+    const html = list.length === 0
+      ? '<div class="empty-state" style="padding:1rem"><div>尚無配方</div></div>'
+      : list.map(r => {
+          const active = currentRecipe && currentRecipe.id === r.id ? ' active' : '';
+          const mats = (r.materials || []).length;
+          return `<div class="affix-card${active}" onclick="selectRecipe('${r.id}')">
+            <div class="affix-card-head">
+              <span class="status-dot status-${r.design_status}"></span>
+              <span class="affix-name">${escapeHtml(r.name_zh)}</span>
+              <span style="font-size:.7rem;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">${r.code}</span>
+            </div>
+            <div class="affix-card-effect">素材需求 ${mats} · ${RECIPE_UNLOCK_TYPES[r.unlock_type]?.zh || '未定'}${r.output_is_temporary ? ' · 臨時卡' : ''}</div>
+          </div>`;
+        }).join('');
+    document.getElementById('recipeList').innerHTML = html;
+  }
+
+  async function selectRecipe(id) {
+    if (recipeDirty && !confirm('未儲存變更，放棄？')) return;
+    try {
+      const r = await adminFetch('/api/recipes/' + id);
+      const d = await r.json();
+      if (d.success) {
+        currentRecipe = d.data;
+        setRecipeDirty(false);
+        renderRecipeEditor();
+        renderRecipePreview();
+        renderRecipeList();
+      }
+    } catch (e) { console.error(e); toast('載入配方失敗', true); }
+  }
+
+  function renderRecipeEditor() {
+    const r = currentRecipe;
+    if (!r) return;
+    const cardOpts = '<option value="">（未指定）</option>' + allCards.filter(c => c.card_type === 'asset').map(c => `<option value="${c.id}" ${r.output_card_id === c.id ? 'selected' : ''}>${escapeHtml(c.name_zh)}（${c.code}）</option>`).join('');
+    const unlockOpts = '<option value="">（未定）</option>' + Object.entries(RECIPE_UNLOCK_TYPES).map(([k, v]) => `<option value="${k}" ${r.unlock_type === k ? 'selected' : ''}>${v.zh}</option>`).join('');
+    const statusOpts = Object.entries(AFFIX_DESIGN_STATUS).map(([k, v]) => `<option value="${k}" ${r.design_status === k ? 'selected' : ''}>${v.zh}</option>`).join('');
+    const mats = r.materials || [];
+    const matRows = mats.length === 0
+      ? '<div style="color:var(--text-tertiary);font-size:.8rem;padding:.5rem">尚無素材需求</div>'
+      : mats.map(m => {
+          let label;
+          if (m.specific_material_id) {
+            const mat = allMaterialsData.find(x => x.id === m.specific_material_id);
+            label = mat ? `具體：${mat.name_zh || '(無名)'} LV${mat.material_level}` : '具體素材（未載入）';
+          } else {
+            const c = MATERIAL_CATEGORIES[m.category_code];
+            label = `類別：${c ? c.icon + c.zh : m.category_code}${m.min_material_level ? ' LV' + m.min_material_level + '+' : ''}`;
+          }
+          return `<div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:var(--bg-primary);border:1px solid var(--border);border-radius:4px;margin-bottom:.3rem">
+            <span style="flex:1">${label}</span>
+            <span style="font-family:'Cinzel',serif;color:var(--gold)">× ${m.quantity}</span>
+            <button class="btn btn-sm" onclick="editRecipeMaterial('${m.id}')">編輯</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteRecipeMaterial('${m.id}')">🗑</button>
+          </div>`;
+        }).join('');
+
+    document.getElementById('recipeEditor').innerHTML = `
+      <div class="editor-section">
+        <h4>基本資訊</h4>
+        <div class="form-grid">
+          <div class="form-group"><label>代碼（唯讀）</label><input value="${escapeHtml(r.code)}" readonly></div>
+          <div class="form-group"><label>設計狀態</label><select id="rec_status" onchange="setRecipeDirty(true)">${statusOpts}</select></div>
+          <div class="form-group"><label>中文名</label><input id="rec_name_zh" value="${escapeHtml(r.name_zh)}" oninput="setRecipeDirty(true)"></div>
+          <div class="form-group"><label>英文名</label><input id="rec_name_en" value="${escapeHtml(r.name_en || '')}" oninput="setRecipeDirty(true)"></div>
+          <div class="form-group full"><label>描述</label><textarea id="rec_desc" rows="2" oninput="setRecipeDirty(true)">${escapeHtml(r.description || '')}</textarea></div>
+        </div>
+      </div>
+      <div class="editor-section">
+        <h4>產出設定</h4>
+        <div class="form-grid">
+          <div class="form-group full"><label>輸出卡片</label><select id="rec_output_card" onchange="setRecipeDirty(true)">${cardOpts}</select></div>
+          <div class="form-group"><label>輸出數量</label><input id="rec_output_qty" type="number" min="1" value="${r.output_quantity || 1}" oninput="setRecipeDirty(true)"></div>
+          <div class="form-group"><label style="display:flex;gap:.5rem;align-items:center;margin-top:1rem"><input type="checkbox" id="rec_temporary" ${r.output_is_temporary ? 'checked' : ''} onchange="setRecipeDirty(true)" style="width:auto"> 臨時卡（不可鍛造）</label></div>
+        </div>
+      </div>
+      <div class="editor-section">
+        <h4>素材需求</h4>
+        ${matRows}
+        <div class="btn-row"><button class="btn" onclick="openRecMatModal(null)">+ 新增素材需求</button></div>
+      </div>
+      <div class="editor-section">
+        <h4>解鎖敘事</h4>
+        <div class="form-grid">
+          <div class="form-group"><label>解鎖類型</label><select id="rec_unlock_type" onchange="setRecipeDirty(true)">${unlockOpts}</select></div>
+          <div class="form-group"></div>
+          <div class="form-group full"><label>敘事說明</label><textarea id="rec_unlock_narr" rows="3" oninput="setRecipeDirty(true)">${escapeHtml(r.unlock_narrative || '')}</textarea></div>
+          <div class="form-group full"><label>備註</label><textarea id="rec_notes" rows="2" oninput="setRecipeDirty(true)">${escapeHtml(r.notes || '')}</textarea></div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="saveRecipe()">💾 儲存</button>
+        <button class="btn btn-danger" onclick="deleteRecipe()">🗑 刪除</button>
+      </div>
+    `;
+  }
+
+  function collectRecipeForm() {
+    return {
+      name_zh: document.getElementById('rec_name_zh').value.trim(),
+      name_en: document.getElementById('rec_name_en').value.trim() || null,
+      description: document.getElementById('rec_desc').value.trim() || null,
+      output_card_id: document.getElementById('rec_output_card').value || null,
+      output_quantity: parseInt(document.getElementById('rec_output_qty').value, 10) || 1,
+      output_is_temporary: document.getElementById('rec_temporary').checked,
+      unlock_type: document.getElementById('rec_unlock_type').value || null,
+      unlock_narrative: document.getElementById('rec_unlock_narr').value.trim() || null,
+      design_status: document.getElementById('rec_status').value,
+      notes: document.getElementById('rec_notes').value.trim() || null,
+    };
+  }
+
+  async function saveRecipe() {
+    if (!currentRecipe) return;
+    const body = collectRecipeForm();
+    if (!body.name_zh) return toast('中文名不可為空', true);
+    try {
+      const r = await adminFetch('/api/recipes/' + currentRecipe.id, { method: 'PATCH', body: JSON.stringify(body) });
+      const d = await r.json();
+      if (d.success) {
+        Object.assign(currentRecipe, d.data);
+        const i = allRecipes.findIndex(x => x.id === currentRecipe.id);
+        if (i >= 0) Object.assign(allRecipes[i], d.data);
+        setRecipeDirty(false);
+        renderRecipeList();
+        renderRecipePreview();
+        toast('已儲存');
+      } else toast('儲存失敗：' + (d.error || ''), true);
+    } catch (e) { console.error(e); toast('儲存失敗', true); }
+  }
+
+  async function createRecipe() {
+    const code = prompt('請輸入新配方代碼（如 recipe_medkit）');
+    if (!code) return;
+    const nameZh = prompt('請輸入中文名');
+    if (!nameZh) return;
+    try {
+      const r = await adminFetch('/api/recipes', { method: 'POST', body: JSON.stringify({ code, name_zh: nameZh }) });
+      const d = await r.json();
+      if (d.success) {
+        await loadRecipes();
+        await selectRecipe(d.data.id);
+        toast('已建立新配方');
+      } else toast('建立失敗：' + (d.error || ''), true);
+    } catch (e) { console.error(e); toast('建立失敗', true); }
+  }
+
+  async function deleteRecipe() {
+    if (!currentRecipe) return;
+    if (!confirm(`確定刪除「${currentRecipe.name_zh}」？所有素材需求也會移除。`)) return;
+    try {
+      const r = await adminFetch('/api/recipes/' + currentRecipe.id, { method: 'DELETE' });
+      const d = await r.json();
+      if (d.success) {
+        currentRecipe = null;
+        await loadRecipes();
+        document.getElementById('recipeEditor').innerHTML = '<div class="empty-state"><div class="icon">📜</div><div>尚未選擇配方</div></div>';
+        document.getElementById('recipePreview').innerHTML = '<div class="empty-state"><div class="icon">🔍</div><div>選擇配方後顯示</div></div>';
+        toast('已刪除');
+      } else toast('刪除失敗：' + (d.error || ''), true);
+    } catch (e) { console.error(e); toast('刪除失敗', true); }
+  }
+
+  async function renderRecipePreview() {
+    const r = currentRecipe;
+    if (!r) return;
+    const card = allCards.find(c => c.id === r.output_card_id);
+    const mats = r.materials || [];
+    const totalSV = mats.reduce((sum, m) => {
+      if (m.specific_material_id) {
+        const mat = allMaterialsData.find(x => x.id === m.specific_material_id);
+        return sum + (mat ? getMaterialSV(mat.material_level) : 0) * m.quantity;
+      }
+      return sum + getMaterialSV(m.min_material_level || 1) * m.quantity;
+    }, 0);
+
+    // 呼叫驗證端點
+    let validation = null;
+    try {
+      const vr = await adminFetch('/api/recipes/' + r.id + '/validate');
+      const vd = await vr.json();
+      if (vd.success) validation = vd.data;
+    } catch (e) { /* ignore */ }
+
+    document.getElementById('recipePreview').innerHTML = `
+      <div class="editor-section">
+        <h4>輸出卡片</h4>
+        ${card ? `<div style="padding:.5rem"><div style="font-family:'Cinzel',serif;color:var(--gold);font-size:1rem">${escapeHtml(card.name_zh)}</div>
+          <div style="color:var(--text-secondary);font-size:.8rem">${card.code} · ${card.card_type}${card.slot && card.slot !== 'none' ? ' · ' + card.slot : ''}</div>
+          ${card.flavor_text ? `<div style="color:var(--text-tertiary);font-size:.75rem;font-style:italic;margin-top:.3rem">${escapeHtml(card.flavor_text)}</div>` : ''}</div>` : '<div style="color:var(--text-tertiary);font-size:.85rem;padding:.5rem">尚未指定</div>'}
+        ${r.output_is_temporary ? '<div style="color:var(--warning,#d4a574);font-size:.75rem;margin-top:.25rem">⚠ 臨時卡片 — 玩家不可鍛造此產出</div>' : ''}
+      </div>
+      <div class="editor-section">
+        <h4>素材成本分析</h4>
+        ${mats.length === 0 ? '<div style="color:var(--text-tertiary);font-size:.8rem">尚無素材需求</div>' : mats.map(m => {
+          let label, sv;
+          if (m.specific_material_id) {
+            const mat = allMaterialsData.find(x => x.id === m.specific_material_id);
+            sv = mat ? getMaterialSV(mat.material_level) : 0;
+            label = mat ? `${mat.name_zh || '(無名)'} LV${mat.material_level}` : '具體素材';
+          } else {
+            sv = getMaterialSV(m.min_material_level || 1);
+            const c = MATERIAL_CATEGORIES[m.category_code];
+            label = `${c ? c.icon + c.zh : m.category_code}${m.min_material_level ? ' LV' + m.min_material_level + '+' : ''}`;
+          }
+          return `<div style="display:flex;gap:.5rem;padding:.2rem 0;font-size:.85rem">
+            <span style="flex:1">${label} × ${m.quantity}</span>
+            <span style="color:var(--gold-dim);font-family:'Cinzel',serif">≈ ${sv * m.quantity} SV</span>
+          </div>`;
+        }).join('') + `<div style="border-top:1px solid var(--border);margin-top:.4rem;padding-top:.4rem;display:flex;font-weight:500"><span style="flex:1">總 SV 成本</span><span style="color:var(--gold);font-family:'Cinzel',serif">${totalSV} SV</span></div>`}
+      </div>
+      ${validation ? `
+      <div class="editor-section">
+        <h4>驗證結果</h4>
+        <div style="color:${validation.isValid ? '#6b9c5a' : '#d67a7a'};font-weight:500;margin-bottom:.4rem">${validation.isValid ? '✓ 通過驗證' : '✗ 驗證失敗'}</div>
+        ${validation.errors.map(e => `<div style="color:#d67a7a;font-size:.8rem">✗ ${escapeHtml(e)}</div>`).join('')}
+        ${validation.warnings.map(w => `<div style="color:#c9a84c;font-size:.8rem">⚠ ${escapeHtml(w)}</div>`).join('')}
+      </div>` : ''}
+    `;
+  }
+
+  // ── 配方素材需求 modal ──
+  function openRecMatModal(matId) {
+    if (!currentRecipe) return;
+    const existing = matId ? (currentRecipe.materials || []).find(m => m.id === matId) : null;
+    recMatEditState = {
+      id: existing ? existing.id : null,
+      mode: existing ? (existing.specific_material_id ? 'specific' : 'category') : 'category',
+      category_code: existing ? existing.category_code : '',
+      specific_material_id: existing ? existing.specific_material_id : '',
+      min_material_level: existing ? existing.min_material_level : '',
+      quantity: existing ? existing.quantity : 1,
+    };
+    renderRecMatModal();
+    document.getElementById('recMatModal').classList.add('show');
+  }
+
+  function editRecipeMaterial(matId) { openRecMatModal(matId); }
+
+  function renderRecMatModal() {
+    const s = recMatEditState;
+    const catOpts = '<option value="">（選擇類別）</option>' + Object.entries(MATERIAL_CATEGORIES).map(([k, v]) => `<option value="${k}" ${s.category_code === k ? 'selected' : ''}>${v.icon} ${v.zh}</option>`).join('');
+    const matOpts = '<option value="">（選擇具體素材）</option>' + allMaterialsData.filter(m => m.name_zh && m.name_zh.trim()).map(m => {
+      const c = MATERIAL_CATEGORIES[m.category_code];
+      return `<option value="${m.id}" ${s.specific_material_id === m.id ? 'selected' : ''}>${c ? c.icon : ''} ${m.name_zh} LV${m.material_level}</option>`;
+    }).join('');
+    const levelOpts = '<option value="">不限</option>' + [1,2,3,4,5,6,7,8,9,10].map(l => `<option value="${l}" ${String(s.min_material_level) === String(l) ? 'selected' : ''}>LV${l}+</option>`).join('');
+
+    document.getElementById('recMatModalBody').innerHTML = `
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>指定方式</label>
+          <div style="display:flex;gap:1rem;padding:.3rem 0">
+            <label style="display:flex;gap:.3rem;align-items:center;cursor:pointer"><input type="radio" name="recmat_mode" value="category" ${s.mode === 'category' ? 'checked' : ''} onchange="recMatEditState.mode=this.value;renderRecMatModal()" style="width:auto"> 類別模式（任一此類別）</label>
+            <label style="display:flex;gap:.3rem;align-items:center;cursor:pointer"><input type="radio" name="recmat_mode" value="specific" ${s.mode === 'specific' ? 'checked' : ''} onchange="recMatEditState.mode=this.value;renderRecMatModal()" style="width:auto"> 具體素材</label>
+          </div>
+        </div>
+        ${s.mode === 'category' ? `
+          <div class="form-group"><label>類別</label><select onchange="recMatEditState.category_code=this.value">${catOpts}</select></div>
+          <div class="form-group"><label>最低等級</label><select onchange="recMatEditState.min_material_level=this.value">${levelOpts}</select></div>
+        ` : `
+          <div class="form-group full"><label>具體素材</label><select onchange="recMatEditState.specific_material_id=this.value">${matOpts}</select></div>
+        `}
+        <div class="form-group"><label>數量</label><input type="number" min="1" value="${s.quantity}" onchange="recMatEditState.quantity=parseInt(this.value,10)||1"></div>
+      </div>
+    `;
+  }
+
+  function closeRecMatModal() {
+    document.getElementById('recMatModal').classList.remove('show');
+    recMatEditState = null;
+  }
+
+  async function saveRecipeMaterial() {
+    const s = recMatEditState;
+    if (!currentRecipe) return;
+    const body = {
+      category_code: s.mode === 'category' ? (s.category_code || null) : null,
+      specific_material_id: s.mode === 'specific' ? (s.specific_material_id || null) : null,
+      min_material_level: s.mode === 'category' && s.min_material_level ? parseInt(s.min_material_level, 10) : null,
+      quantity: s.quantity,
+    };
+    if (s.mode === 'category' && !body.category_code) return toast('請選擇類別', true);
+    if (s.mode === 'specific' && !body.specific_material_id) return toast('請選擇具體素材', true);
+    try {
+      let r;
+      if (s.id) {
+        r = await adminFetch(`/api/recipes/${currentRecipe.id}/materials/${s.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      } else {
+        r = await adminFetch(`/api/recipes/${currentRecipe.id}/materials`, { method: 'POST', body: JSON.stringify(body) });
+      }
+      const d = await r.json();
+      if (d.success) {
+        closeRecMatModal();
+        await selectRecipe(currentRecipe.id);
+        toast('已儲存');
+      } else toast('儲存失敗：' + (d.error || ''), true);
+    } catch (e) { console.error(e); toast('儲存失敗', true); }
+  }
+
+  async function deleteRecipeMaterial(matId) {
+    if (!currentRecipe) return;
+    if (!confirm('確定移除此素材需求？')) return;
+    try {
+      const r = await adminFetch(`/api/recipes/${currentRecipe.id}/materials/${matId}`, { method: 'DELETE' });
+      const d = await r.json();
+      if (d.success) { await selectRecipe(currentRecipe.id); toast('已移除'); }
+    } catch (e) { console.error(e); }
+  }
+
+  // ============================================================
+  // 素材庫（Stage B）
+  // ============================================================
+  let currentMatCategory = '';
+  let currentEditingMaterial = null; // 編輯中的素材物件
+
+  async function loadMaterials() {
+    try {
+      const r = await adminFetch('/api/materials');
+      const d = await r.json();
+      if (d.success) {
+        allMaterialsData = d.data || [];
+        renderMatCatNav();
+        renderMaterialList();
+      }
+    } catch (e) { console.error(e); }
+  }
+
+  function renderMatCatNav() {
+    const counts = { '': allMaterialsData.length };
+    allMaterialsData.forEach(m => counts[m.category_code] = (counts[m.category_code] || 0) + 1);
+    const items = [
+      { code: '', label: '全部', icon: '■', theme: '' },
+      ...Object.values(MATERIAL_CATEGORIES).map(c => ({ code: c.code, label: c.zh, icon: c.icon, theme: c.theme })),
+    ];
+    document.getElementById('matCatNav').innerHTML = items.map(it => {
+      const cls = 'cat-item cat-' + (it.code || 'all') + (currentMatCategory === it.code ? ' active' : '');
+      return `<div class="${cls}" onclick="selectMatCategory('${it.code}')">
+        <span class="cat-icon">${it.icon}</span>
+        <span class="cat-name">${it.label}</span>
+        <span class="cat-count">${counts[it.code] || 0}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function selectMatCategory(code) {
+    currentMatCategory = code;
+    renderMatCatNav();
+    renderMaterialList();
+  }
+
+  function renderMaterialList() {
+    const list = allMaterialsData.filter(m => !currentMatCategory || m.category_code === currentMatCategory);
+    document.getElementById('matCount').textContent = `(${list.length})`;
+
+    // 依等級分組呈現
+    const byLevel = {};
+    list.forEach(m => { const key = `${m.category_code}-${m.material_level}`; if (!byLevel[key]) byLevel[key] = []; byLevel[key].push(m); });
+
+    const html = list.map(m => {
+      const c = MATERIAL_CATEGORIES[m.category_code];
+      const empty = !m.name_zh || !m.name_zh.trim();
+      return `<div class="affix-card" style="--cat-color:${c ? c.color : '#888'};border-left-color:${c ? c.color : '#888'}" onclick="openMatModal('${m.id}')">
+        <div class="affix-card-head">
+          <span style="font-size:1rem">${c ? c.icon : ''}</span>
+          <span class="affix-name" style="${empty ? 'color:var(--text-tertiary);font-style:italic' : ''}">${empty ? '（未命名）' : escapeHtml(m.name_zh)}</span>
+          <span class="tier-badge tier-plus-${Math.min(Math.ceil(m.material_level / 3), 3)}">LV${m.material_level}</span>
+        </div>
+        <div class="affix-card-effect">SV=${m.material_value}${m.monster_family_id ? ' · 怪物家族' : ''}</div>
+      </div>`;
+    }).join('');
+    document.getElementById('materialList').innerHTML = html || '<div class="empty-state" style="grid-column:1/-1"><div>尚無素材</div></div>';
+  }
+
+  function openMatModal(id) {
+    currentEditingMaterial = id ? allMaterialsData.find(m => m.id === id) : {
+      category_code: currentMatCategory || 'mineral',
+      material_level: 1,
+      name_zh: '',
+      name_en: '',
+      description: '',
+      flavor_text: '',
+      icon_url: '',
+    };
+    if (!currentEditingMaterial) return;
+    document.getElementById('matDeleteBtn').style.display = id ? '' : 'none';
+    document.getElementById('matModalTitle').textContent = id ? '素材編輯' : '新增素材';
+    renderMatModal();
+    document.getElementById('matModal').classList.add('show');
+  }
+
+  function renderMatModal() {
+    const m = currentEditingMaterial;
+    const c = MATERIAL_CATEGORIES[m.category_code];
+    const catOpts = Object.entries(MATERIAL_CATEGORIES).map(([k, v]) => `<option value="${k}" ${m.category_code === k ? 'selected' : ''}>${v.icon} ${v.zh}</option>`).join('');
+    const levelOpts = [1,2,3,4,5,6,7,8,9,10].map(l => `<option value="${l}" ${m.material_level === l ? 'selected' : ''}>LV${l}（SV=${getMaterialSV(l)}）</option>`).join('');
+    const isExisting = !!m.id;
+    document.getElementById('matModalBody').innerHTML = `
+      <div class="form-grid">
+        <div class="form-group"><label>類別${isExisting ? '（唯讀）' : ''}</label><select id="mat_cat" ${isExisting ? 'disabled' : ''}>${catOpts}</select></div>
+        <div class="form-group"><label>等級</label><select id="mat_level">${levelOpts}</select></div>
+        <div class="form-group"><label>中文名</label><input id="mat_name_zh" value="${escapeHtml(m.name_zh || '')}"></div>
+        <div class="form-group"><label>英文名</label><input id="mat_name_en" value="${escapeHtml(m.name_en || '')}"></div>
+        <div class="form-group full"><label>描述</label><textarea id="mat_desc" rows="2">${escapeHtml(m.description || '')}</textarea></div>
+        <div class="form-group full"><label>傳敘</label><textarea id="mat_flavor" rows="2">${escapeHtml(m.flavor_text || '')}</textarea></div>
+        <div class="form-group full"><label>圖示 URL</label><input id="mat_icon" value="${escapeHtml(m.icon_url || '')}"></div>
+      </div>
+    `;
+  }
+
+  function closeMatModal() {
+    document.getElementById('matModal').classList.remove('show');
+    currentEditingMaterial = null;
+  }
+
+  async function saveMaterial() {
+    const m = currentEditingMaterial;
+    const body = {
+      category_code: document.getElementById('mat_cat').value,
+      material_level: parseInt(document.getElementById('mat_level').value, 10),
+      name_zh: document.getElementById('mat_name_zh').value.trim(),
+      name_en: document.getElementById('mat_name_en').value.trim() || null,
+      description: document.getElementById('mat_desc').value.trim() || null,
+      flavor_text: document.getElementById('mat_flavor').value.trim() || null,
+      icon_url: document.getElementById('mat_icon').value.trim() || null,
+    };
+    try {
+      let r;
+      if (m.id) {
+        r = await adminFetch('/api/materials/' + m.id, { method: 'PATCH', body: JSON.stringify(body) });
+      } else {
+        r = await adminFetch('/api/materials', { method: 'POST', body: JSON.stringify(body) });
+      }
+      const d = await r.json();
+      if (d.success) {
+        closeMatModal();
+        await loadMaterials();
+        toast('已儲存');
+      } else toast('儲存失敗：' + (d.error || ''), true);
+    } catch (e) { console.error(e); toast('儲存失敗', true); }
+  }
+
+  function createMaterial() { openMatModal(null); }
+
+  async function deleteMaterial() {
+    const m = currentEditingMaterial;
+    if (!m || !m.id) return;
+    if (!confirm('確定刪除此素材？（若已被配方引用則無法刪除）')) return;
+    try {
+      const r = await adminFetch('/api/materials/' + m.id, { method: 'DELETE' });
+      const d = await r.json();
+      if (d.success) { closeMatModal(); await loadMaterials(); toast('已刪除'); }
+      else toast(d.error || '刪除失敗', true);
+    } catch (e) { console.error(e); toast('刪除失敗', true); }
+  }
+
+  // ============================================================
+  // 卡片下拉（給配方用）
+  // ============================================================
+  async function loadCards() {
+    try {
+      const r = await adminFetch('/api/cards?type=asset');
+      const d = await r.json();
+      if (d.success) allCards = d.data || [];
+    } catch (e) { console.error(e); }
+  }
+
+  // ============================================================
   // 啟動
   // ============================================================
-  document.addEventListener('DOMContentLoaded', () => {
-    loadAffixes();
+  document.addEventListener('DOMContentLoaded', async () => {
+    renderRecipeUnlockOptions();
+    await loadAffixes();
+    await loadMaterials();
+    await loadCards();
+    await loadRecipes();
   });
   </script>
 </body>

@@ -195,6 +195,18 @@ export const investigatorRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(r.rows);
   });
 
+  // 取全部戰鬥熟練（跨 style 平鋪，供 MOD-11 下拉使用）
+  app.get('/api/admin/proficiencies', async (_req, reply) => {
+    const r = await pool.query(`
+      SELECT cs.id, cs.code, cs.name_zh, cs.name_en, cs.attribute, cs.prof_bonus, cs.spec_bonus,
+             cst.name_zh AS style_name_zh, cst.code AS style_code
+        FROM combat_specializations cs
+        LEFT JOIN combat_styles cst ON cst.id = cs.style_id
+        ORDER BY cst.sort_order, cs.sort_order, cs.name_zh
+    `);
+    return reply.send(r.rows);
+  });
+
   // ════════════════════════════════════════════
   //  列表
   // ════════════════════════════════════════════

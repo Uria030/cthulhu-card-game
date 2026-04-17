@@ -6,6 +6,173 @@
   <title>調查員設計器 — Admin Module</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    /* ========= Layout ========= */
+    .view-switcher { display:flex; gap:0.5rem; padding:0.75rem 1rem; background:var(--bg-secondary); border-bottom:1px solid var(--border); }
+    .view-switcher button { background:transparent; color:var(--text-secondary); border:1px solid var(--border); padding:0.4rem 0.9rem; font-family:'Cinzel',serif; font-size:0.8rem; letter-spacing:0.1em; cursor:pointer; border-radius:3px; }
+    .view-switcher button.active { background:var(--gold-dim); color:#0D0D14; border-color:var(--gold); }
+    .view { display:none; }
+    .view.active { display:block; }
+
+    .three-col { display:grid; grid-template-columns: 22% 46% 32%; gap:0.5rem; height:calc(100vh - 100px); }
+    .three-col > aside, .three-col > main { background:var(--bg-card); border:1px solid var(--border); overflow:hidden; display:flex; flex-direction:column; }
+    .panel-body { flex:1; overflow-y:auto; padding:0.75rem; }
+    .panel-header { padding:0.5rem 0.75rem; border-bottom:1px solid var(--border); background:var(--bg-secondary); font-family:'Cinzel',serif; font-size:0.75rem; color:var(--gold-dim); letter-spacing:0.15em; }
+
+    /* ========= Left: preset matrix ========= */
+    .filters { padding:0.5rem 0.75rem; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:0.35rem; }
+    .filters input, .filters select { width:100%; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); padding:0.3rem; font-size:0.75rem; }
+    .mbti-group { margin-top:0.75rem; }
+    .mbti-group-title { font-family:'Cinzel',serif; color:var(--gold); border-bottom:1px solid var(--border); padding-bottom:0.2rem; font-size:0.7rem; letter-spacing:0.2em; margin-bottom:0.3rem; text-transform:uppercase; }
+    .mbti-card { background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:3px; padding:0.4rem; margin-bottom:0.4rem; }
+    .mbti-code { font-family:'Cinzel',serif; color:#d4a574; font-size:0.8rem; display:flex; justify-content:space-between; }
+    .mbti-code .mbti-zh { font-family:'Noto Sans TC',sans-serif; color:var(--text-secondary); font-size:0.7rem; }
+    .career-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:0.2rem; margin-top:0.3rem; }
+    .career-cell { aspect-ratio:1/1; border:1px dashed var(--border); border-radius:3px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:0.6rem; cursor:pointer; transition:all 0.15s; position:relative; background:rgba(0,0,0,0.15); }
+    .career-cell:hover { border-color:var(--gold-dim); }
+    .career-cell.in-progress { border-style:solid; background:color-mix(in srgb, var(--fc,#999) 20%, transparent); border-color:var(--fc,#999); }
+    .career-cell.completed { border-color:#d4a574; background:color-mix(in srgb, var(--fc,#999) 35%, transparent); box-shadow:0 0 4px rgba(212,165,116,0.3); }
+    .career-cell.selected { box-shadow:0 0 0 2px var(--gold), 0 0 10px rgba(201,168,76,0.4); }
+    .career-cell .letter { font-family:'Cinzel',serif; font-weight:700; font-size:0.7rem; color:var(--fc,#fff); }
+    .career-cell .dots { display:flex; gap:2px; margin-top:2px; }
+    .career-cell .dot { width:3px; height:3px; border-radius:50%; background:var(--border); }
+    .career-cell .dot.on { background:#d4a574; }
+
+    /* ========= Center: main ========= */
+    .v-banner { padding:0.5rem 0.75rem; background:rgba(0,0,0,0.3); border-bottom:1px solid var(--border); font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--text-secondary); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem; }
+    .v-grade { padding:0.1rem 0.5rem; border-radius:3px; font-size:0.7rem; font-weight:600; }
+    .v-grade.balanced { background:#2a5a3f; color:#a3d3b5; }
+    .v-grade.above_average, .v-grade.below_average { background:#5a4a2a; color:#d3c5a3; }
+    .v-grade.overpowered, .v-grade.underpowered { background:#5a2a2a; color:#d3a3a3; }
+    .v-grade.incomplete { background:#2a2a2a; color:#888; }
+
+    .progress-bar { display:flex; gap:0.3rem; padding:0.4rem 0.75rem; background:var(--bg-secondary); border-bottom:1px solid var(--border); flex-wrap:wrap; font-size:0.7rem; }
+    .progress-bar .item { color:var(--text-tertiary); }
+    .progress-bar .item.done { color:var(--gold); }
+    .progress-bar .item.done::before { content:'✓ '; }
+    .progress-bar .item:not(.done)::before { content:'○ '; }
+
+    .tab-nav { display:flex; border-bottom:1px solid var(--border); background:var(--bg-secondary); }
+    .tab-nav button { flex:1; background:transparent; color:var(--text-secondary); border:none; border-right:1px solid var(--border); padding:0.6rem 0.3rem; font-size:0.75rem; cursor:pointer; font-family:'Cinzel',serif; letter-spacing:0.05em; }
+    .tab-nav button.active { background:var(--bg-card); color:var(--gold); border-bottom:2px solid var(--gold); }
+
+    .tab-content { display:none; padding:1rem; }
+    .tab-content.active { display:block; }
+
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; }
+    .form-grid .full { grid-column:span 2; }
+    .form-grid label { display:flex; flex-direction:column; font-size:0.75rem; color:var(--text-secondary); gap:0.25rem; }
+    .form-grid input, .form-grid select, .form-grid textarea { background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); padding:0.4rem; font-size:0.8rem; font-family:inherit; }
+    .form-grid textarea { min-height:80px; resize:vertical; }
+
+    /* ========= Tab2: attributes ========= */
+    .attr-summary { margin-bottom:0.75rem; padding:0.5rem; background:rgba(0,0,0,0.2); border:1px solid var(--border); font-size:0.75rem; display:flex; gap:1rem; flex-wrap:wrap; }
+    .attr-summary span { color:var(--text-secondary); }
+    .attr-summary b { color:var(--gold); }
+    .attr-table { width:100%; border-collapse:collapse; font-size:0.8rem; }
+    .attr-table th, .attr-table td { padding:0.4rem 0.5rem; border-bottom:1px solid var(--border); text-align:center; }
+    .attr-table th { font-family:'Cinzel',serif; font-size:0.7rem; color:var(--gold-dim); letter-spacing:0.1em; background:var(--bg-secondary); }
+    .attr-table td.name { text-align:left; color:var(--text-secondary); }
+    .attr-table td.base { color:var(--text-tertiary); }
+    .attr-table td.faction { color:#B84C4C; font-weight:600; }
+    .attr-table td.free button { width:22px; height:22px; background:var(--bg-primary); border:1px solid var(--border); color:var(--gold); cursor:pointer; font-size:0.75rem; }
+    .attr-table td.free input { width:2.5rem; text-align:center; background:var(--bg-primary); border:1px solid var(--border); color:var(--gold); padding:0.2rem; }
+    .attr-table td.total { font-weight:700; color:var(--gold); font-size:0.9rem; }
+    .attr-table td.vval { color:#a3d3b5; font-family:'JetBrains Mono',monospace; }
+
+    .warn-note { background:rgba(201,168,76,0.1); border-left:3px solid var(--gold-dim); padding:0.4rem 0.6rem; margin-top:0.5rem; font-size:0.75rem; color:var(--gold); }
+
+    /* ========= Tab3: proficiency ========= */
+    .prof-list { list-style:none; padding:0; margin:0; }
+    .prof-list li { display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0.5rem; background:rgba(0,0,0,0.2); border:1px solid var(--border); margin-bottom:0.3rem; font-size:0.8rem; }
+    .prof-list li .info { display:flex; gap:0.6rem; align-items:center; }
+    .prof-list li .v { font-family:'JetBrains Mono',monospace; color:#a3d3b5; font-size:0.75rem; }
+
+    /* ========= Tab4: signature & weakness slots ========= */
+    .slots-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:0.5rem; margin-bottom:0.75rem; }
+    .slot-card { border:1px dashed var(--border); padding:0.6rem; background:rgba(0,0,0,0.15); cursor:pointer; min-height:90px; display:flex; flex-direction:column; justify-content:center; text-align:center; transition:border-color 0.15s; border-radius:3px; }
+    .slot-card:hover { border-color:var(--gold-dim); }
+    .slot-card.filled { border-style:solid; border-color:var(--gold-dim); background:rgba(201,168,76,0.08); text-align:left; }
+    .slot-card .slot-name { color:var(--gold); font-weight:600; font-size:0.85rem; margin-bottom:0.25rem; }
+    .slot-card .slot-meta { font-size:0.7rem; color:var(--text-secondary); font-family:'JetBrains Mono',monospace; }
+
+    /* ========= Tab5: deck builder ========= */
+    .deck-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.5rem; height:calc(100vh - 280px); }
+    .deck-col { background:rgba(0,0,0,0.15); border:1px solid var(--border); overflow-y:auto; padding:0.5rem; }
+    .deck-col h4 { margin:0 0 0.5rem 0; font-family:'Cinzel',serif; font-size:0.8rem; color:var(--gold); border-bottom:1px solid var(--border); padding-bottom:0.25rem; letter-spacing:0.1em; }
+    .card-chip { display:flex; justify-content:space-between; align-items:center; padding:0.3rem 0.5rem; background:var(--bg-card); border:1px solid var(--border); margin-bottom:0.25rem; font-size:0.75rem; }
+    .card-chip.sig { border-left:3px solid var(--gold); }
+    .card-chip.wk { border-left:3px solid #B84C4C; }
+    .card-chip .meta { color:var(--text-tertiary); font-family:'JetBrains Mono',monospace; font-size:0.7rem; }
+    .qty-ctl button { width:18px; height:18px; background:var(--bg-primary); border:1px solid var(--border); color:var(--gold); cursor:pointer; font-size:0.75rem; }
+    .cost-curve { display:flex; align-items:flex-end; gap:2px; height:60px; margin-top:0.4rem; background:rgba(0,0,0,0.2); padding:4px; }
+    .cost-curve .bar { flex:1; background:linear-gradient(180deg,var(--gold),var(--gold-dim)); min-height:2px; border-radius:2px 2px 0 0; position:relative; }
+    .cost-curve .bar::after { content:attr(data-c); position:absolute; bottom:-14px; left:0; right:0; text-align:center; font-size:0.6rem; color:var(--text-tertiary); }
+    .dist-row { display:flex; align-items:center; gap:0.4rem; margin-bottom:0.2rem; font-size:0.7rem; font-family:'JetBrains Mono',monospace; }
+    .dist-row .label { width:60px; color:var(--text-secondary); }
+    .dist-row .fill { flex:1; height:8px; background:rgba(0,0,0,0.3); position:relative; }
+    .dist-row .fill span { display:block; height:100%; background:var(--gold-dim); }
+    .dist-row .num { width:25px; text-align:right; color:var(--gold); }
+
+    /* ========= Right: editors ========= */
+    .right-editor { display:none; }
+    .right-editor.active { display:block; }
+    .editor-section { margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--border); }
+    .editor-section h4 { font-family:'Cinzel',serif; font-size:0.75rem; color:var(--gold); letter-spacing:0.15em; margin:0 0 0.5rem 0; text-transform:uppercase; }
+    .commit-row { display:flex; gap:0.3rem; align-items:center; margin-bottom:0.25rem; }
+    .commit-row select { flex:2; }
+    .commit-row input { flex:1; width:50px; }
+    .value-breakdown-list { list-style:none; padding:0; margin:0; max-height:200px; overflow-y:auto; }
+    .value-breakdown-list li { display:flex; justify-content:space-between; align-items:center; padding:0.25rem 0.4rem; background:rgba(0,0,0,0.15); border:1px solid var(--border); margin-bottom:0.2rem; font-size:0.75rem; }
+    .value-breakdown-list li .v { font-family:'JetBrains Mono',monospace; color:#a3d3b5; }
+
+    /* ========= AI result modal ========= */
+    .ai-result { position:fixed; top:10%; left:50%; transform:translateX(-50%); width:min(700px,90vw); max-height:80vh; overflow-y:auto; background:var(--bg-card); border:2px solid var(--gold-dim); box-shadow:0 0 40px rgba(0,0,0,0.8); padding:1rem; z-index:1000; display:none; }
+    .ai-result.open { display:block; }
+    .ai-result h3 { font-family:'Cinzel',serif; color:var(--gold); margin:0 0 0.75rem 0; }
+    .ai-result .section { margin-bottom:0.75rem; padding:0.5rem; background:rgba(0,0,0,0.2); border:1px solid var(--border); }
+    .ai-result .field-label { font-size:0.7rem; color:var(--text-secondary); letter-spacing:0.1em; text-transform:uppercase; }
+    .ai-result .current { color:var(--text-tertiary); font-size:0.8rem; margin:0.2rem 0; font-style:italic; }
+    .ai-result .suggestion { color:var(--gold); font-size:0.85rem; margin:0.2rem 0; }
+    .ai-result .actions { display:flex; gap:0.5rem; margin-top:0.5rem; }
+    .ai-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:999; display:none; }
+    .ai-backdrop.open { display:block; }
+
+    /* ========= Overview panel ========= */
+    .quad-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; padding:1rem; }
+    .quad { background:var(--bg-card); border:1px solid var(--border); padding:1rem; }
+    .quad h3 { font-family:'Cinzel',serif; color:var(--gold); font-size:0.85rem; letter-spacing:0.15em; margin:0 0 0.75rem 0; text-transform:uppercase; border-bottom:1px solid var(--border); padding-bottom:0.3rem; }
+    .heatmap { display:grid; grid-template-columns:repeat(5,1fr); gap:3px; font-family:'JetBrains Mono',monospace; font-size:0.65rem; }
+    .heatmap .hm-h { color:var(--gold-dim); text-align:center; padding:0.3rem; }
+    .heatmap .hm-cell { aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; cursor:pointer; border-radius:2px; font-size:0.55rem; }
+    .heatmap .hm-label { color:var(--text-secondary); padding:0.3rem; font-size:0.7rem; }
+
+    .tag-cloud { display:flex; flex-wrap:wrap; gap:0.4rem; }
+    .tag-cloud .tag { background:rgba(201,168,76,0.15); border:1px solid var(--gold-dim); padding:0.2rem 0.5rem; color:var(--gold); font-size:0.7rem; border-radius:2px; }
+    .tag-cloud .tag .n { color:var(--text-tertiary); margin-left:0.25rem; font-family:'JetBrains Mono',monospace; }
+
+    /* ========= Balance panel ========= */
+    .bal-scatter { position:relative; height:300px; background:rgba(0,0,0,0.25); border:1px solid var(--border); padding:0.5rem; overflow:hidden; }
+    .bal-scatter svg { width:100%; height:100%; }
+    .bal-warnings { max-height:400px; overflow-y:auto; }
+    .warn-item { padding:0.5rem; border:1px solid var(--border); margin-bottom:0.4rem; font-size:0.75rem; border-radius:2px; }
+    .warn-item.red { background:rgba(184,76,76,0.1); border-left:3px solid #B84C4C; }
+    .warn-item.yellow { background:rgba(201,168,76,0.1); border-left:3px solid var(--gold-dim); }
+    .warn-item.blue { background:rgba(74,124,155,0.1); border-left:3px solid #4A7C9B; }
+    .warn-item a { color:var(--gold); cursor:pointer; text-decoration:underline; font-size:0.7rem; margin-left:0.5rem; }
+
+    /* ========= Buttons ========= */
+    .btn { background:var(--bg-secondary); color:var(--gold); border:1px solid var(--gold-dim); padding:0.35rem 0.75rem; font-size:0.75rem; cursor:pointer; font-family:'Noto Sans TC',sans-serif; letter-spacing:0.05em; }
+    .btn:hover { background:var(--gold-dim); color:#0D0D14; }
+    .btn.primary { background:var(--gold-dim); color:#0D0D14; }
+    .btn.danger { border-color:#B84C4C; color:#ff8888; }
+    .btn.danger:hover { background:#B84C4C; color:white; }
+    .btn-row { display:flex; gap:0.5rem; margin-top:0.75rem; flex-wrap:wrap; }
+
+    /* ========= Common ========= */
+    .empty { color:var(--text-tertiary); text-align:center; padding:2rem 1rem; font-size:0.8rem; }
+    .chip { display:inline-block; padding:0.1rem 0.4rem; background:rgba(0,0,0,0.2); border:1px solid var(--border); font-size:0.65rem; color:var(--text-secondary); font-family:'JetBrains Mono',monospace; margin-right:0.25rem; }
+  </style>
 </head>
 <body>
 
@@ -15,20 +182,1497 @@
     <span class="nav-code">MOD-11</span>
   </nav>
 
-  <div class="container">
-    <div class="page-header">
-      <h1>調查員設計器</h1>
-      <p class="page-sub">Investigator Designer</p>
-      <p class="page-desc">設計調查員模板、簽名卡、弱點與預組牌組</p>
-    </div>
+  <div class="view-switcher">
+    <button data-view="designer" class="active">設計器</button>
+    <button data-view="overview">📊 總覽面板</button>
+    <button data-view="balance">⚖️ V 值平衡面板</button>
+    <span style="flex:1"></span>
+    <button class="btn" onclick="openGeminiKeyDialog()" title="設定 Gemini API Key">🔑 Gemini Key</button>
+  </div>
 
-    <div class="placeholder-message">
-      <div class="placeholder-icon">🔧</div>
-      <div class="placeholder-text">此模組尚在開發中</div>
-      <div class="placeholder-sub">Module under development</div>
+  <!-- =============== VIEW: DESIGNER =============== -->
+  <div id="view-designer" class="view active">
+    <div class="three-col">
+
+      <!-- LEFT: matrix -->
+      <aside>
+        <div class="panel-header">預設模板 · 16×4</div>
+        <div class="filters">
+          <input id="flt-search" placeholder="搜尋 姓名/稱號/MBTI" oninput="renderMatrix()">
+          <select id="flt-completion" onchange="renderMatrix()">
+            <option value="all">全部</option>
+            <option value="completed">已完成</option>
+            <option value="in_progress">進行中</option>
+            <option value="skeleton">骨架</option>
+          </select>
+          <select id="flt-group" onchange="renderMatrix()">
+            <option value="all">全部群組</option>
+            <option value="Analysts">分析家</option>
+            <option value="Diplomats">外交家</option>
+            <option value="Sentinels">守護者</option>
+            <option value="Explorers">探險家</option>
+          </select>
+        </div>
+        <div class="panel-body" id="matrix-body"></div>
+        <div style="padding:0.5rem; border-top:1px solid var(--border);">
+          <button class="btn" style="width:100%" onclick="createCustomTemplate()">+ 新增自建模板</button>
+        </div>
+      </aside>
+
+      <!-- CENTER: editor -->
+      <main>
+        <div class="v-banner" id="v-banner">
+          <span id="v-banner-code">— 尚未選擇模板 —</span>
+          <span id="v-banner-grade"></span>
+        </div>
+        <div class="progress-bar" id="progress-bar"></div>
+        <div class="tab-nav">
+          <button data-tab="basic" class="active">① 基本資訊</button>
+          <button data-tab="attrs">② 屬性配點</button>
+          <button data-tab="prof">③ 戰鬥熟練</button>
+          <button data-tab="sigwk">④ 簽名卡+弱點</button>
+          <button data-tab="deck">⑤ 起始牌組</button>
+        </div>
+        <div class="panel-body" style="padding:0">
+
+          <!-- Tab 1: basic -->
+          <div class="tab-content active" id="tab-basic">
+            <div class="form-grid">
+              <label>姓名（中文）<input id="f-name-zh" onchange="saveField('name_zh')"></label>
+              <label>姓名（英文）<input id="f-name-en" onchange="saveField('name_en')"></label>
+              <label>稱號（中文）<input id="f-title-zh" onchange="saveField('title_zh')"></label>
+              <label>稱號（英文）<input id="f-title-en" onchange="saveField('title_en')"></label>
+              <label>MBTI 四字碼<input id="f-mbti" disabled></label>
+              <label>職業序號<input id="f-career" disabled></label>
+              <label>偏重字母<input id="f-dominant" disabled></label>
+              <label>頭像 URL<input id="f-portrait" onchange="saveField('portrait_url')"></label>
+              <label class="full">時代標籤（逗號分隔）<input id="f-era" placeholder="1925, 紐約, 私家偵探" onchange="saveField('era_tags')"></label>
+              <label class="full">背景故事
+                <textarea id="f-backstory" onchange="saveField('backstory')"></textarea>
+              </label>
+              <label class="full">能力文字（中）
+                <textarea id="f-ability-zh" onchange="saveField('ability_text_zh')"></textarea>
+              </label>
+              <label class="full">能力文字（英）
+                <textarea id="f-ability-en" onchange="saveField('ability_text_en')"></textarea>
+              </label>
+            </div>
+            <div class="btn-row">
+              <button class="btn primary" onclick="aiGenerateBackground()">✨ AI 生成敘事</button>
+              <button class="btn" onclick="cloneTemplate()">複製為自建模板</button>
+              <button class="btn" onclick="clearTemplate()">清空回骨架</button>
+              <button class="btn danger" onclick="deleteTemplate()">刪除（僅自建）</button>
+            </div>
+          </div>
+
+          <!-- Tab 2: attributes -->
+          <div class="tab-content" id="tab-attrs">
+            <div class="attr-summary" id="attr-summary"></div>
+            <table class="attr-table">
+              <thead><tr><th>屬性</th><th>基礎</th><th>陣營</th><th>自由</th><th>總計</th><th>修正</th><th>V 值</th></tr></thead>
+              <tbody id="attr-tbody"></tbody>
+            </table>
+            <div id="attr-warn"></div>
+            <div class="btn-row">
+              <button class="btn primary" onclick="saveAttributes()">💾 儲存屬性</button>
+              <button class="btn" onclick="resetAttributesToBase()">重設為基礎 13 點</button>
+            </div>
+          </div>
+
+          <!-- Tab 3: proficiency -->
+          <div class="tab-content" id="tab-prof">
+            <div style="margin-bottom:0.5rem; font-size:0.75rem; color:var(--text-secondary);" id="prof-hint"></div>
+            <ul class="prof-list" id="prof-list"></ul>
+            <div style="display:flex; gap:0.4rem; margin-top:0.5rem;">
+              <select id="prof-select" style="flex:1; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); padding:0.35rem;"></select>
+              <button class="btn" onclick="addProficiency()">加入</button>
+              <button class="btn primary" onclick="applyRecommendedProf()">套用推薦</button>
+            </div>
+            <div class="editor-section" style="margin-top:1rem;">
+              <h4>能力文字 V 值</h4>
+              <div style="display:flex; gap:0.5rem; align-items:center;">
+                <label style="flex:1; display:flex; flex-direction:column; font-size:0.7rem; color:var(--text-secondary); gap:0.2rem;">
+                  當前值（V）
+                  <input id="f-ability-v" type="number" step="0.1" style="background:var(--bg-primary); color:var(--gold); border:1px solid var(--border); padding:0.3rem;" onchange="saveAbilityTextValue()">
+                </label>
+                <label style="flex:1; display:flex; flex-direction:column; font-size:0.7rem; color:var(--text-secondary); gap:0.2rem;">
+                  來源
+                  <select id="f-ability-src" style="background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); padding:0.3rem;" onchange="saveAbilityTextSource()">
+                    <option value="manual">manual 手填</option>
+                    <option value="ai_estimated">ai_estimated AI 未審</option>
+                    <option value="ai_confirmed">ai_confirmed AI 已審</option>
+                  </select>
+                </label>
+                <button class="btn primary" onclick="aiEstimateAbilityValue()">🤖 AI 估算</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 4: signature + weakness -->
+          <div class="tab-content" id="tab-sigwk">
+            <h4 style="font-family:'Cinzel',serif; color:var(--gold-dim); font-size:0.8rem; letter-spacing:0.15em; margin:0 0 0.5rem 0;">簽名卡（0-3 張）</h4>
+            <div class="slots-grid" id="sig-slots"></div>
+
+            <h4 style="font-family:'Cinzel',serif; color:var(--gold-dim); font-size:0.8rem; letter-spacing:0.15em; margin:1rem 0 0.5rem 0;">個人弱點（1 張）</h4>
+            <div class="slots-grid" style="grid-template-columns:1fr;" id="wk-slot"></div>
+          </div>
+
+          <!-- Tab 5: deck -->
+          <div class="tab-content" id="tab-deck">
+            <div class="attr-summary" id="deck-summary"></div>
+            <div class="deck-grid">
+              <div class="deck-col">
+                <h4>可用卡池</h4>
+                <div style="display:flex; gap:0.2rem; margin-bottom:0.4rem; flex-wrap:wrap;">
+                  <input id="pool-search" placeholder="搜尋" style="flex:1; min-width:0; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); padding:0.25rem; font-size:0.7rem;" oninput="loadAvailableCards()">
+                  <select id="pool-type" onchange="loadAvailableCards()" style="background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); padding:0.25rem; font-size:0.7rem;">
+                    <option value="">全類型</option><option value="asset">資產</option><option value="event">事件</option><option value="ally">盟友</option><option value="skill">技能</option>
+                  </select>
+                </div>
+                <div id="pool-list"></div>
+              </div>
+              <div class="deck-col">
+                <h4>已選牌組</h4>
+                <div id="deck-list"></div>
+              </div>
+              <div class="deck-col">
+                <h4>分析</h4>
+                <div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">費用曲線</div>
+                <div class="cost-curve" id="cost-curve"></div>
+                <div style="margin-top:1.2rem;">
+                  <div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">類型分佈</div>
+                  <div id="type-dist"></div>
+                </div>
+                <div style="margin-top:0.75rem;">
+                  <div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">陣營分佈</div>
+                  <div id="fac-dist"></div>
+                </div>
+                <div id="deck-warn" style="margin-top:0.75rem;"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </main>
+
+      <!-- RIGHT: editors -->
+      <aside>
+        <div class="panel-header" id="right-header">提示</div>
+        <div class="panel-body">
+          <div class="right-editor active" id="right-hint">
+            <p style="font-size:0.75rem; color:var(--text-secondary); line-height:1.6;">選擇一個模板開始編輯。</p>
+            <p style="font-size:0.75rem; color:var(--text-secondary); line-height:1.6;">在「簽名卡+弱點」分頁點擊卡槽即可在此編輯。</p>
+            <p style="font-size:0.7rem; color:var(--text-tertiary); margin-top:1rem;">MOD-11 · v0.10.0</p>
+          </div>
+
+          <div class="right-editor" id="right-signature">
+            <h4 style="font-family:'Cinzel',serif; color:var(--gold); margin:0 0 0.5rem 0;">簽名卡設計器</h4>
+            <div class="editor-section">
+              <h4>基本資訊</h4>
+              <div class="form-grid" style="grid-template-columns:1fr;">
+                <label>名稱（中）<input id="sig-name-zh"></label>
+                <label>名稱（英）<input id="sig-name-en"></label>
+                <div style="display:flex; gap:0.3rem;">
+                  <label style="flex:1; display:flex; flex-direction:column; font-size:0.75rem; color:var(--text-secondary);">類型
+                    <select id="sig-type" onchange="recomputeSigValue()"><option value="asset">資產</option><option value="event">事件</option><option value="ally">盟友</option><option value="skill">技能</option></select>
+                  </label>
+                  <label style="flex:1; display:flex; flex-direction:column; font-size:0.75rem; color:var(--text-secondary);">風格
+                    <select id="sig-style"><option value="">—</option><option value="A+H">A+H</option><option value="A+C">A+C</option><option value="O+H">O+H</option><option value="O+C">O+C</option></select>
+                  </label>
+                  <label style="flex:1; display:flex; flex-direction:column; font-size:0.75rem; color:var(--text-secondary);">費用
+                    <input id="sig-cost" type="number" min="0" max="6" value="0">
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="editor-section">
+              <h4>三合一屬性</h4>
+              <div id="sig-commit-icons"></div>
+              <button class="btn" style="margin-top:0.3rem;" onclick="addCommitIcon()">+ 新增加值</button>
+              <label style="display:flex; flex-direction:column; font-size:0.75rem; color:var(--text-secondary); margin-top:0.5rem;">消費效果<textarea id="sig-consume" style="min-height:60px;"></textarea></label>
+            </div>
+            <div class="editor-section">
+              <h4>打出效果</h4>
+              <label style="display:flex; flex-direction:column; font-size:0.75rem; color:var(--text-secondary);">效果文字<textarea id="sig-play" style="min-height:70px;"></textarea></label>
+            </div>
+            <div class="editor-section">
+              <h4>敘事</h4>
+              <label style="display:flex; flex-direction:column; font-size:0.75rem; color:var(--text-secondary);">傳敘<textarea id="sig-flavor" style="min-height:50px;"></textarea></label>
+              <label style="display:flex; flex-direction:column; font-size:0.75rem; color:var(--text-secondary); margin-top:0.3rem;">插圖 URL<input id="sig-art"></label>
+              <button class="btn" style="margin-top:0.4rem;" onclick="aiGenerateSigFlavor()">✨ AI 生成傳敘</button>
+            </div>
+            <div class="editor-section">
+              <h4>V 值計算</h4>
+              <ul class="value-breakdown-list" id="sig-breakdown"></ul>
+              <button class="btn" style="margin-top:0.3rem;" onclick="addBreakdownItem()">+ 新增效果項目</button>
+              <button class="btn" style="margin-left:0.3rem;" onclick="aiBreakdownSig()">🤖 AI 輔助拆解</button>
+              <div style="margin-top:0.5rem; font-family:'JetBrains Mono',monospace; font-size:0.75rem;">
+                單次: <b id="sig-single-v" style="color:#a3d3b5;">0.0</b>V
+                使用次數: <input id="sig-uses" type="number" min="1" value="1" style="width:50px; background:var(--bg-primary); color:var(--gold); border:1px solid var(--border); padding:0.15rem;" onchange="recomputeSigValue()">
+                最終: <b id="sig-total-v" style="color:var(--gold);">0.0</b>V
+              </div>
+            </div>
+            <div class="btn-row">
+              <button class="btn primary" onclick="saveSignatureCard()">💾 儲存</button>
+              <button class="btn danger" onclick="deleteSignatureCard()">🗑 刪除</button>
+              <button class="btn" onclick="closeRightEditor()">取消</button>
+            </div>
+          </div>
+
+          <div class="right-editor" id="right-weakness">
+            <h4 style="font-family:'Cinzel',serif; color:var(--gold); margin:0 0 0.5rem 0;">個人弱點編輯器</h4>
+            <div class="editor-section">
+              <div class="form-grid" style="grid-template-columns:1fr;">
+                <label>名稱（中）<input id="wk-name-zh"></label>
+                <label>名稱（英）<input id="wk-name-en"></label>
+                <label>弱點類型
+                  <select id="wk-type">
+                    <option value="flaw">性格缺陷 flaw</option><option value="trauma">舊傷 trauma</option>
+                    <option value="curse">詛咒 curse</option><option value="obsession">執念 obsession</option>
+                    <option value="debt">債務 debt</option><option value="secret">秘密 secret</option>
+                  </select>
+                </label>
+                <label>觸發條件<textarea id="wk-trigger" style="min-height:50px;"></textarea></label>
+                <label>負面效果<textarea id="wk-effect" style="min-height:50px;"></textarea></label>
+                <label>解除條件（可留空）<textarea id="wk-removal" style="min-height:40px;"></textarea></label>
+                <label>背景故事<textarea id="wk-backstory" style="min-height:60px;"></textarea></label>
+                <label>傳敘<textarea id="wk-flavor" style="min-height:40px;"></textarea></label>
+              </div>
+              <button class="btn" style="margin-top:0.4rem;" onclick="aiGenerateWeakness()">✨ AI 生成背景</button>
+            </div>
+            <div class="editor-section">
+              <h4>V 值計算（負值）</h4>
+              <div style="display:flex; gap:0.3rem; flex-wrap:wrap; font-size:0.7rem; color:var(--text-secondary);">
+                <label style="display:flex; flex-direction:column; flex:1;">單次效果 V（負）
+                  <input id="wk-ev" type="number" step="0.1" oninput="updWkFinalV()" style="background:var(--bg-primary); color:var(--gold); border:1px solid var(--border); padding:0.2rem;">
+                </label>
+                <label style="display:flex; flex-direction:column; flex:1;">抽到機率
+                  <input id="wk-prob" type="number" step="0.001" min="0" max="1" value="0.067" oninput="updWkFinalV()" style="background:var(--bg-primary); color:var(--gold); border:1px solid var(--border); padding:0.2rem;">
+                </label>
+                <label style="display:flex; flex-direction:column; flex:1;">預期回合數
+                  <input id="wk-rounds" type="number" min="1" value="5" oninput="updWkFinalV()" style="background:var(--bg-primary); color:var(--gold); border:1px solid var(--border); padding:0.2rem;">
+                </label>
+              </div>
+              <div style="margin-top:0.4rem; font-size:0.75rem; font-family:'JetBrains Mono',monospace;">
+                最終 V 值：<b id="wk-final-v" style="color:#ff8888;">0.0</b>V
+              </div>
+            </div>
+            <div class="btn-row">
+              <button class="btn primary" onclick="saveWeakness()">💾 儲存</button>
+              <button class="btn danger" onclick="deleteWeakness()">🗑 刪除</button>
+              <button class="btn" onclick="closeRightEditor()">取消</button>
+            </div>
+          </div>
+
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <!-- =============== VIEW: OVERVIEW =============== -->
+  <div id="view-overview" class="view">
+    <div style="padding:1rem 1rem 0 1rem;">
+      <h2 style="font-family:'Cinzel',serif; color:var(--gold); margin:0;">📊 總覽面板</h2>
+      <div id="overview-summary" style="margin-top:0.5rem; color:var(--text-secondary); font-size:0.85rem;"></div>
+    </div>
+    <div class="quad-grid">
+      <div class="quad">
+        <h3>A · 完成度矩陣</h3>
+        <div id="heatmap"></div>
+      </div>
+      <div class="quad">
+        <h3>B · 完成度統計</h3>
+        <div id="completion-chart"></div>
+      </div>
+      <div class="quad">
+        <h3>C · 時代標籤分佈</h3>
+        <div class="tag-cloud" id="tag-cloud"></div>
+      </div>
+      <div class="quad">
+        <h3>D · 偏重字母分佈</h3>
+        <div id="letter-dist"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =============== VIEW: BALANCE =============== -->
+  <div id="view-balance" class="view">
+    <div style="padding:1rem 1rem 0 1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+      <div>
+        <h2 style="font-family:'Cinzel',serif; color:var(--gold); margin:0;">⚖️ V 值平衡面板</h2>
+        <div id="balance-summary" style="margin-top:0.5rem; color:var(--text-secondary); font-size:0.85rem;"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn" onclick="reloadBalance()">🔄 全庫重算</button>
+        <button class="btn" onclick="openValueConfig()">⚙️ 調整係數</button>
+        <button class="btn" onclick="exportBalanceCSV()">📤 匯出 CSV</button>
+      </div>
+    </div>
+    <div class="quad-grid">
+      <div class="quad">
+        <h3>A · V 值散佈圖</h3>
+        <div class="bal-scatter" id="bal-scatter"></div>
+      </div>
+      <div class="quad">
+        <h3>B · 字母分組箱型圖</h3>
+        <div id="bal-boxplot"></div>
+      </div>
+      <div class="quad">
+        <h3>C · V 值組成（堆疊）</h3>
+        <div id="bal-stack"></div>
+      </div>
+      <div class="quad">
+        <h3>D · 警告清單</h3>
+        <div class="bal-warnings" id="bal-warnings"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI result modal -->
+  <div class="ai-backdrop" id="ai-backdrop" onclick="closeAI()"></div>
+  <div class="ai-result" id="ai-result">
+    <h3 id="ai-title">AI 生成結果</h3>
+    <div id="ai-body"></div>
+    <div class="btn-row">
+      <button class="btn" onclick="closeAI()">關閉</button>
     </div>
   </div>
 
   <script src="admin-shared.js"></script>
+  <script>
+    // ══════════════════════════════════════════════
+    //  State
+    // ══════════════════════════════════════════════
+    const state = {
+      current: null,        // 目前選中的 investigator 完整資料
+      currentId: null,
+      matrix: {},
+      presets: [],
+      sigEditing: null,     // 當前編輯的簽名卡（新建用 {new:true, card_order:n}）
+      wkEditing: null,      // 當前編輯的弱點（同上）
+      proficiencies: [],    // 全部 combat_specializations
+      factionAttrMap: {},
+      valueMatrix: [],
+      valueStats: null,
+      geminiKey: localStorage.getItem('gemini_api_key') || '',
+    };
+
+    const DOMINANT_RECOMMEND = {
+      E: '射擊', I: '暗殺', S: '隨身武器', N: '施法',
+      T: '工兵', F: '搏擊', J: '軍用武器', P: '弓術'
+    };
+    const FACTION_ZH = { E:'號令', I:'深淵', S:'鐵證', N:'天啟', T:'解析', F:'聖燼', J:'鐵壁', P:'流影' };
+    const ATTR_META = [
+      ['strength','力量','STR'], ['agility','敏捷','AGI'], ['constitution','體質','CON'],
+      ['intellect','智力','INT'], ['willpower','意志','WIL'], ['perception','感知','PER'],
+      ['charisma','魅力','CHA']
+    ];
+
+    const $ = id => document.getElementById(id);
+
+    async function api(url, opts = {}) {
+      const r = await adminFetch(url, opts);
+      if (!r.ok) {
+        let msg = 'API error';
+        try { const j = await r.json(); msg = j.error || msg; } catch {}
+        throw new Error(msg);
+      }
+      if (r.status === 204) return null;
+      return await r.json();
+    }
+
+    // ══════════════════════════════════════════════
+    //  Init
+    // ══════════════════════════════════════════════
+    async function init() {
+      document.querySelectorAll('.view-switcher button[data-view]').forEach(b => {
+        b.onclick = () => switchView(b.dataset.view);
+      });
+      document.querySelectorAll('.tab-nav button[data-tab]').forEach(b => {
+        b.onclick = () => switchTab(b.dataset.tab);
+      });
+
+      // 載入陣營屬性對照 + 熟練清單
+      try {
+        state.factionAttrMap = await api('/api/admin/faction-attribute-map').then(rows => {
+          const map = {};
+          for (const r of rows) map[r.faction_code] = r;
+          return map;
+        });
+      } catch(e) { console.warn('faction-attribute-map', e); }
+
+      try {
+        const profs = await api('/api/admin/proficiencies');
+        state.proficiencies = profs || [];
+        const sel = $('prof-select');
+        sel.innerHTML = '<option value="">— 選擇熟練 —</option>' +
+          state.proficiencies.map(p => `<option value="${p.id}">${p.style_name_zh||''}·${p.name_zh} (${p.attribute||''})</option>`).join('');
+      } catch(e) {
+        console.warn('proficiencies load failed', e);
+      }
+
+      await refreshMatrix();
+    }
+
+    function switchView(v) {
+      document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.view-switcher button[data-view]').forEach(x => x.classList.toggle('active', x.dataset.view === v));
+      $('view-' + v).classList.add('active');
+      if (v === 'overview') renderOverview();
+      if (v === 'balance') renderBalance();
+    }
+
+    function switchTab(t) {
+      document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.tab-nav button[data-tab]').forEach(x => x.classList.toggle('active', x.dataset.tab === t));
+      $('tab-' + t).classList.add('active');
+      if (t === 'deck') loadAvailableCards();
+    }
+
+    // ══════════════════════════════════════════════
+    //  Matrix (left panel)
+    // ══════════════════════════════════════════════
+    async function refreshMatrix() {
+      state.matrix = await api('/api/admin/investigators/preset-matrix');
+      state.presets = [];
+      for (const mbti of Object.keys(state.matrix)) {
+        for (const ci of Object.keys(state.matrix[mbti])) {
+          state.presets.push(state.matrix[mbti][ci]);
+        }
+      }
+      renderMatrix();
+    }
+
+    function renderMatrix() {
+      const box = $('matrix-body');
+      const search = ($('flt-search').value || '').toLowerCase();
+      const comp = $('flt-completion').value;
+      const grp = $('flt-group').value;
+      const groups = { Analysts: ['INTJ','INTP','ENTJ','ENTP'], Diplomats: ['INFJ','INFP','ENFJ','ENFP'],
+                       Sentinels: ['ISTJ','ISFJ','ESTJ','ESFJ'], Explorers: ['ISTP','ISFP','ESTP','ESFP'] };
+      const html = [];
+      for (const [g, list] of Object.entries(groups)) {
+        if (grp !== 'all' && grp !== g) continue;
+        html.push(`<div class="mbti-group"><div class="mbti-group-title">${g}</div>`);
+        for (const mbti of list) {
+          const row = state.matrix[mbti] || {};
+          html.push(`<div class="mbti-card"><div class="mbti-code"><span>${mbti}</span><span class="mbti-zh">${MBTI_TYPES[mbti]?.zh || ''}</span></div><div class="career-grid">`);
+          for (let ci = 1; ci <= 4; ci++) {
+            const t = row[ci];
+            if (!t) { html.push(`<div class="career-cell" style="opacity:0.3">—</div>`); continue; }
+            if (search && !((t.name_zh||'').toLowerCase().includes(search) || (t.title_zh||'').toLowerCase().includes(search) || mbti.toLowerCase().includes(search))) { html.push(`<div class="career-cell" style="opacity:0.15">—</div>`); continue; }
+            const hasName = !!t.name_zh;
+            const isSkel = !hasName;
+            const isInProg = hasName && !t.is_completed;
+            const isDone = t.is_completed;
+            if (comp === 'completed' && !isDone) { html.push(`<div class="career-cell" style="opacity:0.15">—</div>`); continue; }
+            if (comp === 'in_progress' && !isInProg) { html.push(`<div class="career-cell" style="opacity:0.15">—</div>`); continue; }
+            if (comp === 'skeleton' && !isSkel) { html.push(`<div class="career-cell" style="opacity:0.15">—</div>`); continue; }
+            const cls = ['career-cell'];
+            if (isInProg) cls.push('in-progress');
+            if (isDone) cls.push('completed');
+            if (state.currentId === t.id) cls.push('selected');
+            const fc = FACTIONS[t.dominant_letter]?.color || '#666';
+            html.push(`<div class="${cls.join(' ')}" style="--fc:${fc}" onclick="loadInvestigator('${t.id}')" title="${t.name_zh||'(空)'}${t.title_zh? ' · '+t.title_zh: ''}">
+              <span class="letter">${ci}-${t.dominant_letter}</span>
+              <div class="dots">
+                <div class="dot ${hasName?'on':''}"></div>
+                <div class="dot ${t.is_completed?'on':''}"></div>
+                <div class="dot ${t.is_completed?'on':''}"></div>
+              </div>
+            </div>`);
+          }
+          html.push('</div></div>');
+        }
+        html.push('</div>');
+      }
+      box.innerHTML = html.join('');
+    }
+
+    // ══════════════════════════════════════════════
+    //  Load investigator
+    // ══════════════════════════════════════════════
+    async function loadInvestigator(id) {
+      state.currentId = id;
+      state.current = await api('/api/admin/investigators/' + id);
+      renderAll();
+      renderMatrix();
+    }
+
+    function renderAll() {
+      if (!state.current) return;
+      renderBanner();
+      renderProgress();
+      renderBasic();
+      renderAttrs();
+      renderProf();
+      renderSlots();
+      renderDeckTab();
+    }
+
+    function renderBanner() {
+      const t = state.current;
+      $('v-banner-code').textContent = `${t.code} · 偏重 ${t.dominant_letter||'?'} · ${t.name_zh || '(未命名)'}　總 V: ${Number(t.total_value||0).toFixed(1)}V`;
+      const g = t.value_grade || 'incomplete';
+      $('v-banner-grade').innerHTML = `<span class="v-grade ${g}">${g}</span>`;
+    }
+
+    function renderProgress() {
+      const t = state.current;
+      const sumA = ATTR_META.reduce((s, [k]) => s + (t['attr_'+k] || 0), 0);
+      const items = [
+        ['姓名', !!t.name_zh], ['稱號', !!t.title_zh],
+        ['背景', (t.backstory||'').length >= 50], ['屬性 18', sumA === 18],
+        ['熟練', (t.proficiency_ids||[]).length >= 1],
+        ['簽名卡 ≥2', (t.signature_cards||[]).length >= 2],
+        ['弱點', !!t.weakness],
+        ['牌組 15-20', (() => { const n=(t.starting_deck||[]).reduce((s,x)=>s+(x.quantity||0),0); return n>=15 && n<=20; })()],
+        ['能力文字', !!t.ability_text_zh],
+      ];
+      $('progress-bar').innerHTML = items.map(([n, ok]) => `<span class="item ${ok?'done':''}">${n}</span>`).join('');
+    }
+
+    function renderBasic() {
+      const t = state.current;
+      $('f-name-zh').value = t.name_zh || '';
+      $('f-name-en').value = t.name_en || '';
+      $('f-title-zh').value = t.title_zh || '';
+      $('f-title-en').value = t.title_en || '';
+      $('f-mbti').value = t.mbti_code || '';
+      $('f-career').value = t.career_index || '';
+      $('f-dominant').value = t.dominant_letter ? `${t.dominant_letter} (${FACTION_ZH[t.dominant_letter]||''})` : '';
+      $('f-portrait').value = t.portrait_url || '';
+      $('f-era').value = t.era_tags || '';
+      $('f-backstory').value = t.backstory || '';
+      $('f-ability-zh').value = t.ability_text_zh || '';
+      $('f-ability-en').value = t.ability_text_en || '';
+    }
+
+    async function saveField(k) {
+      if (!state.currentId) return;
+      const map = { name_zh:'f-name-zh', name_en:'f-name-en', title_zh:'f-title-zh', title_en:'f-title-en',
+                    portrait_url:'f-portrait', era_tags:'f-era', backstory:'f-backstory',
+                    ability_text_zh:'f-ability-zh', ability_text_en:'f-ability-en' };
+      const v = $(map[k]).value;
+      state.current = await api('/api/admin/investigators/' + state.currentId, {
+        method: 'PATCH', body: JSON.stringify({ [k]: v })
+      });
+      renderBanner(); renderProgress();
+      refreshMatrixCell(state.currentId);
+    }
+
+    async function refreshMatrixCell(id) {
+      // 部分更新：只重抓該模板並重渲染 matrix
+      const r = await api('/api/admin/investigators/' + id);
+      const mbti = r.mbti_code, ci = r.career_index;
+      if (mbti && ci && state.matrix[mbti]) {
+        state.matrix[mbti][ci] = { ...state.matrix[mbti][ci], ...r };
+      }
+      renderMatrix();
+    }
+
+    // ══════════════════════════════════════════════
+    //  Attributes tab
+    // ══════════════════════════════════════════════
+    function renderAttrs() {
+      const t = state.current;
+      const base = calculateBaseAttributes(t.mbti_code || 'XXXX') || { attrs: {}, freePoints: 5 };
+      const cur = {};
+      for (const [k] of ATTR_META) cur[k] = t['attr_'+k] || 1;
+      const sum = ATTR_META.reduce((s,[k]) => s + cur[k], 0);
+      const allocated = sum;
+      const free = 18 - (base.totalAllocated || 13);
+      const used = allocated - (base.totalAllocated || 13);
+      $('attr-summary').innerHTML = `<span>基礎總計 <b>${base.totalAllocated||13}</b></span><span>自由已用 <b>${used}</b> / ${free}</span><span>總計 <b>${sum}</b> / 18</span><span>HP ${cur.constitution*2+5}　SAN ${cur.willpower*2+5}</span>`;
+      const rows = ATTR_META.map(([k,zh,abbr]) => {
+        const b = 1;
+        const fac = (base.attrs[k]||1) - 1;
+        const freeVal = cur[k] - (base.attrs[k] || 1);
+        const total = cur[k];
+        const vVal = total * 2.0;
+        return `<tr>
+          <td class="name">${zh} ${abbr}</td>
+          <td class="base">+${b}</td>
+          <td class="faction">+${fac}</td>
+          <td class="free">
+            <button onclick="adjFreeAttr('${k}',-1)">−</button>
+            <input value="${freeVal}" readonly style="margin:0 0.3rem;">
+            <button onclick="adjFreeAttr('${k}',1)">+</button>
+          </td>
+          <td class="total">${total}</td>
+          <td>+${total}</td>
+          <td class="vval">${vVal.toFixed(1)}V</td>
+        </tr>`;
+      }).join('');
+      $('attr-tbody').innerHTML = rows;
+      const warn = [];
+      for (const [k,zh] of ATTR_META) if (cur[k] >= 5) warn.push(`${zh} 已達上限 5`);
+      $('attr-warn').innerHTML = warn.length ? `<div class="warn-note">⚠ ${warn.join('；')}（創角 5 上限）</div>` : '';
+    }
+
+    function adjFreeAttr(key, delta) {
+      const t = state.current;
+      const base = calculateBaseAttributes(t.mbti_code || 'XXXX');
+      const baseVal = base?.attrs[key] || 1;
+      const cur = t['attr_'+key] || 1;
+      const nextVal = cur + delta;
+      if (nextVal < baseVal) return;
+      if (nextVal > 5) return;
+      const sumAfter = ATTR_META.reduce((s,[k]) => s + (k===key? nextVal : t['attr_'+k]), 0);
+      if (sumAfter > 18) return;
+      t['attr_'+key] = nextVal;
+      renderAttrs();
+    }
+
+    async function saveAttributes() {
+      const t = state.current;
+      const body = {};
+      for (const [k] of ATTR_META) body['attr_'+k] = t['attr_'+k];
+      state.current = await api('/api/admin/investigators/' + state.currentId, {
+        method:'PATCH', body: JSON.stringify(body)
+      });
+      renderAll();
+      refreshMatrixCell(state.currentId);
+    }
+
+    function resetAttributesToBase() {
+      const t = state.current;
+      const base = calculateBaseAttributes(t.mbti_code || 'XXXX');
+      if (!base) return;
+      for (const [k] of ATTR_META) t['attr_'+k] = base.attrs[k] || 1;
+      renderAttrs();
+    }
+
+    // ══════════════════════════════════════════════
+    //  Proficiency tab
+    // ══════════════════════════════════════════════
+    function renderProf() {
+      const t = state.current;
+      const ids = t.proficiency_ids || [];
+      const hint = t.dominant_letter ? `偏重 ${t.dominant_letter}(${FACTION_ZH[t.dominant_letter]}) → 推薦熟練：${DOMINANT_RECOMMEND[t.dominant_letter]||'—'}` : '';
+      $('prof-hint').textContent = hint;
+      const list = ids.map(id => state.proficiencies.find(p => p.id === id)).filter(Boolean);
+      $('prof-list').innerHTML = list.length === 0
+        ? '<li class="empty">尚未選擇熟練（建議 1-2 個）</li>'
+        : list.map(p => `<li>
+            <span class="info">✓ <b style="color:var(--gold);">${p.name_zh}</b> <span class="chip">${p.attribute}</span> <span class="v">+7.5V</span></span>
+            <button class="btn danger" onclick="removeProf('${p.id}')">移除</button>
+          </li>`).join('');
+      $('f-ability-v').value = t.ability_text_value || 0;
+      $('f-ability-src').value = t.ability_value_source || 'manual';
+    }
+
+    async function addProficiency() {
+      const pid = $('prof-select').value;
+      if (!pid) return;
+      const t = state.current;
+      const ids = t.proficiency_ids || [];
+      if (ids.includes(pid)) return;
+      ids.push(pid);
+      state.current = await api('/api/admin/investigators/' + state.currentId, {
+        method:'PATCH', body: JSON.stringify({ proficiency_ids: ids })
+      });
+      renderProf(); renderBanner(); renderProgress(); refreshMatrixCell(state.currentId);
+    }
+
+    async function removeProf(pid) {
+      const t = state.current;
+      const ids = (t.proficiency_ids||[]).filter(x => x !== pid);
+      state.current = await api('/api/admin/investigators/' + state.currentId, {
+        method:'PATCH', body: JSON.stringify({ proficiency_ids: ids })
+      });
+      renderProf(); renderBanner(); renderProgress(); refreshMatrixCell(state.currentId);
+    }
+
+    function applyRecommendedProf() {
+      const t = state.current;
+      const letter = t.dominant_letter;
+      if (!letter) return;
+      const recommend = DOMINANT_RECOMMEND[letter];
+      const match = state.proficiencies.find(p => p.name_zh && p.name_zh.includes(recommend));
+      if (match) { $('prof-select').value = match.id; addProficiency(); }
+      else alert(`未找到推薦熟練「${recommend}」，請從下拉選擇`);
+    }
+
+    async function saveAbilityTextValue() {
+      const v = parseFloat($('f-ability-v').value) || 0;
+      await api('/api/admin/investigators/' + state.currentId, {
+        method:'PATCH', body: JSON.stringify({ ability_text_value: v })
+      });
+      state.current.ability_text_value = v;
+      renderBanner();
+    }
+    async function saveAbilityTextSource() {
+      const v = $('f-ability-src').value;
+      await api('/api/admin/investigators/' + state.currentId, {
+        method:'PATCH', body: JSON.stringify({ ability_value_source: v })
+      });
+      state.current.ability_value_source = v;
+    }
+
+    // ══════════════════════════════════════════════
+    //  Signature & Weakness slots (tab 4)
+    // ══════════════════════════════════════════════
+    function renderSlots() {
+      const t = state.current;
+      const sigs = t.signature_cards || [];
+      const sigHtml = [];
+      for (let i = 1; i <= 3; i++) {
+        const c = sigs.find(s => s.card_order === i);
+        if (c) {
+          sigHtml.push(`<div class="slot-card filled" onclick="editSig('${c.id}')">
+            <div class="slot-name">${c.name_zh||'(未命名)'}</div>
+            <div class="slot-meta">#${i} · ${c.card_type} · cost ${c.cost||0} · V=${Number(c.effect_value||0).toFixed(1)}</div>
+          </div>`);
+        } else {
+          sigHtml.push(`<div class="slot-card" onclick="newSig(${i})">+ 新增簽名卡 #${i}</div>`);
+        }
+      }
+      $('sig-slots').innerHTML = sigHtml.join('');
+
+      const w = t.weakness;
+      $('wk-slot').innerHTML = w
+        ? `<div class="slot-card filled" onclick="editWk()">
+             <div class="slot-name">${w.name_zh||'(未命名)'}</div>
+             <div class="slot-meta">${w.weakness_type} · 最終 V=${Number(w.final_value||0).toFixed(1)}</div>
+           </div>`
+        : `<div class="slot-card" onclick="newWk()">+ 設計個人弱點</div>`;
+    }
+
+    function openRight(id) {
+      document.querySelectorAll('.right-editor').forEach(x => x.classList.remove('active'));
+      $(id).classList.add('active');
+      const map = { 'right-hint':'提示', 'right-signature':'簽名卡編輯', 'right-weakness':'個人弱點編輯' };
+      $('right-header').textContent = map[id] || '';
+    }
+    function closeRightEditor() { openRight('right-hint'); state.sigEditing = null; state.wkEditing = null; }
+
+    function newSig(order) {
+      state.sigEditing = { new:true, card_order:order };
+      $('sig-name-zh').value = '';
+      $('sig-name-en').value = '';
+      $('sig-type').value = 'asset';
+      $('sig-style').value = '';
+      $('sig-cost').value = 0;
+      $('sig-consume').value = '';
+      $('sig-play').value = '';
+      $('sig-flavor').value = '';
+      $('sig-art').value = '';
+      $('sig-uses').value = 1;
+      $('sig-commit-icons').innerHTML = '';
+      $('sig-breakdown').innerHTML = '';
+      recomputeSigValue();
+      openRight('right-signature');
+    }
+
+    function editSig(cid) {
+      const c = (state.current.signature_cards||[]).find(x => x.id === cid);
+      if (!c) return;
+      state.sigEditing = { ...c };
+      $('sig-name-zh').value = c.name_zh || '';
+      $('sig-name-en').value = c.name_en || '';
+      $('sig-type').value = c.card_type || 'asset';
+      $('sig-style').value = c.card_style || '';
+      $('sig-cost').value = c.cost || 0;
+      $('sig-consume').value = c.consume_effect || '';
+      $('sig-play').value = c.play_effect || '';
+      $('sig-flavor').value = c.flavor_text || '';
+      $('sig-art').value = c.illustration_url || '';
+      $('sig-uses').value = 1;
+      renderCommitIcons(c.commit_icons || []);
+      renderBreakdown(c.value_breakdown || []);
+      openRight('right-signature');
+    }
+
+    function renderCommitIcons(icons) {
+      const attrs = ['strength','agility','constitution','intellect','willpower','perception','charisma','wild'];
+      $('sig-commit-icons').innerHTML = icons.map((ic,i) => `<div class="commit-row">
+        <select onchange="updCommit(${i},'attr',this.value)">${attrs.map(a => `<option value="${a}" ${a===ic.attr?'selected':''}>${a}</option>`).join('')}</select>
+        <input type="number" min="1" max="3" value="${ic.value||1}" onchange="updCommit(${i},'value',parseInt(this.value))">
+        <button class="btn danger" onclick="delCommit(${i})">×</button>
+      </div>`).join('');
+      state.sigCommitIcons = icons;
+    }
+
+    function addCommitIcon() {
+      const list = state.sigCommitIcons || [];
+      list.push({ attr:'willpower', value:1 });
+      renderCommitIcons(list);
+    }
+    function updCommit(i, k, v) { state.sigCommitIcons[i][k] = v; }
+    function delCommit(i) { state.sigCommitIcons.splice(i,1); renderCommitIcons(state.sigCommitIcons); }
+
+    function renderBreakdown(items) {
+      state.sigBreakdown = items;
+      $('sig-breakdown').innerHTML = items.map((it,i) => `<li>
+        <span>${it.effect || it.effect_description || '—'}</span>
+        <span class="v">
+          <input type="number" step="0.1" value="${it.value||0}" style="width:55px; background:var(--bg-primary); color:#a3d3b5; border:1px solid var(--border); padding:0.1rem;" onchange="updBreakdown(${i},this.value)">V
+          <button class="btn danger" style="padding:0 0.3rem;" onclick="delBreakdown(${i})">×</button>
+        </span>
+      </li>`).join('');
+      recomputeSigValue();
+    }
+    function addBreakdownItem() {
+      const list = state.sigBreakdown || [];
+      const eff = prompt('效果描述');
+      if (!eff) return;
+      const v = parseFloat(prompt('V 值（可為負）', '1.0')) || 0;
+      list.push({ effect: eff, value: v, reason: '' });
+      renderBreakdown(list);
+    }
+    function updBreakdown(i, v) { state.sigBreakdown[i].value = parseFloat(v)||0; recomputeSigValue(); }
+    function delBreakdown(i) { state.sigBreakdown.splice(i,1); renderBreakdown(state.sigBreakdown); }
+
+    function recomputeSigValue() {
+      const list = state.sigBreakdown || [];
+      const single = list.reduce((s,x) => s + (parseFloat(x.value)||0), 0);
+      const uses = parseInt($('sig-uses')?.value || 1, 10);
+      const raw = single * uses;
+      // 若為資產類：扣 -1 行動 + -1 留場
+      const type = $('sig-type').value;
+      const isAsset = type === 'asset';
+      const final = raw + (isAsset ? -2 : 0);
+      if ($('sig-single-v')) $('sig-single-v').textContent = single.toFixed(1);
+      if ($('sig-total-v')) $('sig-total-v').textContent = final.toFixed(1);
+      state.sigFinalV = final;
+    }
+
+    async function saveSignatureCard() {
+      if (!state.sigEditing) return;
+      const body = {
+        card_order: state.sigEditing.card_order,
+        name_zh: $('sig-name-zh').value,
+        name_en: $('sig-name-en').value || null,
+        card_type: $('sig-type').value,
+        card_style: $('sig-style').value || null,
+        cost: parseInt($('sig-cost').value,10) || 0,
+        commit_icons: state.sigCommitIcons || [],
+        consume_effect: $('sig-consume').value || null,
+        play_effect: $('sig-play').value || null,
+        flavor_text: $('sig-flavor').value || null,
+        illustration_url: $('sig-art').value || null,
+        effect_value: state.sigFinalV || 0,
+        value_breakdown: state.sigBreakdown || [],
+      };
+      if (!body.name_zh) { alert('名稱必填'); return; }
+      if (state.sigEditing.new) {
+        await api(`/api/admin/investigators/${state.currentId}/signature-cards`, { method:'POST', body: JSON.stringify(body) });
+      } else {
+        await api(`/api/admin/investigators/${state.currentId}/signature-cards/${state.sigEditing.id}`, { method:'PATCH', body: JSON.stringify(body) });
+      }
+      await loadInvestigator(state.currentId);
+      closeRightEditor();
+    }
+
+    async function deleteSignatureCard() {
+      if (!state.sigEditing || state.sigEditing.new) { closeRightEditor(); return; }
+      if (!confirm('確認刪除此簽名卡？')) return;
+      await api(`/api/admin/investigators/${state.currentId}/signature-cards/${state.sigEditing.id}`, { method:'DELETE' });
+      await loadInvestigator(state.currentId);
+      closeRightEditor();
+    }
+
+    // Weakness
+    function newWk() {
+      state.wkEditing = { new:true };
+      ['wk-name-zh','wk-name-en','wk-trigger','wk-effect','wk-removal','wk-backstory','wk-flavor'].forEach(id => $(id).value = '');
+      $('wk-type').value = 'flaw';
+      $('wk-ev').value = -3;
+      $('wk-prob').value = 0.067;
+      $('wk-rounds').value = 5;
+      updWkFinalV();
+      openRight('right-weakness');
+    }
+    function editWk() {
+      const w = state.current.weakness;
+      if (!w) return newWk();
+      state.wkEditing = { ...w };
+      $('wk-name-zh').value = w.name_zh || '';
+      $('wk-name-en').value = w.name_en || '';
+      $('wk-type').value = w.weakness_type || 'flaw';
+      $('wk-trigger').value = w.trigger_condition || '';
+      $('wk-effect').value = w.negative_effect || '';
+      $('wk-removal').value = w.removal_condition || '';
+      $('wk-backstory').value = w.backstory || '';
+      $('wk-flavor').value = w.flavor_text || '';
+      $('wk-ev').value = w.effect_value || 0;
+      $('wk-prob').value = w.trigger_probability || 0.067;
+      $('wk-rounds').value = w.expected_rounds || 5;
+      updWkFinalV();
+      openRight('right-weakness');
+    }
+    function updWkFinalV() {
+      const ev = parseFloat($('wk-ev').value)||0;
+      const p = parseFloat($('wk-prob').value)||0;
+      const r = parseFloat($('wk-rounds').value)||0;
+      $('wk-final-v').textContent = (ev*p*r).toFixed(2);
+    }
+    async function saveWeakness() {
+      const body = {
+        name_zh: $('wk-name-zh').value,
+        name_en: $('wk-name-en').value || null,
+        weakness_type: $('wk-type').value,
+        trigger_condition: $('wk-trigger').value,
+        negative_effect: $('wk-effect').value,
+        removal_condition: $('wk-removal').value || null,
+        backstory: $('wk-backstory').value || null,
+        flavor_text: $('wk-flavor').value || null,
+        effect_value: parseFloat($('wk-ev').value)||0,
+        trigger_probability: parseFloat($('wk-prob').value)||0.067,
+        expected_rounds: parseInt($('wk-rounds').value,10)||5,
+      };
+      if (!body.name_zh || !body.trigger_condition || !body.negative_effect) { alert('名稱/觸發/效果必填'); return; }
+      await api(`/api/admin/investigators/${state.currentId}/weakness`, { method:'PUT', body: JSON.stringify(body) });
+      await loadInvestigator(state.currentId);
+      closeRightEditor();
+    }
+
+    async function deleteWeakness() {
+      if (!confirm('確認刪除弱點？')) return;
+      await api(`/api/admin/investigators/${state.currentId}/weakness`, { method:'DELETE' });
+      await loadInvestigator(state.currentId);
+      closeRightEditor();
+    }
+
+    // ══════════════════════════════════════════════
+    //  Deck tab
+    // ══════════════════════════════════════════════
+    async function renderDeckTab() {
+      const t = state.current;
+      const deck = t.starting_deck || [];
+      const total = deck.reduce((s,x) => s + (x.quantity||0), 0);
+      $('deck-summary').innerHTML = `<span>張數 <b>${total}</b> / 15-20</span><span>費用平均 <b>${calcAvgCost(deck).toFixed(1)}</b></span><span>簽名卡 <b>${deck.filter(x=>x.signature_card_id).length}</b></span><span>弱點 <b>${deck.filter(x=>x.weakness_id).length}</b></span>`;
+      renderDeckList(deck);
+      renderDeckAnalysis(deck);
+      validateDeck();
+    }
+
+    function calcAvgCost(deck) {
+      let tot = 0, n = 0;
+      for (const s of deck) {
+        const c = s.cd_cost ?? s.sc_cost ?? 0;
+        tot += c * (s.quantity||1); n += (s.quantity||1);
+      }
+      return n ? tot/n : 0;
+    }
+
+    function renderDeckList(deck) {
+      const sigs = deck.filter(x => x.signature_card_id);
+      const wks = deck.filter(x => x.weakness_id);
+      const generals = deck.filter(x => x.card_definition_id);
+      const h = [];
+      if (sigs.length) {
+        h.push(`<div style="font-size:0.7rem; color:var(--gold-dim); margin:0.3rem 0;">簽名卡 ${sigs.reduce((s,x)=>s+x.quantity,0)}</div>`);
+        for (const s of sigs) h.push(`<div class="card-chip sig"><span>${s.sc_name_zh||'?'} ×${s.quantity}</span><span class="meta">簽</span></div>`);
+      }
+      if (wks.length) {
+        h.push(`<div style="font-size:0.7rem; color:#B84C4C; margin:0.3rem 0;">弱點 ${wks.reduce((s,x)=>s+x.quantity,0)}</div>`);
+        for (const s of wks) h.push(`<div class="card-chip wk"><span>${s.wk_name_zh||'?'} ×${s.quantity}</span><span class="meta">弱</span></div>`);
+      }
+      if (generals.length) {
+        h.push(`<div style="font-size:0.7rem; color:var(--text-secondary); margin:0.5rem 0 0.3rem 0;">一般卡 ${generals.reduce((s,x)=>s+x.quantity,0)}</div>`);
+        for (const s of generals) h.push(`<div class="card-chip">
+          <span>${s.cd_name_zh||'?'} ×${s.quantity}</span>
+          <span class="qty-ctl">
+            <button onclick="deckQty('${s.id}',-1)">−</button>
+            <button onclick="deckQty('${s.id}',1)">+</button>
+            <button onclick="deckRemove('${s.id}')">×</button>
+          </span>
+        </div>`);
+      }
+      if (!h.length) h.push('<div class="empty">牌組為空</div>');
+      $('deck-list').innerHTML = h.join('');
+    }
+
+    function renderDeckAnalysis(deck) {
+      const costs = [0,0,0,0,0,0,0];
+      const types = {};
+      const facs = {};
+      for (const s of deck) {
+        const c = s.cd_cost ?? s.sc_cost ?? 0;
+        const ty = s.cd_card_type ?? s.sc_card_type ?? '其他';
+        const fa = (s.cd_faction||'').trim();
+        if (c >= 0 && c <= 6) costs[c] += s.quantity||0;
+        types[ty] = (types[ty]||0) + (s.quantity||0);
+        if (s.weakness_id) facs['弱'] = (facs['弱']||0) + (s.quantity||0);
+        else if (s.signature_card_id) facs['簽'] = (facs['簽']||0) + (s.quantity||0);
+        else facs[fa || '中立'] = (facs[fa || '中立']||0) + (s.quantity||0);
+      }
+      const maxC = Math.max(1, ...costs);
+      $('cost-curve').innerHTML = costs.map((c,i) => `<div class="bar" data-c="${i}" style="height:${(c/maxC)*100}%;" title="費用 ${i}：${c} 張"></div>`).join('');
+      const typeMax = Math.max(1, ...Object.values(types));
+      $('type-dist').innerHTML = Object.entries(types).map(([k,v]) => `<div class="dist-row"><span class="label">${k}</span><span class="fill"><span style="width:${(v/typeMax)*100}%"></span></span><span class="num">${v}</span></div>`).join('');
+      const facMax = Math.max(1, ...Object.values(facs));
+      $('fac-dist').innerHTML = Object.entries(facs).map(([k,v]) => `<div class="dist-row"><span class="label">${k}</span><span class="fill"><span style="width:${(v/facMax)*100}%"></span></span><span class="num">${v}</span></div>`).join('');
+    }
+
+    async function validateDeck() {
+      if (!state.currentId) return;
+      try {
+        const r = await api(`/api/admin/investigators/${state.currentId}/starting-deck/validate`);
+        const warn = [];
+        if (r.errors?.length) warn.push(`<div class="warn-note" style="background:rgba(184,76,76,0.1); border-color:#B84C4C; color:#ff8888;">⚠ ${r.errors.join('；')}</div>`);
+        if (r.warnings?.length) warn.push(`<div class="warn-note">⚠ ${r.warnings.join('；')}</div>`);
+        if (!warn.length) warn.push(`<div class="warn-note" style="background:rgba(107,142,107,0.1); border-color:#6B8E6B; color:#a3d3a3;">✓ 牌組有效（${r.totalCards} 張）</div>`);
+        $('deck-warn').innerHTML = warn.join('');
+      } catch(e) { $('deck-warn').innerHTML = `<div class="warn-note">${e.message}</div>`; }
+    }
+
+    async function loadAvailableCards() {
+      if (!state.currentId) return;
+      const q = new URLSearchParams();
+      const search = $('pool-search').value;
+      const type = $('pool-type').value;
+      if (search) q.set('search', search);
+      if (type) q.set('card_type', type);
+      try {
+        const rows = await api(`/api/admin/investigators/${state.currentId}/available-cards?${q}`);
+        $('pool-list').innerHTML = rows.length === 0
+          ? '<div class="empty">無符合條件的卡</div>'
+          : rows.slice(0,80).map(c => `<div class="card-chip">
+              <span>${c.name_zh} <span class="meta">${c.card_type}·c${c.cost}·${c.faction||'中'}</span></span>
+              <button class="btn" onclick="deckAdd('${c.id}')">+</button>
+            </div>`).join('');
+      } catch(e) { $('pool-list').innerHTML = `<div class="warn-note">${e.message}</div>`; }
+    }
+
+    async function deckAdd(cardId) {
+      try {
+        await api(`/api/admin/investigators/${state.currentId}/starting-deck/cards`, {
+          method:'POST', body: JSON.stringify({ card_definition_id: cardId, quantity: 1 })
+        });
+        state.current = await api('/api/admin/investigators/' + state.currentId);
+        renderDeckTab();
+      } catch(e) { alert(e.message); }
+    }
+    async function deckQty(slotId, delta) {
+      const slot = (state.current.starting_deck||[]).find(x => x.id === slotId);
+      if (!slot) return;
+      const q = (slot.quantity||1) + delta;
+      if (q <= 0) return deckRemove(slotId);
+      await api(`/api/admin/investigators/${state.currentId}/starting-deck/cards/${slotId}`, {
+        method:'PATCH', body: JSON.stringify({ quantity: q })
+      });
+      state.current = await api('/api/admin/investigators/' + state.currentId);
+      renderDeckTab();
+    }
+    async function deckRemove(slotId) {
+      await api(`/api/admin/investigators/${state.currentId}/starting-deck/cards/${slotId}`, { method:'DELETE' });
+      state.current = await api('/api/admin/investigators/' + state.currentId);
+      renderDeckTab();
+    }
+
+    // ══════════════════════════════════════════════
+    //  Template ops
+    // ══════════════════════════════════════════════
+    async function createCustomTemplate() {
+      const mbti = prompt('MBTI 四字碼（選填，大寫 4 字母）', '');
+      const b = mbti ? { mbti_code: mbti.toUpperCase() } : {};
+      const r = await api('/api/admin/investigators', { method:'POST', body: JSON.stringify(b) });
+      await refreshMatrix();
+      loadInvestigator(r.id);
+    }
+    async function cloneTemplate() {
+      if (!state.currentId) return;
+      const r = await api(`/api/admin/investigators/${state.currentId}/clone`, { method:'POST' });
+      await refreshMatrix();
+      loadInvestigator(r.id);
+    }
+    async function clearTemplate() {
+      if (!state.currentId) return;
+      if (!confirm('確認清空回骨架狀態？所有敘事、簽名卡、弱點、牌組都會被清除')) return;
+      await api(`/api/admin/investigators/${state.currentId}/clear`, { method:'POST' });
+      await loadInvestigator(state.currentId);
+      await refreshMatrix();
+    }
+    async function deleteTemplate() {
+      if (!state.currentId) return;
+      try {
+        await api('/api/admin/investigators/' + state.currentId, { method:'DELETE' });
+        state.currentId = null; state.current = null;
+        await refreshMatrix();
+        ['v-banner-code','v-banner-grade','progress-bar'].forEach(id => $(id).innerHTML = '— 尚未選擇模板 —');
+      } catch(e) { alert(e.message); }
+    }
+
+    // ══════════════════════════════════════════════
+    //  Gemini AI integration (前端直呼)
+    // ══════════════════════════════════════════════
+    function openGeminiKeyDialog() {
+      const k = prompt('輸入 Gemini API Key（儲存在 localStorage）', state.geminiKey || '');
+      if (k !== null) { state.geminiKey = k; localStorage.setItem('gemini_api_key', k); alert('已儲存'); }
+    }
+
+    async function callGemini(systemPrompt) {
+      if (!state.geminiKey) { openGeminiKeyDialog(); if (!state.geminiKey) throw new Error('尚未設定 Gemini API Key'); }
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.geminiKey}`;
+      const res = await fetch(url, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          contents:[{role:'user', parts:[{text: systemPrompt}]}],
+          generationConfig:{ temperature:0.85, maxOutputTokens: 1500, responseMimeType:'application/json' }
+        })
+      });
+      if (!res.ok) throw new Error('Gemini API 失敗：' + res.status);
+      const j = await res.json();
+      const txt = j?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!txt) throw new Error('Gemini 回應為空');
+      return JSON.parse(txt);
+    }
+
+    function showAI(title, html) {
+      $('ai-title').textContent = title;
+      $('ai-body').innerHTML = html;
+      $('ai-backdrop').classList.add('open');
+      $('ai-result').classList.add('open');
+    }
+    function closeAI() { $('ai-backdrop').classList.remove('open'); $('ai-result').classList.remove('open'); }
+
+    async function aiGenerateBackground() {
+      if (!state.currentId) return;
+      const t = state.current;
+      const hint = prompt('給 AI 的提示（選填，如：「女性，戰爭寡婦」）', '');
+      const sys = `你是克蘇魯神話冒險遊戲的角色設計師，專長是 1920-30 年代美國背景。
+請為一位調查員設計完整敘事，輸出 JSON：{ "name_zh","name_en","title_zh","title_en","backstory","ability_text_zh" }。
+- MBTI: ${t.mbti_code} (${MBTI_TYPES[t.mbti_code]?.zh||''})
+- 職業偏重：${t.dominant_letter}(${FACTION_ZH[t.dominant_letter]||''})陣營
+- 時代標籤：${t.era_tags || '1920s 美國'}
+- 額外提示：${hint || '（無）'}
+設計約束：
+- 台灣繁體中文，克蘇魯譯名採台灣 TRPG 慣用（克蘇魯/奈亞拉托提普/阿卡姆）
+- 背景故事 150-250 字，暗黑哥德氛圍，避免輕鬆戲謔
+- 能力文字 1-2 句中文，不含數值/擲骰術語
+- 姓名符合時代與族群`;
+      try {
+        const j = await callGemini(sys);
+        const applyAll = () => {
+          ['name_zh','name_en','title_zh','title_en','backstory','ability_text_zh'].forEach(k => {
+            if (j[k]) {
+              const id = { name_zh:'f-name-zh', name_en:'f-name-en', title_zh:'f-title-zh', title_en:'f-title-en', backstory:'f-backstory', ability_text_zh:'f-ability-zh' }[k];
+              $(id).value = j[k];
+              state.current[k] = j[k];
+            }
+          });
+          closeAI();
+          api('/api/admin/investigators/' + state.currentId, { method:'PATCH', body: JSON.stringify({
+            name_zh:j.name_zh, name_en:j.name_en, title_zh:j.title_zh, title_en:j.title_en,
+            backstory:j.backstory, ability_text_zh:j.ability_text_zh
+          })}).then(() => { loadInvestigator(state.currentId); });
+        };
+        window.__aiApplyAll = applyAll;
+        const rows = ['name_zh','name_en','title_zh','title_en','backstory','ability_text_zh']
+          .filter(k => j[k]).map(k => `<div class="section"><div class="field-label">${k}</div><div class="suggestion">${j[k]}</div></div>`).join('');
+        showAI('AI 敘事建議', rows + `<div class="btn-row"><button class="btn primary" onclick="window.__aiApplyAll()">一鍵全部採用</button></div>`);
+      } catch(e) { alert(e.message); }
+    }
+
+    async function aiGenerateSigFlavor() {
+      const t = state.current;
+      const sys = `你是克蘇魯神話卡牌遊戲的敘事設計師。請為簽名卡撰寫傳敘（Flavor Text），20-60 字中文，氛圍而非機制。
+卡片資訊：
+- 名稱：${$('sig-name-zh').value}
+- 類型：${$('sig-type').value}
+- 效果：${$('sig-play').value || '(無)'}
+調查員：${t.name_zh || t.mbti_code}，${t.title_zh || '?'}
+背景摘要：${(t.backstory||'').slice(0,100)}
+輸出 JSON：{"flavor_text":"..."}。不可包含機制術語（傷害/擲骰/點數）。基調：不安、孤獨、無力感。`;
+      try {
+        const j = await callGemini(sys);
+        if (j.flavor_text) { $('sig-flavor').value = j.flavor_text; alert('已套用'); }
+      } catch(e) { alert(e.message); }
+    }
+
+    async function aiGenerateWeakness() {
+      const t = state.current;
+      const sys = `你是克蘇魯神話冒險遊戲的敘事設計師。為個人弱點撰寫背景與傳敘。
+- 弱點名稱：${$('wk-name-zh').value}
+- 類型：${$('wk-type').value}
+- 觸發：${$('wk-trigger').value}
+- 負面效果：${$('wk-effect').value}
+- 歸屬：${t.name_zh || t.mbti_code}，${t.title_zh || ''}
+輸出 JSON：{"backstory":"80-150 字中文","flavor_text":"20-50 字中文"}。沉重、內省、弱點不被克服。`;
+      try {
+        const j = await callGemini(sys);
+        if (j.backstory) $('wk-backstory').value = j.backstory;
+        if (j.flavor_text) $('wk-flavor').value = j.flavor_text;
+        alert('已套用');
+      } catch(e) { alert(e.message); }
+    }
+
+    async function aiEstimateAbilityValue() {
+      const t = state.current;
+      const text = t.ability_text_zh || $('f-ability-zh').value;
+      if (!text) { alert('能力文字為空'); return; }
+      const sys = `你是克蘇魯神話卡牌遊戲的平衡設計師。
+1V = 1 行動點 = 1 資源 = 抽 1 張牌 = 1 點傷害。
+估算以下能力文字的 V 值，輸出 JSON：
+{"estimated_value": 數字, "breakdown":[{"effect_description":"...","value":數字,"reason":"..."}], "confidence":"high|medium|low", "caveats":"..."}
+參考：
+- 每 +1 屬性 ≈ 2.0V, +1 傷害 = 2.5V, 抽 1 牌/回合 ≈ 5V
+- 純敘事無機制 → 回傳 estimated_value:0 並在 caveats 標註
+調查員：${t.mbti_code}(${t.dominant_letter})
+能力文字：${text}`;
+      try {
+        const j = await callGemini(sys);
+        const html = `<div class="section"><div class="field-label">估算 V 值</div><div class="suggestion">${j.estimated_value} V　信心度：${j.confidence||'?'}</div></div>
+          <div class="section"><div class="field-label">拆解</div>${(j.breakdown||[]).map(b => `<div>· ${b.effect_description} <b style="color:#a3d3b5">${b.value}V</b> <span style="color:var(--text-tertiary); font-size:0.75rem;">${b.reason||''}</span></div>`).join('')}</div>
+          ${j.caveats? `<div class="warn-note">⚠ ${j.caveats}</div>`: ''}
+          <div class="btn-row"><button class="btn primary" onclick="window.__applyAbilityV(${j.estimated_value})">採用 ${j.estimated_value}V</button><button class="btn" onclick="closeAI()">捨棄</button></div>`;
+        window.__applyAbilityV = async (v) => {
+          $('f-ability-v').value = v;
+          $('f-ability-src').value = 'ai_confirmed';
+          await api('/api/admin/investigators/' + state.currentId, {
+            method:'PATCH', body: JSON.stringify({ ability_text_value: v, ability_value_source: 'ai_confirmed' })
+          });
+          state.current.ability_text_value = v;
+          state.current.ability_value_source = 'ai_confirmed';
+          renderBanner(); closeAI();
+        };
+        showAI('AI 估算能力文字 V 值', html);
+      } catch(e) { alert(e.message); }
+    }
+
+    async function aiBreakdownSig() {
+      const sys = `你是克蘇魯神話卡牌遊戲的卡片平衡設計師。
+請拆解此簽名卡的效果為獨立項目與 V 值，輸出 JSON：
+{"breakdown":[{"effect":"...","value":數字,"reason":"..."}], "expected_uses":數字, "final_estimated_value":數字, "confidence":"high|medium|low"}
+卡名：${$('sig-name-zh').value}
+類型：${$('sig-type').value}
+費用：${$('sig-cost').value}
+效果：${$('sig-play').value}
+參考 V 值表：造成 1 點傷害 1V、抽 1 牌 1V、自動成功 4V、額外攻擊 1.5V、+1 屬性 0.5V、萬能 +1 = 1V。`;
+      try {
+        const j = await callGemini(sys);
+        renderBreakdown(j.breakdown || []);
+        if (j.expected_uses) $('sig-uses').value = j.expected_uses;
+        recomputeSigValue();
+        alert('已填入效果拆解');
+      } catch(e) { alert(e.message); }
+    }
+
+    // ══════════════════════════════════════════════
+    //  Overview panel
+    // ══════════════════════════════════════════════
+    async function renderOverview() {
+      const stats = await api('/api/admin/investigators/stats');
+      $('overview-summary').innerHTML = `完成度：<b>${stats.completed_presets} / ${stats.total_presets}</b>（${(stats.completion_rate*100).toFixed(1)}%）`;
+
+      // Heatmap
+      const matrix = state.matrix;
+      const mbtis = ['INTJ','INTP','ENTJ','ENTP','INFJ','INFP','ENFJ','ENFP','ISTJ','ISFJ','ESTJ','ESFJ','ISTP','ISFP','ESTP','ESFP'];
+      const h = ['<div class="heatmap hm-label"></div>'];
+      for (let ci = 1; ci <= 4; ci++) h.push(`<div class="heatmap hm-h">職業 ${ci}</div>`);
+      const grid = ['<div class="heatmap">'];
+      for (const mbti of mbtis) {
+        grid.push(`<div class="hm-label">${mbti}</div>`);
+        for (let ci = 1; ci <= 4; ci++) {
+          const t = matrix[mbti]?.[ci];
+          let bg = '#2a2a2a', label = '';
+          if (t) {
+            if (t.is_completed) { bg = '#d4a574'; label = '█'; }
+            else if (t.name_zh) { bg = '#6b5a3a'; label = '▓'; }
+            else { bg = '#2a2a2a'; label = '░'; }
+          }
+          grid.push(`<div class="hm-cell" style="background:${bg}" onclick="switchView('designer'); loadInvestigator('${t?.id||''}');" title="${mbti}-${ci} ${t?.name_zh||''}">${label}</div>`);
+        }
+      }
+      grid.push('</div>');
+      $('heatmap').innerHTML = grid.join('');
+
+      // Completion chart
+      const done = stats.completed_presets, prog = state.presets.filter(t => t.name_zh && !t.is_completed).length, skel = stats.total_presets - done - prog;
+      $('completion-chart').innerHTML = `
+        <div style="font-family:'JetBrains Mono',monospace; font-size:0.8rem;">
+          <div style="margin-bottom:0.5rem;"><span style="color:#d4a574">█</span> 已完成 <b>${done}</b>（${(done/stats.total_presets*100).toFixed(1)}%）</div>
+          <div style="margin-bottom:0.5rem;"><span style="color:#6b5a3a">▓</span> 進行中 <b>${prog}</b>（${(prog/stats.total_presets*100).toFixed(1)}%）</div>
+          <div style="margin-bottom:0.5rem;"><span style="color:#555">░</span> 骨架 <b>${skel}</b>（${(skel/stats.total_presets*100).toFixed(1)}%）</div>
+          <hr style="border-color:var(--border);">
+          ${(stats.by_mbti||[]).map(r => `<div style="display:flex; justify-content:space-between; font-size:0.7rem;"><span>${r.mbti_code}</span><span>${r.completed}/${r.total}</span></div>`).join('')}
+        </div>`;
+
+      // Tag cloud
+      const tags = stats.by_era_tag || {};
+      const tagEntries = Object.entries(tags).sort((a,b) => b[1]-a[1]);
+      $('tag-cloud').innerHTML = tagEntries.length === 0 ? '<div class="empty">尚無時代標籤</div>' : tagEntries.map(([k,v]) => {
+        const fontSize = Math.min(1.3, 0.7 + v*0.08);
+        return `<span class="tag" style="font-size:${fontSize}rem">${k}<span class="n">${v}</span></span>`;
+      }).join('');
+
+      // Letter dist
+      const bl = stats.by_dominant_letter || [];
+      const maxC = Math.max(1, ...bl.map(r => r.c));
+      $('letter-dist').innerHTML = bl.map(r => {
+        const imbalance = Math.abs(r.c - 8) > 2;
+        return `<div class="dist-row"><span class="label" style="color:${FACTIONS[r.dominant_letter]?.color||'#fff'}">${r.dominant_letter}</span>
+          <span class="fill"><span style="width:${(r.c/maxC)*100}%; background:${FACTIONS[r.dominant_letter]?.color||'#fff'}"></span></span>
+          <span class="num">${r.c}${imbalance?' ⚠':''}</span></div>`;
+      }).join('');
+    }
+
+    // ══════════════════════════════════════════════
+    //  Balance panel
+    // ══════════════════════════════════════════════
+    async function renderBalance() {
+      const [matrix, stats] = await Promise.all([
+        api('/api/admin/investigators/value-matrix'),
+        api('/api/admin/investigators/value-stats'),
+      ]);
+      state.valueMatrix = matrix;
+      state.valueStats = stats;
+      const mean = Number(stats.mean_value||0), sd = Number(stats.stddev_value||0), med = Number(stats.median_value||0);
+      const warnRed = (stats.warnings||[]).filter(w => w.value_grade === 'overpowered' || w.value_grade === 'underpowered');
+      const warnYel = (stats.warnings||[]).filter(w => w.value_grade === 'above_average' || w.value_grade === 'below_average');
+      $('balance-summary').innerHTML = `完成 <b>${stats.total_completed}</b> / ${stats.total_templates}　平均 V <b>${mean.toFixed(1)}</b>　中位 <b>${med.toFixed(1)}</b>　標準差 <b>${sd.toFixed(2)}</b>　🔴 ${warnRed.length}　🟡 ${warnYel.length}`;
+
+      renderScatter(matrix, mean, sd);
+      renderBoxplot(matrix);
+      renderStackChart(matrix);
+      renderWarnings(stats, matrix);
+    }
+
+    function renderScatter(matrix, mean, sd) {
+      const box = $('bal-scatter');
+      const w = box.clientWidth || 400, h = box.clientHeight - 40 || 250;
+      const vals = matrix.map(r => Number(r.total_value||0));
+      const vMin = Math.min(...vals, mean-3*sd, 0);
+      const vMax = Math.max(...vals, mean+3*sd, 100);
+      const xStep = w / Math.max(1, matrix.length - 1);
+      const yScale = v => h - ((v - vMin) / Math.max(1,(vMax - vMin))) * h;
+      const parts = [`<svg viewBox="0 0 ${w} ${h+40}" preserveAspectRatio="none">`];
+      // mean line
+      parts.push(`<line x1="0" y1="${yScale(mean)}" x2="${w}" y2="${yScale(mean)}" stroke="#666" stroke-dasharray="4,4"/>`);
+      // ±1sd band
+      if (sd > 0) {
+        parts.push(`<rect x="0" y="${yScale(mean+sd)}" width="${w}" height="${yScale(mean-sd)-yScale(mean+sd)}" fill="rgba(100,100,100,0.1)"/>`);
+      }
+      // points
+      matrix.forEach((r,i) => {
+        const x = i * xStep, y = yScale(Number(r.total_value||0));
+        const col = FACTIONS[r.dominant_letter]?.color || '#888';
+        const size = r.is_completed ? 5 : 2.5;
+        parts.push(`<circle cx="${x}" cy="${y}" r="${size}" fill="${col}" opacity="${r.is_completed?0.9:0.4}" onclick="switchView('designer'); loadInvestigator('${r.id}');"><title>${r.code} · V=${Number(r.total_value).toFixed(1)}</title></circle>`);
+      });
+      parts.push('</svg>');
+      parts.push(`<div style="display:flex; justify-content:space-between; font-size:0.65rem; color:var(--text-tertiary); padding:0.2rem;"><span>INTJ-1</span><span style="text-align:center; flex:1;">平均 ${mean.toFixed(1)} ±${sd.toFixed(2)}</span><span>ESFP-4</span></div>`);
+      box.innerHTML = parts.join('');
+    }
+
+    function renderBoxplot(matrix) {
+      // 依 dominant_letter 分組
+      const groups = {};
+      for (const r of matrix) {
+        if (!r.is_completed) continue;
+        (groups[r.dominant_letter] = groups[r.dominant_letter] || []).push(Number(r.total_value));
+      }
+      const letters = ['E','I','S','N','T','F','J','P'];
+      const allMed = median(matrix.filter(r => r.is_completed).map(r => Number(r.total_value)));
+      const rows = letters.map(L => {
+        const arr = (groups[L] || []).sort((a,b) => a-b);
+        if (arr.length === 0) return `<div class="dist-row"><span class="label">${L}</span><span class="fill" style="color:var(--text-tertiary);"> — 無資料</span></div>`;
+        const min = arr[0], max = arr[arr.length-1], med = median(arr), q1 = arr[Math.floor(arr.length*0.25)], q3 = arr[Math.floor(arr.length*0.75)];
+        const imbal = allMed > 0 && Math.abs(med - allMed)/allMed > 0.10;
+        return `<div class="dist-row" style="margin-bottom:0.4rem;">
+          <span class="label" style="color:${FACTIONS[L]?.color}">${L}</span>
+          <span class="fill" style="height:14px; background:rgba(0,0,0,0.3); position:relative; border:${imbal?'1px solid #B84C4C':'none'};">
+            <span style="position:absolute; left:${((q1-min)/(max-min||1))*100}%; width:${((q3-q1)/(max-min||1))*100}%; height:100%; background:${FACTIONS[L]?.color}; opacity:0.5;"></span>
+            <span style="position:absolute; left:${((med-min)/(max-min||1))*100}%; width:2px; height:100%; background:white;"></span>
+          </span>
+          <span class="num" style="width:60px;">${med.toFixed(1)}${imbal?' ⚠':''}</span>
+        </div>`;
+      }).join('');
+      $('bal-boxplot').innerHTML = rows || '<div class="empty">尚無已完成模板資料</div>';
+    }
+
+    function median(arr) { const s = [...arr].sort((a,b)=>a-b); return s.length? s[Math.floor(s.length/2)]: 0; }
+
+    function renderStackChart(matrix) {
+      // 取已完成的前 16 個做 stack（避免過長）
+      const data = matrix.filter(r => r.is_completed).slice(0, 20);
+      if (data.length === 0) { $('bal-stack').innerHTML = '<div class="empty">尚無已完成模板</div>'; return; }
+      const maxTot = Math.max(...data.map(r => Number(r.total_value||0)), 1);
+      const rows = data.map(r => {
+        const segs = [
+          { c:'#8B6E3F', v:Number(r.attribute_value||0), label:'屬性' },
+          { c:'#4A7C9B', v:Number(r.hp_value||0) + Number(r.san_value||0), label:'HP+SAN' },
+          { c:'#C9A84C', v:Number(r.proficiency_value||0), label:'熟練' },
+          { c:'#7B4EA3', v:Number(r.ability_text_value||0), label:'能力文字' },
+          { c:'#D4A574', v:Number(r.signature_total_value||0), label:'簽名卡' },
+        ];
+        return `<div class="dist-row" style="margin-bottom:0.25rem;">
+          <span class="label" style="width:70px;">${r.code}</span>
+          <span class="fill" style="height:10px; background:rgba(0,0,0,0.3); display:flex;">
+            ${segs.map(s => `<span style="width:${(s.v/maxTot)*100}%; height:100%; background:${s.c};" title="${s.label} ${s.v.toFixed(1)}V"></span>`).join('')}
+          </span>
+          <span class="num" style="width:50px;">${Number(r.total_value).toFixed(1)}V</span>
+        </div>`;
+      }).join('');
+      $('bal-stack').innerHTML = `
+        <div style="font-size:0.65rem; color:var(--text-tertiary); margin-bottom:0.4rem;">
+          <span style="color:#8B6E3F">■</span>屬性
+          <span style="color:#4A7C9B">■</span>HP+SAN
+          <span style="color:#C9A84C">■</span>熟練
+          <span style="color:#7B4EA3">■</span>能力
+          <span style="color:#D4A574">■</span>簽名卡
+        </div>${rows}`;
+    }
+
+    function renderWarnings(stats, matrix) {
+      const rows = [];
+      const red = (stats.warnings||[]).filter(w => w.value_grade === 'overpowered' || w.value_grade === 'underpowered');
+      const yel = (stats.warnings||[]).filter(w => w.value_grade === 'above_average' || w.value_grade === 'below_average');
+      for (const w of red) {
+        const rec = matrix.find(m => m.code === w.code);
+        rows.push(`<div class="warn-item red">🔴 <b>${w.code}</b> V=${Number(w.total_value).toFixed(1)}（${w.value_grade}）<a onclick="switchView('designer'); loadInvestigator('${rec?.id||''}')">[跳轉]</a></div>`);
+      }
+      for (const w of yel) {
+        const rec = matrix.find(m => m.code === w.code);
+        rows.push(`<div class="warn-item yellow">🟡 <b>${w.code}</b> V=${Number(w.total_value).toFixed(1)}（${w.value_grade}）<a onclick="switchView('designer'); loadInvestigator('${rec?.id||''}')">[跳轉]</a></div>`);
+      }
+      const incompleteCount = matrix.filter(m => !m.is_completed).length;
+      if (incompleteCount > 0) rows.push(`<div class="warn-item blue">🔵 尚有 <b>${incompleteCount}</b> 個調查員未完成設計</div>`);
+      const noAbVCount = matrix.filter(m => m.is_completed && Number(m.ability_text_value||0) === 0).length;
+      if (noAbVCount > 0) rows.push(`<div class="warn-item blue">🔵 ${noAbVCount} 個已完成調查員的能力文字 V 值為 0（建議估算）</div>`);
+      $('bal-warnings').innerHTML = rows.join('') || '<div class="empty">無警告</div>';
+    }
+
+    async function reloadBalance() {
+      if (!confirm('全庫重算 V 值？')) return;
+      await api('/api/admin/investigators/recalculate-all', { method:'POST' });
+      renderBalance();
+    }
+
+    async function openValueConfig() {
+      const rows = await api('/api/admin/value-config');
+      const body = rows.map(r => `<div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.3rem;">
+        <span style="flex:1; font-family:'JetBrains Mono',monospace; font-size:0.75rem;">${r.key}</span>
+        <input id="vc-${r.key}" type="number" step="0.001" value="${r.value_numeric}" style="width:80px; background:var(--bg-primary); color:var(--gold); border:1px solid var(--border); padding:0.2rem;">
+        <span style="font-size:0.7rem; color:var(--text-tertiary); flex:1;">${r.description||''}</span>
+      </div>`).join('');
+      showAI('V 值計算係數', body + `<div class="warn-note">⚠ 修改後會觸發全庫重算，影響所有調查員的 V 值</div><div class="btn-row"><button class="btn primary" onclick="window.__saveVC()">💾 儲存並全庫重算</button></div>`);
+      window.__saveVC = async () => {
+        const body = {};
+        for (const r of rows) body[r.key] = parseFloat($('vc-'+r.key).value);
+        await api('/api/admin/value-config', { method:'PATCH', body: JSON.stringify(body) });
+        closeAI(); renderBalance();
+      };
+    }
+
+    function exportBalanceCSV() {
+      const rows = state.valueMatrix || [];
+      const header = ['code','mbti_code','career_index','dominant_letter','name_zh','is_completed','attribute_value','hp_value','san_value','proficiency_value','ability_text_value','signature_total_value','weakness_value','total_value','value_grade'];
+      const csv = [header.join(',')].concat(rows.map(r => header.map(k => {
+        const v = r[k]; return typeof v === 'string' && v.includes(',') ? `"${v}"` : (v ?? '');
+      }).join(','))).join('\n');
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `investigators-value-${Date.now()}.csv`; a.click();
+    }
+
+    // ══════════════════════════════════════════════
+    init();
+  </script>
 </body>
 </html>

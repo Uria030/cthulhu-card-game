@@ -6,6 +6,129 @@
   <title>鍛造與製作管理 — Admin Module</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    /* ===== 頂部分頁 ===== */
+    .top-tabs{display:flex;gap:0;margin:1rem 0;border-bottom:1px solid var(--border)}
+    .top-tab{padding:.625rem 1.25rem;background:transparent;color:var(--text-secondary);border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:'Noto Sans TC',sans-serif;font-size:.9rem;transition:all .15s}
+    .top-tab:hover{color:var(--gold-dim)}
+    .top-tab.active{color:var(--gold);border-bottom-color:var(--gold);font-weight:500}
+
+    /* ===== 三欄佈局 ===== */
+    .fc-layout{display:grid;grid-template-columns:22% 45% 33%;gap:.75rem;min-height:calc(100vh - 200px)}
+    .fc-col{background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:.75rem;overflow-y:auto;max-height:calc(100vh - 180px)}
+    .fc-col h3{font-family:'Cinzel',serif;font-size:.875rem;color:var(--gold-dim);text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem;padding-bottom:.375rem;border-bottom:1px solid var(--border)}
+
+    /* ===== 類別導航 ===== */
+    .cat-nav{margin-bottom:1rem}
+    .cat-item{display:flex;align-items:center;gap:.5rem;padding:.45rem .6rem;cursor:pointer;border-left:3px solid transparent;font-size:.875rem;transition:background .15s;border-radius:4px}
+    .cat-item:hover{background:var(--bg-card)}
+    .cat-item.active{border-left-color:var(--cat-color,var(--gold));background:color-mix(in srgb,var(--cat-color,var(--gold)) 12%,transparent)}
+    .cat-icon{font-size:1rem;width:1.25rem;text-align:center}
+    .cat-name{flex:1}
+    .cat-count{font-size:.7rem;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace}
+
+    .cat-mineral{--cat-color:#a8865f}
+    .cat-wood   {--cat-color:#8b5a2e}
+    .cat-insect {--cat-color:#6b8340}
+    .cat-fish   {--cat-color:#5a90b0}
+    .cat-monster{--cat-color:#9465bd}
+
+    /* ===== 搜尋/篩選 ===== */
+    .filter-group{margin-bottom:.75rem}
+    .filter-group label{display:block;font-size:.7rem;color:var(--text-tertiary);margin-bottom:.2rem}
+    .filter-group input,.filter-group select{width:100%;font-size:.8125rem}
+
+    /* ===== 詞條列表 ===== */
+    .affix-list{display:flex;flex-direction:column;gap:.4rem}
+    .affix-card{background:var(--bg-card);border:1px solid var(--border);border-left:4px solid var(--cat-color,var(--gold-dim));border-radius:6px;padding:.55rem .7rem;cursor:pointer;transition:all .15s}
+    .affix-card:hover{border-color:var(--gold-dim)}
+    .affix-card.active{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 10%,var(--bg-card))}
+    .affix-card-head{display:flex;align-items:center;gap:.4rem;margin-bottom:.1rem}
+    .affix-name{font-weight:500;font-size:.875rem;flex:1}
+    .affix-card-effect{font-size:.75rem;color:var(--text-secondary)}
+    .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+    .status-pending {background:#8b6b3a}
+    .status-partial {background:#c9a84c}
+    .status-complete{background:#6b9c5a}
+
+    /* ===== tier badge ===== */
+    .tier-badge{display:inline-block;padding:.12rem .4rem;border-radius:3px;font-family:'Cinzel',serif;font-weight:700;font-size:.7rem;letter-spacing:.02em}
+    .tier-plus-1{background:#3a2e20;color:#c9a84c}
+    .tier-plus-2{background:#4a3a20;color:#d4a574}
+    .tier-plus-3{background:#5a4a20;color:#e4b584;box-shadow:0 0 4px rgba(212,165,116,.3)}
+    .tier-fixed {background:#2a3e4a;color:#7aa8c4}
+    .tier-choice{background:#3a2a4a;color:#a884c9}
+
+    /* ===== 編輯器 ===== */
+    .editor-section{margin-bottom:1rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.75rem}
+    .editor-section h4{font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold-dim);text-transform:uppercase;letter-spacing:.05em;margin:0 0 .6rem}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+    .form-grid .full{grid-column:1/-1}
+    .form-group{display:flex;flex-direction:column}
+    .form-group label{font-size:.7rem;color:var(--text-secondary);margin-bottom:.15rem}
+    .form-group input,.form-group select,.form-group textarea{font-size:.8125rem}
+
+    /* subtype checkbox grid */
+    .subtype-grid{display:grid;grid-template-columns:1fr 1fr;gap:.3rem}
+    .subtype-grid label{display:flex;align-items:center;gap:.35rem;font-size:.8rem;cursor:pointer;padding:.2rem .3rem;border-radius:3px}
+    .subtype-grid label:hover{background:var(--bg-primary)}
+    .subtype-grid input[type=checkbox]{width:auto;margin:0}
+
+    /* tier table */
+    .tier-table{width:100%;border-collapse:collapse;font-size:.8125rem}
+    .tier-table th,.tier-table td{padding:.35rem .5rem;border:1px solid var(--border);text-align:left}
+    .tier-table th{background:var(--bg-primary);color:var(--gold-dim);font-family:'Cinzel',serif;font-weight:600;font-size:.7rem;letter-spacing:.05em}
+    .tier-table td input,.tier-table td textarea{width:100%;background:transparent;border:none;color:var(--text-primary);font-size:.8125rem;padding:.15rem}
+    .tier-table td input:focus{outline:1px solid var(--gold-dim);background:var(--bg-primary)}
+    .tier-table .v-value{font-family:'Cinzel',serif;font-weight:600;color:#d4a574;text-align:center}
+    .tier-row-actions{text-align:center;white-space:nowrap}
+    .tier-row-actions button{font-size:.7rem;padding:.15rem .35rem}
+
+    /* cost preview */
+    .cost-preview-table{width:100%;border-collapse:collapse;font-size:.8125rem;margin:.5rem 0}
+    .cost-preview-table th,.cost-preview-table td{padding:.3rem .45rem;text-align:center;border:1px solid var(--border)}
+    .cost-preview-table th{background:var(--bg-primary);color:var(--gold-dim);font-family:'Cinzel',serif;font-size:.7rem;font-weight:600}
+    .cost-preview-table .qty-1{background:rgba(212,165,116,.08)}
+    .cost-preview-table .qty-2{background:rgba(212,165,116,.15)}
+    .cost-preview-table .qty-3{background:rgba(212,165,116,.22)}
+    .cost-preview-table .qty-4{background:rgba(212,165,116,.3)}
+    .cost-preview-table .qty-hi{background:rgba(228,138,76,.35);color:#fff;font-weight:600}
+
+    /* button helpers */
+    .btn-row{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.6rem}
+    .btn{padding:.35rem .7rem;font-size:.8125rem;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:4px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;transition:all .15s}
+    .btn:hover{border-color:var(--gold-dim);color:var(--gold)}
+    .btn-primary{background:var(--gold);color:var(--bg-primary);border-color:var(--gold);font-weight:500}
+    .btn-primary:hover{background:var(--gold-dim);color:var(--bg-primary)}
+    .btn-danger{color:#d67a7a}
+    .btn-danger:hover{border-color:#d67a7a;color:#e89898}
+    .btn-sm{padding:.2rem .4rem;font-size:.7rem}
+
+    /* placeholder */
+    .empty-state{text-align:center;padding:3rem 1rem;color:var(--text-tertiary)}
+    .empty-state .icon{font-size:2rem;margin-bottom:.5rem;opacity:.6}
+
+    /* dirty indicator */
+    .dirty-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#d67a7a;margin-left:.4rem;opacity:0}
+    .dirty-dot.on{opacity:1;animation:pulse 1.5s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+    /* modal */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:500}
+    .modal-overlay.show{display:flex}
+    .modal{background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;padding:1.25rem;max-width:640px;width:90%;max-height:85vh;overflow-y:auto}
+    .modal h3{margin-top:0;font-family:'Cinzel',serif;color:var(--gold-dim);font-size:1rem;border-bottom:1px solid var(--border);padding-bottom:.5rem}
+    .modal .tier-row{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.6rem;margin-bottom:.5rem}
+    .modal-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--border)}
+
+    /* toast */
+    .toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:var(--bg-secondary);border:1px solid var(--gold-dim);color:var(--gold);padding:.5rem 1rem;border-radius:6px;font-size:.875rem;z-index:600;opacity:0;transition:opacity .2s}
+    .toast.show{opacity:1}
+    .toast.err{border-color:#d67a7a;color:#e89898}
+
+    /* responsive */
+    @media (max-width:1200px){.fc-layout{grid-template-columns:26% 1fr;grid-template-rows:auto auto}.fc-col:nth-child(3){grid-column:1/-1}}
+  </style>
 </head>
 <body>
 
@@ -15,20 +138,781 @@
     <span class="nav-code">MOD-09</span>
   </nav>
 
-  <div class="container">
+  <div class="container" style="max-width:1600px">
     <div class="page-header">
       <h1>鍛造與製作管理</h1>
-      <p class="page-sub">Forge & Craft Manager</p>
-      <p class="page-desc">管理素材列表、鍛造詞條與製作配方</p>
+      <p class="page-sub">Forge &amp; Craft Manager</p>
     </div>
 
-    <div class="placeholder-message">
-      <div class="placeholder-icon">🔧</div>
-      <div class="placeholder-text">此模組尚在開發中</div>
-      <div class="placeholder-sub">Module under development</div>
+    <div class="top-tabs">
+      <button class="top-tab active" data-tab="affixes" onclick="switchTopTab('affixes')">🔨 鍛造詞條</button>
+      <button class="top-tab" data-tab="recipes" onclick="switchTopTab('recipes')">📜 製作配方</button>
+      <button class="top-tab" data-tab="materials" onclick="switchTopTab('materials')">💎 素材庫</button>
+      <button class="top-tab" data-tab="overview" onclick="switchTopTab('overview')">📊 總覽統計</button>
+    </div>
+
+    <!-- ======================================= -->
+    <!-- 標籤頁 1：鍛造詞條                       -->
+    <!-- ======================================= -->
+    <div id="viewAffixes">
+      <div class="fc-layout">
+
+        <!-- 左欄：類別導航 + 篩選 + 列表 -->
+        <div class="fc-col">
+          <h3>類別與篩選</h3>
+          <div class="cat-nav" id="catNav"></div>
+
+          <div class="filter-group">
+            <label>搜尋</label>
+            <input id="fltSearch" placeholder="名稱或代碼" oninput="renderAffixList()">
+          </div>
+          <div class="filter-group">
+            <label>階級模式</label>
+            <select id="fltTierMode" onchange="renderAffixList()">
+              <option value="">全部</option>
+              <option value="scaling">scaling（+1/+2/+3）</option>
+              <option value="fixed">fixed</option>
+              <option value="choice">choice</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>設計狀態</label>
+            <select id="fltStatus" onchange="renderAffixList()">
+              <option value="">全部</option>
+              <option value="pending">pending</option>
+              <option value="partial">partial</option>
+              <option value="complete">complete</option>
+            </select>
+          </div>
+
+          <h3 style="margin-top:1rem">詞條列表 <span id="affixCount" style="color:var(--text-tertiary);font-size:.75rem;font-family:'JetBrains Mono',monospace"></span></h3>
+          <div class="affix-list" id="affixList"></div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="createAffix()">+ 新增詞條</button>
+          </div>
+        </div>
+
+        <!-- 中欄：編輯器 -->
+        <div class="fc-col">
+          <h3>詞條編輯 <span class="dirty-dot" id="dirtyDot"></span></h3>
+          <div id="affixEditor">
+            <div class="empty-state">
+              <div class="icon">🔨</div>
+              <div>從左欄選擇詞條，或新增一個</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右欄：試算 -->
+        <div class="fc-col">
+          <h3>費用試算</h3>
+          <div id="affixPreview">
+            <div class="empty-state">
+              <div class="icon">🧮</div>
+              <div>選擇詞條後顯示試算</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ======================================= -->
+    <!-- 標籤頁 2：製作配方（stub）                -->
+    <!-- ======================================= -->
+    <div id="viewRecipes" style="display:none">
+      <div class="empty-state">
+        <div class="icon">📜</div>
+        <div>製作配方設計器 — Stage B 開發中</div>
+      </div>
+    </div>
+
+    <!-- ======================================= -->
+    <!-- 標籤頁 3：素材庫（stub）                  -->
+    <!-- ======================================= -->
+    <div id="viewMaterials" style="display:none">
+      <div class="empty-state">
+        <div class="icon">💎</div>
+        <div>素材庫 — Stage B 開發中</div>
+      </div>
+    </div>
+
+    <!-- ======================================= -->
+    <!-- 標籤頁 4：總覽統計                        -->
+    <!-- ======================================= -->
+    <div id="viewOverview" style="display:none">
+      <div id="overviewContent" style="padding:1rem">
+        <div class="empty-state">
+          <div class="icon">📊</div>
+          <div>載入中…</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- tier 編輯 modal -->
+  <div class="modal-overlay" id="tierModal">
+    <div class="modal">
+      <h3 id="tierModalTitle">編輯階級</h3>
+      <div id="tierModalBody"></div>
+      <div class="btn-row">
+        <button class="btn" onclick="addTierRow()">+ 新增階級</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeTierModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveAllTiers()">儲存所有變更</button>
+      </div>
     </div>
   </div>
 
+  <!-- toast -->
+  <div class="toast" id="toast"></div>
+
   <script src="admin-shared.js"></script>
+  <script>
+  // ============================================================
+  // 狀態
+  // ============================================================
+  let allAffixes = [];
+  let currentAffix = null;   // 完整物件 { ...affix, tiers: [] }
+  let currentCategory = '';  // '' = all
+  let dirty = false;
+  let tierEditState = [];    // modal 內的 tier 草稿
+
+  const STATUS_EMOJI = { pending: '○', partial: '◐', complete: '●' };
+
+  // ============================================================
+  // 頂部分頁切換
+  // ============================================================
+  function switchTopTab(tab) {
+    document.querySelectorAll('.top-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    document.getElementById('viewAffixes').style.display   = tab === 'affixes'   ? '' : 'none';
+    document.getElementById('viewRecipes').style.display   = tab === 'recipes'   ? '' : 'none';
+    document.getElementById('viewMaterials').style.display = tab === 'materials' ? '' : 'none';
+    document.getElementById('viewOverview').style.display  = tab === 'overview'  ? '' : 'none';
+    if (tab === 'overview') loadOverview();
+  }
+
+  // ============================================================
+  // toast
+  // ============================================================
+  function toast(msg, isErr = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.toggle('err', isErr);
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 2400);
+  }
+
+  function setDirty(on) {
+    dirty = on;
+    document.getElementById('dirtyDot').classList.toggle('on', on);
+  }
+
+  // ============================================================
+  // 類別導航
+  // ============================================================
+  function renderCatNav() {
+    const counts = { '': allAffixes.length };
+    allAffixes.forEach(a => counts[a.category_code] = (counts[a.category_code] || 0) + 1);
+
+    const items = [
+      { code: '', label: '全部', icon: '■', theme: '' },
+      ...Object.values(MATERIAL_CATEGORIES).map(c => ({ code: c.code, label: c.zh, icon: c.icon, theme: c.theme })),
+    ];
+    document.getElementById('catNav').innerHTML = items.map(it => {
+      const cls = 'cat-item cat-' + (it.code || 'all') + (currentCategory === it.code ? ' active' : '');
+      return `<div class="${cls}" onclick="selectCategory('${it.code}')">
+        <span class="cat-icon">${it.icon}</span>
+        <span class="cat-name">${it.label}${it.theme ? ' <span style="color:var(--text-tertiary);font-size:.7rem">[' + it.theme + ']</span>' : ''}</span>
+        <span class="cat-count">${counts[it.code] || 0}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function selectCategory(code) {
+    currentCategory = code;
+    renderCatNav();
+    renderAffixList();
+  }
+
+  // ============================================================
+  // 詞條列表
+  // ============================================================
+  function filterAffixes() {
+    const q = document.getElementById('fltSearch').value.trim().toLowerCase();
+    const tm = document.getElementById('fltTierMode').value;
+    const st = document.getElementById('fltStatus').value;
+    return allAffixes.filter(a => {
+      if (currentCategory && a.category_code !== currentCategory) return false;
+      if (tm && a.tier_mode !== tm) return false;
+      if (st && a.design_status !== st) return false;
+      if (q && !(a.name_zh.toLowerCase().includes(q) || (a.code || '').toLowerCase().includes(q) || (a.name_en || '').toLowerCase().includes(q))) return false;
+      return true;
+    });
+  }
+
+  function renderAffixList() {
+    const list = filterAffixes();
+    document.getElementById('affixCount').textContent = `(${list.length}/${allAffixes.length})`;
+    const html = list.map(a => {
+      const cat = MATERIAL_CATEGORIES[a.category_code];
+      const catCls = 'cat-' + a.category_code;
+      const active = currentAffix && currentAffix.id === a.id ? ' active' : '';
+      const statusCls = 'status-' + a.design_status;
+      return `<div class="affix-card ${catCls}${active}" onclick="selectAffix('${a.id}')" style="--cat-color:${cat ? cat.color : '#888'}">
+        <div class="affix-card-head">
+          <span class="status-dot ${statusCls}" title="${a.design_status}"></span>
+          <span class="affix-name">${escapeHtml(a.name_zh)}</span>
+          <span style="font-size:.7rem;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace">${a.code}</span>
+        </div>
+        <div class="affix-card-effect">${escapeHtml(a.effect_description_zh || '')}</div>
+      </div>`;
+    }).join('');
+    document.getElementById('affixList').innerHTML = html || '<div class="empty-state" style="padding:1rem"><div>沒有符合條件的詞條</div></div>';
+  }
+
+  function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // ============================================================
+  // 載入 / 選擇詞條
+  // ============================================================
+  async function loadAffixes() {
+    try {
+      const r = await adminFetch('/api/affixes');
+      const d = await r.json();
+      if (d.success) {
+        allAffixes = d.data || [];
+        renderCatNav();
+        renderAffixList();
+      } else {
+        toast('載入詞條失敗：' + (d.error || ''), true);
+      }
+    } catch (e) {
+      console.error(e);
+      toast('載入詞條失敗', true);
+    }
+  }
+
+  async function selectAffix(id) {
+    if (dirty && !confirm('目前詞條有未儲存變更，要放棄嗎？')) return;
+    try {
+      const r = await adminFetch('/api/affixes/' + id);
+      const d = await r.json();
+      if (d.success) {
+        currentAffix = d.data;
+        setDirty(false);
+        renderAffixEditor();
+        renderAffixPreview();
+        renderAffixList();
+      }
+    } catch (e) {
+      console.error(e);
+      toast('載入詞條失敗', true);
+    }
+  }
+
+  // ============================================================
+  // 編輯器
+  // ============================================================
+  function renderAffixEditor() {
+    if (!currentAffix) return;
+    const a = currentAffix;
+    const cat = MATERIAL_CATEGORIES[a.category_code];
+    const subtypes = Array.isArray(a.applicable_subtypes) ? a.applicable_subtypes : (a.applicable_subtypes || []);
+    const allAsset = subtypes.includes('all_asset');
+
+    const subtypeBoxes = Object.entries(APPLICABLE_SUBTYPES).map(([k, v]) => {
+      const checked = subtypes.includes(k);
+      const disabled = allAsset && k !== 'all_asset' ? ' disabled' : '';
+      return `<label><input type="checkbox" value="${k}" ${checked ? 'checked' : ''}${disabled} onchange="onSubtypeChange()"> ${v.zh}</label>`;
+    }).join('');
+
+    const tiers = a.tiers || [];
+    const tierRows = tiers.length === 0
+      ? `<tr><td colspan="4" style="text-align:center;color:var(--text-tertiary);padding:.75rem">尚未建立階級</td></tr>`
+      : tiers.map(t => {
+          const cls = getTierBadgeCls(t.tier_label);
+          return `<tr>
+            <td style="text-align:center"><span class="tier-badge ${cls}">${escapeHtml(t.tier_label)}</span></td>
+            <td class="v-value">${t.affix_value}</td>
+            <td>${escapeHtml(t.effect_detail_zh || '')}</td>
+            <td style="font-size:.7rem;color:var(--text-tertiary)">${t.choice_payload ? JSON.stringify(t.choice_payload) : '—'}</td>
+          </tr>`;
+        }).join('');
+
+    document.getElementById('affixEditor').innerHTML = `
+      <div class="editor-section">
+        <h4>基本資訊</h4>
+        <div class="form-grid">
+          <div class="form-group"><label>代碼（唯讀）</label><input value="${escapeHtml(a.code)}" readonly></div>
+          <div class="form-group">
+            <label>類別（唯讀）</label>
+            <input value="${cat ? cat.icon + ' ' + cat.zh : a.category_code}" readonly>
+          </div>
+          <div class="form-group"><label>中文名</label><input id="aff_name_zh" value="${escapeHtml(a.name_zh)}" oninput="setDirty(true)"></div>
+          <div class="form-group"><label>英文名</label><input id="aff_name_en" value="${escapeHtml(a.name_en || '')}" oninput="setDirty(true)"></div>
+          <div class="form-group">
+            <label>階級模式</label>
+            <select id="aff_tier_mode" onchange="onTierModeChange()">
+              ${Object.entries(AFFIX_TIER_MODES).map(([k, v]) => `<option value="${k}" ${a.tier_mode === k ? 'selected' : ''}>${v.zh}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>設計狀態</label>
+            <select id="aff_design_status" onchange="setDirty(true)">
+              ${Object.entries(AFFIX_DESIGN_STATUS).map(([k, v]) => `<option value="${k}" ${a.design_status === k ? 'selected' : ''}>${v.zh}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group full"><label>效果敘述（中）</label><input id="aff_effect_zh" value="${escapeHtml(a.effect_description_zh || '')}" oninput="setDirty(true)"></div>
+          <div class="form-group full"><label>效果敘述（英）</label><input id="aff_effect_en" value="${escapeHtml(a.effect_description_en || '')}" oninput="setDirty(true)"></div>
+          <div class="form-group full"><label>備註</label><textarea id="aff_notes" rows="2" oninput="setDirty(true)">${escapeHtml(a.notes || '')}</textarea></div>
+        </div>
+      </div>
+
+      <div class="editor-section">
+        <h4>適用卡片子類型</h4>
+        <div class="subtype-grid" id="subtypeGrid">${subtypeBoxes}</div>
+        <div style="font-size:.7rem;color:var(--text-tertiary);margin-top:.4rem">勾選「全資產」後其餘子類型將被停用</div>
+      </div>
+
+      <div class="editor-section">
+        <h4>階級設計（${AFFIX_TIER_MODES[a.tier_mode]?.zh || a.tier_mode}）</h4>
+        <table class="tier-table">
+          <thead><tr><th style="width:16%">階級</th><th style="width:12%">V 值</th><th>效果敘述</th><th style="width:30%">Payload（choice）</th></tr></thead>
+          <tbody>${tierRows}</tbody>
+        </table>
+        <div class="btn-row">
+          <button class="btn" onclick="openTierModal()">編輯階級</button>
+          <button class="btn btn-sm" onclick="validateAffix()">驗證詞條</button>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="saveAffix()">💾 儲存</button>
+        <button class="btn btn-danger" onclick="deleteAffix()">🗑 刪除</button>
+      </div>
+    `;
+  }
+
+  function getTierBadgeCls(label) {
+    if (label === '+1') return 'tier-plus-1';
+    if (label === '+2') return 'tier-plus-2';
+    if (label === '+3') return 'tier-plus-3';
+    if (label === 'fixed') return 'tier-fixed';
+    return 'tier-choice';
+  }
+
+  function onSubtypeChange() {
+    setDirty(true);
+    const boxes = document.querySelectorAll('#subtypeGrid input[type=checkbox]');
+    const allAsset = Array.from(boxes).find(b => b.value === 'all_asset' && b.checked);
+    boxes.forEach(b => { if (b.value !== 'all_asset') b.disabled = !!allAsset; if (allAsset && b.value !== 'all_asset') b.checked = false; });
+  }
+
+  function onTierModeChange() {
+    setDirty(true);
+    const newMode = document.getElementById('aff_tier_mode').value;
+    if (newMode !== currentAffix.tier_mode && currentAffix.tiers && currentAffix.tiers.length > 0) {
+      if (!confirm('切換階級模式會影響現有 tier，確定嗎？（儲存後以驗證端點檢查一致性）')) {
+        document.getElementById('aff_tier_mode').value = currentAffix.tier_mode;
+      }
+    }
+  }
+
+  function collectAffixForm() {
+    const subtypes = Array.from(document.querySelectorAll('#subtypeGrid input[type=checkbox]:checked')).map(b => b.value);
+    return {
+      name_zh: document.getElementById('aff_name_zh').value.trim(),
+      name_en: document.getElementById('aff_name_en').value.trim() || null,
+      effect_description_zh: document.getElementById('aff_effect_zh').value.trim(),
+      effect_description_en: document.getElementById('aff_effect_en').value.trim() || null,
+      tier_mode: document.getElementById('aff_tier_mode').value,
+      design_status: document.getElementById('aff_design_status').value,
+      notes: document.getElementById('aff_notes').value.trim() || null,
+      applicable_subtypes: subtypes,
+    };
+  }
+
+  async function saveAffix() {
+    if (!currentAffix) return;
+    const body = collectAffixForm();
+    if (!body.name_zh) return toast('中文名不可為空', true);
+    try {
+      const r = await adminFetch('/api/affixes/' + currentAffix.id, { method: 'PATCH', body: JSON.stringify(body) });
+      const d = await r.json();
+      if (d.success) {
+        Object.assign(currentAffix, d.data);
+        const i = allAffixes.findIndex(a => a.id === currentAffix.id);
+        if (i >= 0) Object.assign(allAffixes[i], d.data);
+        setDirty(false);
+        renderAffixList();
+        renderAffixPreview();
+        toast('已儲存');
+      } else {
+        toast('儲存失敗：' + (d.error || ''), true);
+      }
+    } catch (e) {
+      console.error(e);
+      toast('儲存失敗', true);
+    }
+  }
+
+  async function createAffix() {
+    const code = prompt('請輸入新詞條代碼（如 my_affix）');
+    if (!code) return;
+    const nameZh = prompt('請輸入中文名');
+    if (!nameZh) return;
+    const categoryCode = prompt('請輸入素材類別代碼（mineral/wood/insect/fish/monster）', 'mineral');
+    if (!categoryCode || !MATERIAL_CATEGORIES[categoryCode]) return toast('類別代碼無效', true);
+    try {
+      const r = await adminFetch('/api/affixes', {
+        method: 'POST',
+        body: JSON.stringify({
+          code, name_zh: nameZh, category_code: categoryCode,
+          effect_description_zh: '待填寫', applicable_subtypes: [], tier_mode: 'scaling',
+        }),
+      });
+      const d = await r.json();
+      if (d.success) {
+        await loadAffixes();
+        await selectAffix(d.data.id);
+        toast('已建立新詞條');
+      } else {
+        toast('建立失敗：' + (d.error || ''), true);
+      }
+    } catch (e) {
+      console.error(e);
+      toast('建立失敗', true);
+    }
+  }
+
+  async function deleteAffix() {
+    if (!currentAffix) return;
+    if (!confirm(`確定刪除「${currentAffix.name_zh}」嗎？所有 tier 也會一併移除。`)) return;
+    try {
+      const r = await adminFetch('/api/affixes/' + currentAffix.id, { method: 'DELETE' });
+      const d = await r.json();
+      if (d.success) {
+        currentAffix = null;
+        await loadAffixes();
+        document.getElementById('affixEditor').innerHTML = '<div class="empty-state"><div class="icon">🔨</div><div>從左欄選擇詞條</div></div>';
+        document.getElementById('affixPreview').innerHTML = '<div class="empty-state"><div class="icon">🧮</div><div>選擇詞條後顯示試算</div></div>';
+        toast('已刪除');
+      } else {
+        toast('刪除失敗：' + (d.error || ''), true);
+      }
+    } catch (e) {
+      console.error(e);
+      toast('刪除失敗', true);
+    }
+  }
+
+  async function validateAffix() {
+    if (!currentAffix) return;
+    try {
+      const r = await adminFetch('/api/affixes/' + currentAffix.id + '/validate');
+      const d = await r.json();
+      if (!d.success) return toast('驗證失敗', true);
+      const v = d.data;
+      let msg = v.isValid ? '✓ 通過驗證' : '✗ 驗證失敗';
+      if (v.errors.length) msg += '\n\n錯誤：\n' + v.errors.map(e => '· ' + e).join('\n');
+      if (v.warnings.length) msg += '\n\n警告：\n' + v.warnings.map(w => '· ' + w).join('\n');
+      alert(msg);
+    } catch (e) {
+      console.error(e);
+      toast('驗證失敗', true);
+    }
+  }
+
+  // ============================================================
+  // tier 編輯 modal
+  // ============================================================
+  function openTierModal() {
+    if (!currentAffix) return;
+    tierEditState = (currentAffix.tiers || []).map(t => ({
+      id: t.id,
+      tier_label: t.tier_label,
+      tier_order: t.tier_order,
+      affix_value: t.affix_value,
+      effect_detail_zh: t.effect_detail_zh || '',
+      choice_payload: t.choice_payload ? JSON.stringify(t.choice_payload) : '',
+      _isNew: false,
+      _delete: false,
+    }));
+    document.getElementById('tierModalTitle').textContent = `編輯階級 — ${currentAffix.name_zh}（${AFFIX_TIER_MODES[currentAffix.tier_mode]?.zh}）`;
+    renderTierModal();
+    document.getElementById('tierModal').classList.add('show');
+  }
+
+  function renderTierModal() {
+    const mode = currentAffix.tier_mode;
+    const html = tierEditState.filter(t => !t._delete).map((t, idx) => `
+      <div class="tier-row">
+        <div class="form-grid">
+          <div class="form-group"><label>階級標籤</label><input data-k="tier_label" data-i="${idx}" value="${escapeHtml(t.tier_label)}"></div>
+          <div class="form-group"><label>排序</label><input type="number" data-k="tier_order" data-i="${idx}" value="${t.tier_order}"></div>
+          <div class="form-group"><label>V 值</label><input type="number" step="0.1" data-k="affix_value" data-i="${idx}" value="${t.affix_value}"></div>
+          <div class="form-group"><label></label><button class="btn btn-sm btn-danger" onclick="removeTierRow(${idx})">🗑 刪除</button></div>
+          <div class="form-group full"><label>效果敘述（中）</label><input data-k="effect_detail_zh" data-i="${idx}" value="${escapeHtml(t.effect_detail_zh)}"></div>
+          ${mode === 'choice' ? `<div class="form-group full"><label>Choice Payload（JSON，如 {"status":"bleed","stacks":1}）</label><input data-k="choice_payload" data-i="${idx}" value='${escapeHtml(t.choice_payload)}'></div>` : ''}
+        </div>
+      </div>
+    `).join('');
+    document.getElementById('tierModalBody').innerHTML = html || '<div style="padding:1rem;color:var(--text-tertiary);text-align:center">尚無階級，點擊下方「新增階級」</div>';
+    document.querySelectorAll('#tierModalBody input').forEach(inp => {
+      inp.addEventListener('input', e => {
+        const i = parseInt(e.target.dataset.i, 10);
+        const k = e.target.dataset.k;
+        tierEditState[i][k] = e.target.value;
+      });
+    });
+  }
+
+  function addTierRow() {
+    const mode = currentAffix.tier_mode;
+    const nextLabel = mode === 'scaling' ? ('+' + ((tierEditState.filter(t => !t._delete).length) + 1)) : (mode === 'fixed' ? 'fixed' : 'option_' + (tierEditState.length + 1));
+    tierEditState.push({
+      tier_label: nextLabel,
+      tier_order: tierEditState.length + 1,
+      affix_value: 1.0,
+      effect_detail_zh: '',
+      choice_payload: '',
+      _isNew: true,
+      _delete: false,
+    });
+    renderTierModal();
+  }
+
+  function removeTierRow(idx) {
+    if (tierEditState[idx]._isNew) {
+      tierEditState.splice(idx, 1);
+    } else {
+      tierEditState[idx]._delete = true;
+    }
+    renderTierModal();
+  }
+
+  function closeTierModal() {
+    document.getElementById('tierModal').classList.remove('show');
+  }
+
+  async function saveAllTiers() {
+    if (!currentAffix) return;
+    // 驗證：choice 模式需要可解析 payload
+    for (const t of tierEditState) {
+      if (t._delete) continue;
+      if (currentAffix.tier_mode === 'choice' && t.choice_payload) {
+        try { JSON.parse(t.choice_payload); } catch (e) { return toast(`tier ${t.tier_label} 的 payload 無法解析為 JSON`, true); }
+      }
+      const v = parseFloat(t.affix_value);
+      if (!(v > 0)) return toast(`tier ${t.tier_label} 的 V 值必須 > 0`, true);
+    }
+    try {
+      // 先刪除後寫入
+      for (const t of tierEditState) {
+        if (t._delete && t.id) {
+          await adminFetch(`/api/affixes/${currentAffix.id}/tiers/${t.id}`, { method: 'DELETE' });
+        }
+      }
+      for (const t of tierEditState) {
+        if (t._delete) continue;
+        const body = {
+          tier_label: t.tier_label,
+          tier_order: parseInt(t.tier_order, 10) || 0,
+          affix_value: parseFloat(t.affix_value),
+          effect_detail_zh: t.effect_detail_zh || null,
+          choice_payload: t.choice_payload ? JSON.parse(t.choice_payload) : null,
+        };
+        if (t._isNew) {
+          await adminFetch(`/api/affixes/${currentAffix.id}/tiers`, { method: 'POST', body: JSON.stringify(body) });
+        } else if (t.id) {
+          await adminFetch(`/api/affixes/${currentAffix.id}/tiers/${t.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+        }
+      }
+      await selectAffix(currentAffix.id);
+      closeTierModal();
+      toast('階級已更新');
+    } catch (e) {
+      console.error(e);
+      toast('階級儲存失敗', true);
+    }
+  }
+
+  // ============================================================
+  // 右欄：費用試算
+  // ============================================================
+  function renderAffixPreview() {
+    if (!currentAffix) return;
+    const a = currentAffix;
+    const tiers = a.tiers || [];
+    if (tiers.length === 0) {
+      document.getElementById('affixPreview').innerHTML = '<div class="empty-state"><div class="icon">🧮</div><div>此詞條尚無階級</div></div>';
+      return;
+    }
+
+    const tierOpts = tiers.map(t => `<option value="${t.id}">${escapeHtml(t.tier_label)}（V=${t.affix_value}）</option>`).join('');
+    document.getElementById('affixPreview').innerHTML = `
+      <div class="editor-section">
+        <h4>當前詞條</h4>
+        <div style="font-family:'Cinzel',serif;font-size:1rem;color:var(--gold);margin-bottom:.25rem">${escapeHtml(a.name_zh)}</div>
+        <div style="font-size:.8rem;color:var(--text-secondary);margin-bottom:.5rem">${escapeHtml(a.effect_description_zh || '')}</div>
+        <div class="form-group">
+          <label>選擇階級</label>
+          <select id="previewTierSelect" onchange="renderPreviewTable()">${tierOpts}</select>
+        </div>
+      </div>
+      <div class="editor-section">
+        <h4>素材等級 × 所需數量</h4>
+        <div id="previewTable"></div>
+        <div style="font-size:.7rem;color:var(--text-tertiary);margin-top:.4rem">公式：V ÷ SV，向上進位</div>
+      </div>
+      <div class="editor-section">
+        <h4>費用對照矩陣（本詞條所有階級）</h4>
+        <div id="previewMatrix"></div>
+      </div>
+    `;
+    renderPreviewTable();
+    renderPreviewMatrix();
+  }
+
+  function renderPreviewTable() {
+    const tierId = document.getElementById('previewTierSelect').value;
+    const tier = currentAffix.tiers.find(t => t.id === tierId);
+    if (!tier) return;
+    const v = parseFloat(tier.affix_value);
+    const rows = MATERIAL_VALUE_TABLE.map(e => {
+      const qty = Math.ceil(v / e.sv);
+      const cls = qty >= 7 ? 'qty-hi' : ('qty-' + Math.min(qty, 4));
+      return `<tr><td>LV${e.levelMin}-${e.levelMax}</td><td>SV=${e.sv}</td><td class="${cls}">${qty} 個</td></tr>`;
+    }).join('');
+    document.getElementById('previewTable').innerHTML = `
+      <table class="cost-preview-table">
+        <thead><tr><th>素材等級</th><th>SV</th><th>需求數量</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function renderPreviewMatrix() {
+    const tiers = currentAffix.tiers || [];
+    const headers = MATERIAL_VALUE_TABLE.map(e => `<th>LV${e.levelMin}-${e.levelMax}<br><span style="font-size:.65rem;color:var(--text-tertiary)">SV=${e.sv}</span></th>`).join('');
+    const rows = tiers.map(t => {
+      const v = parseFloat(t.affix_value);
+      const cells = MATERIAL_VALUE_TABLE.map(e => {
+        const qty = Math.ceil(v / e.sv);
+        const cls = qty >= 7 ? 'qty-hi' : ('qty-' + Math.min(qty, 4));
+        return `<td class="${cls}">${qty}</td>`;
+      }).join('');
+      const badgeCls = getTierBadgeCls(t.tier_label);
+      return `<tr><td><span class="tier-badge ${badgeCls}">${escapeHtml(t.tier_label)}</span> <span style="color:var(--text-tertiary);font-size:.7rem">V=${t.affix_value}</span></td>${cells}</tr>`;
+    }).join('');
+    document.getElementById('previewMatrix').innerHTML = `
+      <table class="cost-preview-table">
+        <thead><tr><th>階級</th>${headers}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  // ============================================================
+  // 總覽統計（簡版，Stage B 會補齊其他面板）
+  // ============================================================
+  async function loadOverview() {
+    try {
+      const r = await adminFetch('/api/forging/stats');
+      const d = await r.json();
+      if (!d.success) return;
+      const s = d.data;
+      const byCat = Object.entries(s.byCategory).map(([k, v]) => {
+        const c = MATERIAL_CATEGORIES[k];
+        return `<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0">
+          <span style="font-size:1rem">${c ? c.icon : ''}</span>
+          <span style="flex:1">${c ? c.zh : k}</span>
+          <span style="font-family:'Cinzel',serif;color:var(--gold)">${v}</span>
+        </div>`;
+      }).join('');
+      const byStatus = Object.entries(s.byStatus).map(([k, v]) => {
+        const st = AFFIX_DESIGN_STATUS[k];
+        return `<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0">
+          <span class="status-dot status-${k}"></span>
+          <span style="flex:1">${st ? st.zh : k}</span>
+          <span style="font-family:'Cinzel',serif;color:var(--gold)">${v}</span>
+        </div>`;
+      }).join('');
+      document.getElementById('overviewContent').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+          <div class="editor-section">
+            <h4>詞條總覽</h4>
+            <div style="font-size:2rem;font-family:'Cinzel',serif;color:var(--gold)">${s.totalAffixes}</div>
+            <div style="color:var(--text-tertiary);font-size:.8rem">詞條</div>
+            <div style="font-size:1.25rem;font-family:'Cinzel',serif;color:var(--gold-dim);margin-top:.5rem">${s.totalTiers}</div>
+            <div style="color:var(--text-tertiary);font-size:.8rem">階級紀錄</div>
+          </div>
+          <div class="editor-section">
+            <h4>依類別分佈</h4>
+            ${byCat}
+          </div>
+          <div class="editor-section">
+            <h4>依設計狀態</h4>
+            ${byStatus}
+          </div>
+        </div>
+        <div class="editor-section" style="margin-top:1rem">
+          <h4>完整費用對照矩陣</h4>
+          <div id="overviewMatrix">載入中…</div>
+        </div>
+      `;
+      renderOverviewMatrix();
+    } catch (e) {
+      console.error(e);
+      document.getElementById('overviewContent').innerHTML = '<div class="empty-state">載入失敗</div>';
+    }
+  }
+
+  async function renderOverviewMatrix() {
+    // 收集所有 tier_id
+    const allTiers = [];
+    allAffixes.forEach(a => (a.tiers || []).forEach(t => allTiers.push({ ...t, affix: a })));
+    if (allTiers.length === 0) { document.getElementById('overviewMatrix').innerHTML = '（無資料）'; return; }
+    const headers = MATERIAL_VALUE_TABLE.map(e => `<th>LV${e.levelMin}-${e.levelMax}<br><span style="font-size:.65rem;color:var(--text-tertiary)">SV=${e.sv}</span></th>`).join('');
+    // 依類別 + affix 分組呈現
+    const byCategory = {};
+    allTiers.forEach(t => {
+      const cat = t.affix.category_code;
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push(t);
+    });
+    const sections = Object.entries(byCategory).map(([cat, tiers]) => {
+      const c = MATERIAL_CATEGORIES[cat];
+      const rows = tiers.map(t => {
+        const v = parseFloat(t.affix_value);
+        const cells = MATERIAL_VALUE_TABLE.map(e => {
+          const qty = Math.ceil(v / e.sv);
+          const cls = qty >= 7 ? 'qty-hi' : ('qty-' + Math.min(qty, 4));
+          return `<td class="${cls}">${qty}</td>`;
+        }).join('');
+        const badgeCls = getTierBadgeCls(t.tier_label);
+        return `<tr><td style="white-space:nowrap">${escapeHtml(t.affix.name_zh)} <span class="tier-badge ${badgeCls}">${escapeHtml(t.tier_label)}</span> <span style="color:var(--text-tertiary);font-size:.7rem">V=${t.affix_value}</span></td>${cells}</tr>`;
+      }).join('');
+      return `
+        <div style="margin-top:.75rem">
+          <div style="font-family:'Cinzel',serif;color:${c ? c.color : 'var(--gold-dim)'};font-size:.85rem;margin-bottom:.25rem">${c ? c.icon + ' ' + c.zh : cat}</div>
+          <table class="cost-preview-table"><thead><tr><th style="width:30%">詞條 · 階級</th>${headers}</tr></thead><tbody>${rows}</tbody></table>
+        </div>`;
+    }).join('');
+    document.getElementById('overviewMatrix').innerHTML = sections;
+  }
+
+  // ============================================================
+  // 啟動
+  // ============================================================
+  document.addEventListener('DOMContentLoaded', () => {
+    loadAffixes();
+  });
+  </script>
 </body>
 </html>

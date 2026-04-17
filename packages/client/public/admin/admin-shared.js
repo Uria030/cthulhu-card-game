@@ -801,3 +801,100 @@ const AFFIX_DESIGN_STATUS = {
   partial:  { zh: '部分完成', en: 'Partial', color: '#c9a84c' },
   complete: { zh: '已完成', en: 'Complete', color: '#6b9c5a' },
 };
+
+// ============================================
+// 模組使用說明 Modal
+// ============================================
+
+let _moduleHelpData = null;
+
+async function _loadModuleHelp() {
+  if (_moduleHelpData) return _moduleHelpData;
+  try {
+    const res = await fetch('data/module-help.json', { cache: 'no-cache' });
+    _moduleHelpData = await res.json();
+    return _moduleHelpData;
+  } catch (e) {
+    console.error('載入 module-help.json 失敗', e);
+    return {};
+  }
+}
+
+function _ensureHelpModalDOM() {
+  if (document.getElementById('moduleHelpModal')) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'help-modal-overlay';
+  overlay.id = 'moduleHelpModal';
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModuleHelp(); });
+  overlay.innerHTML = `
+    <div class="help-modal">
+      <div class="help-modal-header">
+        <span class="h-code" id="helpModalCode">—</span>
+        <h2 id="helpModalTitle">—</h2>
+        <button class="h-close" onclick="closeModuleHelp()" aria-label="關閉">×</button>
+      </div>
+      <div class="help-modal-tabs" id="helpModalTabs"></div>
+      <div class="help-modal-body" id="helpModalBody"></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  // ESC 關閉
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.classList.contains('show')) closeModuleHelp();
+  });
+}
+
+/**
+ * 開啟指定模組的使用說明
+ * @param {string} code - 如 'MOD-09' 或 'SIM-01'
+ */
+async function openModuleHelp(code) {
+  _ensureHelpModalDOM();
+  const data = await _loadModuleHelp();
+  const info = data[code];
+  const overlay = document.getElementById('moduleHelpModal');
+  const titleEl = document.getElementById('helpModalTitle');
+  const codeEl = document.getElementById('helpModalCode');
+  const tabsEl = document.getElementById('helpModalTabs');
+  const bodyEl = document.getElementById('helpModalBody');
+
+  codeEl.textContent = code;
+  if (!info) {
+    titleEl.textContent = '使用說明';
+    tabsEl.innerHTML = '';
+    bodyEl.innerHTML = `<div class="placeholder">尚未撰寫此模組的使用說明（${code}）。</div>`;
+    overlay.classList.add('show');
+    return;
+  }
+
+  titleEl.textContent = info.title || code;
+  const sections = info.sections || [];
+  tabsEl.innerHTML = sections.map((s, i) => `<button class="help-modal-tab${i === 0 ? ' active' : ''}" data-idx="${i}" onclick="_switchHelpTab(${i})">${s.label}</button>`).join('');
+  _renderHelpSection(sections, 0);
+  overlay.classList.add('show');
+}
+
+function _switchHelpTab(idx) {
+  const data = _moduleHelpData;
+  const code = document.getElementById('helpModalCode').textContent;
+  const sections = (data && data[code] && data[code].sections) || [];
+  document.querySelectorAll('.help-modal-tab').forEach(t => t.classList.toggle('active', parseInt(t.dataset.idx, 10) === idx));
+  _renderHelpSection(sections, idx);
+}
+
+function _renderHelpSection(sections, idx) {
+  const s = sections[idx];
+  const bodyEl = document.getElementById('helpModalBody');
+  if (!s) { bodyEl.innerHTML = ''; return; }
+  bodyEl.innerHTML = s.html || `<div class="placeholder">（空）</div>`;
+  bodyEl.scrollTop = 0;
+}
+
+function closeModuleHelp() {
+  const overlay = document.getElementById('moduleHelpModal');
+  if (overlay) overlay.classList.remove('show');
+}
+
+window.openModuleHelp = openModuleHelp;
+window.closeModuleHelp = closeModuleHelp;
+window._switchHelpTab = _switchHelpTab;

@@ -1,0 +1,31 @@
+{
+  "MOD-09": {
+    "title": "鍛造與製作管理",
+    "sections": [
+      {
+        "label": "概述",
+        "html": "<h3>這個設計器是做什麼的</h3><p>MOD-09 負責定義<strong>鍛造詞條</strong>（武器/裝備上的 <em>+X 詞綴</em>）與<strong>製作配方</strong>（素材組合後得到的卡片）。本模組不處理玩家運行時的鍛造紀錄，只負責「設計資料」。</p><h3>涵蓋的設計對象</h3><ul><li><strong>素材類別</strong> — 礦物／木材／蟲類／魚類／怪物素材（五類）</li><li><strong>素材定義</strong> — 具體素材名稱，每個素材對應等級 1–10，SV 值依等級自動計算</li><li><strong>鍛造詞條</strong> — 23 個已預建詞條（規則書第四章 §4），分為 scaling / fixed / choice 三模式</li><li><strong>詞條階級</strong> — 每個詞條的 +1/+2/+3 對應 V 值（決定鍛造費用）</li><li><strong>製作配方</strong> — 需要的素材組合與產出卡片（依規則書第四章 §5）</li></ul><h3>不在本模組範圍</h3><ul><li>玩家的鍛造紀錄（屬運行時資料）</li><li>配方解鎖觸發邏輯（場景系統處理）</li><li>鍛造／製作手續費具體數值（規則書標為「待定」，暫不處理）</li></ul>"
+      },
+      {
+        "label": "何時使用",
+        "html": "<h3>在整個設計工作流中的位置</h3><p>本模組依賴以下模組先有資料：</p><ul><li><span class=\"rule-ref\">MOD-01</span> 卡片設計器 — 配方需要指定產出的卡片、詞條需要指定適用的卡片子類型</li><li><span class=\"rule-ref\">MOD-03</span> 敵人設計器 — 怪物素材需要對應 <em>monster_families</em>（進階功能）</li></ul><h3>建議順序</h3><ol><li>先在 MOD-01 建立好武器／裝備卡片</li><li>來本模組建立鍛造詞條（Seed 已預建 23 個，只需補充敘述或新增）</li><li>建立製作配方，指定產出卡片 + 素材需求</li><li>將來開放團隊精神的「鍛造解鎖」時，本模組的詞條才會真正可用</li></ol><div class=\"tip\">詞條 Seed 已經由 <em>migration 015</em> 預載 23 個完整詞條 + 67 個 tier，你可以立刻進入編輯、補敘述，不需要從零建立。</div>"
+      },
+      {
+        "label": "操作步驟",
+        "html": "<h3>快速開始</h3><h3>編輯現有詞條</h3><ol><li>切到「🔨 鍛造詞條」分頁（預設即是）</li><li>左欄選擇類別（礦物／木材／蟲類／魚類／怪物），或直接用搜尋</li><li>點選詞條 → 中欄出現編輯器</li><li>調整名稱／效果敘述／適用子類型／設計狀態</li><li>點「編輯階級」可打開 tier 編輯 modal，改 V 值或效果細節</li><li>按「💾 儲存」送出</li></ol><h3>新增詞條</h3><ol><li>左欄下方「+ 新增詞條」按鈕</li><li>依提示輸入代碼、中文名、素材類別</li><li>建立後會回到編輯器，補其餘欄位</li></ol><h3>試算鍛造費用</h3><p>右欄會即時顯示當前詞條的 <strong>費用對照矩陣</strong>：不同素材等級 × 不同階級 → 所需素材數。公式：<em>V ÷ SV，向上進位</em>。</p><h3>配方設計</h3><ol><li>切到「📜 製作配方」分頁</li><li>「+ 新增配方」→ 輸入代碼與中文名</li><li>中欄設定產出卡片（從 MOD-01 下拉）、數量、是否臨時卡</li><li>「+ 新增素材需求」→ 選擇類別模式（任一此類別）或具體模式（指定某素材）</li><li>填寫解鎖敘事（可用 AI 輔助）</li></ol><h3>素材命名</h3><ol><li>切到「💎 素材庫」分頁</li><li>左欄選類別 → 右欄看到 10 個等級的空素材骨架</li><li>點任一素材進入編輯 modal，填入名稱與敘述</li><li>或使用「✨ AI 批次命名」一次生成 LV1–10 的建議</li></ol>"
+      },
+      {
+        "label": "關鍵欄位",
+        "html": "<h3>詞條</h3><ul><li><strong>tier_mode</strong>：<ul><li><em>scaling</em> — 有 +1/+2/+3 三階，V 值遞增（例：利刃 +1 傷害）</li><li><em>fixed</em> — 固定效果，無階級（例：快速 — 不消耗行動點）</li><li><em>choice</em> — 玩家從清單選一個（例：蟲淬 II 選中毒／燃燒／冷凍／弱化）</li></ul></li><li><strong>applicable_subtypes</strong>：詞條適用於哪些卡片子類型。勾選「全資產」即等同套用到所有資產卡</li><li><strong>affix_value (V)</strong>：詞條面值，不乘使用次數。這是鍛造費用計算的核心參數</li><li><strong>choice_payload</strong>：choice 模式下的結構化資料，例 <em>{\"status\":\"bleed\",\"stacks\":1}</em></li></ul><h3>配方</h3><ul><li><strong>output_is_temporary</strong>：若為 true，代表產出是臨時卡（<span class=\"rule-ref\">規則書第四章 §5.4</span>），玩家不可再鍛造</li><li><strong>unlock_type</strong>：解鎖方式分六類（初始已知／場景探索／陣營天賦／劇情事件／任務獎勵／隱藏）</li><li><strong>素材需求互斥</strong>：類別模式 vs 具體模式只能二擇一</li></ul><h3>素材</h3><ul><li><strong>material_value (SV)</strong>：依等級自動計算，1-2=1、3-4=2、5-6=3、7-8=5、9-10=8</li><li><strong>monster_family_id</strong>：僅怪物類素材使用，指向 MOD-03 的怪物家族</li></ul><div class=\"warn\">切換詞條的 tier_mode 會影響既有 tier 結構，系統會跳警告確認。儲存後記得按「驗證詞條」檢查一致性。</div>"
+      },
+      {
+        "label": "相關規則",
+        "html": "<h3>規則書章節</h3><ul><li><span class=\"rule-ref\">規則書第四章 §4</span> — 鍛造詞條定義，23 個詞條的 V 值與效果</li><li><span class=\"rule-ref\">規則書第四章 §5</span> — 製作配方系統，解鎖類型與臨時卡</li><li><span class=\"rule-ref\">補充 06 v0.1</span> — 鍛造與製作系統原始設計文件</li></ul><h3>核心公式</h3><p><strong>鍛造費用計算：</strong>所需素材數量 = <em>CEIL(V ÷ SV)</em></p><p>範例：鍛造「護盾 +3」（V=18），用 LV5 素材（SV=3）：18 ÷ 3 = 6 個。用 LV9 素材（SV=8）：CEIL(18/8) = 3 個。</p><h3>素材價值表（SV）</h3><ul><li>LV 1–2：SV = 1</li><li>LV 3–4：SV = 2</li><li>LV 5–6：SV = 3</li><li>LV 7–8：SV = 5</li><li>LV 9–10：SV = 8</li></ul><h3>詞條階級模式的設計由來</h3><p>規則書第四章 §4 將詞條分為三種結構（scaling / fixed / choice），本模組把這個結構實作為 <em>tier_mode</em> 欄位，每種模式的驗證規則不同：</p><ul><li>scaling 必須剛好 3 筆 tier（+1/+2/+3）</li><li>fixed 必須剛好 1 筆 tier</li><li>choice 至少 2 筆 tier，且每筆應有 choice_payload</li></ul>"
+      },
+      {
+        "label": "AI 輔助",
+        "html": "<h3>Gemini AI 三種敘事模式</h3><p>本模組內建 Gemini AI 輔助寫作。API Key 存在瀏覽器 <em>localStorage</em>，第一次使用時系統會提示輸入。</p><h3>模式 A：詞條敘事建議</h3><p>位置：詞條編輯器的「效果敘述（中）」旁邊的「✨ AI 建議」按鈕</p><ul><li>會提供 3 組名稱建議 + 敘述選項</li><li>可填入「使用者提示」幫 AI 理解設計意圖</li><li>每個建議都有「套用」按鈕直接帶入編輯器</li></ul><h3>模式 B：配方解鎖敘事</h3><p>位置：配方編輯器的「敘事說明」旁的「✨ AI 建議」按鈕</p><ul><li>產出 40–80 字的克蘇魯氛圍敘事</li><li>會參考配方名稱、產出、素材與解鎖類型</li></ul><h3>模式 C：素材命名批次</h3><p>位置：素材庫頁面下方的「✨ AI 批次命名」按鈕</p><ul><li>選好類別後一次為 LV1–10 各生成命名建議</li><li>每個建議有獨立「套用此 LV」按鈕</li><li>若對應 LV 已有命名素材，會問你要不要新增一筆</li></ul><div class=\"tip\">AI 只負責名稱與敘事文字，<strong>不會</strong>幫你指定 V 值、階級結構或素材數量 — 這些數值決策由設計者掌握。</div><h3>設定 API Key</h3><p>頂部列右側的「🔑 API Key」按鈕，輸入 Google Gemini API Key 後即可使用。Key 僅存在本機瀏覽器，不會上傳伺服器。</p>"
+      }
+    ]
+  }
+}

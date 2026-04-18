@@ -252,19 +252,27 @@ function updateProviderButtons() {
     }
   }
 
-  // 頂部 nav 的就緒狀態指示
+  // 頂部 nav 的就緒狀態指示（短文字 + 點擊看完整）
   const navInd = document.getElementById('navReadyIndicator');
   if (navInd) {
     navInd.classList.remove('ready', 'not-ready');
+    let shortTxt, fullTxt;
     if (ready) {
       navInd.classList.add('ready');
-      navInd.textContent = `✓ ${state.currentAiModel} 就緒`;
-      navInd.title = `${state.userProviderChoice === 'gemini' ? '遠端 Gemini API' : '本地 Gemma (Ollama)'} · ${state.currentAiModel}`;
+      shortTxt = state.userProviderChoice === 'gemini' ? 'GEMINI 就緒' : 'GEMMA 就緒';
+      fullTxt = `${state.userProviderChoice === 'gemini' ? '遠端 Gemini API' : '本地 Gemma (Ollama)'} · 模型：${state.currentAiModel} · 可送出任務`;
     } else {
       navInd.classList.add('not-ready');
-      navInd.textContent = state.userProviderChoice === 'gemini' ? '未設定 API Key' : '本地 Gemma 不可用';
-      navInd.title = 'AI 尚未就緒，無法送出';
+      shortTxt = state.userProviderChoice === 'gemini' ? 'API Key 未設定' : 'GEMMA 不可用';
+      fullTxt = state.userProviderChoice === 'gemini'
+        ? 'AI 尚未就緒：請點頂部「設定 API Key」輸入你的 Gemini API Key'
+        : 'AI 尚未就緒：本地 Gemma 需要在小黑環境啟動 bridge + Ollama。雲端部署請切到「遠端」。';
     }
+    navInd.textContent = shortTxt;
+    navInd.title = fullTxt;
+    navInd.dataset.detail = fullTxt;
+    navInd.style.cursor = 'pointer';
+    navInd.onclick = () => alert('AI 狀態\n\n' + fullTxt);
   }
 
   // API Key 按鈕視覺狀態（仿 MOD-01：已設定綠色 / 未設定灰色）
@@ -285,7 +293,20 @@ function setModeIndicator(mode, label) {
   const lbl = document.getElementById('modeLabel');
   if (!dot || !lbl) return;
   dot.className = `mode-dot mode-${mode}`;
-  lbl.textContent = label;
+  // 短標籤顯示；完整 label 放 title + 點擊彈窗（iPad 沒有 hover）
+  const shortMap = {
+    'detecting': 'BRIDGE 偵測中',
+    'unavailable': 'BRIDGE 未連接',
+    'both': 'BRIDGE 連線',
+    'remote-only': 'BRIDGE 連線',
+    'local-only': 'BRIDGE 連線',
+  };
+  const shortTxt = shortMap[mode] || 'BRIDGE';
+  lbl.textContent = shortTxt;
+  lbl.title = label;
+  lbl.dataset.detail = label;
+  lbl.style.cursor = 'pointer';
+  lbl.onclick = () => alert('Bridge 狀態\n\n' + label);
 }
 
 window.redetectBridge = redetectBridge;

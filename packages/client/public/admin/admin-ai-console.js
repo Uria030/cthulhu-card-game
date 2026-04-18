@@ -82,7 +82,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   } catch (err) {
     console.error('[DOMContentLoaded] updateProviderButtons throw:', err);
     const ind = document.getElementById('navReadyIndicator');
-    if (ind) { ind.classList.add('not-ready'); ind.textContent = 'init error'; }
+    if (ind) {
+      ind.classList.add('not-ready');
+      // 完整錯誤訊息帶到 UI（可能很長，title 放完整字串，textContent 截到 80 字）
+      const msg = (err && err.message) ? err.message : String(err);
+      const stack = (err && err.stack) ? err.stack.split('\n').slice(0, 3).join(' | ') : '';
+      ind.textContent = 'init err: ' + msg.slice(0, 80);
+      ind.title = 'updateProviderButtons throw:\n' + msg + '\n\n' + stack;
+    }
   }
   redetectBridge();
   renderTaskPanel();

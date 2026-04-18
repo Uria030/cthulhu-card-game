@@ -251,6 +251,21 @@
         `;
         designGrid.appendChild(card);
       }
+
+      // 系統診斷面板：僅 admin / owner 可見，掛在 SIM 工具區
+      const simGrid = document.querySelectorAll('.module-grid')[1];
+      if (simGrid) {
+        const diag = document.createElement('a');
+        diag.href = 'admin-system-diag.html';
+        diag.className = 'module-card';
+        diag.innerHTML = `
+          <div class="card-code"><span>DIAG</span><span class="badge-ready">READY</span></div>
+          <div class="card-title">系統診斷面板</div>
+          <div class="card-en">System Diagnostics</div>
+          <div class="card-desc">檢查 Admin / Bridge / Ollama / Gemini 連線，含遠端裝置 log 複製（僅 admin 可見）</div>
+        `;
+        simGrid.appendChild(diag);
+      }
     }
   </script>
 </body>

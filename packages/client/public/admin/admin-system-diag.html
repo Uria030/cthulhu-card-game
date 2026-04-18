@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>系統診斷面板 — Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    :root {
+      --diag-ok: #4a9d4a;
+      --diag-warn: #c99738;
+      --diag-err: #c14a4a;
+      --diag-unknown: #6a6a6a;
+    }
+    body { padding: 0; margin: 0; }
+    .diag-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+    .diag-header {
+      padding: 1rem 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1rem;
+    }
+    .diag-header h1 {
+      font-family: 'Cinzel', serif;
+      color: var(--gold);
+      margin: 0 0 0.3rem;
+      font-size: 1.5rem;
+    }
+    .diag-header p { margin: 0.2rem 0; color: var(--text-secondary); font-size: 0.85rem; }
+    .diag-action-row {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      padding: 1rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .diag-btn {
+      min-height: 44px;
+      padding: 0.6rem 1.2rem;
+      font-size: 0.95rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      font-family: inherit;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .diag-btn.primary { background: var(--gold-dim); color: #12110f; border-color: var(--gold); font-weight: 600; }
+    .diag-btn.primary:active { background: var(--gold); }
+    .diag-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .diag-btn.danger { color: var(--diag-err); }
+
+    .diag-status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 0.75rem;
+      padding: 1rem 0;
+    }
+    .diag-card {
+      padding: 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      border-left: 4px solid var(--diag-unknown);
+    }
+    .diag-card.ok { border-left-color: var(--diag-ok); }
+    .diag-card.warn { border-left-color: var(--diag-warn); }
+    .diag-card.err { border-left-color: var(--diag-err); }
+    .diag-card-title {
+      font-family: 'Cinzel', serif;
+      font-size: 0.85rem;
+      color: var(--gold-dim);
+      margin-bottom: 0.3rem;
+    }
+    .diag-card-status {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+    }
+    .diag-card.ok .diag-card-status { color: var(--diag-ok); }
+    .diag-card.warn .diag-card-status { color: var(--diag-warn); }
+    .diag-card.err .diag-card-status { color: var(--diag-err); }
+    .diag-card-detail {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+      word-break: break-all;
+    }
+
+    .diag-log-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 1rem 0 0.5rem;
+    }
+    .diag-log-header .spacer { flex: 1; }
+    .diag-log {
+      background: #08070a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.8rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: #cfc4a8;
+      height: 420px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .diag-log .line { display: block; }
+    .diag-log .ts { color: #6a6a6a; }
+    .diag-log .ok { color: #7fbf7f; }
+    .diag-log .err { color: #e46a6a; }
+    .diag-log .warn { color: #e4b466; }
+    .diag-log .info { color: #8aa8e0; }
+    .diag-log .sep { color: #3a362e; }
+
+    .diag-copy-hint {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 0.4rem;
+    }
+
+    /* narrow screen tweaks */
+    @media (max-width: 640px) {
+      .diag-container { padding: 0.75rem; }
+      .diag-header h1 { font-size: 1.25rem; }
+      .diag-btn { flex: 1 1 auto; }
+      .diag-log { height: 50vh; font-size: 0.72rem; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="admin-nav">
+    <a href="index.html" class="nav-back">← 返回首頁</a>
+    <span class="nav-title">系統診斷面板</span>
+    <span class="nav-code">DIAG</span>
+  </nav>
+
+  <div class="diag-container">
+    <div class="diag-header">
+      <h1>系統診斷面板</h1>
+      <p>用於驗證遠端裝置（iPad / 手機 / 其他電腦）能否連線到 Admin 與 bridge。</p>
+      <p id="envInfo" class="diag-copy-hint"></p>
+    </div>
+
+    <div class="diag-action-row">
+      <button class="diag-btn primary" id="btnRunAll">▶ 執行全套診斷</button>
+      <button class="diag-btn" id="btnAuth">1. 認證檢查</button>
+      <button class="diag-btn" id="btnBridgeHealth">2. Bridge 健康</button>
+      <button class="diag-btn" id="btnBridgeTask">3. Bridge 任務測試</button>
+      <button class="diag-btn" id="btnClientInfo">4. 客戶端資訊</button>
+    </div>
+
+    <div class="diag-status-grid">
+      <div class="diag-card" id="cardAuth">
+        <div class="diag-card-title">Admin 認證</div>
+        <div class="diag-card-status" data-status>—</div>
+        <div class="diag-card-detail" data-detail>尚未測試</div>
+      </div>
+      <div class="diag-card" id="cardBridge">
+        <div class="diag-card-title">Bridge 代理</div>
+        <div class="diag-card-status" data-status>—</div>
+        <div class="diag-card-detail" data-detail>尚未測試</div>
+      </div>
+      <div class="diag-card" id="cardOllama">
+        <div class="diag-card-title">Ollama（本地 Gemma）</div>
+        <div class="diag-card-status" data-status>—</div>
+        <div class="diag-card-detail" data-detail>尚未測試</div>
+      </div>
+      <div class="diag-card" id="cardGemini">
+        <div class="diag-card-title">Gemini（遠端 API）</div>
+        <div class="diag-card-status" data-status>—</div>
+        <div class="diag-card-detail" data-detail>尚未測試</div>
+      </div>
+    </div>
+
+    <div class="diag-log-header">
+      <strong>Log</strong>
+      <span class="spacer"></span>
+      <button class="diag-btn" id="btnCopyLog">複製全部 log</button>
+      <button class="diag-btn danger" id="btnClearLog">清除</button>
+    </div>
+    <div class="diag-log" id="logArea"></div>
+    <div class="diag-copy-hint">在 iPad 上：長按選取 → 複製。或按「複製全部 log」把內容貼給 Claude。</div>
+  </div>
+
+  <script src="admin-shared.js"></script>
+  <script>
+  (() => {
+    'use strict';
+
+    // auth guard
+    const userRaw = localStorage.getItem('admin_user');
+    let user = null;
+    try { user = userRaw ? JSON.parse(userRaw) : null; } catch { user = null; }
+    if (!user || (user.role !== 'admin' && user.role !== 'owner')) {
+      document.querySelector('.diag-container').innerHTML =
+        '<div style="padding:2rem;text-align:center;"><h1>權限不足</h1><p>本模組僅限管理員。</p><p><a href="index.html">← 返回首頁</a></p></div>';
+      return;
+    }
+
+    // env info
+    document.getElementById('envInfo').textContent =
+      `${location.protocol}//${location.host} · 使用者 ${user.username || user.email || user.id} (${user.role})`;
+
+    const logArea = document.getElementById('logArea');
+
+    function ts() {
+      const d = new Date();
+      return d.toISOString().slice(11, 23);
+    }
+    function escHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function log(level, msg, extra) {
+      const line = document.createElement('span');
+      line.className = 'line';
+      const parts = [
+        `<span class="ts">[${ts()}]</span> `,
+        `<span class="${level}">[${level.toUpperCase()}]</span> `,
+        escHtml(msg),
+      ];
+      if (extra !== undefined) {
+        parts.push('\n  ');
+        parts.push(`<span class="sep">↳</span> `);
+        parts.push(escHtml(typeof extra === 'string' ? extra : JSON.stringify(extra, null, 2)));
+      }
+      line.innerHTML = parts.join('');
+      logArea.appendChild(line);
+      logArea.appendChild(document.createTextNode('\n'));
+      logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    function setCard(id, status, statusText, detailText) {
+      const card = document.getElementById(id);
+      card.classList.remove('ok', 'warn', 'err');
+      if (status) card.classList.add(status);
+      card.querySelector('[data-status]').textContent = statusText;
+      card.querySelector('[data-detail]').textContent = detailText || '';
+    }
+
+    async function test_auth() {
+      log('info', '檢查 admin 認證 /api/auth/me …');
+      try {
+        const res = await adminFetch('/api/auth/me');
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          setCard('cardAuth', 'err', '失敗', `HTTP ${res.status} ${data.error || ''}`);
+          log('err', `認證失敗 HTTP ${res.status}`, data);
+          return false;
+        }
+        setCard('cardAuth', 'ok', '已登入', `${data.data?.username || ''} (${data.data?.role || ''})`);
+        log('ok', '認證成功', data.data);
+        return true;
+      } catch (e) {
+        setCard('cardAuth', 'err', '錯誤', e.message);
+        log('err', `認證異常：${e.message}`);
+        return false;
+      }
+    }
+
+    async function test_bridgeHealth() {
+      log('info', '檢查 bridge 代理 /api/ai-console/bridge/health …');
+      try {
+        const res = await adminFetch('/api/ai-console/bridge/health');
+        const data = await res.json().catch(() => ({}));
+        const bridgeUrl = data.bridgeUrl || '（未知）';
+        if (!res.ok || !data.success) {
+          setCard('cardBridge', 'err', 'Bridge 不可達', `${bridgeUrl} · ${data.error || 'HTTP ' + res.status}`);
+          setCard('cardOllama', 'err', '無法檢測', 'Bridge 斷線');
+          setCard('cardGemini', 'err', '無法檢測', 'Bridge 斷線');
+          log('err', `Bridge 代理失敗 HTTP ${res.status}`, data);
+          return null;
+        }
+        const inner = data.data || {};
+        setCard('cardBridge', 'ok', '連線正常', bridgeUrl);
+        log('ok', `Bridge 代理通 · ${bridgeUrl}`, inner);
+
+        const up = inner.upstreams || {};
+        // Ollama
+        if (up.ollama === 'up') {
+          setCard('cardOllama', 'ok', 'Up', (inner.config?.ollamaModel || '未知 model') + ' · 本地 Gemma 可用');
+          log('ok', `Ollama up · ${inner.config?.ollamaModel || ''}`);
+        } else {
+          setCard('cardOllama', 'warn', up.ollama || '未知', '本地 Gemma 不可用（遠端存取時此項預期為 down）');
+          log('warn', `Ollama ${up.ollama || '?'}`);
+        }
+        // Gemini
+        if (up.gemini === 'up') {
+          setCard('cardGemini', 'ok', 'Up', `${inner.config?.geminiFlashModel || ''} / ${inner.config?.geminiProModel || ''}`);
+          log('ok', `Gemini up · flash=${inner.config?.geminiFlashModel} pro=${inner.config?.geminiProModel}`);
+        } else {
+          setCard('cardGemini', 'err', up.gemini || '未知', '遠端 API 不可用（檢查 GEMINI_API_KEY）');
+          log('err', `Gemini ${up.gemini || '?'}`);
+        }
+        return inner;
+      } catch (e) {
+        setCard('cardBridge', 'err', '錯誤', e.message);
+        setCard('cardOllama', 'err', '無法檢測', '');
+        setCard('cardGemini', 'err', '無法檢測', '');
+        log('err', `Bridge 代理異常：${e.message}`);
+        return null;
+      }
+    }
+
+    async function test_bridgeTask() {
+      log('info', '執行最小 bridge 任務測試（card_design, writeToDb=false）…');
+      try {
+        const t0 = Date.now();
+        const res = await adminFetch('/api/ai-console/bridge/run-task', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            taskType: 'card_design',
+            input: '一張 LV0 的基本武器卡，手槍類型，敏捷檢定',
+            writeToDb: false,
+            batchCount: 1,
+          }),
+        });
+        const elapsed = Date.now() - t0;
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          log('err', `Bridge 任務失敗 HTTP ${res.status} (${elapsed}ms)`, data);
+          return;
+        }
+        const preview = data.items?.[0] || data.result || data;
+        log('ok', `Bridge 任務成功 (${elapsed}ms)`, {
+          itemsCount: data.items?.length,
+          firstItem: preview?.name_zh ? { name_zh: preview.name_zh, cost: preview.cost, faction: preview.faction } : preview,
+        });
+      } catch (e) {
+        log('err', `Bridge 任務異常：${e.message}`);
+      }
+    }
+
+    function test_clientInfo() {
+      const info = {
+        url: location.href,
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        viewport: `${window.innerWidth}×${window.innerHeight}`,
+        screen: `${screen.width}×${screen.height}`,
+        online: navigator.onLine,
+        language: navigator.language,
+        adminApiBase: window.ADMIN_API_BASE || '（未設）',
+        time: new Date().toString(),
+      };
+      log('info', '客戶端資訊', info);
+    }
+
+    async function runAll() {
+      log('info', '════ 開始全套診斷 ════');
+      const authOk = await test_auth();
+      if (!authOk) {
+        log('warn', '因認證失敗，跳過後續 bridge 測試');
+        return;
+      }
+      const health = await test_bridgeHealth();
+      if (health) await test_bridgeTask();
+      test_clientInfo();
+      log('info', '════ 診斷結束 ════');
+    }
+
+    // wire buttons
+    document.getElementById('btnRunAll').onclick = runAll;
+    document.getElementById('btnAuth').onclick = test_auth;
+    document.getElementById('btnBridgeHealth').onclick = test_bridgeHealth;
+    document.getElementById('btnBridgeTask').onclick = test_bridgeTask;
+    document.getElementById('btnClientInfo').onclick = test_clientInfo;
+    document.getElementById('btnClearLog').onclick = () => { logArea.textContent = ''; };
+    document.getElementById('btnCopyLog').onclick = async () => {
+      const text = logArea.innerText;
+      try {
+        await navigator.clipboard.writeText(text);
+        log('ok', `已複製 ${text.length} 字到剪貼簿`);
+      } catch (e) {
+        // iOS Safari fallback: select + deprecated execCommand
+        const range = document.createRange();
+        range.selectNodeContents(logArea);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        log('warn', '自動複製失敗，log 已反白，請手動長按 → 複製');
+      }
+    };
+
+    // initial env log
+    log('info', `面板載入 · ${location.protocol}//${location.host}`);
+    log('info', `admin-shared.js ADMIN_API_BASE = ${window.ADMIN_API_BASE || '（未設）'}`);
+  })();
+  </script>
+</body>
+</html>

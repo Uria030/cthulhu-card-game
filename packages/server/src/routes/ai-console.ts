@@ -4,6 +4,10 @@ import { requireAdmin } from '../middleware/requireAdmin.js';
 
 type AuthUser = { userId: string; role: string };
 
+const BRIDGE_URL = process.env.BRIDGE_URL || 'http://127.0.0.1:8787';
+const BRIDGE_HEALTH_TIMEOUT_MS = 5_000;
+const BRIDGE_TASK_TIMEOUT_MS = 120_000;
+
 export const aiConsoleRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', requireAdmin);
 
@@ -266,6 +270,62 @@ export const aiConsoleRoutes: FastifyPluginAsync = async (app) => {
       }
     },
   );
+
+  // ── GET /api/ai-console/bridge/health ── proxy to bridge /health
+  app.get('/api/ai-console/bridge/health', async (request, reply) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), BRIDGE_HEALTH_TIMEOUT_MS);
+    try {
+      const res = await fetch(`${BRIDGE_URL}/health`, { signal: controller.signal });
+      clearTimeout(timer);
+      const data = await res.json().catch(() => ({}));
+      return reply.status(res.status).send({
+        success: res.ok,
+        bridgeUrl: BRIDGE_URL,
+        data,
+      });
+    } catch (error: any) {
+      clearTimeout(timer);
+      request.log.error(error, 'bridge /health proxy error');
+      return reply.status(502).send({
+        success: false,
+        bridgeUrl: BRIDGE_URL,
+        error: `bridge unreachable: ${error.message || String(error)}`,
+      });
+    }
+  });
+
+  // ── POST /api/ai-console/bridge/run-task ── proxy to bridge /task
+  app.post<{
+    Body: {
+      taskType: string;
+      input: string;
+      writeToDb?: boolean;
+      batchCount?: number;
+      contextTags?: string[];
+    };
+  }>('/api/ai-console/bridge/run-task', async (request, reply) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), BRIDGE_TASK_TIMEOUT_MS);
+    try {
+      const res = await fetch(`${BRIDGE_URL}/task`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request.body || {}),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const data = await res.json().catch(() => ({ error: 'bridge returned non-JSON' }));
+      return reply.status(res.status).send(data);
+    } catch (error: any) {
+      clearTimeout(timer);
+      request.log.error(error, 'bridge /task proxy error');
+      return reply.status(502).send({
+        success: false,
+        error: `bridge task failed: ${error.message || String(error)}`,
+      });
+    }
+  });
 
   // ── DELETE /api/ai-console/tasks/clear-history ── keep running/queued
   app.delete('/api/ai-console/tasks/clear-history', async (request, reply) => {

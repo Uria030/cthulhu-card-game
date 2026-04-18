@@ -1,18 +1,29 @@
 /* ========================================
-   MOD-12 — gemma-bridge HTTP client
+   MOD-12 — bridge client (via admin server proxy)
+   改造：不再直打 bridge:8787，改走 admin server `/api/ai-console/bridge/*`
+   - 受 JWT 認證保護（admin server 已有 requireAdmin）
+   - 支援遠端存取（iPad/手機/Railway 部署後只要 admin server 可達即可）
+   - Gemma/Gemini 切換在 admin server 的 BRIDGE_URL env 一處決定
    ======================================== */
 
-const BRIDGE_URL = 'http://127.0.0.1:8787';
-
-async function bridgeHealth(timeoutMs = 3000) {
+async function bridgeHealth(timeoutMs = 5000) {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch(`${BRIDGE_URL}/health`, { signal: controller.signal });
+    const res = await adminFetch('/api/ai-console/bridge/health', { signal: controller.signal });
     clearTimeout(timer);
-    if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` };
-    const data = await res.json();
-    return { ok: true, upstreams: data.upstreams, config: data.config, raw: data };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      return { ok: false, reason: data.error || `HTTP ${res.status}`, bridgeUrl: data.bridgeUrl };
+    }
+    const inner = data.data || {};
+    return {
+      ok: true,
+      upstreams: inner.upstreams,
+      config: inner.config,
+      bridgeUrl: data.bridgeUrl,
+      raw: inner,
+    };
   } catch (e) {
     return { ok: false, reason: e.message || String(e) };
   }
@@ -23,14 +34,14 @@ async function bridgeRunTask({ taskType, input, writeToDb = false, batchCount, c
   if (batchCount != null) body.batchCount = batchCount;
   if (contextTags && contextTags.length) body.contextTags = contextTags;
 
-  const res = await fetch(`${BRIDGE_URL}/task`, {
+  const res = await adminFetch('/api/ai-console/bridge/run-task', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`bridge /task failed (${res.status}): ${text.slice(0, 400)}`);
+    throw new Error(`bridge run-task failed (${res.status}): ${text.slice(0, 400)}`);
   }
   return res.json();
 }

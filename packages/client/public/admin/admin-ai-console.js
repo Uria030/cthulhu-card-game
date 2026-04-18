@@ -24,7 +24,7 @@ const MOD_BUTTONS = [
     api: '/api/admin/monsters/variants',
     available: true,
   },
-  { code: 'MOD-04', name_zh: '團隊精神',    api: '/api/team-spirits',           available: false, reason: '待擴充 bridge 支援（第二期）' },
+  { code: 'MOD-04', name_zh: '團隊精神',    bridgeTaskType: 'spirit_design', api: '/api/team-spirits',           available: true },
   { code: 'MOD-05', name_zh: '戰鬥風格',    api: '/api/combat-styles',          available: false, reason: '待擴充 bridge 支援（第二期）' },
   { code: 'MOD-06', name_zh: '戰役敘事',    api: null,                          available: false, reason: '模組尚未建置' },
   { code: 'MOD-07', name_zh: '關卡編輯器',  api: null,                          available: false, reason: '模組尚未建置' },

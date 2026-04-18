@@ -81,6 +81,44 @@ function mapCard(item) {
 }
 
 // ────────────────────────────────────────────
+// MOD-04: team_spirit
+// Gemini output → POST /api/team-spirits (main) + PUT /api/team-spirits/{id}/depths
+// 使用 __postSaveActions 讓 executeConfirmedPlan 在主 POST 成功後再送深度
+// ────────────────────────────────────────────
+function mapSpirit(item) {
+  const b = { ...item };
+  // Gemini 產出 depth_effects（使用 level 欄位）→ 伺服器 PUT /depths 期望 raw array 且欄位叫 depth
+  const rawDepths = Array.isArray(b.depth_effects) ? b.depth_effects : [];
+  const depths = rawDepths.map((d, idx) => ({
+    depth: d.depth ?? d.level ?? (idx + 1),
+    effect_name_zh: d.effect_name_zh || null,
+    effect_name_en: d.effect_name_en || null,
+    effect_desc_zh: d.effect_desc_zh || null,
+    effect_desc_en: d.effect_desc_en || null,
+    effect_value: d.effect_value ?? null,
+    effect_formula: d.effect_formula || null,
+  }));
+  delete b.depth_effects;
+
+  if (!b.total_value || b.total_value <= 0) {
+    b.total_value = depths.reduce((s, d) => s + (parseFloat(d.effect_value) || 0), 0);
+  }
+  b.design_status = b.design_status || 'partial';
+
+  if (depths.length > 0) {
+    b.__postSaveActions = [
+      {
+        pathTemplate: '/api/team-spirits/{id}/depths',
+        method: 'PUT',
+        body: depths, // raw array，不包 {depths: ...}
+        label: '精神深度效果（PUT /depths）',
+      },
+    ];
+  }
+  return b;
+}
+
+// ────────────────────────────────────────────
 // MOD-02: talent_tree
 // bridge talentNodeSchema → POST /api/talent-trees/:factionCode/nodes body
 // factionCode travels via the URL (apiPathResolver), so faction_code is read
@@ -145,6 +183,7 @@ function mapItem(moduleCode, item, context) {
     case 'MOD-01': return mapCard(item);
     case 'MOD-02': return mapTalentNode(item);
     case 'MOD-03': return mapEnemyVariant(item, context);
+    case 'MOD-04': return mapSpirit(item);
     default:
       throw new Error(`mapItem: no mapper for ${moduleCode}`);
   }

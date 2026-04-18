@@ -430,3 +430,140 @@ async function generateCardViaDirectGemini(userDescription, { model = 'gemini-2.
 }
 
 window.generateCardViaDirectGemini = generateCardViaDirectGemini;
+
+// ============================================================
+// MOD-04 團隊精神（Team Spirit）
+// ============================================================
+
+function buildSpiritDesignPrompt(userDescription) {
+  return `你是克蘇魯神話合作卡牌遊戲（1920s 偵探黑色電影 × 宇宙恐怖）的系統設計師。
+請為一個**團隊精神（Team Spirit）**做完整設計。團隊精神是全隊共享的被動能力，以「凝聚力投入」換取深度等級解鎖更強效果。
+
+## 絕對規則
+1. 輸出**單一 JSON object**，不要 array、不要 markdown 圍欄
+2. 文字欄位使用**台灣繁體中文**
+3. 嚴格遵守 JSON 欄位名稱與型別
+
+## 分類 category（必須從這 8 種選一）
+combat（戰鬥類）, investigation（調查與資訊類）, resource（資源與經濟類）, growth（成長與系統解鎖類）, knowledge（知識與神話類）, rhythm（團隊節奏類）, status（異常狀態專精類）, bestiary（怪物學類）
+
+## 效果標籤 effect_tags（選 1-3 個）
+damage_boost, damage_reduction, healing, resource_gen, card_advantage, information, system_unlock, status_offense, status_defense, chaos_control, action_economy, team_synergy
+
+## 效果價值參考表（1V = 1 行動點 = 1 資源 = 抽 1 張 = 1 點傷害）
+- 傷害：1V/點、恐懼 3V/點、攻擊 +1 = 2.5V
+- 恢復：HP/SAN 1.5V/點、取消傷害 0.5V
+- 卡牌：抽 1 張 1V、搜牌 6V、回收棄牌 1.5V
+- 資源：1 資源 1V、1 使用次數 0.5V
+- 檢定修正：單屬性 +1=0.5V, +2=1.5V, +3=3V；萬能 +1=1V, +2=3V, +3=6V
+- 狀態（每層）：中毒 3V、流血 2V、燃燒 3V、冷凍 3V、護甲 3V、護盾 6V、強化 3V
+- 特殊：快速 +1V、指定他人 +2V、額外攻擊 1.5V、重擲 1V、自動成功 4V
+
+## 深度規則
+- **5 個等級** (level 1 到 5)，每級效果逐級遞進、同主題
+- Lv1：簡單基礎（約 1-2V）
+- Lv2-3：中等強化（約 2-4V）
+- Lv4：重要飛躍（約 4-6V）
+- Lv5：頂級效果（約 4-8V）
+- **總價值 15-25V** 之間（≈ Σ depth_effects.effect_value）
+
+## 克蘇魯氛圍原則
+- 避免太「正面英雄」的語調；偏向「代價換取」「勉強維繫」的暗色基調
+- milestone 達成條件可設具體但帶絕望感（例：目睹 5 位調查員發狂）
+- flavor 可引用 Lovecraft 風格，簡短不祥
+
+## 使用者需求
+${userDescription}
+
+## 輸出格式（完整 JSON）
+{
+  "code": "小寫底線命名，全域唯一（如 flame_of_pledge）",
+  "name_zh": "精神名稱（繁中）",
+  "name_en": "English Name",
+  "category": "combat",
+  "description": "精神主題描述（繁中，1-2 句）",
+  "description_en": "Theme description (English)",
+  "adopt_effect_zh": "採納時的基礎被動效果（具體可執行）",
+  "adopt_effect_en": "Adopt passive effect",
+  "maxed_effect_zh": "全 5 級解鎖後的額外被動",
+  "maxed_effect_en": "Maxed extra passive",
+  "milestone_name_zh": "里程碑名稱",
+  "milestone_name_en": "Milestone Name",
+  "milestone_desc": "達成條件（具體可驗證）",
+  "milestone_effect_zh": "里程碑效果（繁中）",
+  "milestone_effect_en": "Milestone effect (English)",
+  "effect_tags": ["damage_boost","healing"],
+  "total_value": 20,
+  "depth_effects": [
+    { "level": 1, "effect_name_zh": "…", "effect_name_en": "…", "effect_desc_zh": "…（具體可執行）", "effect_desc_en": "…", "effect_value": 1.5, "effect_formula": "1V 抽牌" },
+    { "level": 2, "effect_name_zh": "…", "effect_name_en": "…", "effect_desc_zh": "…", "effect_desc_en": "…", "effect_value": 3,   "effect_formula": "" },
+    { "level": 3, "effect_name_zh": "…", "effect_name_en": "…", "effect_desc_zh": "…", "effect_desc_en": "…", "effect_value": 4,   "effect_formula": "" },
+    { "level": 4, "effect_name_zh": "…", "effect_name_en": "…", "effect_desc_zh": "…", "effect_desc_en": "…", "effect_value": 5,   "effect_formula": "" },
+    { "level": 5, "effect_name_zh": "…", "effect_name_en": "…", "effect_desc_zh": "…", "effect_desc_en": "…", "effect_value": 6.5, "effect_formula": "" }
+  ]
+}
+
+## 重要提醒
+1. depth_effects 陣列**必須剛好 5 個元素**，level 依序 1 到 5
+2. total_value ≈ Σ depth_effects.effect_value，並保持在 15-25V
+3. Lv5 的 effect_value 應 ≥ Lv1 的 2-3 倍
+4. 所有 effect_desc 要**具體可執行**，避免「增強隊友」這種模糊描述——要寫清楚數值、範圍、觸發條件
+5. adopt_effect 與 maxed_effect 語意不同：adopt 是「採納就生效」，maxed 是「5 級全滿額外加碼」`;
+}
+
+const VALID_SPIRIT_CATEGORIES = ['combat','investigation','resource','growth','knowledge','rhythm','status','bestiary'];
+const VALID_SPIRIT_EFFECT_TAGS = new Set([
+  'damage_boost','damage_reduction','healing','resource_gen','card_advantage','information',
+  'system_unlock','status_offense','status_defense','chaos_control','action_economy','team_synergy',
+]);
+
+function validateAndFixSpiritData(d) {
+  if (!d || typeof d !== 'object') return d;
+  if (!VALID_SPIRIT_CATEGORIES.includes(d.category)) {
+    console.warn('spirit: invalid category coerced to combat:', d.category);
+    d.category = 'combat';
+  }
+  d.effect_tags = Array.isArray(d.effect_tags)
+    ? d.effect_tags.filter((t) => VALID_SPIRIT_EFFECT_TAGS.has(t)).slice(0, 3)
+    : [];
+
+  // Ensure depth_effects is exactly 5 entries with level 1-5
+  if (!Array.isArray(d.depth_effects)) d.depth_effects = [];
+  for (let i = 0; i < 5; i++) {
+    if (!d.depth_effects[i] || typeof d.depth_effects[i] !== 'object') {
+      d.depth_effects[i] = { level: i + 1, effect_desc_zh: '', effect_value: 0 };
+    }
+    d.depth_effects[i].level = i + 1;
+    d.depth_effects[i].effect_value = Math.max(0, Math.min(15, parseFloat(d.depth_effects[i].effect_value) || 0));
+  }
+  d.depth_effects = d.depth_effects.slice(0, 5);
+
+  // Normalize main numeric
+  const computedTotal = d.depth_effects.reduce((s, e) => s + (e.effect_value || 0), 0);
+  const claimed = parseFloat(d.total_value);
+  d.total_value = Number.isFinite(claimed) && claimed > 0 ? claimed : computedTotal;
+  d.total_value = Math.max(0, Math.min(50, d.total_value));
+
+  // Code fallback from name_en
+  if (!d.code || typeof d.code !== 'string') {
+    const base = (d.name_en || d.name_zh || 'spirit').toString().toLowerCase();
+    d.code = base.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || `spirit_${Date.now()}`;
+  }
+  return d;
+}
+
+async function generateSpiritViaDirectGemini(userDescription, { model = 'gemini-2.5-pro', apiKey } = {}) {
+  if (!userDescription || typeof userDescription !== 'string') throw new Error('userDescription 為空');
+  const prompt = buildSpiritDesignPrompt(userDescription);
+  const { text, modelName } = await callGeminiDirect({ prompt, model, apiKey });
+  const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
+  let data;
+  try { data = JSON.parse(cleanJson); }
+  catch (e) { throw new Error('Gemini 回傳內容不是合法 JSON：' + e.message); }
+  const item = validateAndFixSpiritData(data);
+  return { items: [item], modelUsed: modelName };
+}
+
+window.buildSpiritDesignPrompt = buildSpiritDesignPrompt;
+window.validateAndFixSpiritData = validateAndFixSpiritData;
+window.generateSpiritViaDirectGemini = generateSpiritViaDirectGemini;

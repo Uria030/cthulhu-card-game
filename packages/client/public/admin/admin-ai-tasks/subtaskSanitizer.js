@@ -32,6 +32,19 @@ const API_FIELD_WHITELIST = {
     'design_status', 'design_notes',
   ],
 
+  // POST /api/team-spirits — spirit_definitions columns
+  //   depth_effects 由 __postSaveActions 獨立送出，不在本 whitelist
+  'MOD-04': [
+    'code', 'name_zh', 'name_en', 'category',
+    'description', 'description_en', 'design_notes',
+    'adopt_effect_zh', 'adopt_effect_en',
+    'maxed_effect_zh', 'maxed_effect_en',
+    'milestone_name_zh', 'milestone_name_en', 'milestone_desc',
+    'milestone_effect_zh', 'milestone_effect_en',
+    'effect_tags', 'total_value', 'value_per_cohesion',
+    'design_status', 'sort_order',
+  ],
+
   // POST /api/admin/monsters/variants — monster_variants columns
   'MOD-03': [
     'species_id', 'code', 'name_zh', 'name_en', 'tier',

@@ -47,10 +47,13 @@ function deriveTaskType(moduleConfig, userPrompt) {
 // Phase 1 替代路徑：前端直連遠端 Gemini API（不經 bridge，與 MOD-01 同模式）
 // 僅支援 MOD-01 card_design；MOD-02/03 需透過 bridge（本地 Gemma 路徑）
 // ────────────────────────────────────────────
+// 遠端 Gemini 直連支援的 MOD 清單（每擴充一個 MOD 這裡加一行）
+const DIRECT_GEMINI_SUPPORTED_MODULES = new Set(['MOD-01', 'MOD-04']);
+
 async function planWithDirectGemini({ moduleConfig, userPrompt, attachedText, historyBlock, batchCount = 1, geminiModel = 'gemini-2.5-pro' }) {
-  if (moduleConfig.code !== 'MOD-01') {
+  if (!DIRECT_GEMINI_SUPPORTED_MODULES.has(moduleConfig.code)) {
     throw new Error(
-      `遠端 Gemini API 直連目前僅支援 MOD-01 卡片設計。${moduleConfig.code} 請切換到「本地 Gemma」（需小黑 bridge）。`,
+      `遠端 Gemini API 直連目前僅支援：${[...DIRECT_GEMINI_SUPPORTED_MODULES].join(', ')}。${moduleConfig.code} 尚未掛上。`,
     );
   }
   if (!window.hasGeminiApiKey || !window.hasGeminiApiKey()) {
@@ -67,7 +70,16 @@ async function planWithDirectGemini({ moduleConfig, userPrompt, attachedText, hi
   ].filter(Boolean).join('\n\n');
 
   const t0 = Date.now();
-  const { items, modelUsed } = await window.generateCardViaDirectGemini(composedInput, { model: geminiModel, batchCount });
+  let items, modelUsed;
+  if (moduleConfig.code === 'MOD-01') {
+    ({ items, modelUsed } = await window.generateCardViaDirectGemini(composedInput, { model: geminiModel, batchCount }));
+  } else if (moduleConfig.code === 'MOD-04') {
+    // MOD-04 目前設計為單筆（團隊精神含 5 深度已是完整實體），暫不支援批次
+    if (batchCount > 1) console.warn('MOD-04 暫不支援批次，忽略 batchCount', batchCount);
+    ({ items, modelUsed } = await window.generateSpiritViaDirectGemini(composedInput, { model: geminiModel }));
+  } else {
+    throw new Error(`internal: unhandled module ${moduleConfig.code} in planWithDirectGemini`);
+  }
   const elapsedMs = Date.now() - t0;
 
   // 組出跟 bridgeResult 形狀相容的結構，plan UI 可以沿用
@@ -110,6 +122,10 @@ async function executeConfirmedPlan({ taskRecordId, moduleConfig, items, onProgr
 
     try {
       const mapped = mapItem(moduleConfig.code, items[i], context);
+      // 抽離 __postSaveActions（主 POST 成功後才跑），避免被 sanitize 當成 body 欄位
+      const postSaveActions = Array.isArray(mapped.__postSaveActions) ? mapped.__postSaveActions : [];
+      if (mapped.__postSaveActions) delete mapped.__postSaveActions;
+
       const cleaned = sanitizeSubtask(moduleConfig.code, mapped);
       const path = resolveApiPath(moduleConfig, mapped);
 
@@ -136,13 +152,55 @@ async function executeConfirmedPlan({ taskRecordId, moduleConfig, items, onProgr
         });
       } else {
         const data = (parsed && parsed.data) || {};
-        artifacts.push({
+        const mainId = data.id || null;
+        const artifact = {
           type: moduleConfig.code,
           subtask_index: i,
-          id: data.id || null,
+          id: mainId,
           name: data.name_zh || data.code || items[i]?.name_zh || `#${i}`,
           code: data.code || null,
-        });
+        };
+
+        // 執行 post-save actions（如 MOD-04 精神的 depths PUT）
+        if (postSaveActions.length > 0 && mainId) {
+          const subResults = [];
+          for (const action of postSaveActions) {
+            const subPath = String(action.pathTemplate || '').replace('{id}', mainId);
+            try {
+              const subRes = await adminFetch(subPath, {
+                method: action.method || 'POST',
+                body: JSON.stringify(action.body || {}),
+              });
+              const subText = await subRes.text();
+              let subParsed = null;
+              try { subParsed = JSON.parse(subText); } catch { /* keep null */ }
+              subResults.push({
+                label: action.label || subPath,
+                ok: subRes.ok && (!subParsed || subParsed.success !== false),
+                status: subRes.status,
+                error: subRes.ok ? null : ((subParsed && subParsed.error) || subText.slice(0, 200)),
+              });
+            } catch (subErr) {
+              subResults.push({
+                label: action.label || subPath,
+                ok: false,
+                error: subErr.message || String(subErr),
+              });
+            }
+          }
+          artifact.postSaveResults = subResults;
+          const anyFailed = subResults.some((r) => !r.ok);
+          if (anyFailed) {
+            artifact.partial = true;
+            artifact.warning = '主實體已建立，但部分延伸資料寫入失敗：'
+              + subResults.filter((r) => !r.ok).map((r) => `${r.label} - ${r.error}`).join('; ');
+          }
+        } else if (postSaveActions.length > 0 && !mainId) {
+          artifact.partial = true;
+          artifact.warning = '主 POST 成功但未回傳 id，post-save actions 已跳過';
+        }
+
+        artifacts.push(artifact);
       }
     } catch (mapErr) {
       artifacts.push({

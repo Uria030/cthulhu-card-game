@@ -567,3 +567,265 @@ async function generateSpiritViaDirectGemini(userDescription, { model = 'gemini-
 window.buildSpiritDesignPrompt = buildSpiritDesignPrompt;
 window.validateAndFixSpiritData = validateAndFixSpiritData;
 window.generateSpiritViaDirectGemini = generateSpiritViaDirectGemini;
+
+// ============================================================
+// MOD-02 天賦樹節點（Talent Tree Node）
+// ============================================================
+
+function buildTalentNodeDesignPrompt(userDescription, batchCount = 1) {
+  const isBatch = batchCount && batchCount > 1;
+  const plural = isBatch ? `${batchCount} 個` : `一個`;
+  return `你是克蘇魯神話合作卡牌遊戲（1920s 偵探黑色電影 × 宇宙恐怖）的系統設計師。
+請為特定陣營的天賦樹設計${plural}**天賦節點**。
+
+## 絕對規則
+1. 輸出 ${isBatch ? 'JSON Array（長度 ' + batchCount + '）' : '單一 JSON object'}，不要 markdown 圍欄
+2. 文字欄位使用**台灣繁體中文**
+3. 所有節點的 code 必須全域唯一（小寫+底線，如 s_weapon_mastery_1）
+4. faction_code 必須從 9 個合法值選一：E / I / S / N / T / F / J / P / neutral
+   （E=號令、I=深淵、S=鐵證、N=天啟、T=解析、F=聖燼、J=鐵壁、P=流影、neutral=中立）
+
+## 天賦樹結構
+- tier（階層）：1 到 12 的整數
+- branch（分支）：字串標籤，例如 "combat" / "investigation" / "resource"（分支名可自由）
+- node_type 必須從這 8 種選一：
+  · basic（基礎節點，低階通用增益）
+  · branch_split（分支切換點，通常在 tier 4 / 7）
+  · milestone（里程碑，強力效果 + 需 milestone_type）
+  · attribute_boost（屬性提升，需 boost_attribute）
+  · skill_unlock（解鎖技能）
+  · specialization_unlock（解鎖專精）
+  · signature_card（簽名卡）
+  · ultimate（終極節點，tier 12 限定）
+
+## 條件欄位
+- node_type=milestone → 必填 milestone_type（字串，例：'chapter_complete'）
+- node_type=attribute_boost → 必填 boost_attribute，值從這 7 個選一：
+  strength / agility / constitution / intellect / willpower / perception / charisma
+
+## 費用
+- cost_in_points：消耗的天賦點（整數，通常 1-3，boss級 ultimate 可到 5）
+- prerequisites：前置節點 code 陣列（可為空陣列 []）
+
+## 克蘇魯氛圍原則
+- description 帶一絲代價、交換、污染感，避免純光明英雄語調
+- milestone 常以「獲得但失去」方式呈現（例：記住全部線索但 SAN 上限 -1）
+
+## 使用者需求
+${userDescription}
+
+## 輸出格式（單節點）
+{
+  "code": "s_gunslinger_tier3_1",
+  "faction_code": "S",
+  "tier": 3,
+  "branch": "combat",
+  "node_type": "attribute_boost",
+  "name_zh": "穩定握持",
+  "name_en": "Steady Grip",
+  "description_zh": "所有射擊類檢定 +1",
+  "description_en": "...",
+  "prerequisites": ["s_combat_tier2_1"],
+  "cost_in_points": 1,
+  "effect_code": "boost_attribute",
+  "effect_value": 1,
+  "boost_attribute": "agility",
+  "is_milestone": false,
+  "is_branch_point": false,
+  "is_ultimate": false
+}
+
+## 重要提醒
+1. code 格式：小寫字母+數字+底線（pattern ^[a-z0-9_]+$）
+2. tier ∈ [1, 12] 整數
+3. cost_in_points ≥ 0 整數
+4. prerequisites 必為陣列（即使空也要 []）
+5. 若節點為 milestone，is_milestone: true 且有 milestone_type
+6. 若節點為 ultimate，is_ultimate: true，通常 tier: 12
+7. 產出內容需扣緊陣營主題（S 鐵證＝裝備物理、N 天啟＝混沌預知、I 深淵＝單獨強化 etc）`;
+}
+
+const VALID_TALENT_NODE_TYPES = new Set([
+  'basic','branch_split','milestone','attribute_boost',
+  'skill_unlock','specialization_unlock','signature_card','ultimate',
+]);
+const VALID_TALENT_FACTION_CODES = new Set(['E','I','S','N','T','F','J','P','neutral']);
+const VALID_ATTRIBUTES_TALENT = new Set(['strength','agility','constitution','intellect','willpower','perception','charisma']);
+
+function validateAndFixTalentNodeData(d) {
+  if (!d || typeof d !== 'object') return d;
+  if (!VALID_TALENT_FACTION_CODES.has(d.faction_code)) {
+    console.warn('talent: invalid faction_code coerced to neutral:', d.faction_code);
+    d.faction_code = 'neutral';
+  }
+  if (!VALID_TALENT_NODE_TYPES.has(d.node_type)) {
+    console.warn('talent: invalid node_type coerced to basic:', d.node_type);
+    d.node_type = 'basic';
+  }
+  d.tier = Math.max(1, Math.min(12, parseInt(d.tier, 10) || 1));
+  d.cost_in_points = Math.max(0, Math.min(5, parseInt(d.cost_in_points, 10) || 1));
+  if (!Array.isArray(d.prerequisites)) d.prerequisites = [];
+  if (d.node_type === 'attribute_boost' && !VALID_ATTRIBUTES_TALENT.has(d.boost_attribute)) {
+    d.boost_attribute = 'strength';
+  }
+  if (d.node_type === 'milestone' && !d.milestone_type) {
+    d.milestone_type = 'generic';
+  }
+  if (!d.code || !/^[a-z0-9_]+$/.test(String(d.code))) {
+    const base = (d.name_en || d.name_zh || 'talent').toString().toLowerCase();
+    d.code = base.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || `talent_${Date.now()}`;
+  }
+  return d;
+}
+
+async function generateTalentNodeViaDirectGemini(userDescription, { model = 'gemini-2.5-pro', batchCount = 1, apiKey } = {}) {
+  if (!userDescription || typeof userDescription !== 'string') throw new Error('userDescription 為空');
+  const prompt = buildTalentNodeDesignPrompt(userDescription, batchCount);
+  const { text, modelName } = await callGeminiDirect({ prompt, model, apiKey });
+  const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
+  let data;
+  try { data = JSON.parse(cleanJson); }
+  catch (e) { throw new Error('Gemini 回傳內容不是合法 JSON：' + e.message); }
+  const items = Array.isArray(data) ? data.map(validateAndFixTalentNodeData) : [validateAndFixTalentNodeData(data)];
+  return { items, modelUsed: modelName };
+}
+
+window.buildTalentNodeDesignPrompt = buildTalentNodeDesignPrompt;
+window.validateAndFixTalentNodeData = validateAndFixTalentNodeData;
+window.generateTalentNodeViaDirectGemini = generateTalentNodeViaDirectGemini;
+
+// ============================================================
+// MOD-03 敵人/怪物變體（Enemy Variant）
+// ============================================================
+
+function buildEnemyDesignPrompt(userDescription, batchCount = 1) {
+  const isBatch = batchCount && batchCount > 1;
+  const plural = isBatch ? `${batchCount} 隻` : `一隻`;
+  return `你是克蘇魯神話合作卡牌遊戲（1920s 偵探黑色電影 × 宇宙恐怖）的敵人設計師。
+請設計${plural}**怪物變體**，與指定家族與位階相符。
+
+## 絕對規則
+1. 輸出 ${isBatch ? 'JSON Array（長度 ' + batchCount + '）' : '單一 JSON object'}，不要 markdown 圍欄
+2. 文字欄位使用**台灣繁體中文**
+3. code 小寫+底線+數字（^[a-z0-9_]+$），全域唯一
+4. **神秘（arcane）元素絕對不可出現在 vulnerabilities / resistances / immunities**
+   （攻擊元素 attack_element 可以是 arcane，但抗性三項只限 physical / fire / ice / electric）
+5. 克蘇魯譯名使用台灣社群慣用譯法，禁止自創（參考對照表）
+
+## 家族 family_code（選一）
+- house_cthulhu（克蘇魯家族，深潛者、深潛巨人、星之眷族）
+- house_hastur（哈斯塔家族，拜亞基、黃衣之王僕人）
+- house_shub（莎布家族，黑山羊幼崽、森林靈）
+- house_nyarlathotep（奈亞家族，黑法老、混沌化身、夜魘）
+- house_yog（猶格家族，星之彩、污染生命）
+- house_cthugha（克圖格亞家族，火焰之靈）
+- house_yig（伊格家族，蛇人、爬行族）
+- fallen（墮落者，發瘋的調查員、神秘學家）
+- undying（不死者，食屍鬼、屍化者）
+- independent（獨立存在，鳥頭巫、黑暗之主）
+
+## 位階 tier（選一，依實力由弱到強）
+minion（雜兵）/ threat（威脅）/ elite（精英）/ boss（頭目）/ titan（巨頭）
+
+## HP 範圍建議（tier → hp）
+- minion: 3-8
+- threat: 8-15
+- elite: 15-28
+- boss: 30-60
+- titan: 80-150
+
+## 攻擊元素 attack_element
+physical / fire / ice / electric / arcane（arcane 最稀少，僅主要施法者）
+
+## 恐懼 horror
+- horror_radius（範圍，0-5 格）
+- horror_value（每圈造成 SAN 傷害點數）
+
+## 使用者需求
+${userDescription}
+
+## 輸出格式
+{
+  "code": "deep_one_hybrid_tier2_01",
+  "species_code": "deep_one",
+  "family_code": "house_cthulhu",
+  "name_zh": "深潛混種",
+  "name_en": "Deep One Hybrid",
+  "tier": "threat",
+  "hp": 12,
+  "san_damage": 1,
+  "horror_radius": 1,
+  "horror_value": 1,
+  "attack_element": "physical",
+  "vulnerabilities": ["fire"],
+  "resistances": ["ice"],
+  "immunities": [],
+  "inflicted_statuses": ["wet"],
+  "design_notes": "..."
+}
+
+## 重要提醒
+1. species_code 是既有物種代碼，若 Gemini 不確定，用合理英文 snake_case 生成（例 shoggoth、nightgaunt、byakhee）
+2. vulnerabilities / resistances / immunities **三者不可重疊**且不可包含 arcane
+3. HP 值要符合 tier 區間
+4. 克蘇魯氛圍：描述帶觸感噁心 / 形體錯亂 / 非歐幾里得 / 讓調查員失智的視覺
+5. 若是施法類敵人（巫師、拜亞基主教），attack_element 可 arcane`;
+}
+
+const VALID_ENEMY_FAMILIES = new Set([
+  'house_cthulhu','house_hastur','house_shub','house_nyarlathotep',
+  'house_yog','house_cthugha','house_yig','fallen','undying','independent',
+]);
+const VALID_ENEMY_TIERS = new Set(['minion','threat','elite','boss','titan']);
+const VALID_ELEMENTS_WITH_ARCANE = new Set(['physical','fire','ice','electric','arcane']);
+const VALID_ELEMENTS_NO_ARCANE = new Set(['physical','fire','ice','electric']);
+
+function validateAndFixEnemyData(d) {
+  if (!d || typeof d !== 'object') return d;
+  if (!VALID_ENEMY_FAMILIES.has(d.family_code)) {
+    console.warn('enemy: invalid family_code coerced to independent:', d.family_code);
+    d.family_code = 'independent';
+  }
+  if (!VALID_ENEMY_TIERS.has(d.tier)) {
+    console.warn('enemy: invalid tier coerced to threat:', d.tier);
+    d.tier = 'threat';
+  }
+  if (!VALID_ELEMENTS_WITH_ARCANE.has(d.attack_element)) {
+    d.attack_element = 'physical';
+  }
+  d.hp = Math.max(1, Math.min(200, parseInt(d.hp, 10) || 10));
+  d.san_damage = Math.max(0, Math.min(10, parseInt(d.san_damage, 10) || 0));
+  d.horror_radius = Math.max(0, Math.min(5, parseInt(d.horror_radius, 10) || 0));
+  d.horror_value = Math.max(0, Math.min(10, parseInt(d.horror_value, 10) || 0));
+
+  // 三抗性陣列：過濾 arcane 和重複值
+  for (const key of ['vulnerabilities','resistances','immunities']) {
+    if (!Array.isArray(d[key])) d[key] = [];
+    d[key] = [...new Set(d[key].filter((e) => VALID_ELEMENTS_NO_ARCANE.has(e)))];
+  }
+  // 三抗性不可重疊（以 vulnerabilities > resistances > immunities 優先順序去重）
+  d.resistances = d.resistances.filter((e) => !d.vulnerabilities.includes(e));
+  d.immunities = d.immunities.filter((e) => !d.vulnerabilities.includes(e) && !d.resistances.includes(e));
+
+  if (!d.code || !/^[a-z0-9_]+$/.test(String(d.code))) {
+    const base = (d.name_en || d.species_code || 'enemy').toString().toLowerCase();
+    d.code = base.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || `enemy_${Date.now()}`;
+  }
+  return d;
+}
+
+async function generateEnemyViaDirectGemini(userDescription, { model = 'gemini-2.5-pro', batchCount = 1, apiKey } = {}) {
+  if (!userDescription || typeof userDescription !== 'string') throw new Error('userDescription 為空');
+  const prompt = buildEnemyDesignPrompt(userDescription, batchCount);
+  const { text, modelName } = await callGeminiDirect({ prompt, model, apiKey });
+  const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
+  let data;
+  try { data = JSON.parse(cleanJson); }
+  catch (e) { throw new Error('Gemini 回傳內容不是合法 JSON：' + e.message); }
+  const items = Array.isArray(data) ? data.map(validateAndFixEnemyData) : [validateAndFixEnemyData(data)];
+  return { items, modelUsed: modelName };
+}
+
+window.buildEnemyDesignPrompt = buildEnemyDesignPrompt;
+window.validateAndFixEnemyData = validateAndFixEnemyData;
+window.generateEnemyViaDirectGemini = generateEnemyViaDirectGemini;

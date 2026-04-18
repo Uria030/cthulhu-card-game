@@ -48,7 +48,7 @@ function deriveTaskType(moduleConfig, userPrompt) {
 // 僅支援 MOD-01 card_design；MOD-02/03 需透過 bridge（本地 Gemma 路徑）
 // ────────────────────────────────────────────
 // 遠端 Gemini 直連支援的 MOD 清單（每擴充一個 MOD 這裡加一行）
-const DIRECT_GEMINI_SUPPORTED_MODULES = new Set(['MOD-01', 'MOD-04']);
+const DIRECT_GEMINI_SUPPORTED_MODULES = new Set(['MOD-01', 'MOD-02', 'MOD-03', 'MOD-04']);
 
 async function planWithDirectGemini({ moduleConfig, userPrompt, attachedText, historyBlock, batchCount = 1, geminiModel = 'gemini-2.5-pro' }) {
   if (!DIRECT_GEMINI_SUPPORTED_MODULES.has(moduleConfig.code)) {
@@ -73,6 +73,10 @@ async function planWithDirectGemini({ moduleConfig, userPrompt, attachedText, hi
   let items, modelUsed;
   if (moduleConfig.code === 'MOD-01') {
     ({ items, modelUsed } = await window.generateCardViaDirectGemini(composedInput, { model: geminiModel, batchCount }));
+  } else if (moduleConfig.code === 'MOD-02') {
+    ({ items, modelUsed } = await window.generateTalentNodeViaDirectGemini(composedInput, { model: geminiModel, batchCount }));
+  } else if (moduleConfig.code === 'MOD-03') {
+    ({ items, modelUsed } = await window.generateEnemyViaDirectGemini(composedInput, { model: geminiModel, batchCount }));
   } else if (moduleConfig.code === 'MOD-04') {
     // MOD-04 目前設計為單筆（團隊精神含 5 深度已是完整實體），暫不支援批次
     if (batchCount > 1) console.warn('MOD-04 暫不支援批次，忽略 batchCount', batchCount);

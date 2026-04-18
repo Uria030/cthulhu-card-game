@@ -66,31 +66,34 @@
 }
 .mode-refresh:hover { color: var(--gold); }
 
-/* ── AI 提供者切換按鈕 ── */
-.ai-provider-switch {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.2rem 0.5rem;
-  margin-right: 0.75rem;
+/* ── 確保 nav 整列單行、自動壓縮 ── */
+.console-nav {
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  min-width: 0;
 }
-.ai-provider-switch .provider-switch-label {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-  margin-right: 0.1rem;
-  letter-spacing: 0.05em;
+.console-nav > * { flex-shrink: 0; }
+.console-nav .nav-spacer { flex: 1 1 auto; min-width: 0.5rem; }
+
+/* ── 遠端 / 本地 兩字按鈕（放右側） ── */
+.ai-provider-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-right: 0.35rem;
 }
 .ai-provider-switch .provider-btn {
-  padding: 0.35rem 0.8rem;
+  padding: 0.3rem 0.6rem;
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text-secondary);
   border-radius: 4px;
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
+  min-width: 2.6rem;
 }
 .ai-provider-switch .provider-btn:hover:not(:disabled) {
   color: var(--gold-dim);
@@ -107,86 +110,82 @@
   cursor: not-allowed;
   text-decoration: line-through;
 }
-.ai-provider-switch .provider-apikey-btn {
-  padding: 0.3rem 0.6rem;
+
+/* ── API Key 按鈕（獨立，MOD-12 左側） ── */
+.provider-apikey-btn {
+  padding: 0.3rem 0.65rem;
   background: transparent;
   border: 1px dashed var(--border);
   color: var(--text-tertiary);
   border-radius: 4px;
   font-family: inherit;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   cursor: pointer;
-  margin-left: 0.25rem;
+  white-space: nowrap;
 }
-.ai-provider-switch .provider-apikey-btn:hover { color: var(--gold-dim); border-color: var(--gold-dim); }
-.ai-provider-switch .provider-apikey-btn.set {
+.provider-apikey-btn:hover { color: var(--gold-dim); border-color: var(--gold-dim); }
+.provider-apikey-btn.set {
   color: var(--mod12-success);
   border-color: var(--mod12-success);
   border-style: solid;
+  background: rgba(107, 156, 90, 0.06);
 }
 
-@media (max-width: 720px) {
-  .ai-provider-switch .provider-switch-label { display: none; }
-  .ai-provider-switch .provider-btn { padding: 0.3rem 0.5rem; font-size: 0.7rem; }
-  .ai-provider-switch .provider-apikey-btn { padding: 0.25rem 0.4rem; font-size: 0.65rem; }
-}
-
-/* ── Nav 內嵌控制項（模型 / 批次，在 AI 來源切換旁） ── */
-.ai-provider-switch .nav-inline-control {
+/* ── Nav 內嵌控制項（模型 / 批次，獨立不依附 .ai-provider-switch） ── */
+.nav-inline-control {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  margin-left: 0.4rem;
+  gap: 0.25rem;
   font-size: 0.72rem;
   color: var(--text-tertiary);
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
-.ai-provider-switch .nav-inline-control select,
-.ai-provider-switch .nav-inline-control input[type="number"] {
+.nav-inline-control select,
+.nav-inline-control input[type="number"] {
   background: var(--bg-card);
   color: var(--text-primary);
   border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 0.25rem 0.4rem;
+  padding: 0.22rem 0.35rem;
   font-family: inherit;
   font-size: 0.72rem;
 }
-.ai-provider-switch .nav-inline-control input[type="number"] { width: 3rem; text-align: center; }
-.ai-provider-switch .nav-inline-control select:focus,
-.ai-provider-switch .nav-inline-control input[type="number"]:focus { outline: none; border-color: var(--gold); }
+.nav-inline-control input[type="number"] { width: 2.8rem; text-align: center; }
+.nav-inline-control select:focus,
+.nav-inline-control input[type="number"]:focus { outline: none; border-color: var(--gold); }
 
-/* ── Nav 的 AI 就緒狀態指示（ready / not-ready） ── */
-.ai-provider-switch .nav-ready-indicator {
+/* ── Nav 的 AI 就緒狀態指示（獨立，ready / not-ready） ── */
+.nav-ready-indicator {
   display: inline-flex;
   align-items: center;
-  margin-left: 0.6rem;
-  padding: 0.3rem 0.7rem;
+  padding: 0.28rem 0.6rem;
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   border: 1px solid var(--border);
   color: var(--text-tertiary);
   white-space: nowrap;
   font-weight: 500;
   letter-spacing: 0.02em;
 }
-.ai-provider-switch .nav-ready-indicator.ready {
+.nav-ready-indicator.ready {
   color: var(--mod12-success);
   border-color: var(--mod12-success);
   background: rgba(107, 156, 90, 0.08);
 }
-.ai-provider-switch .nav-ready-indicator.not-ready {
+.nav-ready-indicator.not-ready {
   color: var(--mod12-danger);
   border-color: var(--mod12-danger);
   background: rgba(193, 74, 74, 0.08);
 }
 
-@media (max-width: 720px) {
-  .ai-provider-switch .nav-inline-control { font-size: 0.65rem; margin-left: 0.25rem; }
-  .ai-provider-switch .nav-inline-control select,
-  .ai-provider-switch .nav-inline-control input[type="number"] { font-size: 0.65rem; padding: 0.2rem 0.3rem; }
-  .ai-provider-switch .nav-inline-control input[type="number"] { width: 2.4rem; }
-  .ai-provider-switch .nav-ready-indicator { font-size: 0.65rem; padding: 0.2rem 0.45rem; margin-left: 0.3rem; }
+@media (max-width: 900px) {
+  .provider-apikey-btn { padding: 0.24rem 0.45rem; font-size: 0.68rem; }
+  .nav-inline-control { font-size: 0.66rem; }
+  .nav-inline-control select, .nav-inline-control input[type="number"] { font-size: 0.66rem; padding: 0.2rem 0.3rem; }
+  .nav-inline-control input[type="number"] { width: 2.3rem; }
+  .nav-ready-indicator { font-size: 0.66rem; padding: 0.2rem 0.45rem; }
+  .ai-provider-switch .provider-btn { padding: 0.25rem 0.45rem; font-size: 0.7rem; min-width: 2.2rem; }
 }
 
 /* ── 聊天輸入列的內嵌控制項（模型 / 批次） ── */

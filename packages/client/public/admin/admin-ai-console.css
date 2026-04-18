@@ -107,10 +107,28 @@
   cursor: not-allowed;
   text-decoration: line-through;
 }
+.ai-provider-switch .provider-apikey-btn {
+  padding: 0.3rem 0.6rem;
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-tertiary);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+  margin-left: 0.25rem;
+}
+.ai-provider-switch .provider-apikey-btn:hover { color: var(--gold-dim); border-color: var(--gold-dim); }
+.ai-provider-switch .provider-apikey-btn.set {
+  color: var(--mod12-success);
+  border-color: var(--mod12-success);
+  border-style: solid;
+}
 
 @media (max-width: 720px) {
   .ai-provider-switch .provider-switch-label { display: none; }
   .ai-provider-switch .provider-btn { padding: 0.3rem 0.5rem; font-size: 0.7rem; }
+  .ai-provider-switch .provider-apikey-btn { padding: 0.25rem 0.4rem; font-size: 0.65rem; }
 }
 
 /* ── 三欄版面 ───────────────────────── */

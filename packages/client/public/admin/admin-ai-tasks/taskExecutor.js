@@ -44,6 +44,52 @@ function deriveTaskType(moduleConfig, userPrompt) {
 }
 
 // ────────────────────────────────────────────
+// Phase 1 替代路徑：前端直連遠端 Gemini API（不經 bridge，與 MOD-01 同模式）
+// 僅支援 MOD-01 card_design；MOD-02/03 需透過 bridge（本地 Gemma 路徑）
+// ────────────────────────────────────────────
+async function planWithDirectGemini({ moduleConfig, userPrompt, attachedText, historyBlock }) {
+  if (moduleConfig.code !== 'MOD-01') {
+    throw new Error(
+      `遠端 Gemini API 直連目前僅支援 MOD-01 卡片設計。${moduleConfig.code} 請切換到「本地 Gemma」（需小黑 bridge）。`,
+    );
+  }
+  if (!window.hasGeminiApiKey || !window.hasGeminiApiKey()) {
+    const k = window.promptForGeminiApiKey && window.promptForGeminiApiKey('需先設定 Gemini API Key 才能使用遠端直連：');
+    if (!k) throw new Error('未設定 Gemini API Key，取消');
+  }
+
+  const taskType = deriveTaskType(moduleConfig, userPrompt);
+  const composedInput = [
+    historyBlock && historyBlock.trim(),
+    '[使用者指令]',
+    userPrompt,
+    attachedText && `[附加文字]\n${attachedText}`,
+  ].filter(Boolean).join('\n\n');
+
+  const t0 = Date.now();
+  const { items, modelUsed } = await window.generateCardViaDirectGemini(composedInput);
+  const elapsedMs = Date.now() - t0;
+
+  // 組出跟 bridgeResult 形狀相容的結構，plan UI 可以沿用
+  const bridgeResult = {
+    taskId: `direct-${Date.now()}`,
+    status: items.length > 0 ? 'success' : 'failed',
+    modelUsed,
+    itemsGenerated: items.length,
+    itemsWritten: 0,
+    errors: [],
+    items,
+    logs: [`direct-gemini path (no bridge), ${elapsedMs}ms`],
+    startedAt: new Date(t0).toISOString(),
+    completedAt: new Date().toISOString(),
+  };
+
+  return { taskType, bridgeResult, items };
+}
+
+window.planWithDirectGemini = planWithDirectGemini;
+
+// ────────────────────────────────────────────
 // Phase 2: Confirmation → per-item POST via admin API
 // ────────────────────────────────────────────
 async function executeConfirmedPlan({ taskRecordId, moduleConfig, items, onProgress }) {

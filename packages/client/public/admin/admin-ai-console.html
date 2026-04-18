@@ -20,6 +20,7 @@
       <span class="provider-switch-label">AI 來源：</span>
       <button type="button" class="provider-btn active" data-provider="gemini" onclick="onProviderChoiceClick('gemini')" title="遠端 Gemini API（需 Gemini API Key）">遠端 Gemini API</button>
       <button type="button" class="provider-btn" data-provider="gemma" onclick="onProviderChoiceClick('gemma')" title="本地 Gemma（Ollama）">本地 Gemma (Ollama)</button>
+      <button type="button" class="provider-apikey-btn" id="providerApiKeyBtn" onclick="onApiKeyClick()" title="設定 Gemini API Key（與 MOD-01 共用 localStorage）">API Key</button>
     </div>
 
     <div class="ai-mode-indicator" id="aiModeIndicator">
@@ -32,6 +33,7 @@
   <div id="rootContainer"></div>
 
   <script src="admin-shared.js"></script>
+  <script src="admin-ai-tasks/geminiDirectClient.js"></script>
   <script src="admin-ai-tasks/bridgeClient.js"></script>
   <script src="admin-ai-tasks/subtaskSanitizer.js"></script>
   <script src="admin-ai-tasks/itemMapper.js"></script>

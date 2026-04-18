@@ -134,77 +134,109 @@ function renderLayout() {
 async function redetectBridge() {
   setModeIndicator('detecting', '偵測 bridge...');
   const result = await bridgeHealth();
-  const dot = document.getElementById('modeDot');
-  const label = document.getElementById('modeLabel');
-  const hint = document.getElementById('chatInputHint');
-  const sendBtn = document.getElementById('chatSendBtn');
 
   if (!result.ok) {
     state.bridgeStatus = null;
-    state.currentAiModel = null;
     setModeIndicator('unavailable', `bridge 不可達（${result.reason}）`);
-    hint && (hint.textContent = '需先啟動 gemma-bridge（bridge 未回應）');
-    sendBtn && (sendBtn.disabled = true);
-    return;
-  }
-  state.bridgeStatus = result.upstreams;
-  const { ollama, gemini } = result.upstreams;
-  if (ollama === 'up' && gemini === 'up') {
-    setModeIndicator('both', '本地 + 遠端皆可用');
-    state.currentAiModel = 'gemini-2.5-pro';
-  } else if (gemini === 'up') {
-    setModeIndicator('remote-only', '僅遠端 Gemini');
-    state.currentAiModel = 'gemini-2.5-pro';
-  } else if (ollama === 'up') {
-    setModeIndicator('local-only', '僅本地 GEMMA');
-    state.currentAiModel = 'gemma-4-e2b';
   } else {
-    setModeIndicator('unavailable', 'bridge 回報 upstream 全 down');
-    state.currentAiModel = null;
+    state.bridgeStatus = result.upstreams;
+    const { ollama, gemini } = result.upstreams;
+    if (ollama === 'up' && gemini === 'up') setModeIndicator('both', 'bridge 本地 + 遠端皆可用');
+    else if (gemini === 'up') setModeIndicator('remote-only', 'bridge：僅遠端 Gemini');
+    else if (ollama === 'up') setModeIndicator('local-only', 'bridge：僅本地 Gemma');
+    else setModeIndicator('unavailable', 'bridge 回報 upstream 全 down');
   }
-  hint && (hint.textContent = state.currentAiModel ? `當前模型：${state.currentAiModel}` : 'AI 不可用');
-  sendBtn && (sendBtn.disabled = !state.currentAiModel);
 
   updateProviderButtons();
 }
 
 // ────────────────────────────────────────────
-// AI 提供者選擇按鈕（遠端 Gemini API / 本地 Gemma）
+// AI 提供者選擇按鈕（遠端 Gemini API 直連 / 本地 Gemma via bridge）
 // ────────────────────────────────────────────
+// ⚠ 架構：遠端 Gemini API 走前端直連 Google（同 MOD-01 模式），不依賴 bridge
+//         本地 Gemma (Ollama) 走 bridge，bridge 只在小黑 localhost 運作
 function onProviderChoiceClick(provider) {
   if (provider !== 'gemini' && provider !== 'gemma') return;
-  // 若對應 upstream 不可用則不允許切換
-  if (provider === 'gemini' && state.bridgeStatus?.gemini !== 'up') {
-    alert('遠端 Gemini API 目前不可用（bridge 回報 down）');
+
+  if (provider === 'gemini') {
+    // 直連 Google，與 bridge 無關。切換時若無 API Key 先提示設定。
+    state.userProviderChoice = 'gemini';
+    if (window.hasGeminiApiKey && !window.hasGeminiApiKey()) {
+      window.promptForGeminiApiKey && window.promptForGeminiApiKey(
+        '請先設定 Gemini API Key（送出訊息時會使用此 key 直連 Google，與 MOD-01 共用）：',
+      );
+    }
+    updateProviderButtons();
     return;
   }
-  if (provider === 'gemma' && state.bridgeStatus?.ollama !== 'up') {
-    alert('本地 Gemma (Ollama) 目前不可用（bridge 回報 down）');
+  // gemma 需要 bridge 的 ollama
+  if (state.bridgeStatus?.ollama !== 'up') {
+    alert('本地 Gemma (Ollama) 目前不可用（需在小黑 localhost 環境執行 bridge 與 Ollama）');
     return;
   }
-  state.userProviderChoice = provider;
+  state.userProviderChoice = 'gemma';
   updateProviderButtons();
 }
 window.onProviderChoiceClick = onProviderChoiceClick;
+
+function onApiKeyClick() {
+  if (!window.promptForGeminiApiKey) return;
+  window.promptForGeminiApiKey('請輸入 Gemini API Key（與 MOD-01 共用 localStorage.gemini_api_key）：');
+  updateProviderButtons();
+}
+window.onApiKeyClick = onApiKeyClick;
 
 function updateProviderButtons() {
   const btns = document.querySelectorAll('.ai-provider-switch .provider-btn');
   if (!btns.length) return;
   const ollamaUp = state.bridgeStatus?.ollama === 'up';
-  const geminiUp = state.bridgeStatus?.gemini === 'up';
+  // 遠端 Gemini API 直連：不受 bridge 影響，永遠可選（缺 key 時送出前會彈窗要求）
+  const geminiAvailable = true;
+
   btns.forEach((btn) => {
     const p = btn.dataset.provider;
-    const upstreamUp = p === 'gemini' ? geminiUp : p === 'gemma' ? ollamaUp : false;
-    btn.disabled = !upstreamUp;
-    btn.classList.toggle('active', state.userProviderChoice === p && upstreamUp);
+    const available = p === 'gemini' ? geminiAvailable : p === 'gemma' ? ollamaUp : false;
+    btn.disabled = !available;
+    btn.classList.toggle('active', state.userProviderChoice === p && available);
   });
-  // 若使用者當前選擇失效（例如選了 gemma 但 Ollama 剛掛），自動切到可用者
-  if (state.userProviderChoice === 'gemini' && !geminiUp && ollamaUp) {
-    state.userProviderChoice = 'gemma';
-    updateProviderButtons();
-  } else if (state.userProviderChoice === 'gemma' && !ollamaUp && geminiUp) {
+
+  // 使用者目前選擇若變得不可用，自動切到可用者
+  if (state.userProviderChoice === 'gemma' && !ollamaUp) {
     state.userProviderChoice = 'gemini';
-    updateProviderButtons();
+    btns.forEach((b) => b.classList.toggle('active', state.userProviderChoice === b.dataset.provider && !b.disabled));
+  }
+
+  // 依最終選擇決定 currentAiModel + sendBtn + 提示
+  if (state.userProviderChoice === 'gemini') {
+    state.currentAiModel = 'gemini-2.5-flash';
+  } else if (state.userProviderChoice === 'gemma' && ollamaUp) {
+    state.currentAiModel = 'gemma-4-e2b';
+  } else {
+    state.currentAiModel = null;
+  }
+
+  const sendBtn = document.getElementById('chatSendBtn');
+  const hint = document.getElementById('chatInputHint');
+  if (sendBtn) sendBtn.disabled = !state.currentAiModel;
+  if (hint) {
+    if (state.userProviderChoice === 'gemini') {
+      hint.textContent = `遠端 Gemini API（${state.currentAiModel} · 前端直連 Google，使用你的 API Key）`;
+    } else if (state.userProviderChoice === 'gemma' && ollamaUp) {
+      hint.textContent = `本地 Gemma (Ollama) · ${state.currentAiModel} · 透過 bridge`;
+    } else {
+      hint.textContent = 'AI 不可用（切到遠端 Gemini API 或在小黑啟動 bridge+Ollama）';
+    }
+  }
+
+  // API Key 按鈕視覺狀態
+  const apiKeyBtn = document.getElementById('providerApiKeyBtn');
+  if (apiKeyBtn && window.hasGeminiApiKey) {
+    const hasKey = window.hasGeminiApiKey();
+    apiKeyBtn.classList.toggle('set', hasKey);
+    apiKeyBtn.textContent = hasKey ? 'API Key ✓' : 'API Key';
+    apiKeyBtn.title = hasKey
+      ? 'Gemini API Key 已設定（點擊修改）'
+      : '尚未設定 Gemini API Key（點擊設定）';
   }
 }
 
@@ -305,7 +337,7 @@ async function onSendMessage() {
     return;
   }
   if (!state.currentAiModel) {
-    alert('AI 目前不可用，請先啟動 gemma-bridge');
+    alert('AI 目前不可用：請切換到「遠端 Gemini API」（直連，需 API Key），或在小黑環境啟動 bridge + Ollama 以使用本地 Gemma');
     return;
   }
 
@@ -318,14 +350,21 @@ async function onSendMessage() {
 
   try {
     const historyBlock = await fetchRecentHistoryBlock(state.selectedModule.code);
-    const plan = await planWithBridge({
-      moduleConfig: state.selectedModule,
-      userPrompt: text,
-      attachedText: '',
-      contextTags: [],
-      historyBlock,
-      aiProvider: state.userProviderChoice,
-    });
+    const plan = state.userProviderChoice === 'gemini'
+      ? await planWithDirectGemini({
+          moduleConfig: state.selectedModule,
+          userPrompt: text,
+          attachedText: '',
+          historyBlock,
+        })
+      : await planWithBridge({
+          moduleConfig: state.selectedModule,
+          userPrompt: text,
+          attachedText: '',
+          contextTags: [],
+          historyBlock,
+          aiProvider: 'gemma',
+        });
     thinking.remove();
 
     if (!plan.items || plan.items.length === 0) {

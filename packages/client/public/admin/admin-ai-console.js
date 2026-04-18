@@ -100,9 +100,11 @@ function renderLayout() {
             <label class="chat-inline-control" title="遠端 Gemini API 使用的模型（本地 Gemma 模式忽略此欄）">
               模型
               <select id="chatGeminiModel" onchange="updateProviderButtons()">
-                <option value="gemini-2.5-pro">2.5 Pro</option>
-                <option value="gemini-2.5-flash">2.5 Flash</option>
-                <option value="gemini-3.0-pro">3.0 Pro（未驗證）</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
+                <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+                <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash-Lite Preview</option>
               </select>
             </label>
             <label class="chat-inline-control" title="一次產出幾張卡片（1-10）">

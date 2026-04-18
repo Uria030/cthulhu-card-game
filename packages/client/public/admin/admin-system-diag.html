@@ -192,8 +192,18 @@
         <div class="diag-card-status" data-status>—</div>
         <div class="diag-card-detail" data-detail>尚未測試</div>
       </div>
-      <div class="diag-card" id="cardModel30Pro">
-        <div class="diag-card-title">模型：gemini-3.0-pro</div>
+      <div class="diag-card" id="cardModel31ProPreview">
+        <div class="diag-card-title">模型：gemini-3.1-pro-preview</div>
+        <div class="diag-card-status" data-status>—</div>
+        <div class="diag-card-detail" data-detail>尚未測試</div>
+      </div>
+      <div class="diag-card" id="cardModel3FlashPreview">
+        <div class="diag-card-title">模型：gemini-3-flash-preview</div>
+        <div class="diag-card-status" data-status>—</div>
+        <div class="diag-card-detail" data-detail>尚未測試</div>
+      </div>
+      <div class="diag-card" id="cardModel31FlashLitePreview">
+        <div class="diag-card-title">模型：gemini-3.1-flash-lite-preview</div>
         <div class="diag-card-status" data-status>—</div>
         <div class="diag-card-detail" data-detail>尚未測試</div>
       </div>
@@ -374,9 +384,11 @@
       }
 
       const models = [
-        { name: 'gemini-2.5-pro',   card: 'cardModel25Pro' },
-        { name: 'gemini-2.5-flash', card: 'cardModel25Flash' },
-        { name: 'gemini-3.0-pro',   card: 'cardModel30Pro' },
+        { name: 'gemini-2.5-pro',                 card: 'cardModel25Pro' },
+        { name: 'gemini-2.5-flash',               card: 'cardModel25Flash' },
+        { name: 'gemini-3.1-pro-preview',         card: 'cardModel31ProPreview' },
+        { name: 'gemini-3-flash-preview',         card: 'cardModel3FlashPreview' },
+        { name: 'gemini-3.1-flash-lite-preview',  card: 'cardModel31FlashLitePreview' },
       ];
       const probePrompt = '回傳合法 JSON：{"ok":true,"echo":"diag"}';
 

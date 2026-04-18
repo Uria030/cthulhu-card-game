@@ -30,8 +30,8 @@ const MOD_BUTTONS = [
   { code: 'MOD-07', name_zh: '關卡編輯器',  api: null,                          available: false, reason: '模組尚未建置' },
   { code: 'MOD-08', name_zh: '地點設計器',  api: '/api/admin/locations',        available: false, reason: '待擴充 bridge 支援（第二期）' },
   { code: 'MOD-09', name_zh: '鍛造製作',    api: '/api/affixes',                available: false, reason: '待擴充 bridge 支援（第二期）' },
-  { code: 'MOD-10', name_zh: '城主設計器',  api: '/api/admin/keeper/mythos-cards', available: false, reason: '待擴充 bridge 支援（第二期）' },
-  { code: 'MOD-11', name_zh: '調查員設計器', api: '/api/admin/investigators',   available: false, reason: '待擴充 bridge 支援（第二期）' },
+  { code: 'MOD-10', name_zh: '城主設計器',  bridgeTaskType: 'mythos_card_design', api: '/api/admin/keeper/mythos-cards', available: true },
+  { code: 'MOD-11', name_zh: '調查員設計器', bridgeTaskType: 'investigator_design', api: '/api/admin/investigators',   available: true },
 ];
 
 const TASK_FILTERS = [

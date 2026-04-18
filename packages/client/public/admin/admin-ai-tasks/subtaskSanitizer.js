@@ -45,6 +45,26 @@ const API_FIELD_WHITELIST = {
     'design_status', 'sort_order',
   ],
 
+  // POST /api/admin/keeper/mythos-cards — mythos_cards columns
+  'MOD-10': [
+    'code', 'name_zh', 'name_en',
+    'description_zh', 'description_en',
+    'action_cost', 'activation_timing', 'card_category', 'intensity_tag',
+    'response_trigger',
+    'flavor_text_zh', 'flavor_text_en',
+    'art_url', 'design_notes', 'design_status',
+  ],
+
+  // POST /api/admin/investigators — investigator_templates 主體欄位
+  //   signature_cards / weakness / starting_deck 為子資源，不在此
+  //   attr_* 不由使用者填，伺服器依 mbti_code 自動推算
+  'MOD-11': [
+    'code', 'faction_code', 'mbti_code', 'career_index', 'dominant_letter',
+    'name_zh', 'name_en', 'title_zh', 'title_en',
+    'backstory', 'ability_text_zh', 'ability_text_en',
+    'era_tags', 'portrait_url',
+  ],
+
   // POST /api/admin/monsters/variants — monster_variants columns
   'MOD-03': [
     'species_id', 'code', 'name_zh', 'name_en', 'tier',

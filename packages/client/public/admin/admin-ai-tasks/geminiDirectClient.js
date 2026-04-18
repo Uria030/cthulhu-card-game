@@ -830,3 +830,219 @@ async function generateEnemyViaDirectGemini(userDescription, { model = 'gemini-2
 window.buildEnemyDesignPrompt = buildEnemyDesignPrompt;
 window.validateAndFixEnemyData = validateAndFixEnemyData;
 window.generateEnemyViaDirectGemini = generateEnemyViaDirectGemini;
+
+// ============================================================
+// MOD-10 城主設計器 — 神話卡（Mythos Card）
+// ============================================================
+
+function buildMythosCardDesignPrompt(userDescription, batchCount = 1) {
+  const isBatch = batchCount && batchCount > 1;
+  const plural = isBatch ? `${batchCount} 張` : `一張`;
+  return `你是克蘇魯神話合作卡牌遊戲（1920s 偵探黑色電影 × 宇宙恐怖）的城主（Keeper）設計師。
+請設計${plural}**神話卡**（Mythos Card）——城主對抗調查員的主力卡片，在敵人階段由城主打出。
+
+## 絕對規則
+1. 輸出 ${isBatch ? 'JSON Array（長度 ' + batchCount + '）' : '單一 JSON object'}，不要 markdown 圍欄
+2. 文字欄位使用**台灣繁體中文**
+3. code 小寫+底線+數字（^[a-z0-9_]+$），全域唯一
+4. 克蘇魯譯名使用台灣社群慣用譯法
+
+## 卡片類別 card_category（選一）
+summon（召喚類，新怪物降臨）/ environment（環境類，地形、氣候、天氣異常）/
+status（狀態類，調查員受身心影響）/ global（全場類，影響整場） /
+agenda（議程類，推進毀滅倒數） / chaos_bag（混沌袋類，污染混沌袋）/
+encounter（遭遇牌堆類，影響遭遇堆）/ cancel（響應取消類，抵消調查員動作）/
+narrative（純敘事，氣氛渲染）/ general（混合/其他）
+
+## 啟動時機 activation_timing（選一）
+keeper_phase（敵人階段使用，最常見）/
+investigator_phase_reaction（調查員階段響應，需指定觸發條件 response_trigger）/
+both（兩者皆可）
+
+## 強度 intensity_tag（選一，依影響範圍）
+small（1-2 行動成本，小事件）/ medium（3-4 成本，中規模打擊）/
+large（5-6 成本，大型威脅）/ epic（7+ 成本，史詩級災難）
+
+## action_cost（城主行動成本）
+小事件 1-2、中事件 3-4、大事件 5-6、史詩 7-9。action_cost 應與 intensity_tag 一致。
+
+## response_trigger
+僅當 card_category='cancel' 或 activation_timing='investigator_phase_reaction' 時必填。
+描述觸發條件（例：'調查員執行調查行動時'、'調查員抽牌階段'）。
+
+## 使用者需求
+${userDescription}
+
+## 輸出格式
+{
+  "code": "deep_one_ambush_01",
+  "name_zh": "深潛者伏擊",
+  "name_en": "Deep One Ambush",
+  "description_zh": "從最近的水域召喚一隻深潛者，立即攻擊該地點的所有調查員。",
+  "description_en": "Summon a Deep One from the nearest water source...",
+  "action_cost": 3,
+  "activation_timing": "keeper_phase",
+  "card_category": "summon",
+  "intensity_tag": "medium",
+  "response_trigger": null,
+  "flavor_text_zh": "潮濕的拍打聲從下水道傳來——那不是水聲。",
+  "flavor_text_en": "Wet slapping sounds echo from the sewer...",
+  "design_notes": "summon × medium",
+  "design_status": "draft"
+}
+
+## 克蘇魯氛圍原則
+- description 具體可執行（機制 + 數值），flavor_text 詩意不祥
+- 避免正面光明語調；偏絕望、代價、不可逃脫感
+- 小事件仍要有存在感（煙霧、幻聽、陰影移動），不該是「什麼都沒發生」
+
+## 重要提醒
+1. activation_timing='investigator_phase_reaction' 或 card_category='cancel' 時，response_trigger 必填
+2. action_cost 必須落在 intensity_tag 建議區間
+3. 不同卡類應有明顯區別：summon 帶出怪物、environment 改變地形、status 施加負面狀態、agenda 推進毀滅
+4. design_status 固定為 'draft'`;
+}
+
+const VALID_MYTHOS_CATEGORIES = new Set(['summon','environment','status','global','agenda','chaos_bag','encounter','cancel','narrative','general']);
+const VALID_MYTHOS_TIMINGS = new Set(['keeper_phase','investigator_phase_reaction','both']);
+const VALID_MYTHOS_INTENSITIES = new Set(['small','medium','large','epic']);
+
+function validateAndFixMythosCardData(d) {
+  if (!d || typeof d !== 'object') return d;
+  if (!VALID_MYTHOS_CATEGORIES.has(d.card_category)) d.card_category = 'general';
+  if (!VALID_MYTHOS_TIMINGS.has(d.activation_timing)) d.activation_timing = 'keeper_phase';
+  if (!VALID_MYTHOS_INTENSITIES.has(d.intensity_tag)) d.intensity_tag = 'small';
+  d.action_cost = Math.max(0, Math.min(10, parseInt(d.action_cost, 10) || 1));
+  if ((d.card_category === 'cancel' || d.activation_timing === 'investigator_phase_reaction') && !d.response_trigger) {
+    d.response_trigger = '（未指定觸發條件——請使用者手動補充）';
+  }
+  if (!d.code || !/^[a-z0-9_]+$/.test(String(d.code))) {
+    const base = (d.name_en || d.name_zh || 'mythos').toString().toLowerCase();
+    d.code = base.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || `mythos_${Date.now()}`;
+  }
+  d.design_status = d.design_status || 'draft';
+  return d;
+}
+
+async function generateMythosCardViaDirectGemini(userDescription, { model = 'gemini-2.5-pro', batchCount = 1, apiKey } = {}) {
+  if (!userDescription || typeof userDescription !== 'string') throw new Error('userDescription 為空');
+  const prompt = buildMythosCardDesignPrompt(userDescription, batchCount);
+  const { text, modelName } = await callGeminiDirect({ prompt, model, apiKey });
+  const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
+  let data;
+  try { data = JSON.parse(cleanJson); }
+  catch (e) { throw new Error('Gemini 回傳內容不是合法 JSON：' + e.message); }
+  const items = Array.isArray(data) ? data.map(validateAndFixMythosCardData) : [validateAndFixMythosCardData(data)];
+  return { items, modelUsed: modelName };
+}
+
+window.buildMythosCardDesignPrompt = buildMythosCardDesignPrompt;
+window.validateAndFixMythosCardData = validateAndFixMythosCardData;
+window.generateMythosCardViaDirectGemini = generateMythosCardViaDirectGemini;
+
+// ============================================================
+// MOD-11 調查員設計器 — 調查員模板（Investigator Template）
+// ============================================================
+
+function buildInvestigatorDesignPrompt(userDescription, batchCount = 1) {
+  const isBatch = batchCount && batchCount > 1;
+  const plural = isBatch ? `${batchCount} 位` : `一位`;
+  return `你是克蘇魯神話合作卡牌遊戲（1920s 偵探黑色電影 × 宇宙恐怖）的角色設計師。
+請設計${plural}**調查員（玩家角色）**——1920-30 年代的凡人，即將踏入宇宙恐怖。
+
+## 絕對規則
+1. 輸出 ${isBatch ? 'JSON Array（長度 ' + batchCount + '）' : '單一 JSON object'}，不要 markdown 圍欄
+2. 文字欄位使用**台灣繁體中文**
+3. code 小寫+底線（^[a-z0-9_]+$），全域唯一
+4. 名字要有 1920 年代美國/歐洲氛圍（避免現代或亞洲名，除非使用者指定）
+
+## 屬性系統（簡化）
+- 屬性由 MBTI 自動推導，**不要手動填 attr_\***
+- 必填 mbti_code（4 字大寫，如 INTJ、ESFP、ENTJ...）
+- 系統會根據 MBTI 主次屬性給 1-5 分配
+
+## 陣營對應（由 MBTI 推導，但可強制指定）
+faction_code 9 個極（E / I / S / N / T / F / J / P / neutral）。
+若使用者指定某陣營，就用那個；否則由 MBTI 首字母推導（E→號令極 / I→深淵極 / ...）。
+
+## 職業指標 career_index
+整數（seed 庫有 16 種 MBTI × 多個職業）。若 Gemini 不確定就用 0。
+
+## 主導字母 dominant_letter
+MBTI 4 字中最強的一個（E/I/S/N/T/F/J/P）。可從 mbti_code 推（例如 INTJ 主導 N 或 T）。
+
+## 時代標籤 era_tags（陣列）
+例：['detective', 'occultist', 'professor', 'journalist', 'soldier', 'psychic']。
+
+## 使用者需求
+${userDescription}
+
+## 輸出格式
+{
+  "code": "harvey_walters_01",
+  "mbti_code": "INTJ",
+  "faction_code": "I",
+  "career_index": 0,
+  "dominant_letter": "N",
+  "name_zh": "哈維·沃特斯",
+  "name_en": "Harvey Walters",
+  "title_zh": "密大教授",
+  "title_en": "Miskatonic Professor",
+  "backstory": "深夜的密大圖書館，他在書架深處發現一本從未列冊的古籍——那是他人生最後的平靜夜晚。",
+  "ability_text_zh": "每當你進行智力檢定，可棄一張手牌獲得 +1。若此檢定成功，抽 1 張牌。",
+  "ability_text_en": "Whenever you make an intellect test, you may discard a card to gain +1...",
+  "era_tags": ["professor", "occultist"]
+}
+
+## 克蘇魯氛圍原則
+- backstory 不要寫成完整傳記，**寫出一個決定性的瞬間**（發現、失去、被侵入）
+- ability_text 是遊戲機制，但描述要扣緊角色特質
+- 避免太陽光向上的語調；調查員都在被什麼吞噬
+
+## 重要提醒
+1. mbti_code 必須是合法 4 字組合（E/I + S/N + T/F + J/P）
+2. 不要自己填 attr_* 欄位——伺服器會根據 MBTI 自動推
+3. code 和 name_en 若有設應保持風格一致（harvey_walters 對 Harvey Walters）
+4. 單次產出避免重複 code`;
+}
+
+const MBTI_PATTERN = /^[EI][SN][TF][JP]$/;
+const VALID_TALENT_FACTION_CODES_INV = new Set(['E','I','S','N','T','F','J','P','neutral']);
+
+function validateAndFixInvestigatorData(d) {
+  if (!d || typeof d !== 'object') return d;
+  if (typeof d.mbti_code === 'string') d.mbti_code = d.mbti_code.toUpperCase();
+  if (!MBTI_PATTERN.test(d.mbti_code || '')) {
+    console.warn('investigator: invalid mbti coerced to INTJ:', d.mbti_code);
+    d.mbti_code = 'INTJ';
+  }
+  if (!VALID_TALENT_FACTION_CODES_INV.has(d.faction_code)) {
+    d.faction_code = d.mbti_code[0]; // fallback 由 MBTI 首字母推
+  }
+  d.career_index = parseInt(d.career_index, 10) || 0;
+  if (typeof d.dominant_letter !== 'string' || !/^[EISNTFJP]$/.test(d.dominant_letter)) {
+    d.dominant_letter = d.mbti_code[3]; // fallback 取 MBTI 第四字（通常主導 J/P 差異）
+  }
+  if (!Array.isArray(d.era_tags)) d.era_tags = [];
+  if (!d.code || !/^[a-z0-9_]+$/.test(String(d.code))) {
+    const base = (d.name_en || d.name_zh || 'investigator').toString().toLowerCase();
+    d.code = base.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || `investigator_${Date.now()}`;
+  }
+  return d;
+}
+
+async function generateInvestigatorViaDirectGemini(userDescription, { model = 'gemini-2.5-pro', batchCount = 1, apiKey } = {}) {
+  if (!userDescription || typeof userDescription !== 'string') throw new Error('userDescription 為空');
+  const prompt = buildInvestigatorDesignPrompt(userDescription, batchCount);
+  const { text, modelName } = await callGeminiDirect({ prompt, model, apiKey });
+  const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
+  let data;
+  try { data = JSON.parse(cleanJson); }
+  catch (e) { throw new Error('Gemini 回傳內容不是合法 JSON：' + e.message); }
+  const items = Array.isArray(data) ? data.map(validateAndFixInvestigatorData) : [validateAndFixInvestigatorData(data)];
+  return { items, modelUsed: modelName };
+}
+
+window.buildInvestigatorDesignPrompt = buildInvestigatorDesignPrompt;
+window.validateAndFixInvestigatorData = validateAndFixInvestigatorData;
+window.generateInvestigatorViaDirectGemini = generateInvestigatorViaDirectGemini;

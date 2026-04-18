@@ -148,6 +148,29 @@ function mapTalentNode(item) {
 // ────────────────────────────────────────────
 const TIER_NAME_TO_INT = { minion: 1, threat: 2, elite: 3, boss: 4, titan: 5 };
 
+// ────────────────────────────────────────────
+// MOD-10: mythos_card — POST /api/admin/keeper/mythos-cards
+// 主實體，不含 effects（使用者在 MOD-10 頁面自行加效果）
+// ────────────────────────────────────────────
+function mapMythosCard(item) {
+  const b = { ...item };
+  // 若 response_trigger 在非 cancel/reaction 情境下有值，server 仍會接受（不強制清空）
+  return {
+    ...b,
+    design_status: b.design_status || 'draft',
+  };
+}
+
+// ────────────────────────────────────────────
+// MOD-11: investigator_template — POST /api/admin/investigators
+// 主實體，不含 signature_cards / weakness / starting_deck（使用者在 MOD-11 自行補）
+// ────────────────────────────────────────────
+function mapInvestigator(item) {
+  const b = { ...item };
+  // era_tags 伺服器期望是 text[] (PostgreSQL array)，傳 JSON 陣列即可
+  return { ...b };
+}
+
 function mapEnemyVariant(item, context) {
   const b = { ...item };
   const speciesByCode = (context && context.speciesByCode) || {};
@@ -184,6 +207,8 @@ function mapItem(moduleCode, item, context) {
     case 'MOD-02': return mapTalentNode(item);
     case 'MOD-03': return mapEnemyVariant(item, context);
     case 'MOD-04': return mapSpirit(item);
+    case 'MOD-10': return mapMythosCard(item);
+    case 'MOD-11': return mapInvestigator(item);
     default:
       throw new Error(`mapItem: no mapper for ${moduleCode}`);
   }

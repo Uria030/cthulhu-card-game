@@ -77,8 +77,13 @@ window.addEventListener('DOMContentLoaded', async () => {
   renderModuleButtons();
   updateModuleInfoBar();
   // 同步先跑一次 updateProviderButtons，確保 state.currentAiModel 立即有值
-  // 否則使用者在 redetectBridge 的 5 秒非同步空窗期按送出會被「AI 不可用」卡住
-  updateProviderButtons();
+  try {
+    updateProviderButtons();
+  } catch (err) {
+    console.error('[DOMContentLoaded] updateProviderButtons throw:', err);
+    const ind = document.getElementById('navReadyIndicator');
+    if (ind) { ind.classList.add('not-ready'); ind.textContent = 'init error'; }
+  }
   redetectBridge();
   renderTaskPanel();
   setInterval(renderTaskPanel, 3000);

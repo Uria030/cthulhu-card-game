@@ -54,5 +54,34 @@
   <script src="admin-ai-tasks/itemMapper.js"></script>
   <script src="admin-ai-tasks/taskExecutor.js"></script>
   <script src="admin-ai-console.js"></script>
+  <script>
+    // Early initial paint：確保即使後續 updateProviderButtons 執行失敗，
+    // API Key 按鈕與就緒指示器仍會根據 localStorage 顯示正確狀態
+    (function earlyPaint() {
+      try {
+        const hasKey = !!(window.hasGeminiApiKey && window.hasGeminiApiKey());
+        const btn = document.getElementById('providerApiKeyBtn');
+        if (btn) {
+          btn.classList.toggle('set', hasKey);
+          btn.textContent = hasKey ? 'API Key 已設定' : '設定 API Key';
+        }
+        const ind = document.getElementById('navReadyIndicator');
+        if (ind) {
+          ind.classList.remove('ready', 'not-ready');
+          if (hasKey) {
+            ind.classList.add('ready');
+            ind.textContent = '✓ gemini-2.5-pro 就緒';
+          } else {
+            ind.classList.add('not-ready');
+            ind.textContent = '未設定 API Key';
+          }
+        }
+      } catch (e) {
+        console.error('[earlyPaint] failed:', e);
+        const ind = document.getElementById('navReadyIndicator');
+        if (ind) { ind.classList.add('not-ready'); ind.textContent = 'init error: ' + (e.message || e); }
+      }
+    })();
+  </script>
 </body>
 </html>

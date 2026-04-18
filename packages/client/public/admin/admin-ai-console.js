@@ -102,10 +102,19 @@ window.addEventListener('DOMContentLoaded', async () => {
 function renderLayout() {
   document.getElementById('rootContainer').innerHTML = `
     <div class="console-layout">
-      <!-- 左欄：聊天 -->
+      <!-- 左欄：聊天（純對話視窗） -->
       <div class="console-col chat-col">
         <h2>聊天</h2>
         <div class="chat-messages" id="chatMessages"></div>
+      </div>
+
+      <!-- 中央：模組 + 輸入欄（輸入欄從左欄搬來，讓左欄保持完整對話） -->
+      <div class="console-col module-col">
+        <h2>指定執行模組（第一期啟用 MOD-01/02/03）</h2>
+        <div class="module-column-body">
+          <div class="module-buttons-grid" id="moduleButtonsGrid"></div>
+          <div class="module-info-bar" id="moduleInfoBar"></div>
+        </div>
         <div class="chat-input-zone">
           <textarea id="chatInput" placeholder="請先選擇模組，再輸入指令..."
             onkeydown="handleChatKeydown(event)"></textarea>
@@ -114,15 +123,6 @@ function renderLayout() {
             <span class="spacer"></span>
             <button id="chatSendBtn" onclick="onSendMessage()">送出</button>
           </div>
-        </div>
-      </div>
-
-      <!-- 中央：模組 -->
-      <div class="console-col module-col">
-        <h2>指定執行模組（第一期啟用 MOD-01/02/03）</h2>
-        <div class="module-column-body">
-          <div class="module-buttons-grid" id="moduleButtonsGrid"></div>
-          <div class="module-info-bar" id="moduleInfoBar"></div>
         </div>
       </div>
 

@@ -222,7 +222,8 @@
   display: grid;
   grid-template-columns: 360px 1fr 380px;
   gap: 14px;
-  height: calc(100vh - 52px);
+  /* 使用者需求：三欄再縮 8% 高度 */
+  height: calc((100vh - 52px) * 0.92);
   padding: 14px;
   box-sizing: border-box;
   overflow: hidden;

@@ -133,6 +133,24 @@
     .panel-right-drawer .preview-card { width: 100%; transform: scale(0.7); transform-origin: top center; margin-bottom: -30%; }
     .panel-right-drawer .balance-panel { width: 100%; }
     @media (max-width: 768px) { .main-layout { flex-direction: column; } .panel-left { width: 260px; } .panel-right-drawer { width: 300px; } }
+
+    /* 數字 input 的 +/− stepper（iPad Safari 沒有原生箭頭） */
+    .num-stepper { display: flex; gap: 0; }
+    .num-stepper input[type="number"] {
+      flex: 1; min-width: 0; text-align: center; border-radius: 0;
+      border-left: 0; border-right: 0;
+    }
+    .num-stepper-btn {
+      width: 32px; padding: 0;
+      background: var(--bg-secondary); color: var(--text-primary);
+      border: 1px solid var(--border); cursor: pointer;
+      font-size: 1.05rem; line-height: 1; font-family: inherit;
+      touch-action: manipulation; user-select: none;
+    }
+    .num-stepper-btn:first-child { border-radius: 4px 0 0 4px; }
+    .num-stepper-btn:last-child { border-radius: 0 4px 4px 0; }
+    .num-stepper-btn:hover { background: var(--bg-card); color: var(--gold-dim); }
+    .num-stepper-btn:active { background: var(--gold-dim); color: var(--bg-primary); }
   </style>
 </head>
 <body>
@@ -384,9 +402,23 @@
                       <option value="cancel_horror">取消恐懼 (0.5V/點)</option>
                     </select>
                   </div>
-                  <div class="form-group" id="consumeAmountGroup"><label>數量</label><input type="number" id="f_consume_amount" value="2" min="1" max="10" onchange="updateConsumeValue()"></div>
+                  <div class="form-group" id="consumeAmountGroup">
+                    <label>數量</label>
+                    <div class="num-stepper">
+                      <button type="button" class="num-stepper-btn" onclick="stepNumber('f_consume_amount', -1, updateConsumeValue)">−</button>
+                      <input type="number" id="f_consume_amount" value="2" min="1" max="10" onchange="updateConsumeValue()">
+                      <button type="button" class="num-stepper-btn" onclick="stepNumber('f_consume_amount', 1, updateConsumeValue)">+</button>
+                    </div>
+                  </div>
                   <div class="form-group hidden" id="consumeStatusGroup"><label>狀態</label><select id="f_consume_status" onchange="updateConsumeValue()"></select></div>
-                  <div class="form-group hidden" id="consumeLayersGroup"><label>層數</label><input type="number" id="f_consume_layers" value="1" min="1" max="5" onchange="updateConsumeValue()"></div>
+                  <div class="form-group hidden" id="consumeLayersGroup">
+                    <label>層數</label>
+                    <div class="num-stepper">
+                      <button type="button" class="num-stepper-btn" onclick="stepNumber('f_consume_layers', -1, updateConsumeValue)">−</button>
+                      <input type="number" id="f_consume_layers" value="1" min="1" max="5" onchange="updateConsumeValue()">
+                      <button type="button" class="num-stepper-btn" onclick="stepNumber('f_consume_layers', 1, updateConsumeValue)">+</button>
+                    </div>
+                  </div>
                 </div>
                 <!-- Consume validation panel -->
                 <div style="margin-top:0.35rem;padding:0.4rem;background:var(--bg-primary);border-radius:4px;border:1px solid var(--border);font-size:0.75rem;" id="consumeValidation"></div>
@@ -505,6 +537,19 @@
   <script src="admin-shared.js"></script>
   <script>
   const LS_API_KEY = 'gemini_api_key';
+
+  // 觸控友善的數字增減 helper（iPad Safari 沒有 input[type=number] 原生箭頭）
+  function stepNumber(id, delta, callback) {
+    const inp = document.getElementById(id);
+    if (!inp) return;
+    const min = Number.isFinite(parseFloat(inp.min)) ? parseFloat(inp.min) : -Infinity;
+    const max = Number.isFinite(parseFloat(inp.max)) ? parseFloat(inp.max) : Infinity;
+    const step = parseFloat(inp.step) || 1;
+    const cur = parseFloat(inp.value) || 0;
+    inp.value = Math.max(min, Math.min(max, cur + step * delta));
+    if (typeof callback === 'function') callback();
+  }
+  window.stepNumber = stepNumber;
   let cards = [];
   let editingId = null;
 
@@ -2578,7 +2623,8 @@ ${userDescription}
 11. 法術卡 slot 固定為 arcane，combat_style 固定為 arcane
 12. 盟友卡需填 ally_hp 和 ally_san，HP+SAN 預算不超過 5（低費）或 7（高費）
 13. 技能卡費用固定為 0，skill_value 為 +1~+3
-14. subtypes 要正確標記（weapon/weapon_melee/weapon_ranged/weapon_arcane/item/arcane_item/consumable/ammo/arrow/spell/light_source）`;
+14. subtypes 要正確標記（weapon/weapon_melee/weapon_ranged/weapon_arcane/item/arcane_item/consumable/ammo/arrow/spell/light_source）
+15. **等級 0 的卡片預設不能有消費能力**：level=0 時 consume_enabled 必須為 false、consume_effect 必須為 null。消費能力屬於進階設計元素，應由使用者升級卡片時（level ≥ 1）自行添加，AI 不可自動填入。`;
   }
 
   const VALID_EFFECT_CODES = new Set([

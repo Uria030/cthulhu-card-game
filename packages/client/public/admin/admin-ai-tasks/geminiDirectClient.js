@@ -329,7 +329,8 @@ ${userDescription}
 11. 法術卡 slot 固定為 arcane，combat_style 固定為 arcane
 12. 盟友卡需填 ally_hp 和 ally_san，HP+SAN 預算不超過 5（低費）或 7（高費）
 13. 技能卡費用固定為 0，skill_value 為 +1~+3
-14. subtypes 要正確標記（weapon/weapon_melee/weapon_ranged/weapon_arcane/item/arcane_item/consumable/ammo/arrow/spell/light_source）${isBatch ? `
+14. subtypes 要正確標記（weapon/weapon_melee/weapon_ranged/weapon_arcane/item/arcane_item/consumable/ammo/arrow/spell/light_source）
+15. **等級 0 的卡片預設不能有消費能力**：level=0 時 consume_enabled 必須為 false、consume_effect 必須為 null。消費能力屬於進階設計元素，應由使用者升級卡片時（level ≥ 1）自行添加，AI 不可自動填入。${isBatch ? `
 
 ## 十一、批次要求（本次為批次模式）
 使用者要一次設計 **${batchCount} 張**卡片。嚴格遵守：

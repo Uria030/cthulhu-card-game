@@ -48,6 +48,10 @@ const state = {
   currentAiModel: null,        // 'gemma-4-e2b' | 'gemini-2.5-pro'
   taskFilter: 'recent',
   pendingPlan: null,           // { taskType, items, bridgeResult }
+  // 使用者指定的 AI 提供者（送給 bridge 的 aiProvider 欄位）
+  //   'gemini' = 強制走遠端 Gemini API（跳過 Ollama 階段）【預設】
+  //   'gemma'  = 強制走本地 Gemma (Ollama)，失敗不 fallback
+  userProviderChoice: 'gemini',
 };
 
 // ────────────────────────────────────────────
@@ -160,6 +164,48 @@ async function redetectBridge() {
   }
   hint && (hint.textContent = state.currentAiModel ? `當前模型：${state.currentAiModel}` : 'AI 不可用');
   sendBtn && (sendBtn.disabled = !state.currentAiModel);
+
+  updateProviderButtons();
+}
+
+// ────────────────────────────────────────────
+// AI 提供者選擇按鈕（遠端 Gemini API / 本地 Gemma）
+// ────────────────────────────────────────────
+function onProviderChoiceClick(provider) {
+  if (provider !== 'gemini' && provider !== 'gemma') return;
+  // 若對應 upstream 不可用則不允許切換
+  if (provider === 'gemini' && state.bridgeStatus?.gemini !== 'up') {
+    alert('遠端 Gemini API 目前不可用（bridge 回報 down）');
+    return;
+  }
+  if (provider === 'gemma' && state.bridgeStatus?.ollama !== 'up') {
+    alert('本地 Gemma (Ollama) 目前不可用（bridge 回報 down）');
+    return;
+  }
+  state.userProviderChoice = provider;
+  updateProviderButtons();
+}
+window.onProviderChoiceClick = onProviderChoiceClick;
+
+function updateProviderButtons() {
+  const btns = document.querySelectorAll('.ai-provider-switch .provider-btn');
+  if (!btns.length) return;
+  const ollamaUp = state.bridgeStatus?.ollama === 'up';
+  const geminiUp = state.bridgeStatus?.gemini === 'up';
+  btns.forEach((btn) => {
+    const p = btn.dataset.provider;
+    const upstreamUp = p === 'gemini' ? geminiUp : p === 'gemma' ? ollamaUp : false;
+    btn.disabled = !upstreamUp;
+    btn.classList.toggle('active', state.userProviderChoice === p && upstreamUp);
+  });
+  // 若使用者當前選擇失效（例如選了 gemma 但 Ollama 剛掛），自動切到可用者
+  if (state.userProviderChoice === 'gemini' && !geminiUp && ollamaUp) {
+    state.userProviderChoice = 'gemma';
+    updateProviderButtons();
+  } else if (state.userProviderChoice === 'gemma' && !ollamaUp && geminiUp) {
+    state.userProviderChoice = 'gemini';
+    updateProviderButtons();
+  }
 }
 
 function setModeIndicator(mode, label) {
@@ -278,6 +324,7 @@ async function onSendMessage() {
       attachedText: '',
       contextTags: [],
       historyBlock,
+      aiProvider: state.userProviderChoice,
     });
     thinking.remove();
 

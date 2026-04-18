@@ -29,10 +29,11 @@ async function bridgeHealth(timeoutMs = 5000) {
   }
 }
 
-async function bridgeRunTask({ taskType, input, writeToDb = false, batchCount, contextTags }) {
+async function bridgeRunTask({ taskType, input, writeToDb = false, batchCount, contextTags, aiProvider }) {
   const body = { taskType, input, writeToDb };
   if (batchCount != null) body.batchCount = batchCount;
   if (contextTags && contextTags.length) body.contextTags = contextTags;
+  if (aiProvider === 'gemma' || aiProvider === 'gemini') body.aiProvider = aiProvider;
 
   const res = await adminFetch('/api/ai-console/bridge/run-task', {
     method: 'POST',

@@ -16,6 +16,12 @@
     <span class="nav-code">MOD-12</span>
     <span class="nav-spacer"></span>
 
+    <div class="ai-provider-switch" id="aiProviderSwitch" role="group" aria-label="AI 提供者選擇">
+      <span class="provider-switch-label">AI 來源：</span>
+      <button type="button" class="provider-btn active" data-provider="gemini" onclick="onProviderChoiceClick('gemini')" title="遠端 Gemini API（需 Gemini API Key）">遠端 Gemini API</button>
+      <button type="button" class="provider-btn" data-provider="gemma" onclick="onProviderChoiceClick('gemma')" title="本地 Gemma（Ollama）">本地 Gemma (Ollama)</button>
+    </div>
+
     <div class="ai-mode-indicator" id="aiModeIndicator">
       <span class="mode-dot mode-detecting" id="modeDot"></span>
       <span class="mode-label" id="modeLabel">偵測 bridge...</span>

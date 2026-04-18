@@ -66,6 +66,53 @@
 }
 .mode-refresh:hover { color: var(--gold); }
 
+/* ── AI 提供者切換按鈕 ── */
+.ai-provider-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  margin-right: 0.75rem;
+}
+.ai-provider-switch .provider-switch-label {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-right: 0.1rem;
+  letter-spacing: 0.05em;
+}
+.ai-provider-switch .provider-btn {
+  padding: 0.35rem 0.8rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.ai-provider-switch .provider-btn:hover:not(:disabled) {
+  color: var(--gold-dim);
+  border-color: var(--gold-dim);
+}
+.ai-provider-switch .provider-btn.active {
+  background: var(--gold-dim);
+  color: #12110f;
+  border-color: var(--gold);
+  font-weight: 600;
+}
+.ai-provider-switch .provider-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+@media (max-width: 720px) {
+  .ai-provider-switch .provider-switch-label { display: none; }
+  .ai-provider-switch .provider-btn { padding: 0.3rem 0.5rem; font-size: 0.7rem; }
+}
+
 /* ── 三欄版面 ───────────────────────── */
 .console-layout {
   display: grid;

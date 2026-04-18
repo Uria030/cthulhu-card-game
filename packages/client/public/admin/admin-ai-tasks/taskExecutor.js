@@ -9,7 +9,7 @@ const cancelledTaskIds = new Set();
 // ────────────────────────────────────────────
 // Phase 1: Planning — call bridge, return items[]
 // ────────────────────────────────────────────
-async function planWithBridge({ moduleConfig, userPrompt, attachedText, contextTags, historyBlock }) {
+async function planWithBridge({ moduleConfig, userPrompt, attachedText, contextTags, historyBlock, aiProvider }) {
   const taskType = deriveTaskType(moduleConfig, userPrompt);
 
   const composedInput = [
@@ -24,6 +24,7 @@ async function planWithBridge({ moduleConfig, userPrompt, attachedText, contextT
     input: composedInput,
     writeToDb: false,
     contextTags: contextTags || [],
+    aiProvider,
   });
 
   return {

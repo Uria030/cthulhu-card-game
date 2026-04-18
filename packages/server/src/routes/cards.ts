@@ -162,7 +162,18 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
       await client.query('ROLLBACK');
       request.log.error(error, 'POST card error');
       if (error.code === '23505') return reply.status(409).send({ success: false, error: 'Card code conflict, please retry' });
-      return reply.status(500).send({ success: false, error: 'Failed to create card' });
+      // 回傳 DB 錯誤細節給前端（本端點有 requireAuth，資訊僅管理員可見）
+      return reply.status(500).send({
+        success: false,
+        error: 'Failed to create card',
+        dbError: {
+          code: error.code || null,
+          message: error.message || String(error),
+          detail: error.detail || null,
+          column: error.column || null,
+          constraint: error.constraint || null,
+        },
+      });
     } finally {
       client.release();
     }

@@ -17,11 +17,20 @@ function mapCard(item) {
   const b = { ...item };
   const mapped = {
     ...b,
+    // card_type: 遠端 Gemini 直連 prompt 用 `type`；bridge cardSchema 用 `card_type`。
+    // 白名單僅保留 `card_type`，這裡必須改名否則送出 body 兩者皆無 → 500。
+    card_type: b.card_type || b.type,
     // style: bridge uses combat_style for skill/asset; cards.ts expects `style` for code prefix
     style: b.style || b.combat_style || 'general',
     // subtypes fallback
     subtypes: Array.isArray(b.subtypes) ? b.subtypes : [],
   };
+  delete mapped.type;
+
+  // 過濾被 validateAndFixCardData 標記為 _invalid 的 effect（effect_code 不合法）
+  if (Array.isArray(b.effects)) {
+    mapped.effects = b.effects.filter((e) => e && !e._invalid);
+  }
 
   // consume_effects (array) → server's consume_effect (single jsonb) + consume_enabled
   if (Array.isArray(b.consume_effects) && b.consume_effects.length > 0) {

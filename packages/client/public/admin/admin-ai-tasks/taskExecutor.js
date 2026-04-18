@@ -122,12 +122,17 @@ async function executeConfirmedPlan({ taskRecordId, moduleConfig, items, onProgr
       try { parsed = JSON.parse(resText); } catch { /* keep null */ }
 
       if (!res.ok) {
+        const dbErr = parsed && parsed.dbError;
+        const dbErrSummary = dbErr
+          ? ` | DB ${dbErr.code || ''}: ${dbErr.message || ''}${dbErr.detail ? ' (' + dbErr.detail + ')' : ''}${dbErr.column ? ' [col=' + dbErr.column + ']' : ''}`
+          : '';
         artifacts.push({
           type: 'error',
           subtask_index: i,
           name: items[i]?.name_zh || items[i]?.code || `#${i}`,
           status: res.status,
-          error: (parsed && parsed.error) || resText.slice(0, 300),
+          error: ((parsed && parsed.error) || resText.slice(0, 300)) + dbErrSummary,
+          sentBody: cleaned, // 留原始送出內容供除錯
         });
       } else {
         const data = (parsed && parsed.data) || {};

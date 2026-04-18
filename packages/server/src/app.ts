@@ -11,6 +11,7 @@ import { locationRoutes } from './routes/locations.js';
 import { keeperRoutes } from './routes/keeper.js';
 import { investigatorRoutes } from './routes/investigators.js';
 import { forgeCraftRoutes } from './routes/forge-craft.js';
+import { aiConsoleRoutes } from './routes/ai-console.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -39,6 +40,7 @@ export async function buildApp() {
   await app.register(keeperRoutes);
   await app.register(investigatorRoutes);
   await app.register(forgeCraftRoutes);
+  await app.register(aiConsoleRoutes);
 
   return app;
 }

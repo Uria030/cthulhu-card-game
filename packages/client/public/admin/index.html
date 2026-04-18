@@ -187,6 +187,7 @@
         <div class="card-en">Investigator Designer</div>
         <div class="card-desc">設計調查員模板、簽名卡、弱點與預組牌組</div>
       </a>
+      <!-- MOD-12 由 script 依角色動態注入 -->
     </div>
 
     <h2 class="section-title">數值模擬工具</h2>
@@ -234,6 +235,23 @@
   <script>
     const user = JSON.parse(localStorage.getItem('admin_user') || '{}');
     document.getElementById('nav-user').textContent = user.displayName || user.username || '';
+
+    // MOD-12 AI 主控台：僅 admin / owner 可見
+    if (user && (user.role === 'admin' || user.role === 'owner')) {
+      const designGrid = document.querySelector('.module-grid');
+      if (designGrid) {
+        const card = document.createElement('a');
+        card.href = 'admin-ai-console.html';
+        card.className = 'module-card';
+        card.innerHTML = `
+          <div class="card-code"><span>MOD-12</span><span class="badge-ready">READY</span></div>
+          <div class="card-title">AI 主控台</div>
+          <div class="card-en">AI Console</div>
+          <div class="card-desc">透過聊天介面指揮 AI 呼叫其他模組 API（僅 admin 可見）</div>
+        `;
+        designGrid.appendChild(card);
+      }
+    }
   </script>
 </body>
 </html>

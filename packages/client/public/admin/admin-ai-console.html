@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 主控台 — MOD-12</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin-shared.css">
+  <link rel="stylesheet" href="admin-ai-console.css">
+</head>
+<body>
+
+  <nav class="admin-nav console-nav">
+    <a href="index.html" class="nav-back">← 返回首頁</a>
+    <span class="nav-title">AI 主控台</span>
+    <span class="nav-code">MOD-12</span>
+    <span class="nav-spacer"></span>
+
+    <div class="ai-mode-indicator" id="aiModeIndicator">
+      <span class="mode-dot mode-detecting" id="modeDot"></span>
+      <span class="mode-label" id="modeLabel">偵測 bridge...</span>
+      <button class="mode-refresh" onclick="redetectBridge()" title="重新偵測">⟳</button>
+    </div>
+  </nav>
+
+  <div id="rootContainer"></div>
+
+  <script src="admin-shared.js"></script>
+  <script src="admin-ai-tasks/bridgeClient.js"></script>
+  <script src="admin-ai-tasks/subtaskSanitizer.js"></script>
+  <script src="admin-ai-tasks/itemMapper.js"></script>
+  <script src="admin-ai-tasks/taskExecutor.js"></script>
+  <script src="admin-ai-console.js"></script>
+</body>
+</html>

@@ -1,0 +1,418 @@
+/* ========================================
+   MOD-12 AI 主控台 — 專用樣式
+   承接 admin-shared.css 的暗黑哥德色系
+   ======================================== */
+
+:root {
+  --mod12-success: #6b9c5a;
+  --mod12-info:    #4a7c9b;
+  --mod12-danger:  #a64949;
+  --mod12-warn:    #b8860b;
+}
+
+/* ── 頂部列 ───────────────────────── */
+.console-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+}
+.console-nav .nav-back {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.console-nav .nav-back:hover { color: var(--gold); }
+.console-nav .nav-code {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+}
+.console-nav .nav-spacer { flex: 1; }
+
+.ai-mode-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+.mode-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.mode-dot.mode-both        { background: var(--mod12-success); box-shadow: 0 0 6px var(--mod12-success); }
+.mode-dot.mode-remote-only { background: var(--gold);          box-shadow: 0 0 6px var(--gold); }
+.mode-dot.mode-local-only  { background: var(--text-secondary); }
+.mode-dot.mode-unavailable { background: var(--mod12-danger);  box-shadow: 0 0 6px var(--mod12-danger); }
+.mode-dot.mode-detecting   { background: var(--text-tertiary); animation: mode-pulse 1s infinite; }
+
+@keyframes mode-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+
+.mode-refresh {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.mode-refresh:hover { color: var(--gold); }
+
+/* ── 三欄版面 ───────────────────────── */
+.console-layout {
+  display: grid;
+  grid-template-columns: 360px 1fr 380px;
+  gap: 14px;
+  height: calc(100vh - 52px);
+  padding: 14px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+@media (max-width: 1399px) {
+  .console-layout { grid-template-columns: 320px 1fr 340px; }
+}
+@media (max-width: 1023px) {
+  .console-layout { grid-template-columns: 1fr; overflow: auto; height: auto; }
+}
+
+.console-col {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.console-col h2 {
+  font-family: 'Cinzel', serif;
+  font-size: 0.875rem;
+  padding: 10px 14px;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--gold-dim);
+  letter-spacing: 0.1em;
+  flex-shrink: 0;
+}
+
+/* ── 聊天欄 ───────────────────────── */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.chat-msg {
+  border-left: 3px solid var(--border);
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.chat-msg.msg-system { color: var(--text-secondary); border-left-color: var(--text-tertiary); font-size: 0.75rem; }
+.chat-msg.msg-user   { border-left-color: var(--gold); }
+.chat-msg.msg-plan   { border-left-color: var(--mod12-info); }
+.chat-msg.msg-error  { border-left-color: var(--mod12-danger); color: #d79b9b; }
+.chat-msg.msg-ok     { border-left-color: var(--mod12-success); }
+.chat-msg.msg-thinking { color: var(--text-tertiary); font-style: italic; }
+
+.chat-msg .meta {
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.plan-summary { font-weight: 600; color: var(--gold); margin-bottom: 4px; }
+.plan-count   { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px; }
+.plan-item-list {
+  list-style-type: decimal;
+  margin: 6px 0 0 18px;
+  padding: 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.plan-item-list li { margin: 2px 0; }
+
+.plan-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.plan-actions button {
+  padding: 5px 12px;
+  font-size: 0.75rem;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.05em;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+.plan-actions button.btn-confirm {
+  border-color: var(--mod12-success);
+  color: #b5e09e;
+}
+.plan-actions button.btn-confirm:hover { background: rgba(107,156,90,0.15); }
+.plan-actions button.btn-cancel:hover  { background: rgba(166,73,73,0.15); color: #d79b9b; }
+
+/* ── 聊天輸入 ───────────────────────── */
+.chat-input-zone {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 8px 10px;
+  background: var(--bg-primary);
+}
+.chat-input-zone textarea {
+  width: 100%;
+  min-height: 52px;
+  max-height: 140px;
+  resize: vertical;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  font-size: 0.8125rem;
+  font-family: 'Noto Sans TC', sans-serif;
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+.chat-input-zone textarea:focus {
+  outline: none;
+  border-color: var(--gold-dim);
+}
+.chat-input-footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+}
+.chat-input-footer .spacer { flex: 1; }
+.chat-input-footer button {
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  font-family: 'Cinzel', serif;
+  background: var(--gold);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+}
+.chat-input-footer button:disabled { opacity: 0.4; cursor: not-allowed; }
+.chat-input-footer button:hover:not(:disabled) { background: var(--gold-bright, #e5c46a); }
+
+/* ── 中央：模組按鈕格 ───────────────── */
+.module-column-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.module-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 10px;
+}
+
+.mod-btn {
+  background: var(--bg-primary);
+  border: 2px solid var(--border);
+  border-radius: 5px;
+  padding: 12px 8px 10px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  position: relative;
+  font-family: inherit;
+}
+.mod-btn:hover:not(:disabled) {
+  border-color: var(--gold-dim);
+  background: var(--bg-secondary);
+}
+.mod-btn.selected {
+  background: var(--gold);
+  color: var(--bg-primary);
+  border-color: var(--gold);
+  box-shadow: 0 0 10px rgba(201, 168, 76, 0.5);
+}
+.mod-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.mod-btn .mod-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.625rem;
+  color: var(--text-tertiary);
+  display: block;
+  margin-bottom: 4px;
+}
+.mod-btn.selected .mod-code { color: rgba(10, 10, 20, 0.7); }
+.mod-btn .mod-name {
+  font-family: 'Cinzel', serif;
+  font-size: 0.8125rem;
+  display: block;
+}
+.mod-btn .mod-lock {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.module-info-bar {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.module-info-bar code {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--gold-dim);
+  font-size: 0.6875rem;
+}
+
+/* ── 右欄：任務面板 ──────────────── */
+.task-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.task-filter-bar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.task-filter-bar button {
+  padding: 3px 8px;
+  font-size: 0.6875rem;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.task-filter-bar button.active {
+  background: var(--gold);
+  color: var(--bg-primary);
+  border-color: var(--gold);
+}
+
+.task-group-title {
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  color: var(--gold-dim);
+  margin: 10px 4px 6px;
+  letter-spacing: 0.08em;
+}
+.task-group-title:first-child { margin-top: 2px; }
+
+.task-card {
+  background: var(--bg-primary);
+  border-left: 3px solid var(--border);
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+}
+.task-card.task-running   { border-left-color: var(--mod12-info); }
+.task-card.task-queued    { border-left-color: var(--text-tertiary); }
+.task-card.task-completed { border-left-color: var(--mod12-success); }
+.task-card.task-failed    { border-left-color: var(--mod12-danger); }
+.task-card.task-cancelled { border-left-color: var(--text-tertiary); opacity: 0.6; }
+
+.task-card .task-header {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.task-card .task-module {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.625rem;
+  color: var(--text-tertiary);
+}
+.task-card .task-summary {
+  color: var(--text-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-card .task-time {
+  font-size: 0.625rem;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', monospace;
+}
+.task-card .task-artifacts {
+  margin-top: 4px;
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+}
+.task-card .task-error {
+  margin-top: 4px;
+  font-size: 0.6875rem;
+  color: #d79b9b;
+  font-family: 'JetBrains Mono', monospace;
+  word-break: break-all;
+}
+.task-card .task-actions {
+  margin-top: 6px;
+  display: flex;
+  gap: 4px;
+}
+.task-card .task-actions button {
+  padding: 2px 8px;
+  font-size: 0.6875rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.task-card .task-actions button:hover {
+  border-color: var(--gold-dim);
+  color: var(--gold);
+}
+
+.access-denied {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.access-denied h1 { font-family: 'Cinzel', serif; color: var(--gold); margin-bottom: 12px; }
+.access-denied a  { color: var(--gold-dim); }

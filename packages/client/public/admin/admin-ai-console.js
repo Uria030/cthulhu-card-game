@@ -1,0 +1,507 @@
+/* ========================================
+   MOD-12 AI 主控台 — 主邏輯
+   ======================================== */
+
+// MOD_BUTTONS：第一期三模組可用，其餘封印
+const MOD_BUTTONS = [
+  {
+    code: 'MOD-01', name_zh: '卡片設計器',
+    bridgeTaskType: 'card_design',
+    api: '/api/cards',
+    available: true,
+  },
+  {
+    code: 'MOD-02', name_zh: '天賦樹設計器',
+    bridgeTaskType: 'talent_tree',
+    api: '/api/talent-trees/:factionCode/nodes',
+    apiPathResolver: (item) =>
+      `/api/talent-trees/${encodeURIComponent(item.faction_code || '')}/nodes`,
+    available: true,
+  },
+  {
+    code: 'MOD-03', name_zh: '敵人設計器',
+    bridgeTaskType: 'enemy_design',
+    api: '/api/admin/monsters/variants',
+    available: true,
+  },
+  { code: 'MOD-04', name_zh: '團隊精神',    api: '/api/team-spirits',           available: false, reason: '待擴充 bridge 支援（第二期）' },
+  { code: 'MOD-05', name_zh: '戰鬥風格',    api: '/api/combat-styles',          available: false, reason: '待擴充 bridge 支援（第二期）' },
+  { code: 'MOD-06', name_zh: '戰役敘事',    api: null,                          available: false, reason: '模組尚未建置' },
+  { code: 'MOD-07', name_zh: '關卡編輯器',  api: null,                          available: false, reason: '模組尚未建置' },
+  { code: 'MOD-08', name_zh: '地點設計器',  api: '/api/admin/locations',        available: false, reason: '待擴充 bridge 支援（第二期）' },
+  { code: 'MOD-09', name_zh: '鍛造製作',    api: '/api/affixes',                available: false, reason: '待擴充 bridge 支援（第二期）' },
+  { code: 'MOD-10', name_zh: '城主設計器',  api: '/api/admin/keeper/mythos-cards', available: false, reason: '待擴充 bridge 支援（第二期）' },
+  { code: 'MOD-11', name_zh: '調查員設計器', api: '/api/admin/investigators',   available: false, reason: '待擴充 bridge 支援（第二期）' },
+];
+
+const TASK_FILTERS = [
+  { key: 'recent',    label: '近 24h' },
+  { key: 'all',       label: '全部' },
+  { key: 'running',   label: '執行中' },
+  { key: 'completed', label: '已完成' },
+  { key: 'failed',    label: '失敗' },
+];
+
+const state = {
+  selectedModule: null,
+  bridgeStatus: null,
+  currentAiModel: null,        // 'gemma-4-e2b' | 'gemini-2.5-pro'
+  taskFilter: 'recent',
+  pendingPlan: null,           // { taskType, items, bridgeResult }
+};
+
+// ────────────────────────────────────────────
+// Bootstrap — admin role guard
+// ────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  const userRaw = localStorage.getItem('admin_user');
+  let user = null;
+  try { user = userRaw ? JSON.parse(userRaw) : null; } catch { user = null; }
+
+  if (!user || (user.role !== 'admin' && user.role !== 'owner')) {
+    document.getElementById('rootContainer').innerHTML = `
+      <div class="access-denied">
+        <h1>權限不足</h1>
+        <p>本模組僅限管理員使用。</p>
+        <p><a href="index.html">← 返回首頁</a></p>
+      </div>
+    `;
+    return;
+  }
+
+  renderLayout();
+  renderModuleButtons();
+  updateModuleInfoBar();
+  redetectBridge();
+  renderTaskPanel();
+  setInterval(renderTaskPanel, 3000);
+});
+
+// ────────────────────────────────────────────
+// Layout render
+// ────────────────────────────────────────────
+function renderLayout() {
+  document.getElementById('rootContainer').innerHTML = `
+    <div class="console-layout">
+      <!-- 左欄：聊天 -->
+      <div class="console-col chat-col">
+        <h2>聊天</h2>
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-input-zone">
+          <textarea id="chatInput" placeholder="請先選擇模組，再輸入指令..."
+            onkeydown="handleChatKeydown(event)"></textarea>
+          <div class="chat-input-footer">
+            <span id="chatInputHint">需先啟動 gemma-bridge</span>
+            <span class="spacer"></span>
+            <button id="chatSendBtn" onclick="onSendMessage()">送出</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 中央：模組 -->
+      <div class="console-col module-col">
+        <h2>指定執行模組（第一期啟用 MOD-01/02/03）</h2>
+        <div class="module-column-body">
+          <div class="module-buttons-grid" id="moduleButtonsGrid"></div>
+          <div class="module-info-bar" id="moduleInfoBar"></div>
+        </div>
+      </div>
+
+      <!-- 右欄：任務面板 -->
+      <div class="console-col task-col">
+        <h2>任務面板</h2>
+        <div class="task-filter-bar" id="taskFilterBar">
+          ${TASK_FILTERS.map((f) =>
+            `<button data-key="${f.key}" onclick="setTaskFilter('${f.key}')"
+              class="${state.taskFilter === f.key ? 'active' : ''}">${f.label}</button>`,
+          ).join('')}
+        </div>
+        <div class="task-panel-body" id="taskPanelBody">
+          <div style="color:var(--text-tertiary);font-size:0.75rem;padding:10px;">載入中...</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ────────────────────────────────────────────
+// Bridge mode detection
+// ────────────────────────────────────────────
+async function redetectBridge() {
+  setModeIndicator('detecting', '偵測 bridge...');
+  const result = await bridgeHealth();
+  const dot = document.getElementById('modeDot');
+  const label = document.getElementById('modeLabel');
+  const hint = document.getElementById('chatInputHint');
+  const sendBtn = document.getElementById('chatSendBtn');
+
+  if (!result.ok) {
+    state.bridgeStatus = null;
+    state.currentAiModel = null;
+    setModeIndicator('unavailable', `bridge 不可達（${result.reason}）`);
+    hint && (hint.textContent = '需先啟動 gemma-bridge（bridge 未回應）');
+    sendBtn && (sendBtn.disabled = true);
+    return;
+  }
+  state.bridgeStatus = result.upstreams;
+  const { ollama, gemini } = result.upstreams;
+  if (ollama === 'up' && gemini === 'up') {
+    setModeIndicator('both', '本地 + 遠端皆可用');
+    state.currentAiModel = 'gemini-2.5-pro';
+  } else if (gemini === 'up') {
+    setModeIndicator('remote-only', '僅遠端 Gemini');
+    state.currentAiModel = 'gemini-2.5-pro';
+  } else if (ollama === 'up') {
+    setModeIndicator('local-only', '僅本地 GEMMA');
+    state.currentAiModel = 'gemma-4-e2b';
+  } else {
+    setModeIndicator('unavailable', 'bridge 回報 upstream 全 down');
+    state.currentAiModel = null;
+  }
+  hint && (hint.textContent = state.currentAiModel ? `當前模型：${state.currentAiModel}` : 'AI 不可用');
+  sendBtn && (sendBtn.disabled = !state.currentAiModel);
+}
+
+function setModeIndicator(mode, label) {
+  const dot = document.getElementById('modeDot');
+  const lbl = document.getElementById('modeLabel');
+  if (!dot || !lbl) return;
+  dot.className = `mode-dot mode-${mode}`;
+  lbl.textContent = label;
+}
+
+window.redetectBridge = redetectBridge;
+
+// ────────────────────────────────────────────
+// Module buttons
+// ────────────────────────────────────────────
+function renderModuleButtons() {
+  const grid = document.getElementById('moduleButtonsGrid');
+  grid.innerHTML = MOD_BUTTONS.map((m) => {
+    const isSelected = state.selectedModule?.code === m.code;
+    return `
+      <button
+        class="mod-btn ${isSelected ? 'selected' : ''}"
+        ${m.available ? `onclick="onSelectModule('${m.code}')"` : 'disabled'}
+        title="${m.available ? '' : (m.reason || '尚未啟用')}">
+        <span class="mod-code">${m.code}</span>
+        <span class="mod-name">${m.name_zh}</span>
+        ${m.available ? '' : '<span class="mod-lock">🔒</span>'}
+      </button>
+    `;
+  }).join('');
+}
+
+function onSelectModule(code) {
+  const mod = MOD_BUTTONS.find((m) => m.code === code);
+  state.selectedModule = state.selectedModule?.code === code ? null : mod;
+  renderModuleButtons();
+  updateModuleInfoBar();
+  updateChatPlaceholder();
+}
+window.onSelectModule = onSelectModule;
+
+function updateModuleInfoBar() {
+  const bar = document.getElementById('moduleInfoBar');
+  if (!bar) return;
+  if (!state.selectedModule) {
+    bar.innerHTML = '<em style="color:var(--text-tertiary)">尚未選擇模組</em>';
+    return;
+  }
+  const m = state.selectedModule;
+  bar.innerHTML = `
+    <strong style="color:var(--gold)">已選擇：${m.code} ${m.name_zh}</strong><br>
+    bridge taskType：<code>${m.bridgeTaskType}</code><br>
+    寫入目標 API：<code>${m.api}</code>
+  `;
+}
+
+function updateChatPlaceholder() {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+  if (state.selectedModule) {
+    input.placeholder = `（${state.selectedModule.code} ${state.selectedModule.name_zh}）輸入指令...（Ctrl+Enter 送出）`;
+  } else {
+    input.placeholder = '請先選擇模組，再輸入指令...';
+  }
+}
+
+// ────────────────────────────────────────────
+// Chat
+// ────────────────────────────────────────────
+function appendChatMessage(type, html, meta) {
+  const container = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = `chat-msg msg-${type}`;
+  div.innerHTML = (meta ? `<div class="meta">${meta}</div>` : '') + html;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+function handleChatKeydown(e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    onSendMessage();
+  }
+}
+window.handleChatKeydown = handleChatKeydown;
+
+async function onSendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = (input.value || '').trim();
+  if (!text) {
+    alert('請先輸入指令');
+    return;
+  }
+  if (!state.selectedModule) {
+    alert('請先選擇要使用的模組');
+    return;
+  }
+  if (!state.currentAiModel) {
+    alert('AI 目前不可用，請先啟動 gemma-bridge');
+    return;
+  }
+
+  appendChatMessage('user', escapeHtml(text), `[${state.selectedModule.code} ${state.selectedModule.name_zh}]`);
+  input.value = '';
+
+  const sendBtn = document.getElementById('chatSendBtn');
+  sendBtn.disabled = true;
+  const thinking = appendChatMessage('thinking', 'AI 規劃中...（首次呼叫遠端 Gemini 可能需 5~20 秒）');
+
+  try {
+    const historyBlock = await fetchRecentHistoryBlock(state.selectedModule.code);
+    const plan = await planWithBridge({
+      moduleConfig: state.selectedModule,
+      userPrompt: text,
+      attachedText: '',
+      contextTags: [],
+      historyBlock,
+    });
+    thinking.remove();
+
+    if (!plan.items || plan.items.length === 0) {
+      appendChatMessage('error',
+        'bridge 沒有回傳任何項目（可能 validator 失敗或 Gemini 輸出格式錯誤）。<br>'
+        + `<details><summary>bridge 原始回傳</summary><pre style="font-size:0.6875rem;white-space:pre-wrap">${
+          escapeHtml(JSON.stringify(plan.bridgeResult, null, 2))
+        }</pre></details>`);
+      return;
+    }
+
+    state.pendingPlan = { ...plan, userPrompt: text };
+    renderPlanForConfirmation(plan, text);
+  } catch (err) {
+    thinking.remove();
+    appendChatMessage('error', '呼叫 bridge 失敗：' + escapeHtml(err.message || String(err)));
+  } finally {
+    sendBtn.disabled = !state.currentAiModel;
+  }
+}
+window.onSendMessage = onSendMessage;
+
+function renderPlanForConfirmation(plan, userPrompt) {
+  const items = plan.items;
+  const listHtml = items.slice(0, 10).map((it, i) => {
+    const name = it.name_zh || it.code || `#${i + 1}`;
+    return `<li>${escapeHtml(String(name))}</li>`;
+  }).join('');
+  const moreNote = items.length > 10 ? `<div style="font-size:0.6875rem;color:var(--text-tertiary);margin-top:4px;">（僅顯示前 10 項，共 ${items.length} 項）</div>` : '';
+
+  const html = `
+    <div class="plan-summary">AI 計畫：產出 ${items.length} 項</div>
+    <div class="plan-count">模型：${plan.bridgeResult.modelUsed} · 任務類型：${plan.taskType}</div>
+    <ol class="plan-item-list">${listHtml}</ol>
+    ${moreNote}
+    <div class="plan-actions">
+      <button class="btn-confirm" onclick="onConfirmPlan()">✓ 確認執行</button>
+      <button class="btn-cancel" onclick="onCancelPlan()">✗ 取消</button>
+    </div>
+  `;
+  appendChatMessage('plan', html, `[AI 計畫 · ${new Date().toLocaleTimeString()}]`);
+}
+
+async function onConfirmPlan() {
+  const pending = state.pendingPlan;
+  if (!pending) return;
+  state.pendingPlan = null;
+
+  const moduleConfig = state.selectedModule;
+  if (!moduleConfig) {
+    appendChatMessage('error', '模組狀態遺失，請重新選擇並再試一次');
+    return;
+  }
+
+  disablePlanButtons();
+
+  try {
+    const taskRecord = await createTaskRecord({
+      moduleCode: moduleConfig.code,
+      userPrompt: pending.userPrompt,
+      attachedText: '',
+      contextTags: [],
+      aiModel: state.currentAiModel,
+      aiResponse: pending.bridgeResult,
+    });
+    appendChatMessage('system', `✓ 任務已建立（${taskRecord.id.slice(0, 8)}…），開始寫入...`);
+    await updateTaskStatus(taskRecord.id, { status: 'running' });
+
+    const result = await executeConfirmedPlan({
+      taskRecordId: taskRecord.id,
+      moduleConfig,
+      items: pending.items,
+      onProgress: (i, total) => {
+        // 以簡化方式顯示進度
+        const msgs = document.getElementById('chatMessages');
+        const last = msgs.lastElementChild;
+        if (last && last.dataset.progressFor === taskRecord.id) {
+          last.innerHTML = `<div class="meta">[執行中]</div>進度 ${i + 1}/${total}...`;
+        } else {
+          const el = appendChatMessage('system', `進度 ${i + 1}/${total}...`, '[執行中]');
+          el.dataset.progressFor = taskRecord.id;
+        }
+      },
+    });
+
+    const okCount = result.artifacts.filter((a) => a.type !== 'error').length;
+    const errCount = result.artifacts.length - okCount;
+    appendChatMessage(
+      result.status === 'completed' ? 'ok' : 'error',
+      `任務結束：${okCount} 成功 / ${errCount} 失敗`
+      + (errCount > 0
+        ? `<details style="margin-top:6px;"><summary>錯誤詳情</summary><pre style="font-size:0.6875rem;white-space:pre-wrap">${
+          escapeHtml(JSON.stringify(result.artifacts.filter((a) => a.type === 'error'), null, 2))
+        }</pre></details>`
+        : ''),
+      `[${new Date().toLocaleTimeString()}]`);
+    renderTaskPanel();
+  } catch (err) {
+    appendChatMessage('error', '執行失敗：' + escapeHtml(err.message || String(err)));
+  }
+}
+window.onConfirmPlan = onConfirmPlan;
+
+function onCancelPlan() {
+  state.pendingPlan = null;
+  disablePlanButtons();
+  appendChatMessage('system', '已取消計畫');
+}
+window.onCancelPlan = onCancelPlan;
+
+function disablePlanButtons() {
+  document.querySelectorAll('.plan-actions button').forEach((b) => { b.disabled = true; });
+}
+
+// ────────────────────────────────────────────
+// Task panel
+// ────────────────────────────────────────────
+function setTaskFilter(key) {
+  state.taskFilter = key;
+  document.querySelectorAll('#taskFilterBar button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.key === key);
+  });
+  renderTaskPanel();
+}
+window.setTaskFilter = setTaskFilter;
+
+async function renderTaskPanel() {
+  const body = document.getElementById('taskPanelBody');
+  if (!body) return;
+
+  const params = { limit: 100 };
+  if (state.taskFilter === 'recent')    params.since = '24h';
+  if (state.taskFilter === 'running')   params.status = 'running';
+  if (state.taskFilter === 'completed') params.status = 'completed';
+  if (state.taskFilter === 'failed')    params.status = 'failed';
+
+  const result = await fetchTaskList(params);
+  const tasks = result.data || [];
+  if (tasks.length === 0) {
+    body.innerHTML = `<div style="color:var(--text-tertiary);font-size:0.75rem;padding:10px;">（無任務）</div>`;
+    return;
+  }
+
+  const groups = { running: [], queued: [], completed: [], failed: [], cancelled: [] };
+  for (const t of tasks) (groups[t.status] || groups.failed).push(t);
+
+  const parts = [];
+  const order = ['running', 'queued', 'completed', 'failed', 'cancelled'];
+  const labels = { running: '執行中', queued: '待執行', completed: '已完成', failed: '失敗', cancelled: '已取消' };
+  for (const key of order) {
+    if (!groups[key].length) continue;
+    parts.push(`<div class="task-group-title">${labels[key]}（${groups[key].length}）</div>`);
+    for (const t of groups[key]) parts.push(renderTaskCard(t));
+  }
+  body.innerHTML = parts.join('');
+}
+
+function renderTaskCard(t) {
+  const arts = Array.isArray(t.artifacts_created) ? t.artifacts_created : [];
+  const okArts = arts.filter((a) => a.type !== 'error');
+  const errArts = arts.filter((a) => a.type === 'error');
+  const time = t.completed_at || t.started_at || t.created_at;
+  const timeStr = time ? new Date(time).toLocaleString() : '';
+
+  let artBlock = '';
+  if (okArts.length) {
+    const names = okArts.slice(0, 3).map((a) => escapeHtml(a.name || '')).join('、');
+    const more = okArts.length > 3 ? `…+${okArts.length - 3}` : '';
+    artBlock = `<div class="task-artifacts">✓ ${names}${more}</div>`;
+  }
+  let errBlock = '';
+  if (errArts.length) {
+    const first = errArts[0];
+    errBlock = `<div class="task-error">✗ ${escapeHtml(first.error || '').slice(0, 120)}${errArts.length > 1 ? ` …+${errArts.length - 1}` : ''}</div>`;
+  }
+
+  let actions = '';
+  if (t.status === 'queued' || t.status === 'running') {
+    actions = `<button onclick="onCancelTask('${t.id}')">取消</button>`;
+  } else if (t.status === 'failed') {
+    actions = `<button onclick="onRetryTask('${t.id}')">重試</button>`;
+  }
+
+  return `
+    <div class="task-card task-${t.status}">
+      <div class="task-header">
+        <span class="task-module">${t.module_code}</span>
+        <span class="task-summary">${escapeHtml(t.user_prompt.slice(0, 50))}</span>
+      </div>
+      <div class="task-time">${timeStr}</div>
+      ${artBlock}
+      ${errBlock}
+      ${actions ? `<div class="task-actions">${actions}</div>` : ''}
+    </div>
+  `;
+}
+
+async function onCancelTask(taskId) {
+  if (!confirm('確定取消此任務？已完成的子項目不會回滾。')) return;
+  await cancelTaskOnServer(taskId);
+  renderTaskPanel();
+}
+window.onCancelTask = onCancelTask;
+
+async function onRetryTask(taskId) {
+  const res = await adminFetch(`/api/ai-console/tasks/${taskId}/retry`, { method: 'POST' });
+  if (res.ok) {
+    appendChatMessage('system', '已建立重試任務，請到任務面板查看。');
+    renderTaskPanel();
+  } else {
+    alert('重試失敗');
+  }
+}
+window.onRetryTask = onRetryTask;
+
+// ────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}

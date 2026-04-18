@@ -98,22 +98,8 @@ function renderLayout() {
           <textarea id="chatInput" placeholder="請先選擇模組，再輸入指令..."
             onkeydown="handleChatKeydown(event)"></textarea>
           <div class="chat-input-footer">
-            <span id="chatInputHint">AI 偵測中…</span>
+            <span id="chatInputHint">&nbsp;</span>
             <span class="spacer"></span>
-            <label class="chat-inline-control" title="遠端 Gemini API 使用的模型（本地 Gemma 模式忽略此欄）">
-              模型
-              <select id="chatGeminiModel" onchange="updateProviderButtons()">
-                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
-                <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
-                <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash-Lite Preview</option>
-              </select>
-            </label>
-            <label class="chat-inline-control" title="一次產出幾張卡片（1-10）">
-              批次
-              <input type="number" id="chatBatchCount" min="1" max="10" value="1">
-            </label>
             <button id="chatSendBtn" onclick="onSendMessage()">送出</button>
           </div>
         </div>
@@ -234,25 +220,47 @@ function updateProviderButtons() {
     state.currentAiModel = null;
   }
 
+  // 判斷目前提供者的**可送出狀態**：gemini 需 key、gemma 需 ollama up
+  const hasKey = !!(window.hasGeminiApiKey && window.hasGeminiApiKey());
+  const geminiReady = state.userProviderChoice === 'gemini' && hasKey;
+  const gemmaReady = state.userProviderChoice === 'gemma' && ollamaUp;
+  const ready = geminiReady || gemmaReady;
+
   const sendBtn = document.getElementById('chatSendBtn');
   const hint = document.getElementById('chatInputHint');
-  if (sendBtn) sendBtn.disabled = !state.currentAiModel;
+  if (sendBtn) sendBtn.disabled = !ready;
+
+  // 底部 hint 簡化為「次要提示」——主要狀態改在頂部 navReadyIndicator
   if (hint) {
-    if (state.userProviderChoice === 'gemini') {
-      hint.textContent = `遠端 Gemini API（${state.currentAiModel} · 前端直連 Google，使用你的 API Key）`;
-    } else if (state.userProviderChoice === 'gemma' && ollamaUp) {
-      hint.textContent = `本地 Gemma (Ollama) · ${state.currentAiModel} · 透過 bridge`;
+    if (!ready) {
+      hint.textContent = state.userProviderChoice === 'gemini'
+        ? '請先在上方設定 API Key'
+        : '本地 Gemma 不可用，請切換到遠端 Gemini API';
     } else {
-      hint.textContent = 'AI 不可用（切到遠端 Gemini API 或在小黑啟動 bridge+Ollama）';
+      hint.textContent = ''; // 就緒時清空，留白
     }
   }
 
-  // API Key 按鈕視覺狀態
+  // 頂部 nav 的就緒狀態指示
+  const navInd = document.getElementById('navReadyIndicator');
+  if (navInd) {
+    navInd.classList.remove('ready', 'not-ready');
+    if (ready) {
+      navInd.classList.add('ready');
+      navInd.textContent = `✓ ${state.currentAiModel} 就緒`;
+      navInd.title = `${state.userProviderChoice === 'gemini' ? '遠端 Gemini API' : '本地 Gemma (Ollama)'} · ${state.currentAiModel}`;
+    } else {
+      navInd.classList.add('not-ready');
+      navInd.textContent = state.userProviderChoice === 'gemini' ? '未設定 API Key' : '本地 Gemma 不可用';
+      navInd.title = 'AI 尚未就緒，無法送出';
+    }
+  }
+
+  // API Key 按鈕視覺狀態（仿 MOD-01：已設定綠色 / 未設定灰色）
   const apiKeyBtn = document.getElementById('providerApiKeyBtn');
-  if (apiKeyBtn && window.hasGeminiApiKey) {
-    const hasKey = window.hasGeminiApiKey();
+  if (apiKeyBtn) {
     apiKeyBtn.classList.toggle('set', hasKey);
-    apiKeyBtn.textContent = hasKey ? 'API Key ✓' : 'API Key';
+    apiKeyBtn.textContent = hasKey ? 'API Key 已設定' : '設定 API Key';
     apiKeyBtn.title = hasKey
       ? 'Gemini API Key 已設定（點擊修改）'
       : '尚未設定 Gemini API Key（點擊設定）';
@@ -355,8 +363,24 @@ async function onSendMessage() {
     alert('請先選擇要使用的模組');
     return;
   }
+  // 提供者就緒檢查：gemini 需 API Key、gemma 需 ollama up
+  const hasKey = !!(window.hasGeminiApiKey && window.hasGeminiApiKey());
+  const geminiReady = state.userProviderChoice === 'gemini' && hasKey;
+  const gemmaReady = state.userProviderChoice === 'gemma' && state.bridgeStatus?.ollama === 'up';
+  if (!geminiReady && !gemmaReady) {
+    if (state.userProviderChoice === 'gemini' && !hasKey) {
+      // 缺 key 時直接彈設定對話框
+      const k = window.promptForGeminiApiKey && window.promptForGeminiApiKey('請先設定 Gemini API Key 才能使用遠端直連：');
+      if (!k) return; // 使用者取消
+      updateProviderButtons();
+      // 設完 key 繼續送（不 return）
+    } else {
+      alert('本地 Gemma 目前不可用：請切到「遠端 Gemini API」並設定 API Key，或在小黑啟動 bridge + Ollama');
+      return;
+    }
+  }
   if (!state.currentAiModel) {
-    alert('AI 目前不可用：請切換到「遠端 Gemini API」（直連，需 API Key），或在小黑環境啟動 bridge + Ollama 以使用本地 Gemma');
+    alert('內部狀態異常：currentAiModel 為空，請重整頁面');
     return;
   }
 

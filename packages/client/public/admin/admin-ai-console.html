@@ -21,6 +21,21 @@
       <button type="button" class="provider-btn active" data-provider="gemini" onclick="onProviderChoiceClick('gemini')" title="遠端 Gemini API（需 Gemini API Key）">遠端 Gemini API</button>
       <button type="button" class="provider-btn" data-provider="gemma" onclick="onProviderChoiceClick('gemma')" title="本地 Gemma（Ollama）">本地 Gemma (Ollama)</button>
       <button type="button" class="provider-apikey-btn" id="providerApiKeyBtn" onclick="onApiKeyClick()" title="設定 Gemini API Key（與 MOD-01 共用 localStorage）">API Key</button>
+      <label class="nav-inline-control" title="遠端 Gemini API 使用的模型（本地 Gemma 模式忽略此欄）">
+        模型
+        <select id="chatGeminiModel" onchange="updateProviderButtons()">
+          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+          <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
+          <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+          <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash-Lite Preview</option>
+        </select>
+      </label>
+      <label class="nav-inline-control" title="一次產出幾張卡片（1-10）">
+        批次
+        <input type="number" id="chatBatchCount" min="1" max="10" value="1">
+      </label>
+      <span class="nav-ready-indicator" id="navReadyIndicator" title="AI 狀態">偵測中…</span>
     </div>
 
     <div class="ai-mode-indicator" id="aiModeIndicator">

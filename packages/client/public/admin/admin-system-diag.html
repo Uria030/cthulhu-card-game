@@ -158,6 +158,7 @@
       <button class="diag-btn" id="btnBridgeHealth">2. Bridge 健康</button>
       <button class="diag-btn" id="btnBridgeTask">3. Bridge 任務測試</button>
       <button class="diag-btn" id="btnClientInfo">4. 客戶端資訊</button>
+      <button class="diag-btn" id="btnProbeModels">5. 測試 Gemini 模型</button>
     </div>
 
     <div class="diag-status-grid">
@@ -181,6 +182,21 @@
         <div class="diag-card-status" data-status>—</div>
         <div class="diag-card-detail" data-detail>尚未測試</div>
       </div>
+      <div class="diag-card" id="cardModel25Pro">
+        <div class="diag-card-title">模型：gemini-2.5-pro</div>
+        <div class="diag-card-status" data-status>—</div>
+        <div class="diag-card-detail" data-detail>尚未測試</div>
+      </div>
+      <div class="diag-card" id="cardModel25Flash">
+        <div class="diag-card-title">模型：gemini-2.5-flash</div>
+        <div class="diag-card-status" data-status>—</div>
+        <div class="diag-card-detail" data-detail>尚未測試</div>
+      </div>
+      <div class="diag-card" id="cardModel30Pro">
+        <div class="diag-card-title">模型：gemini-3.0-pro</div>
+        <div class="diag-card-status" data-status>—</div>
+        <div class="diag-card-detail" data-detail>尚未測試</div>
+      </div>
     </div>
 
     <div class="diag-log-header">
@@ -194,6 +210,7 @@
   </div>
 
   <script src="admin-shared.js"></script>
+  <script src="admin-ai-tasks/geminiDirectClient.js"></script>
   <script>
   (() => {
     'use strict';
@@ -342,6 +359,60 @@
       }
     }
 
+    async function test_probeModels() {
+      log('info', '════ 測試 Gemini 模型可用性 ════');
+      if (!window.callGeminiDirect) {
+        log('err', 'geminiDirectClient.js 未載入');
+        return;
+      }
+      if (!window.hasGeminiApiKey || !window.hasGeminiApiKey()) {
+        const k = window.promptForGeminiApiKey && window.promptForGeminiApiKey('測試模型前需先設定 Gemini API Key：');
+        if (!k) {
+          log('warn', '未設定 API Key，取消模型測試');
+          return;
+        }
+      }
+
+      const models = [
+        { name: 'gemini-2.5-pro',   card: 'cardModel25Pro' },
+        { name: 'gemini-2.5-flash', card: 'cardModel25Flash' },
+        { name: 'gemini-3.0-pro',   card: 'cardModel30Pro' },
+      ];
+      const probePrompt = '回傳合法 JSON：{"ok":true,"echo":"diag"}';
+
+      for (const m of models) {
+        setCard(m.card, '', '測試中…', '');
+        log('info', `測試 ${m.name} …`);
+        const t0 = Date.now();
+        try {
+          const { text, modelName } = await window.callGeminiDirect({
+            prompt: probePrompt,
+            model: m.name,
+            temperature: 0,
+            responseMimeType: 'application/json',
+          });
+          const elapsed = Date.now() - t0;
+          let parsed = null;
+          try { parsed = JSON.parse(text); } catch (_) { /* keep raw */ }
+          setCard(m.card, 'ok', '可用', `${elapsed}ms · ${modelName}`);
+          log('ok', `${m.name} 可用 (${elapsed}ms)`, parsed || text.slice(0, 120));
+        } catch (e) {
+          const elapsed = Date.now() - t0;
+          const msg = e.message || String(e);
+          const isNotFound = /404|not found|is not found|does not exist/i.test(msg);
+          const isAuth = /401|403|permission|api key|unauth/i.test(msg);
+          setCard(
+            m.card,
+            isNotFound ? 'warn' : 'err',
+            isNotFound ? '模型不存在' : isAuth ? 'API Key 問題' : '失敗',
+            `${elapsed}ms · ${msg.slice(0, 140)}`,
+          );
+          log(isNotFound ? 'warn' : 'err', `${m.name}：${msg}`);
+        }
+      }
+      log('info', '════ 模型測試結束 ════');
+    }
+
     function test_clientInfo() {
       const info = {
         url: location.href,
@@ -376,6 +447,7 @@
     document.getElementById('btnBridgeHealth').onclick = test_bridgeHealth;
     document.getElementById('btnBridgeTask').onclick = test_bridgeTask;
     document.getElementById('btnClientInfo').onclick = test_clientInfo;
+    document.getElementById('btnProbeModels').onclick = test_probeModels;
     document.getElementById('btnClearLog').onclick = () => { logArea.textContent = ''; };
     document.getElementById('btnCopyLog').onclick = async () => {
       const text = logArea.innerText;

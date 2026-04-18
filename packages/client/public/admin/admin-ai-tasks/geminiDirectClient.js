@@ -43,7 +43,7 @@ window.promptForGeminiApiKey = promptForGeminiApiKey;
 // ─── 直接呼叫 Google Gemini generateContent ──────────────────────
 async function callGeminiDirect({
   prompt,
-  model = 'gemini-2.5-flash',
+  model = 'gemini-2.5-pro',
   temperature = 0.7,
   responseMimeType = 'application/json',
   apiKey,
@@ -74,9 +74,11 @@ async function callGeminiDirect({
 
 window.callGeminiDirect = callGeminiDirect;
 
-// ─── 卡片設計 prompt（複製自 MOD-01 buildGeminiPrompt） ───────────
-function buildCardDesignPrompt(userDescription) {
-  return `你是一個克蘇魯神話卡牌遊戲的卡片設計師。請根據以下完整規則和使用者需求，生成一張**數值平衡**的卡片。
+// ─── 卡片設計 prompt（複製自 MOD-01 buildGeminiPrompt；新增 batchCount 支援） ──
+function buildCardDesignPrompt(userDescription, batchCount = 1) {
+  const isBatch = batchCount && batchCount > 1;
+  const plural = isBatch ? `${batchCount} 張` : `一張`;
+  return `你是一個克蘇魯神話卡牌遊戲的卡片設計師。請根據以下完整規則和使用者需求，生成${plural}**數值平衡**的卡片。
 
 ## 零、價值計算系統（最重要）
 
@@ -327,7 +329,18 @@ ${userDescription}
 11. 法術卡 slot 固定為 arcane，combat_style 固定為 arcane
 12. 盟友卡需填 ally_hp 和 ally_san，HP+SAN 預算不超過 5（低費）或 7（高費）
 13. 技能卡費用固定為 0，skill_value 為 +1~+3
-14. subtypes 要正確標記（weapon/weapon_melee/weapon_ranged/weapon_arcane/item/arcane_item/consumable/ammo/arrow/spell/light_source）`;
+14. subtypes 要正確標記（weapon/weapon_melee/weapon_ranged/weapon_arcane/item/arcane_item/consumable/ammo/arrow/spell/light_source）${isBatch ? `
+
+## 十一、批次要求（本次為批次模式）
+使用者要一次設計 **${batchCount} 張**卡片。嚴格遵守：
+1. **回傳 JSON Array**（不是單一 object），陣列長度**必須剛好為 ${batchCount}**
+2. 每個元素都是完整的單張卡片 JSON（結構同上面範例）
+3. 所有卡片圍繞使用者描述的**同一主題**，彼此之間要有**設計呼應**：
+   - 可以是同一陣營極的不同機制切面
+   - 可以是互補配合（例如前排坦克 + 後排輸出 + 支援）
+   - 可以是費用由低到高的成長階梯
+4. 同批次內嚴禁完全重複：費用、等級、效果動詞、卡片類別至少要有變化
+5. flavor_text 可有連貫敘事（例如同一事件的不同切角）` : ''}`;
 }
 
 window.buildCardDesignPrompt = buildCardDesignPrompt;
@@ -395,11 +408,11 @@ function validateAndFixCardData(d) {
 window.validateAndFixCardData = validateAndFixCardData;
 
 // ─── 給 MOD-12 的高階 helper：跑完「生卡片」端到端 ─────────────
-async function generateCardViaDirectGemini(userDescription, { model = 'gemini-2.5-flash', apiKey } = {}) {
+async function generateCardViaDirectGemini(userDescription, { model = 'gemini-2.5-pro', batchCount = 1, apiKey } = {}) {
   if (!userDescription || typeof userDescription !== 'string') {
     throw new Error('userDescription 為空');
   }
-  const prompt = buildCardDesignPrompt(userDescription);
+  const prompt = buildCardDesignPrompt(userDescription, batchCount);
   const { text, modelName } = await callGeminiDirect({ prompt, model, apiKey });
   const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
   let data;
@@ -408,8 +421,11 @@ async function generateCardViaDirectGemini(userDescription, { model = 'gemini-2.
   } catch (e) {
     throw new Error('Gemini 回傳內容不是合法 JSON：' + e.message);
   }
-  // Gemini 可能直接回單張物件，也可能回陣列
+  // Gemini 可能直接回單張物件（單卡），也可能回陣列（批次）
   const items = Array.isArray(data) ? data.map(validateAndFixCardData) : [validateAndFixCardData(data)];
+  if (batchCount > 1 && items.length !== batchCount) {
+    console.warn(`batch mismatch: requested ${batchCount}, got ${items.length}`);
+  }
   return { items, modelUsed: modelName };
 }
 

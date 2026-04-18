@@ -47,7 +47,7 @@ function deriveTaskType(moduleConfig, userPrompt) {
 // Phase 1 替代路徑：前端直連遠端 Gemini API（不經 bridge，與 MOD-01 同模式）
 // 僅支援 MOD-01 card_design；MOD-02/03 需透過 bridge（本地 Gemma 路徑）
 // ────────────────────────────────────────────
-async function planWithDirectGemini({ moduleConfig, userPrompt, attachedText, historyBlock }) {
+async function planWithDirectGemini({ moduleConfig, userPrompt, attachedText, historyBlock, batchCount = 1, geminiModel = 'gemini-2.5-pro' }) {
   if (moduleConfig.code !== 'MOD-01') {
     throw new Error(
       `遠端 Gemini API 直連目前僅支援 MOD-01 卡片設計。${moduleConfig.code} 請切換到「本地 Gemma」（需小黑 bridge）。`,
@@ -67,7 +67,7 @@ async function planWithDirectGemini({ moduleConfig, userPrompt, attachedText, hi
   ].filter(Boolean).join('\n\n');
 
   const t0 = Date.now();
-  const { items, modelUsed } = await window.generateCardViaDirectGemini(composedInput);
+  const { items, modelUsed } = await window.generateCardViaDirectGemini(composedInput, { model: geminiModel, batchCount });
   const elapsedMs = Date.now() - t0;
 
   // 組出跟 bridgeResult 形狀相容的結構，plan UI 可以沿用
@@ -79,7 +79,7 @@ async function planWithDirectGemini({ moduleConfig, userPrompt, attachedText, hi
     itemsWritten: 0,
     errors: [],
     items,
-    logs: [`direct-gemini path (no bridge), ${elapsedMs}ms`],
+    logs: [`direct-gemini path (no bridge), model=${modelUsed}, batch=${batchCount}, ${elapsedMs}ms`],
     startedAt: new Date(t0).toISOString(),
     completedAt: new Date().toISOString(),
   };

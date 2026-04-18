@@ -45,7 +45,7 @@ const TASK_FILTERS = [
 const state = {
   selectedModule: null,
   bridgeStatus: null,
-  currentAiModel: null,        // 'gemma-4-e2b' | 'gemini-2.5-pro'
+  currentAiModel: null,        // 'gemma-4-e2b' | 'gemini-2.5-pro' | 'gemini-2.5-flash' | 'gemini-3.0-pro'
   taskFilter: 'recent',
   pendingPlan: null,           // { taskType, items, bridgeResult }
   // 使用者指定的 AI 提供者（送給 bridge 的 aiProvider 欄位）
@@ -97,6 +97,18 @@ function renderLayout() {
           <div class="chat-input-footer">
             <span id="chatInputHint">需先啟動 gemma-bridge</span>
             <span class="spacer"></span>
+            <label class="chat-inline-control" title="遠端 Gemini API 使用的模型（本地 Gemma 模式忽略此欄）">
+              模型
+              <select id="chatGeminiModel" onchange="updateProviderButtons()">
+                <option value="gemini-2.5-pro">2.5 Pro</option>
+                <option value="gemini-2.5-flash">2.5 Flash</option>
+                <option value="gemini-3.0-pro">3.0 Pro（未驗證）</option>
+              </select>
+            </label>
+            <label class="chat-inline-control" title="一次產出幾張卡片（1-10）">
+              批次
+              <input type="number" id="chatBatchCount" min="1" max="10" value="1">
+            </label>
             <button id="chatSendBtn" onclick="onSendMessage()">送出</button>
           </div>
         </div>
@@ -186,6 +198,7 @@ function onApiKeyClick() {
 }
 window.onApiKeyClick = onApiKeyClick;
 
+window.updateProviderButtons = function () { return updateProviderButtons(); };
 function updateProviderButtons() {
   const btns = document.querySelectorAll('.ai-provider-switch .provider-btn');
   if (!btns.length) return;
@@ -208,7 +221,8 @@ function updateProviderButtons() {
 
   // 依最終選擇決定 currentAiModel + sendBtn + 提示
   if (state.userProviderChoice === 'gemini') {
-    state.currentAiModel = 'gemini-2.5-flash';
+    const sel = document.getElementById('chatGeminiModel');
+    state.currentAiModel = (sel && sel.value) || 'gemini-2.5-pro';
   } else if (state.userProviderChoice === 'gemma' && ollamaUp) {
     state.currentAiModel = 'gemma-4-e2b';
   } else {
@@ -350,12 +364,18 @@ async function onSendMessage() {
 
   try {
     const historyBlock = await fetchRecentHistoryBlock(state.selectedModule.code);
+    const batchEl = document.getElementById('chatBatchCount');
+    const batchCount = Math.max(1, Math.min(10, parseInt(batchEl?.value || '1', 10) || 1));
+    const modelEl = document.getElementById('chatGeminiModel');
+    const geminiModel = modelEl?.value || 'gemini-2.5-pro';
     const plan = state.userProviderChoice === 'gemini'
       ? await planWithDirectGemini({
           moduleConfig: state.selectedModule,
           userPrompt: text,
           attachedText: '',
           historyBlock,
+          batchCount,
+          geminiModel,
         })
       : await planWithBridge({
           moduleConfig: state.selectedModule,
@@ -570,12 +590,35 @@ async function onCancelTask(taskId) {
 window.onCancelTask = onCancelTask;
 
 async function onRetryTask(taskId) {
-  const res = await adminFetch(`/api/ai-console/tasks/${taskId}/retry`, { method: 'POST' });
-  if (res.ok) {
-    appendChatMessage('system', '已建立重試任務，請到任務面板查看。');
-    renderTaskPanel();
-  } else {
-    alert('重試失敗');
+  // 修正：舊版只呼叫 server 端 /retry 建立 queued row，但無任何執行引擎消化
+  // queued，任務永遠停住。改為前端 re-invoke 完整流程（plan → confirm → execute）
+  try {
+    const res = await adminFetch(`/api/ai-console/tasks/${taskId}`);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) {
+      alert('無法讀取原任務：' + (json.error || `HTTP ${res.status}`));
+      return;
+    }
+    const t = json.data;
+    if (!t || !t.module_code || !t.user_prompt) {
+      alert('原任務資料不完整，無法重試');
+      return;
+    }
+
+    // 1. 選回原模組
+    onSelectModule(t.module_code);
+    // 2. 把原 prompt 塞回輸入欄（使用者可先改再送）
+    const input = document.getElementById('chatInput');
+    if (input) input.value = t.user_prompt;
+    // 3. 切到「近 24h」filter 讓使用者看到新任務進度
+    if (state.taskFilter !== 'recent' && state.taskFilter !== 'all') {
+      state.taskFilter = 'recent';
+      renderTaskPanel();
+    }
+    // 4. 直接觸發送出（plan UI 還會彈出讓使用者確認，不會真的直衝寫入）
+    await onSendMessage();
+  } catch (err) {
+    alert('重試失敗：' + (err.message || String(err)));
   }
 }
 window.onRetryTask = onRetryTask;

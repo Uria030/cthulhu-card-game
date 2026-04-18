@@ -131,6 +131,34 @@
   .ai-provider-switch .provider-apikey-btn { padding: 0.25rem 0.4rem; font-size: 0.65rem; }
 }
 
+/* ── 聊天輸入列的內嵌控制項（模型 / 批次） ── */
+.chat-inline-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-right: 0.6rem;
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+}
+.chat-inline-control select,
+.chat-inline-control input[type="number"] {
+  background: var(--bg-card, #1a1815);
+  color: var(--text-primary, #e8d9a8);
+  border: 1px solid var(--border, #2a2620);
+  border-radius: 4px;
+  padding: 0.25rem 0.4rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+}
+.chat-inline-control input[type="number"] { width: 3.2rem; text-align: center; }
+.chat-inline-control select:focus,
+.chat-inline-control input[type="number"]:focus { outline: none; border-color: var(--gold, #c9a961); }
+@media (max-width: 720px) {
+  .chat-inline-control { font-size: 0.68rem; margin-right: 0.35rem; }
+  .chat-inline-control select, .chat-inline-control input[type="number"] { font-size: 0.7rem; padding: 0.2rem 0.3rem; }
+}
+
 /* ── 三欄版面 ───────────────────────── */
 .console-layout {
   display: grid;

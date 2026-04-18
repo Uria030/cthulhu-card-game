@@ -76,6 +76,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   renderLayout();
   renderModuleButtons();
   updateModuleInfoBar();
+  // 同步先跑一次 updateProviderButtons，確保 state.currentAiModel 立即有值
+  // 否則使用者在 redetectBridge 的 5 秒非同步空窗期按送出會被「AI 不可用」卡住
+  updateProviderButtons();
   redetectBridge();
   renderTaskPanel();
   setInterval(renderTaskPanel, 3000);
@@ -95,7 +98,7 @@ function renderLayout() {
           <textarea id="chatInput" placeholder="請先選擇模組，再輸入指令..."
             onkeydown="handleChatKeydown(event)"></textarea>
           <div class="chat-input-footer">
-            <span id="chatInputHint">需先啟動 gemma-bridge</span>
+            <span id="chatInputHint">AI 偵測中…</span>
             <span class="spacer"></span>
             <label class="chat-inline-control" title="遠端 Gemini API 使用的模型（本地 Gemma 模式忽略此欄）">
               模型

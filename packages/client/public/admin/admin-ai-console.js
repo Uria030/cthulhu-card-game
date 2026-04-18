@@ -201,7 +201,6 @@ function onApiKeyClick() {
 }
 window.onApiKeyClick = onApiKeyClick;
 
-window.updateProviderButtons = function () { return updateProviderButtons(); };
 function updateProviderButtons() {
   const btns = document.querySelectorAll('.ai-provider-switch .provider-btn');
   if (!btns.length) return;
@@ -278,6 +277,8 @@ function updateProviderButtons() {
       : '尚未設定 Gemini API Key（點擊設定）';
   }
 }
+// 直接把函式本體暴露到 window 供 inline onchange 呼叫（不能用 wrapper，會遞迴）
+window.updateProviderButtons = updateProviderButtons;
 
 function setModeIndicator(mode, label) {
   const dot = document.getElementById('modeDot');

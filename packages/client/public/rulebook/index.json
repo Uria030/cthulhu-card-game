@@ -1,6 +1,6 @@
 {
-  "version": "v01",
-  "frozen_at": "2026-04-18",
+  "version": "v02",
+  "frozen_at": "2026-04-19",
   "sections": [
     {
       "id": "rulebook",
@@ -23,7 +23,8 @@
         { "file": "s01_monster_family.md", "title": "怪物家族設計草案 v2", "lines": 685 },
         { "file": "s02_mythos_terms.md", "title": "克蘇魯神話專有名詞對照表 v0.1", "lines": 185 },
         { "file": "s03_card_design_spec.md", "title": "卡片設計規範 v0.2", "lines": 518 },
-        { "file": "s04_card_value_spec.md", "title": "卡片價值計算規範 v1.1 修正案", "lines": 634 }
+        { "file": "s04_card_value_spec.md", "title": "卡片價值計算規範 v1.1 修正案", "lines": 634 },
+        { "file": "s05_faction_pillars.md", "title": "支柱一 · 陣營與構築 v0.1（八陣營極完整定義）", "lines": 268 }
       ]
     },
     {

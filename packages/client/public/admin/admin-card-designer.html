@@ -2661,6 +2661,13 @@ ${userDescription}
       d.combat_style = null;
     }
 
+    // slot 白名單校驗：對應 DB card_slot enum，與 geminiDirectClient.js 保持同步
+    const validSlots = ['one_hand','two_hand','head','body','accessory','arcane','talent','expertise','none'];
+    if (!d.slot || !validSlots.includes(d.slot)) {
+      if (d.slot) console.warn('Invalid slot from AI, coercing:', d.slot);
+      d.slot = d.combat_style === 'arcane' ? 'arcane' : 'none';
+    }
+
     // Validate attribute_modifiers
     if (d.attribute_modifiers && typeof d.attribute_modifiers === 'object') {
       const validKeys = ['strength','agility','constitution','intellect','willpower','perception','charisma','all'];

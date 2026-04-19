@@ -382,10 +382,12 @@ ${userDescription}
 9. 武器不再指定固定的檢定屬性，檢定屬性由戰鬥風格卡決定
 10. spell_type 和 spell_casting 只有法術卡（combat_style=arcane）才需要填寫
 11. 法術卡 slot 固定為 arcane，combat_style 固定為 arcane
-12. 盟友卡需填 ally_hp 和 ally_san，HP+SAN 預算不超過 5（低費）或 7（高費）
-13. 技能卡費用固定為 0，skill_value 為 +1~+3
-14. subtypes 要正確標記（weapon/weapon_melee/weapon_ranged/weapon_arcane/item/arcane_item/consumable/ammo/arrow/spell/light_source）
-15. **等級 0 的卡片預設不能有消費能力**：level=0 時 consume_enabled 必須為 false、consume_effect 必須為 null。消費能力屬於進階設計元素，應由使用者升級卡片時（level ≥ 1）自行添加，AI 不可自動填入。${isBatch ? `
+12. 盟友卡（type=ally）slot 固定為 none；事件卡（type=event）、技能卡（type=skill）slot 預設為 none
+13. slot 合法值只有：one_hand, two_hand, head, body, accessory, arcane, talent, expertise, none（不可填 type 的值）
+14. 盟友卡需填 ally_hp 和 ally_san，HP+SAN 預算不超過 5（低費）或 7（高費）
+15. 技能卡費用固定為 0，skill_value 為 +1~+3
+16. subtypes 要正確標記（weapon/weapon_melee/weapon_ranged/weapon_arcane/item/arcane_item/consumable/ammo/arrow/spell/light_source）
+17. **等級 0 的卡片預設不能有消費能力**：level=0 時 consume_enabled 必須為 false、consume_effect 必須為 null。消費能力屬於進階設計元素，應由使用者升級卡片時（level ≥ 1）自行添加，AI 不可自動填入。${isBatch ? `
 
 ## 十一、批次要求（本次為批次模式）
 使用者要一次設計 **${batchCount} 張**卡片。嚴格遵守：
@@ -433,6 +435,14 @@ function validateAndFixCardData(d) {
   if (d.combat_style && !validStyles.includes(d.combat_style)) {
     console.warn('Invalid combat_style:', d.combat_style);
     d.combat_style = null;
+  }
+
+  // slot 白名單校驗：對應 DB card_slot enum。
+  // 批次模式無 form 中介，必須在此攔下不合法值（例如 Gemini 偶爾會把 type="ally" 複製到 slot）。
+  const validSlots = ['one_hand','two_hand','head','body','accessory','arcane','talent','expertise','none'];
+  if (!d.slot || !validSlots.includes(d.slot)) {
+    if (d.slot) console.warn('Invalid slot from AI, coercing:', d.slot);
+    d.slot = d.combat_style === 'arcane' ? 'arcane' : 'none';
   }
 
   if (d.attribute_modifiers && typeof d.attribute_modifiers === 'object') {

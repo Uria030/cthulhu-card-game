@@ -1,0 +1,217 @@
+{
+  "verbs": [
+    {
+      "code": "place_tile",
+      "name_zh": "放置地點",
+      "description_zh": "將地點放入當前地圖",
+      "icon": "📍",
+      "category": "tile",
+      "params": [
+        { "key": "location_code", "type": "location_picker", "label_zh": "地點", "mode": "replace", "required": true },
+        {
+          "key": "position",
+          "type": "select",
+          "label_zh": "放置位置",
+          "options": [
+            { "value": "central", "label_zh": "中央" },
+            { "value": "adjacent_to_spawn", "label_zh": "調查員起點相鄰" },
+            { "value": "unspecified", "label_zh": "未指定（由城主判斷）" }
+          ],
+          "default": "unspecified"
+        },
+        { "key": "auto_connect_to", "type": "location_picker_multi", "label_zh": "自動連接至", "required": false }
+      ]
+    },
+    {
+      "code": "remove_tile",
+      "name_zh": "移除地點",
+      "description_zh": "將地點從地圖移除",
+      "icon": "✖",
+      "category": "tile",
+      "params": [
+        { "key": "location_code", "type": "location_picker", "label_zh": "地點", "mode": "replace", "required": true },
+        {
+          "key": "handle_investigators",
+          "type": "select",
+          "label_zh": "處理站在此地的調查員",
+          "options": [
+            { "value": "move_to_spawn", "label_zh": "移至調查員起點" },
+            { "value": "move_to_nearest", "label_zh": "移至最近相鄰地點" },
+            { "value": "apply_damage", "label_zh": "施加傷害" }
+          ],
+          "default": "move_to_nearest"
+        }
+      ]
+    },
+    {
+      "code": "reveal_tile",
+      "name_zh": "翻開地點",
+      "description_zh": "揭開地點的隱藏資訊",
+      "icon": "🔍",
+      "category": "tile",
+      "params": [
+        { "key": "location_code", "type": "location_picker", "label_zh": "地點", "mode": "replace", "required": true },
+        { "key": "hidden_info_id", "type": "text", "label_zh": "揭開的隱藏資訊 ID", "required": false, "hint": "若留空則揭開全部隱藏資訊" }
+      ]
+    },
+    {
+      "code": "flip_card",
+      "name_zh": "翻面卡片",
+      "description_zh": "將指定卡片翻面",
+      "icon": "🔄",
+      "category": "card",
+      "params": [
+        {
+          "key": "target_type",
+          "type": "select",
+          "label_zh": "翻面對象",
+          "options": [
+            { "value": "act", "label_zh": "目標卡" },
+            { "value": "agenda", "label_zh": "議案卡" },
+            { "value": "location", "label_zh": "地點卡" }
+          ],
+          "required": true
+        },
+        { "key": "target_id", "type": "text", "label_zh": "對象識別（卡序或地點代碼）", "required": true }
+      ]
+    },
+    {
+      "code": "connect_tiles",
+      "name_zh": "建立連接",
+      "description_zh": "讓兩個地點可以互相移動",
+      "icon": "⇔",
+      "category": "topology",
+      "params": [
+        { "key": "location_a", "type": "location_picker", "label_zh": "地點 A", "mode": "replace", "required": true },
+        { "key": "location_b", "type": "location_picker", "label_zh": "地點 B", "mode": "replace", "required": true },
+        { "key": "cost", "type": "number", "label_zh": "移動成本", "default": 1, "min": 1, "max": 5 }
+      ]
+    },
+    {
+      "code": "disconnect_tiles",
+      "name_zh": "斷開連接",
+      "description_zh": "阻斷兩個地點的連接",
+      "icon": "⇎",
+      "category": "topology",
+      "params": [
+        { "key": "location_a", "type": "location_picker", "label_zh": "地點 A", "mode": "replace", "required": true },
+        { "key": "location_b", "type": "location_picker", "label_zh": "地點 B", "mode": "replace", "required": true }
+      ]
+    },
+    {
+      "code": "spawn_enemy",
+      "name_zh": "生成敵人",
+      "description_zh": "生成新敵人（會觸發生成敘事）",
+      "icon": "🐙",
+      "category": "enemy",
+      "params": [
+        { "key": "family_code", "type": "family_picker", "label_zh": "怪物家族", "required": true },
+        { "key": "tier", "type": "tier_select", "label_zh": "位階", "required": true },
+        { "key": "location_code", "type": "location_picker", "label_zh": "生成地點", "mode": "replace", "required": true },
+        { "key": "count", "type": "number", "label_zh": "數量", "default": 1, "min": 1, "max": 6 }
+      ]
+    },
+    {
+      "code": "place_enemy",
+      "name_zh": "直接放置敵人",
+      "description_zh": "直接放置敵人（不觸發生成敘事）",
+      "icon": "💀",
+      "category": "enemy",
+      "params": [
+        { "key": "family_code", "type": "family_picker", "label_zh": "怪物家族", "required": true },
+        { "key": "tier", "type": "tier_select", "label_zh": "位階", "required": true },
+        { "key": "location_code", "type": "location_picker", "label_zh": "放置地點", "mode": "replace", "required": true },
+        { "key": "count", "type": "number", "label_zh": "數量", "default": 1, "min": 1, "max": 6 }
+      ]
+    },
+    {
+      "code": "create_light",
+      "name_zh": "建立光源",
+      "icon": "💡",
+      "category": "environment",
+      "params": [
+        { "key": "location_code", "type": "location_picker", "label_zh": "地點", "mode": "replace", "required": true }
+      ]
+    },
+    {
+      "code": "extinguish_light",
+      "name_zh": "熄滅光源",
+      "icon": "🕯",
+      "category": "environment",
+      "params": [
+        { "key": "location_code", "type": "location_picker", "label_zh": "地點", "mode": "replace", "required": true }
+      ]
+    },
+    {
+      "code": "create_darkness",
+      "name_zh": "建立黑暗",
+      "icon": "🌑",
+      "category": "environment",
+      "params": [
+        { "key": "location_code", "type": "location_picker", "label_zh": "地點", "mode": "replace", "required": true }
+      ]
+    },
+    {
+      "code": "remove_darkness",
+      "name_zh": "移除黑暗",
+      "icon": "☀",
+      "category": "environment",
+      "params": [
+        { "key": "location_code", "type": "location_picker", "label_zh": "地點", "mode": "replace", "required": true }
+      ]
+    },
+    {
+      "code": "create_fire",
+      "name_zh": "建立失火",
+      "icon": "🔥",
+      "category": "environment",
+      "params": [
+        { "key": "location_code", "type": "location_picker", "label_zh": "地點", "mode": "replace", "required": true }
+      ]
+    },
+    {
+      "code": "extinguish_fire",
+      "name_zh": "撲滅失火",
+      "icon": "💧",
+      "category": "environment",
+      "params": [
+        { "key": "location_code", "type": "location_picker", "label_zh": "地點", "mode": "replace", "required": true }
+      ]
+    },
+    {
+      "code": "place_clue",
+      "name_zh": "放置線索",
+      "icon": "🔎",
+      "category": "token",
+      "params": [
+        { "key": "location_code", "type": "location_picker", "label_zh": "地點", "mode": "replace", "required": true },
+        { "key": "count", "type": "number", "label_zh": "數量", "default": 1, "min": 1, "max": 10 }
+      ]
+    },
+    {
+      "code": "advance_act",
+      "name_zh": "推進目標牌堆",
+      "description_zh": "強制推進目標牌堆（無視推進條件）",
+      "icon": "▶",
+      "category": "meta",
+      "params": []
+    },
+    {
+      "code": "advance_agenda",
+      "name_zh": "推進議案牌堆",
+      "description_zh": "強制推進議案牌堆（無視毀滅門檻）",
+      "icon": "⏩",
+      "category": "meta",
+      "params": []
+    }
+  ],
+  "category_labels": {
+    "tile": "地點操作",
+    "card": "卡片操作",
+    "topology": "連接操作",
+    "enemy": "敵人操作",
+    "environment": "環境操作",
+    "token": "標記操作",
+    "meta": "牌堆控制"
+  }
+}

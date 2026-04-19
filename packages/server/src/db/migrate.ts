@@ -2340,6 +2340,153 @@ CREATE INDEX IF NOT EXISTS idx_interlude_chapter
 `;
 
 // ============================================
+// Migration 018: 關卡編輯器 (MOD-07)
+//   stages / scenarios / stage_act_cards / stage_agenda_cards
+//   stage_encounter_pool / stage_mythos_pool / stage_chaos_bag
+//   stage_monster_pool / random_dungeon_generators
+// ============================================
+const MIGRATION_018_SQL = `
+CREATE TABLE IF NOT EXISTS stages (
+  id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  chapter_id             UUID REFERENCES chapters(id) ON DELETE CASCADE,
+  code                   VARCHAR(64) NOT NULL UNIQUE,
+  name_zh                VARCHAR(128) NOT NULL,
+  name_en                VARCHAR(128) NOT NULL DEFAULT '',
+  stage_type             VARCHAR(16) NOT NULL
+                         CHECK (stage_type IN ('main','side','side_return','side_random')),
+  narrative              TEXT NOT NULL DEFAULT '',
+  entry_condition        JSONB,
+  completion_flags       JSONB NOT NULL DEFAULT '[]'::jsonb,
+  scaling_rules          JSONB NOT NULL DEFAULT '{}'::jsonb,
+  return_parent_id       UUID REFERENCES stages(id) ON DELETE SET NULL,
+  return_overrides       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  return_stage_number    INTEGER,
+  side_signature_card_id UUID,
+  design_status          VARCHAR(16) NOT NULL DEFAULT 'draft'
+                         CHECK (design_status IN ('draft','review','published')),
+  version                INTEGER NOT NULL DEFAULT 1,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_stages_chapter ON stages(chapter_id);
+CREATE INDEX IF NOT EXISTS idx_stages_type ON stages(stage_type);
+CREATE INDEX IF NOT EXISTS idx_stages_return_parent ON stages(return_parent_id);
+
+CREATE TABLE IF NOT EXISTS scenarios (
+  id                           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  stage_id                     UUID NOT NULL REFERENCES stages(id) ON DELETE CASCADE,
+  scenario_order               INTEGER NOT NULL,
+  name_zh                      VARCHAR(128) NOT NULL DEFAULT '',
+  name_en                      VARCHAR(128) NOT NULL DEFAULT '',
+  narrative                    TEXT NOT NULL DEFAULT '',
+  initial_location_codes       VARCHAR(64)[] NOT NULL DEFAULT '{}',
+  initial_connections          JSONB NOT NULL DEFAULT '[]'::jsonb,
+  investigator_spawn_location  VARCHAR(64),
+  initial_environment          JSONB NOT NULL DEFAULT '{}'::jsonb,
+  initial_enemies              JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (stage_id, scenario_order)
+);
+CREATE INDEX IF NOT EXISTS idx_scenarios_stage ON scenarios(stage_id);
+
+CREATE TABLE IF NOT EXISTS stage_act_cards (
+  id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  stage_id                 UUID NOT NULL REFERENCES stages(id) ON DELETE CASCADE,
+  card_order               INTEGER NOT NULL,
+  name_zh                  VARCHAR(128) NOT NULL DEFAULT '',
+  name_en                  VARCHAR(128) NOT NULL DEFAULT '',
+  front_narrative          TEXT NOT NULL DEFAULT '',
+  front_objective_types    VARCHAR(32)[] NOT NULL DEFAULT '{}',
+  front_advance_condition  JSONB NOT NULL DEFAULT '{}'::jsonb,
+  front_scaling            JSONB NOT NULL DEFAULT '{}'::jsonb,
+  back_narrative           TEXT NOT NULL DEFAULT '',
+  back_flag_sets           JSONB NOT NULL DEFAULT '[]'::jsonb,
+  back_rewards             JSONB NOT NULL DEFAULT '{}'::jsonb,
+  back_map_operations      JSONB NOT NULL DEFAULT '[]'::jsonb,
+  back_resolution_code     VARCHAR(64),
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (stage_id, card_order)
+);
+CREATE INDEX IF NOT EXISTS idx_act_cards_stage ON stage_act_cards(stage_id);
+
+CREATE TABLE IF NOT EXISTS stage_agenda_cards (
+  id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  stage_id               UUID NOT NULL REFERENCES stages(id) ON DELETE CASCADE,
+  card_order             INTEGER NOT NULL,
+  name_zh                VARCHAR(128) NOT NULL DEFAULT '',
+  name_en                VARCHAR(128) NOT NULL DEFAULT '',
+  front_narrative        TEXT NOT NULL DEFAULT '',
+  front_doom_threshold   INTEGER NOT NULL DEFAULT 3,
+  back_narrative         TEXT NOT NULL DEFAULT '',
+  back_flag_sets         JSONB NOT NULL DEFAULT '[]'::jsonb,
+  back_penalties         JSONB NOT NULL DEFAULT '[]'::jsonb,
+  back_map_operations    JSONB NOT NULL DEFAULT '[]'::jsonb,
+  back_resolution_code   VARCHAR(64),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (stage_id, card_order)
+);
+CREATE INDEX IF NOT EXISTS idx_agenda_cards_stage ON stage_agenda_cards(stage_id);
+
+CREATE TABLE IF NOT EXISTS stage_encounter_pool (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  stage_id            UUID NOT NULL REFERENCES stages(id) ON DELETE CASCADE,
+  encounter_card_id   UUID NOT NULL,
+  weight              INTEGER NOT NULL DEFAULT 1 CHECK (weight > 0),
+  UNIQUE (stage_id, encounter_card_id)
+);
+CREATE INDEX IF NOT EXISTS idx_encounter_pool_stage ON stage_encounter_pool(stage_id);
+
+CREATE TABLE IF NOT EXISTS stage_mythos_pool (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  stage_id         UUID NOT NULL REFERENCES stages(id) ON DELETE CASCADE,
+  mythos_card_id   UUID NOT NULL,
+  weight           INTEGER NOT NULL DEFAULT 1 CHECK (weight > 0),
+  UNIQUE (stage_id, mythos_card_id)
+);
+CREATE INDEX IF NOT EXISTS idx_mythos_pool_stage ON stage_mythos_pool(stage_id);
+
+CREATE TABLE IF NOT EXISTS stage_chaos_bag (
+  stage_id             UUID PRIMARY KEY REFERENCES stages(id) ON DELETE CASCADE,
+  difficulty_preset    VARCHAR(16) NOT NULL DEFAULT 'standard'
+                       CHECK (difficulty_preset IN ('easy','standard','hard','expert')),
+  number_markers       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  scenario_markers     JSONB NOT NULL DEFAULT '{}'::jsonb,
+  mythos_markers       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  dynamic_markers      JSONB NOT NULL DEFAULT '{"bless":0,"curse":0}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS stage_monster_pool (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  stage_id           UUID NOT NULL REFERENCES stages(id) ON DELETE CASCADE,
+  family_code        VARCHAR(64) NOT NULL,
+  role               VARCHAR(16) NOT NULL
+                     CHECK (role IN ('primary','secondary')),
+  allowed_tiers      VARCHAR(16)[] NOT NULL DEFAULT '{}',
+  fixed_boss_ids     UUID[] NOT NULL DEFAULT '{}',
+  UNIQUE (stage_id, family_code)
+);
+CREATE INDEX IF NOT EXISTS idx_monster_pool_stage ON stage_monster_pool(stage_id);
+
+CREATE TABLE IF NOT EXISTS random_dungeon_generators (
+  stage_id              UUID PRIMARY KEY REFERENCES stages(id) ON DELETE CASCADE,
+  location_pool         JSONB NOT NULL DEFAULT '[]'::jsonb,
+  topology_rules        JSONB NOT NULL DEFAULT '{}'::jsonb,
+  act_template_pool     JSONB NOT NULL DEFAULT '{}'::jsonb,
+  agenda_template_pool  JSONB NOT NULL DEFAULT '{}'::jsonb,
+  monster_rules         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  chaos_bag_rules       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  mythos_pool_rules     JSONB NOT NULL DEFAULT '{}'::jsonb,
+  encounter_pool_rules  JSONB NOT NULL DEFAULT '{}'::jsonb,
+  victory_conditions    JSONB NOT NULL DEFAULT '[]'::jsonb,
+  reward_rules          JSONB NOT NULL DEFAULT '{}'::jsonb,
+  seed_verified_at      TIMESTAMPTZ
+);
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -2507,6 +2654,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_015_SQL);
     await client.query(MIGRATION_016_SQL);
     await client.query(MIGRATION_017_SQL);
+    await client.query(MIGRATION_018_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

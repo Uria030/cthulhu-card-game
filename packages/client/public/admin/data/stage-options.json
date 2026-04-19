@@ -1,0 +1,180 @@
+{
+  "stage_types": [
+    { "code": "main", "name_zh": "主線關卡" },
+    { "code": "side", "name_zh": "預設支線" },
+    { "code": "side_return", "name_zh": "支線重返版" },
+    { "code": "side_random", "name_zh": "隨機地城" }
+  ],
+  "design_statuses": [
+    { "code": "draft", "name_zh": "草稿" },
+    { "code": "review", "name_zh": "審核中" },
+    { "code": "published", "name_zh": "已發佈" }
+  ],
+  "location_scales": [
+    { "code": "room", "name_zh": "房間級" },
+    { "code": "block", "name_zh": "街區級" },
+    { "code": "city", "name_zh": "城市級" },
+    { "code": "intercontinental", "name_zh": "跨國級" }
+  ],
+  "enemy_tiers": [
+    { "code": "minion", "name_zh": "雜兵" },
+    { "code": "threat", "name_zh": "威脅" },
+    { "code": "elite", "name_zh": "精英" },
+    { "code": "boss", "name_zh": "頭目" },
+    { "code": "titan", "name_zh": "巨頭" }
+  ],
+  "environment_states": [
+    { "code": "day", "name_zh": "白天" },
+    { "code": "night", "name_zh": "夜間" },
+    { "code": "darkness", "name_zh": "黑暗" },
+    { "code": "fire", "name_zh": "失火" }
+  ],
+  "objective_types": [
+    { "code": "seal_gate", "name_zh": "封印次元門" },
+    { "code": "defeat_titan", "name_zh": "擊敗巨頭" },
+    { "code": "uncover_truth", "name_zh": "發覺真相" },
+    { "code": "escape", "name_zh": "逃脫" },
+    { "code": "endurance", "name_zh": "撐到時間到" }
+  ],
+  "scenario_marker_effects": {
+    "skull": [
+      { "code": "death_touch", "name_zh": "死亡之觸" },
+      { "code": "trauma_erosion", "name_zh": "創傷侵蝕" },
+      { "code": "blood_sacrifice", "name_zh": "血祭" },
+      { "code": "life_drain", "name_zh": "生命流逝" },
+      { "code": "life_cost", "name_zh": "生命代價" }
+    ],
+    "cultist": [
+      { "code": "doom_advance", "name_zh": "末日推進" },
+      { "code": "follower_response", "name_zh": "信徒回應" },
+      { "code": "ritual_resonance", "name_zh": "儀式共鳴" },
+      { "code": "exposure", "name_zh": "暴露" },
+      { "code": "dark_ritual", "name_zh": "黑暗儀式" }
+    ],
+    "tablet": [
+      { "code": "forbidden_knowledge", "name_zh": "禁忌知識" },
+      { "code": "mad_whispers", "name_zh": "瘋狂低語" },
+      { "code": "memory_collapse", "name_zh": "記憶崩解" },
+      { "code": "mental_exhaustion", "name_zh": "精神枯竭" },
+      { "code": "things_not_to_know", "name_zh": "不應知曉之事" }
+    ],
+    "elder_thing": [
+      { "code": "rift_expansion", "name_zh": "裂隙擴張" },
+      { "code": "spacetime_distortion", "name_zh": "時空扭曲" },
+      { "code": "otherworldly_seep", "name_zh": "異界滲透" },
+      { "code": "space_rupture", "name_zh": "空間斷裂" },
+      { "code": "otherworldly_fire", "name_zh": "異界之火" },
+      { "code": "void_chill", "name_zh": "虛空寒流" }
+    ]
+  },
+  "difficulty_presets": {
+    "easy": {
+      "number_markers": { "+1": 2, "0": 3, "-1": 2, "-2": 0, "-3": 0, "-4": 0 },
+      "scenario_markers": {
+        "skull": { "count": 1, "effect": "death_touch", "value": -1 },
+        "cultist": { "count": 1, "effect": "follower_response", "value": -1 },
+        "tablet": { "count": 0, "effect": "forbidden_knowledge", "value": -2 },
+        "elder_thing": { "count": 0, "effect": "otherworldly_seep", "value": -2 }
+      },
+      "mythos_markers": {
+        "clue": { "count": 2, "value": 0 },
+        "headline": { "count": 1, "value": -1 },
+        "monster": { "count": 1, "value": -2 },
+        "doom": { "count": 0, "value": -3 },
+        "gate": { "count": 0, "value": -3 }
+      }
+    },
+    "standard": {
+      "number_markers": { "+1": 1, "0": 2, "-1": 2, "-2": 2, "-3": 0, "-4": 0 },
+      "scenario_markers": {
+        "skull": { "count": 2, "effect": "blood_sacrifice", "value": -1 },
+        "cultist": { "count": 1, "effect": "follower_response", "value": -2 },
+        "tablet": { "count": 1, "effect": "forbidden_knowledge", "value": -2 },
+        "elder_thing": { "count": 1, "effect": "otherworldly_seep", "value": -3 }
+      },
+      "mythos_markers": {
+        "clue": { "count": 1, "value": -1 },
+        "headline": { "count": 1, "value": -1 },
+        "monster": { "count": 1, "value": -2 },
+        "doom": { "count": 1, "value": -3 },
+        "gate": { "count": 0, "value": -3 }
+      }
+    },
+    "hard": {
+      "number_markers": { "+1": 1, "0": 1, "-1": 2, "-2": 2, "-3": 1, "-4": 0 },
+      "scenario_markers": {
+        "skull": { "count": 2, "effect": "trauma_erosion", "value": -2 },
+        "cultist": { "count": 2, "effect": "doom_advance", "value": -2 },
+        "tablet": { "count": 1, "effect": "mad_whispers", "value": -2 },
+        "elder_thing": { "count": 1, "effect": "rift_expansion", "value": -3 }
+      },
+      "mythos_markers": {
+        "clue": { "count": 1, "value": -1 },
+        "headline": { "count": 0, "value": -2 },
+        "monster": { "count": 1, "value": -3 },
+        "doom": { "count": 1, "value": -3 },
+        "gate": { "count": 1, "value": -4 }
+      }
+    },
+    "expert": {
+      "number_markers": { "+1": 0, "0": 1, "-1": 2, "-2": 2, "-3": 2, "-4": 1 },
+      "scenario_markers": {
+        "skull": { "count": 2, "effect": "life_cost", "value": -2 },
+        "cultist": { "count": 2, "effect": "dark_ritual", "value": -3 },
+        "tablet": { "count": 2, "effect": "things_not_to_know", "value": -3 },
+        "elder_thing": { "count": 2, "effect": "space_rupture", "value": -4 }
+      },
+      "mythos_markers": {
+        "clue": { "count": 0, "value": -2 },
+        "headline": { "count": 0, "value": -2 },
+        "monster": { "count": 1, "value": -3 },
+        "doom": { "count": 1, "value": -4 },
+        "gate": { "count": 1, "value": -5 }
+      }
+    }
+  },
+  "family_effect_suggestions": {
+    "cthulhu_spawn": {
+      "skull": "death_touch",
+      "cultist": "follower_response",
+      "tablet": "mad_whispers",
+      "elder_thing": "rift_expansion"
+    },
+    "deep_one": {
+      "skull": "blood_sacrifice",
+      "cultist": "dark_ritual",
+      "tablet": "things_not_to_know",
+      "elder_thing": "otherworldly_seep"
+    },
+    "nyarlathotep_envoy": {
+      "skull": "life_drain",
+      "cultist": "exposure",
+      "tablet": "memory_collapse",
+      "elder_thing": "spacetime_distortion"
+    },
+    "hastur_disciple": {
+      "skull": "trauma_erosion",
+      "cultist": "ritual_resonance",
+      "tablet": "forbidden_knowledge",
+      "elder_thing": "void_chill"
+    },
+    "yog_sothoth_breach": {
+      "skull": "life_cost",
+      "cultist": "doom_advance",
+      "tablet": "mental_exhaustion",
+      "elder_thing": "space_rupture"
+    },
+    "shub_niggurath_spawn": {
+      "skull": "blood_sacrifice",
+      "cultist": "follower_response",
+      "tablet": "mad_whispers",
+      "elder_thing": "otherworldly_fire"
+    },
+    "undead_cult": {
+      "skull": "death_touch",
+      "cultist": "dark_ritual",
+      "tablet": "forbidden_knowledge",
+      "elder_thing": "otherworldly_seep"
+    }
+  }
+}

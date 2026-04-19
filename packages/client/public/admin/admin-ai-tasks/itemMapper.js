@@ -198,6 +198,74 @@ function mapEnemyVariant(item, context) {
 // Dispatch + API path resolution (dynamic route params)
 // ────────────────────────────────────────────
 
+// ────────────────────────────────────────────
+// MOD-08: location
+// 主 POST /api/admin/locations；hidden_info 透過 __postSaveActions 獨立送出
+// ────────────────────────────────────────────
+function mapLocation(item) {
+  const b = { ...item };
+  const hiddenInfo = Array.isArray(b.hidden_info) ? b.hidden_info : [];
+  delete b.hidden_info;
+
+  if (hiddenInfo.length > 0) {
+    b.__postSaveActions = hiddenInfo.map((h, idx) => ({
+      label: `hidden_info[${idx}]`,
+      method: 'POST',
+      pathTemplate: '/api/admin/locations/{id}/hidden-info',
+      body: {
+        title_zh: h.title_zh || null,
+        title_en: h.title_en || null,
+        description_zh: h.description_zh || '',
+        description_en: h.description_en || null,
+        reveal_condition_type: h.reveal_condition_type || 'perception_threshold',
+        reveal_condition_params: h.reveal_condition_params || { threshold: 3 },
+        reward_type: h.reward_type || 'narrative_only',
+        reward_params: h.reward_params || {},
+      },
+    }));
+  }
+  return b;
+}
+
+// ────────────────────────────────────────────
+// MOD-05: combat specialization
+// 主 POST /api/combat-styles/:styleId/specs（styleId 由 apiPathResolver 帶入）
+// ────────────────────────────────────────────
+function mapCombatSpec(item) {
+  const b = { ...item };
+  // style_id 由使用者在 UI 層選定；若 AI 填了就清掉（以路徑為準）
+  delete b.style_id;
+  delete b.combat_style_id;
+  return b;
+}
+
+// ────────────────────────────────────────────
+// MOD-09: forging affix
+// 主 POST /api/affixes；tiers 透過 __postSaveActions 逐筆 POST /api/affixes/:id/tiers
+// ────────────────────────────────────────────
+function mapAffix(item) {
+  const b = { ...item };
+  const tiers = Array.isArray(b.tiers) ? b.tiers : [];
+  delete b.tiers;
+
+  if (tiers.length > 0) {
+    b.__postSaveActions = tiers.map((t, idx) => ({
+      label: `tier[${t.tier_label || idx}]`,
+      method: 'POST',
+      pathTemplate: '/api/affixes/{id}/tiers',
+      body: {
+        tier_label: t.tier_label,
+        tier_order: t.tier_order ?? idx + 1,
+        affix_value: t.affix_value ?? 0,
+        effect_detail_zh: t.effect_detail_zh || null,
+        effect_detail_en: t.effect_detail_en || null,
+        choice_payload: t.choice_payload || null,
+      },
+    }));
+  }
+  return b;
+}
+
 function mapItem(moduleCode, item, context) {
   if (!item || typeof item !== 'object') {
     throw new Error('mapItem: item must be object');
@@ -207,6 +275,9 @@ function mapItem(moduleCode, item, context) {
     case 'MOD-02': return mapTalentNode(item);
     case 'MOD-03': return mapEnemyVariant(item, context);
     case 'MOD-04': return mapSpirit(item);
+    case 'MOD-05': return mapCombatSpec(item);
+    case 'MOD-08': return mapLocation(item);
+    case 'MOD-09': return mapAffix(item);
     case 'MOD-10': return mapMythosCard(item);
     case 'MOD-11': return mapInvestigator(item);
     default:

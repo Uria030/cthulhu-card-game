@@ -1116,3 +1116,339 @@ async function generateInvestigatorViaDirectGemini(userDescription, { model = 'g
 window.buildInvestigatorDesignPrompt = buildInvestigatorDesignPrompt;
 window.validateAndFixInvestigatorData = validateAndFixInvestigatorData;
 window.generateInvestigatorViaDirectGemini = generateInvestigatorViaDirectGemini;
+
+// ═══════════════════════════════════════════════════════
+// MOD-08 地點設計器 — Location
+// ═══════════════════════════════════════════════════════
+function buildLocationDesignPrompt(userDescription, batchCount = 1) {
+  const isBatch = batchCount > 1;
+  return `你是克蘇魯神話卡牌冒險遊戲的地點設計助手。請依使用者描述產出地點資料。
+
+## 一、術語規範
+克蘇魯神話專有名詞採用台灣 TRPG/桌遊社群慣用譯名（克蘇魯、奈亞拉托提普、印斯茅斯、敦威治、阿卡姆）。情感基調：渺小感、未知的不安、真實代價。
+
+## 二、地點欄位
+- code：小寫英數底線，唯一代碼（例：gilman_house_hotel、marsh_basement）
+- name_zh / name_en：中文/英文名稱
+- description_zh / description_en：場所描述（80-200 字），第二人稱或旁觀視角
+- scale_tag：room（房間級）/ block（街區級）/ city（城市級）/ intercontinental（跨國級）
+- shroud：遮蔽難度 0-8，越高調查越難（一般房間 2-3、神秘場所 4-6、禁地 7-8）
+- clues_base：基礎線索數 1-5
+- clues_per_player：true / false（是否隨玩家人數縮放）
+- travel_cost：進入/移動成本 1-3（action_point 類型下通常為 1）
+- travel_cost_type：action_point / time
+- art_type：none（預設留空）
+- design_status：draft（預設）
+- design_notes：設計備註（可選，給設計師看的）
+
+## 三、隱藏資訊（選填）
+若場景需要隱藏資訊（可被調查揭露的秘密），填 hidden_info 陣列：
+[{
+  "title_zh": "短標題",
+  "description_zh": "揭露時呈現的敘事文字（50-150 字）",
+  "reveal_condition_type": "perception_threshold",
+  "reveal_condition_params": { "threshold": 3 },
+  "reward_type": "narrative_only",
+  "reward_params": {}
+}]
+- reveal_condition_type：perception_threshold（感知門檻 1-10）/ investigation_count（調查次數 1-10）/ manual / none
+- reward_type：narrative_only / clue / card / effect（預設 narrative_only 安全，其他型別的 params 交給設計師補）
+
+## 四、使用者需求
+${userDescription}
+
+## 五、輸出格式
+請回傳嚴格的 JSON${isBatch ? `（陣列長度必須為 ${batchCount}）` : ''}，不要加任何額外文字或 Markdown 標記：
+
+${isBatch ? '[' : ''}{
+  "code": "",
+  "name_zh": "",
+  "name_en": "",
+  "description_zh": "",
+  "description_en": "",
+  "scale_tag": "block",
+  "shroud": 3,
+  "clues_base": 2,
+  "clues_per_player": true,
+  "travel_cost": 1,
+  "travel_cost_type": "action_point",
+  "art_type": "none",
+  "design_status": "draft",
+  "design_notes": null,
+  "hidden_info": []
+}${isBatch ? `, ... 共 ${batchCount} 筆]` : ''}
+
+## 六、注意事項
+1. 每個地點的 code 必須唯一，批次模式下互不重複
+2. shroud 要與場所氛圍一致：公共場所 1-3、半禁區 4-6、禁地 7-8
+3. hidden_info 非必填，預設空陣列。有主題暗示時才加
+4. description_zh 要有氛圍但不過度血腥
+5. 不要使用現代網路用語
+${isBatch ? `\n## 七、批次模式\n- 陣列長度嚴格等於 ${batchCount}\n- 所有地點圍繞使用者描述的同一主題，彼此有地理或情境呼應\n- code 必須互不重複` : ''}`;
+}
+
+function validateAndFixLocationData(d) {
+  if (!d || typeof d !== 'object') return d;
+  const validScales = ['room', 'block', 'city', 'intercontinental'];
+  if (!validScales.includes(d.scale_tag)) d.scale_tag = 'block';
+  d.shroud = Math.max(0, Math.min(8, parseInt(d.shroud, 10) || 2));
+  d.clues_base = Math.max(0, Math.min(10, parseInt(d.clues_base, 10) || 1));
+  d.travel_cost = Math.max(1, Math.min(5, parseInt(d.travel_cost, 10) || 1));
+  const validArtTypes = ['none', 'image_url', 'svg_generated', 'svg_custom'];
+  if (!validArtTypes.includes(d.art_type)) d.art_type = 'none';
+  const validStatuses = ['draft', 'review', 'approved'];
+  if (!validStatuses.includes(d.design_status)) d.design_status = 'draft';
+  const validTravelTypes = ['action_point', 'time'];
+  if (!validTravelTypes.includes(d.travel_cost_type)) d.travel_cost_type = 'action_point';
+
+  if (Array.isArray(d.hidden_info)) {
+    const validReveal = ['perception_threshold', 'investigation_count', 'manual', 'none'];
+    const validReward = ['narrative_only', 'clue', 'card', 'effect'];
+    d.hidden_info = d.hidden_info.map((h) => {
+      if (!h || typeof h !== 'object') return null;
+      if (!validReveal.includes(h.reveal_condition_type)) h.reveal_condition_type = 'perception_threshold';
+      if (!validReward.includes(h.reward_type)) h.reward_type = 'narrative_only';
+      if (h.reveal_condition_type === 'perception_threshold') {
+        const t = h.reveal_condition_params?.threshold;
+        h.reveal_condition_params = { threshold: Math.max(1, Math.min(10, parseInt(t, 10) || 3)) };
+      } else if (h.reveal_condition_type === 'investigation_count') {
+        const c = h.reveal_condition_params?.count;
+        h.reveal_condition_params = { count: Math.max(1, Math.min(10, parseInt(c, 10) || 2)) };
+      } else {
+        h.reveal_condition_params = h.reveal_condition_params || {};
+      }
+      h.reward_params = h.reward_params || {};
+      return h;
+    }).filter(Boolean);
+  } else {
+    d.hidden_info = [];
+  }
+  return d;
+}
+
+async function generateLocationViaDirectGemini(userDescription, { model = 'gemini-2.5-pro', batchCount = 1, apiKey } = {}) {
+  if (!userDescription || typeof userDescription !== 'string') throw new Error('userDescription 為空');
+  const prompt = buildLocationDesignPrompt(userDescription, batchCount);
+  const { text, modelName } = await callGeminiDirect({ prompt, model, apiKey });
+  const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
+  let data;
+  try { data = JSON.parse(cleanJson); }
+  catch (e) { throw new Error('Gemini 回傳內容不是合法 JSON：' + e.message); }
+  const items = Array.isArray(data) ? data.map(validateAndFixLocationData) : [validateAndFixLocationData(data)];
+  return { items, modelUsed: modelName };
+}
+
+window.buildLocationDesignPrompt = buildLocationDesignPrompt;
+window.validateAndFixLocationData = validateAndFixLocationData;
+window.generateLocationViaDirectGemini = generateLocationViaDirectGemini;
+
+// ═══════════════════════════════════════════════════════
+// MOD-05 戰鬥風格專精 — Combat Specialization
+// 設計目標：為「某個風格（8 種固定）」新增一個專精。本模組的 8 風格與 30 固定專精
+// 已預建，但使用者可以為特定風格新增額外專精或命名尚未填寫的骨架。
+// ═══════════════════════════════════════════════════════
+function buildCombatSpecDesignPrompt(userDescription, batchCount = 1) {
+  const isBatch = batchCount > 1;
+  return `你是克蘇魯卡牌遊戲的戰鬥專精設計助手。為指定的戰鬥風格產出專精資料。
+
+## 一、戰鬥風格體系
+遊戲有 8 種戰鬥風格（固定）：
+- shooting（射擊）、archery（弓術）、sidearm（手槍）、military（軍武）
+- brawl（格鬥）、arcane（奧術）、engineer（工程）、assassin（暗殺）
+
+每種風格下有 3-5 種專精（如射擊下的「精準射手」「狙擊手」「散彈專家」）。
+
+## 二、七大屬性
+strength（力）、agility（敏）、constitution（體）、intellect（智）、willpower（志）、perception（感）、charisma（魅）
+
+## 三、專精欄位
+- code：小寫英數底線（例：precision_marksman、demolitions_expert）
+- name_zh / name_en：中文/英文名稱
+- description_zh：專精說明（30-80 字），描述此路線的戰鬥風格取向
+- description_en：英文對應
+- attribute：主屬性（七大之一，決定檢定骨幹）
+- prof_bonus：熟練加值 1-3（基本精通）
+- spec_bonus：專精加值 2-5（達到專精境界）
+
+## 四、使用者需求
+${userDescription}
+
+## 五、輸出格式
+${isBatch ? `陣列，長度嚴格等於 ${batchCount}：` : '單一 JSON 物件：'}
+${isBatch ? '[' : ''}{
+  "code": "",
+  "name_zh": "",
+  "name_en": "",
+  "description_zh": "",
+  "description_en": "",
+  "attribute": "agility",
+  "prof_bonus": 1,
+  "spec_bonus": 3
+}${isBatch ? ', ...]' : ''}
+
+## 六、注意事項
+1. code 小寫英數底線、唯一、批次內互不重複
+2. attribute 必須是七大屬性之一
+3. prof_bonus < spec_bonus（專精加值必大於熟練）
+4. description_zh 要描述「這條路的人物形象與打法傾向」，不是單純的機制文字
+5. 不要填 style_id / combat_style_id（由呼叫端依路徑決定所屬風格）`;
+}
+
+function validateAndFixCombatSpecData(d) {
+  if (!d || typeof d !== 'object') return d;
+  const validAttrs = ['strength', 'agility', 'constitution', 'intellect', 'willpower', 'perception', 'charisma'];
+  if (!validAttrs.includes(d.attribute)) d.attribute = 'agility';
+  d.prof_bonus = Math.max(1, Math.min(3, parseInt(d.prof_bonus, 10) || 1));
+  d.spec_bonus = Math.max(2, Math.min(5, parseInt(d.spec_bonus, 10) || 3));
+  if (d.prof_bonus >= d.spec_bonus) d.spec_bonus = d.prof_bonus + 1;
+  return d;
+}
+
+async function generateCombatSpecViaDirectGemini(userDescription, { model = 'gemini-2.5-pro', batchCount = 1, apiKey } = {}) {
+  if (!userDescription || typeof userDescription !== 'string') throw new Error('userDescription 為空');
+  const prompt = buildCombatSpecDesignPrompt(userDescription, batchCount);
+  const { text, modelName } = await callGeminiDirect({ prompt, model, apiKey });
+  const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
+  let data;
+  try { data = JSON.parse(cleanJson); }
+  catch (e) { throw new Error('Gemini 回傳內容不是合法 JSON：' + e.message); }
+  const items = Array.isArray(data) ? data.map(validateAndFixCombatSpecData) : [validateAndFixCombatSpecData(data)];
+  return { items, modelUsed: modelName };
+}
+
+window.buildCombatSpecDesignPrompt = buildCombatSpecDesignPrompt;
+window.validateAndFixCombatSpecData = validateAndFixCombatSpecData;
+window.generateCombatSpecViaDirectGemini = generateCombatSpecViaDirectGemini;
+
+// ═══════════════════════════════════════════════════════
+// MOD-09 鍛造詞條 — Forging Affix
+// ═══════════════════════════════════════════════════════
+function buildAffixDesignPrompt(userDescription, batchCount = 1) {
+  const isBatch = batchCount > 1;
+  return `你是克蘇魯卡牌遊戲的鍛造詞條設計助手。為武器/裝備設計新的鍛造詞條。
+
+## 一、五大素材類別（category_code）
+- ore（礦物）— 適合護甲、鈍器、金屬武器
+- wood（木材）— 適合箭、杖、木盾
+- insect（蟲類）— 適合異化詞條（中毒/燃燒/冷凍）
+- fish（魚類）— 適合水生/深潛詞條
+- monster（怪物素材）— 適合高階 / 奧術詞條
+
+## 二、詞條階級模式（tier_mode）
+- scaling：有 +1/+2/+3 三階，V 值遞增（例：利刃 +1/+2/+3 = 傷害 +1/+2/+3）
+- fixed：固定效果，無階級（例：快速 — 不消耗行動點）
+- choice：玩家從清單選一個（例：蟲淬 II 選中毒/燃燒/冷凍/弱化）
+
+## 三、適用卡片子類型（applicable_subtypes 陣列）
+weapon / weapon_melee / weapon_ranged / weapon_arcane / item / arcane_item / consumable / ammo / arrow / spell / light_source / armor / accessory
+留空陣列代表通用。
+
+## 四、詞條欄位
+- code：小寫英數底線（例：keen_edge、venom_coat）
+- name_zh / name_en：詞條中文/英文名稱（簡短 2-6 字）
+- category_code：五大素材類別之一
+- effect_description_zh / effect_description_en：效果敘述（30-60 字）
+- applicable_subtypes：適用卡片子類型陣列
+- tier_mode：scaling / fixed / choice
+- design_status：pending（預設）
+- notes：設計備註（可選）
+
+## 五、tiers 子結構（依 tier_mode 產出對應數量）
+- scaling：陣列 3 筆，tier_label 為 "+1"/"+2"/"+3"，affix_value 遞增
+- fixed：陣列 1 筆，tier_label 為 "fixed"
+- choice：陣列 2-4 筆，每筆 tier_label 為選項名稱，須有 choice_payload
+
+範例 tiers 結構：
+"tiers": [
+  { "tier_label": "+1", "tier_order": 1, "affix_value": 3, "effect_detail_zh": "傷害 +1", "choice_payload": null },
+  { "tier_label": "+2", "tier_order": 2, "affix_value": 6, "effect_detail_zh": "傷害 +2", "choice_payload": null },
+  { "tier_label": "+3", "tier_order": 3, "affix_value": 9, "effect_detail_zh": "傷害 +3", "choice_payload": null }
+]
+
+## 六、V 值（affix_value）參考
+- scaling +1 通常 2-4、+2 為 5-8、+3 為 9-14
+- fixed 固定效果通常 5-10
+- choice 每個選項 3-6（選擇性由玩家）
+
+## 七、使用者需求
+${userDescription}
+
+## 八、輸出格式
+${isBatch ? `陣列，長度嚴格等於 ${batchCount}：` : '單一 JSON 物件：'}
+${isBatch ? '[' : ''}{
+  "code": "",
+  "name_zh": "",
+  "name_en": "",
+  "category_code": "ore",
+  "effect_description_zh": "",
+  "effect_description_en": "",
+  "applicable_subtypes": ["weapon"],
+  "tier_mode": "scaling",
+  "design_status": "pending",
+  "notes": null,
+  "tiers": []
+}${isBatch ? ', ...]' : ''}
+
+## 九、注意事項
+1. tier_mode 與 tiers 結構必須一致（scaling=3 筆、fixed=1 筆、choice=2-4 筆）
+2. choice 模式的每筆 tier 要有 choice_payload（例 {"status":"bleed","stacks":1}）
+3. V 值要合理（不要給 scaling +1 超過 5 的數值）
+4. effect_description_zh 要明確描述「這詞條做什麼」`;
+}
+
+function validateAndFixAffixData(d) {
+  if (!d || typeof d !== 'object') return d;
+  const validCats = ['ore', 'wood', 'insect', 'fish', 'monster'];
+  if (!validCats.includes(d.category_code)) d.category_code = 'ore';
+  const validModes = ['scaling', 'fixed', 'choice'];
+  if (!validModes.includes(d.tier_mode)) d.tier_mode = 'scaling';
+  const validStatuses = ['pending', 'partial', 'complete'];
+  if (!validStatuses.includes(d.design_status)) d.design_status = 'pending';
+  if (!Array.isArray(d.applicable_subtypes)) d.applicable_subtypes = [];
+
+  // tiers 結構校驗
+  if (!Array.isArray(d.tiers)) d.tiers = [];
+  if (d.tier_mode === 'scaling') {
+    // 強制 3 筆
+    while (d.tiers.length < 3) {
+      d.tiers.push({ tier_label: `+${d.tiers.length + 1}`, tier_order: d.tiers.length + 1, affix_value: (d.tiers.length + 1) * 3, effect_detail_zh: '', choice_payload: null });
+    }
+    d.tiers = d.tiers.slice(0, 3);
+    d.tiers.forEach((t, i) => { t.tier_order = i + 1; t.tier_label = `+${i + 1}`; t.choice_payload = null; });
+  } else if (d.tier_mode === 'fixed') {
+    if (d.tiers.length === 0) d.tiers = [{ tier_label: 'fixed', tier_order: 1, affix_value: 5, effect_detail_zh: '', choice_payload: null }];
+    d.tiers = d.tiers.slice(0, 1);
+    d.tiers[0].tier_order = 1;
+    d.tiers[0].tier_label = 'fixed';
+    d.tiers[0].choice_payload = null;
+  } else if (d.tier_mode === 'choice') {
+    if (d.tiers.length < 2) {
+      // 補足至 2 筆
+      while (d.tiers.length < 2) d.tiers.push({ tier_label: `option_${d.tiers.length + 1}`, tier_order: d.tiers.length + 1, affix_value: 4, effect_detail_zh: '', choice_payload: {} });
+    }
+    d.tiers = d.tiers.slice(0, 4);
+    d.tiers.forEach((t, i) => { t.tier_order = i + 1; if (!t.choice_payload) t.choice_payload = {}; });
+  }
+  d.tiers.forEach((t) => {
+    const v = parseFloat(t.affix_value);
+    t.affix_value = Number.isFinite(v) ? v : 0;
+  });
+
+  return d;
+}
+
+async function generateAffixViaDirectGemini(userDescription, { model = 'gemini-2.5-pro', batchCount = 1, apiKey } = {}) {
+  if (!userDescription || typeof userDescription !== 'string') throw new Error('userDescription 為空');
+  const prompt = buildAffixDesignPrompt(userDescription, batchCount);
+  const { text, modelName } = await callGeminiDirect({ prompt, model, apiKey });
+  const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
+  let data;
+  try { data = JSON.parse(cleanJson); }
+  catch (e) { throw new Error('Gemini 回傳內容不是合法 JSON：' + e.message); }
+  const items = Array.isArray(data) ? data.map(validateAndFixAffixData) : [validateAndFixAffixData(data)];
+  return { items, modelUsed: modelName };
+}
+
+window.buildAffixDesignPrompt = buildAffixDesignPrompt;
+window.validateAndFixAffixData = validateAndFixAffixData;
+window.generateAffixViaDirectGemini = generateAffixViaDirectGemini;

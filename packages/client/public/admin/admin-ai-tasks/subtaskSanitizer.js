@@ -65,6 +65,34 @@ const API_FIELD_WHITELIST = {
     'era_tags', 'portrait_url',
   ],
 
+  // POST /api/combat-styles/:styleId/specs — specializations columns
+  //   style_id 由路徑決定，不在 body
+  'MOD-05': [
+    'code', 'name_zh', 'name_en', 'attribute',
+    'prof_bonus', 'spec_bonus',
+    'description_zh', 'description_en',
+  ],
+
+  // POST /api/admin/locations — locations columns
+  //   hidden_info 由 __postSaveActions 獨立送出，不在本 whitelist
+  'MOD-08': [
+    'code', 'name_zh', 'name_en',
+    'description_zh', 'description_en',
+    'scale_tag', 'shroud', 'clues_base', 'clues_per_player',
+    'travel_cost', 'travel_cost_type', 'art_type',
+    'design_status', 'design_notes',
+  ],
+
+  // POST /api/affixes — forging_affixes columns
+  //   tiers 由 __postSaveActions 獨立送出，不在本 whitelist
+  'MOD-09': [
+    'code', 'name_zh', 'name_en',
+    'category_code',
+    'effect_description_zh', 'effect_description_en',
+    'applicable_subtypes',
+    'tier_mode', 'design_status', 'notes', 'sort_order',
+  ],
+
   // POST /api/admin/monsters/variants — monster_variants columns
   'MOD-03': [
     'species_id', 'code', 'name_zh', 'name_en', 'tier',

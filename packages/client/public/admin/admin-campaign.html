@@ -3,32 +3,954 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>戰役管理 — Admin Module</title>
+  <title>戰役敘事設計器 | UG 後台</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    :root {
+      --cam-gold: #c9a961;
+      --cam-gold-dim: #8a7540;
+      --cam-success: #6b9c5a;
+      --cam-warn: #c99738;
+      --cam-danger: #c14a4a;
+    }
+    html, body { height: 100%; margin: 0; }
+    body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg-primary); color: var(--text-primary); }
+
+    /* ── 三欄佈局 ── */
+    .layout-container {
+      display: grid;
+      grid-template-columns: 280px 1fr 340px;
+      height: calc(100vh - 52px);
+      gap: 0;
+    }
+    .left-panel, .right-panel {
+      background: var(--bg-card);
+      overflow-y: auto;
+    }
+    .left-panel { border-right: 1px solid var(--border); }
+    .right-panel { border-left: 1px solid var(--border); }
+    .main-panel { overflow-y: auto; padding: 1rem 1.25rem; }
+
+    .panel-header {
+      padding: 0.75rem 1rem; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+    }
+    .panel-header h2 { font-family: 'Cinzel', serif; font-size: 0.95rem; color: var(--cam-gold); margin: 0; }
+    .panel-filters {
+      padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 0.35rem;
+    }
+    .panel-filters input, .panel-filters select {
+      background: var(--bg-primary); color: var(--text-primary);
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 0.3rem 0.5rem; font-family: inherit; font-size: 0.8rem;
+    }
+
+    /* ── 左欄：戰役列表 ── */
+    .campaign-list { padding: 0.35rem 0; }
+    .campaign-item {
+      padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background 0.1s, border-left-color 0.1s;
+      border-left: 3px solid transparent;
+    }
+    .campaign-item:hover { background: rgba(201, 169, 97, 0.07); }
+    .campaign-item.active { background: rgba(201, 169, 97, 0.15); border-left-color: var(--cam-gold); }
+    .campaign-item .ci-code { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-tertiary); }
+    .campaign-item .ci-name { font-size: 0.9rem; color: var(--text-primary); margin: 0.15rem 0; }
+    .campaign-item .ci-meta { font-size: 0.7rem; color: var(--text-secondary); }
+
+    /* ── 主編輯區 ── */
+    .placeholder {
+      text-align: center; padding: 3rem 2rem; color: var(--text-tertiary);
+      font-size: 0.9rem;
+    }
+    .editor-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); margin-bottom: 0.75rem;
+    }
+    .editor-header h2 { font-family: 'Cinzel', serif; color: var(--cam-gold); margin: 0; font-size: 1.1rem; }
+    .editor-meta { display: flex; gap: 0.5rem; align-items: center; font-size: 0.75rem; color: var(--text-secondary); }
+
+    /* ── 分頁標籤 ── */
+    .tab-bar {
+      display: flex; border-bottom: 2px solid var(--border); margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      padding: 0.5rem 0.9rem; background: transparent; border: none;
+      color: var(--text-secondary); cursor: pointer; font-size: 0.85rem;
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      font-family: inherit;
+    }
+    .tab-btn:hover { color: var(--text-primary); }
+    .tab-btn.active { color: var(--cam-gold); border-bottom-color: var(--cam-gold); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── 表單 ── */
+    .editor-section {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 6px; padding: 1rem; margin-bottom: 1rem;
+    }
+    .editor-section h3 {
+      font-family: 'Cinzel', serif; color: var(--cam-gold-dim);
+      font-size: 0.9rem; margin: 0 0 0.75rem; padding-bottom: 0.35rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .editor-section label {
+      display: block; margin-bottom: 0.6rem;
+      font-size: 0.78rem; color: var(--text-secondary);
+    }
+    .editor-section label input,
+    .editor-section label textarea,
+    .editor-section label select {
+      display: block; width: 100%; margin-top: 0.2rem; box-sizing: border-box;
+      background: var(--bg-primary); color: var(--text-primary);
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 0.35rem 0.5rem; font-family: inherit; font-size: 0.85rem;
+    }
+    .editor-section label textarea { resize: vertical; }
+    .editor-section label input[readonly] { opacity: 0.7; cursor: not-allowed; }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+    /* ── 混沌袋編輯 ── */
+    .chaos-bag-editor { display: flex; flex-direction: column; gap: 0.85rem; }
+    .marker-group {
+      background: var(--bg-primary); border: 1px solid var(--border);
+      border-radius: 4px; padding: 0.75rem;
+    }
+    .marker-group h4 {
+      margin: 0 0 0.5rem; color: var(--cam-gold);
+      font-size: 0.82rem; font-family: 'Cinzel', serif;
+    }
+    .marker-row {
+      display: flex; flex-wrap: wrap; gap: 0.75rem;
+      align-items: center; margin-bottom: 0.35rem;
+    }
+    .marker-row label {
+      display: inline-flex; align-items: center; gap: 0.3rem; margin: 0;
+      font-size: 0.75rem; color: var(--text-secondary);
+    }
+    .marker-row input[type="number"] {
+      width: 3.5rem; padding: 0.2rem 0.35rem; text-align: center;
+      background: var(--bg-card); color: var(--text-primary);
+      border: 1px solid var(--border); border-radius: 4px;
+      font-family: inherit; font-size: 0.78rem;
+    }
+    .marker-row select {
+      padding: 0.2rem 0.35rem; background: var(--bg-card);
+      color: var(--text-primary); border: 1px solid var(--border);
+      border-radius: 4px; font-family: inherit; font-size: 0.75rem; max-width: 10rem;
+    }
+    .marker-summary {
+      background: rgba(201, 169, 97, 0.07); padding: 0.5rem 0.75rem;
+      border-radius: 4px; font-size: 0.8rem; color: var(--text-secondary);
+      display: flex; gap: 1.5rem; margin-top: 0.5rem;
+    }
+    .preset-buttons { display: flex; gap: 0.35rem; margin-bottom: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .preset-buttons button {
+      padding: 0.3rem 0.7rem; background: transparent; color: var(--text-secondary);
+      border: 1px solid var(--border); border-radius: 4px;
+      cursor: pointer; font-family: inherit; font-size: 0.75rem;
+    }
+    .preset-buttons button:hover { color: var(--cam-gold); border-color: var(--cam-gold-dim); }
+
+    /* ── 十章網格 ── */
+    .chapter-grid {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem;
+      margin-top: 0.35rem;
+    }
+    .chapter-card {
+      background: var(--bg-primary); border: 1px solid var(--border);
+      border-radius: 5px; padding: 0.6rem; cursor: pointer;
+      transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
+      display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+    }
+    .chapter-card:hover {
+      transform: translateY(-1px);
+      border-color: var(--cam-gold-dim);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+    .chapter-card .ch-num {
+      font-size: 1.4rem; font-weight: 700; color: var(--cam-gold);
+      font-family: 'Cinzel', serif;
+    }
+    .chapter-card .ch-code {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
+      color: var(--text-tertiary);
+    }
+    .chapter-card .ch-name {
+      font-size: 0.72rem; color: var(--text-primary); text-align: center; min-height: 1.4em;
+    }
+    .chapter-card .ch-badges {
+      display: flex; flex-wrap: wrap; gap: 0.2rem; justify-content: center;
+      font-size: 0.6rem;
+    }
+
+    /* ── 狀態徽章 ── */
+    .status-draft, .status-review, .status-published {
+      padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.68rem;
+    }
+    .status-draft { background: rgba(90,90,82,0.25); color: #a0a092; }
+    .status-review { background: rgba(201,169,97,0.2); color: var(--cam-gold); }
+    .status-published { background: rgba(107,156,90,0.2); color: var(--cam-success); }
+    .badge-dirty { color: var(--cam-warn); font-weight: 600; }
+
+    /* ── 按鈕 ── */
+    .btn-primary {
+      padding: 0.35rem 0.85rem; background: var(--cam-gold-dim);
+      color: var(--bg-primary); border: 1px solid var(--cam-gold);
+      border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .btn-primary:hover { background: var(--cam-gold); }
+    .btn-danger {
+      padding: 0.3rem 0.7rem; background: transparent;
+      color: var(--cam-danger); border: 1px solid var(--cam-danger);
+      border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 0.78rem;
+    }
+    .btn-danger:hover { background: rgba(193,74,74,0.1); }
+    .btn-secondary {
+      padding: 0.3rem 0.7rem; background: transparent;
+      color: var(--text-secondary); border: 1px solid var(--border);
+      border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 0.78rem;
+    }
+    .btn-secondary:hover { color: var(--text-primary); border-color: var(--cam-gold-dim); }
+
+    .editor-footer { margin-top: 1rem; display: flex; gap: 0.5rem; }
+
+    /* ── 右欄預覽 ── */
+    .preview-content { padding: 0.75rem; }
+    .preview-card {
+      background: var(--bg-primary); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.85rem;
+    }
+    .preview-card h3 {
+      font-family: 'Cinzel', serif; color: var(--cam-gold);
+      margin: 0 0 0.35rem; font-size: 1rem;
+    }
+    .preview-card .theme { font-size: 0.75rem; color: var(--text-tertiary); margin: 0.2rem 0; }
+    .preview-card .cover-narrative {
+      font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6;
+      white-space: pre-wrap; margin: 0.5rem 0;
+    }
+    .preview-card h4 {
+      font-family: 'Cinzel', serif; font-size: 0.82rem; color: var(--cam-gold-dim);
+      margin: 0.75rem 0 0.35rem;
+    }
+    .chapter-mini-grid {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.2rem;
+    }
+    .chapter-mini-grid .mini-ch {
+      aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 3px; font-size: 0.7rem;
+    }
+    .chapter-mini-grid .mini-ch.status-published { border-color: var(--cam-success); color: var(--cam-success); }
+    .chapter-mini-grid .mini-ch.status-review { border-color: var(--cam-warn); color: var(--cam-warn); }
+
+    /* ── 對話框 ── */
+    .dialog-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+    }
+    .dialog-content {
+      background: var(--bg-card); border: 1px solid var(--cam-gold-dim);
+      border-radius: 8px; padding: 1.2rem 1.5rem;
+      min-width: 380px; max-width: 90vw;
+    }
+    .dialog-content h3 {
+      font-family: 'Cinzel', serif; color: var(--cam-gold);
+      margin: 0 0 1rem; font-size: 1rem;
+    }
+    .dialog-content label { display: block; margin-bottom: 0.6rem; font-size: 0.8rem; color: var(--text-secondary); }
+    .dialog-content label input { display: block; width: 100%; margin-top: 0.2rem; box-sizing: border-box;
+      background: var(--bg-primary); color: var(--text-primary);
+      border: 1px solid var(--border); border-radius: 4px; padding: 0.35rem 0.5rem; font-family: inherit; }
+    .dialog-footer {
+      display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem;
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; top: 70px; right: 20px; z-index: 2000;
+      padding: 0.6rem 1rem; border-radius: 4px;
+      font-size: 0.85rem; max-width: 300px;
+      animation: slideIn 0.2s ease-out; color: #fff;
+    }
+    .toast.success { background: rgba(107,156,90,0.95); border-left: 4px solid var(--cam-success); }
+    .toast.error { background: rgba(193,74,74,0.95); border-left: 4px solid var(--cam-danger); }
+    .toast.warn { background: rgba(201,151,56,0.95); border-left: 4px solid var(--cam-warn); }
+    @keyframes slideIn { from { transform: translateX(350px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* ── 版本號 ── */
+    .nav-version { color: var(--text-tertiary); font-size: 0.7rem; margin-left: 0.5rem; }
+
+    /* ── Responsive ── */
+    @media (max-width: 1100px) {
+      .layout-container { grid-template-columns: 240px 1fr 280px; }
+      .chapter-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 800px) {
+      .layout-container { grid-template-columns: 1fr; }
+      .left-panel, .right-panel { display: none; }
+    }
+  </style>
 </head>
 <body>
 
   <nav class="admin-nav">
     <a href="index.html" class="nav-back">← 返回首頁</a>
-    <span class="nav-title">戰役管理</span>
+    <span class="nav-title">戰役敘事設計器</span>
     <span class="nav-code">MOD-06</span>
+    <span class="nav-spacer"></span>
+    <button class="btn-secondary" onclick="openModuleHelp && openModuleHelp('MOD-06')" title="使用說明">說明</button>
+    <span id="current-user" class="nav-version"></span>
+    <span class="nav-version" id="admin-version-tag"></span>
   </nav>
 
-  <div class="container">
-    <div class="page-header">
-      <h1>戰役管理</h1>
-      <p class="page-sub">Campaign Manager</p>
-      <p class="page-desc">管理戰役結構、章節與劇情推進</p>
-    </div>
+  <div class="layout-container">
 
-    <div class="placeholder-message">
-      <div class="placeholder-icon">🔧</div>
-      <div class="placeholder-text">此模組尚在開發中</div>
-      <div class="placeholder-sub">Module under development</div>
-    </div>
+    <!-- 左欄：戰役列表 -->
+    <aside class="left-panel">
+      <div class="panel-header">
+        <h2>戰役列表</h2>
+        <button class="btn-primary" onclick="openCreateCampaignDialog()">＋ 新戰役</button>
+      </div>
+      <div class="panel-filters">
+        <input type="search" id="campaign-search" placeholder="搜尋戰役…" oninput="renderCampaignList()">
+        <select id="campaign-status-filter" onchange="renderCampaignList()">
+          <option value="">全部狀態</option>
+          <option value="draft">草稿</option>
+          <option value="review">審核中</option>
+          <option value="published">已發佈</option>
+        </select>
+      </div>
+      <div id="campaign-list" class="campaign-list"></div>
+    </aside>
+
+    <!-- 主編輯區 -->
+    <main class="main-panel">
+      <div id="no-campaign-placeholder" class="placeholder">
+        <p>請從左側選擇戰役，或建立新戰役。</p>
+      </div>
+
+      <div id="campaign-editor" style="display:none;">
+        <div class="editor-header">
+          <h2 id="editor-title"></h2>
+          <div class="editor-meta">
+            <span id="editor-status-badge"></span>
+            <span id="editor-version"></span>
+          </div>
+        </div>
+
+        <nav class="tab-bar">
+          <button class="tab-btn active" data-tab="overview">戰役總覽</button>
+          <button class="tab-btn" data-tab="chapters">章節編輯</button>
+          <button class="tab-btn" data-tab="flags">旗標字典</button>
+          <button class="tab-btn" data-tab="interludes">間章事件</button>
+          <button class="tab-btn" data-tab="chaos-evolution">混沌袋演變</button>
+          <button class="tab-btn" data-tab="completeness">完整性檢查</button>
+        </nav>
+
+        <!-- 戰役總覽 -->
+        <section id="tab-overview" class="tab-content active">
+          <div class="editor-section">
+            <h3>戰役元資料</h3>
+            <div class="form-row">
+              <label>戰役代碼（建立後不可修改）
+                <input type="text" id="field-code" readonly>
+              </label>
+              <label>設計狀態
+                <select id="field-design-status" onchange="markDirty()">
+                  <option value="draft">草稿</option>
+                  <option value="review">審核中</option>
+                  <option value="published">已發佈</option>
+                </select>
+              </label>
+            </div>
+            <div class="form-row">
+              <label>中文名稱
+                <input type="text" id="field-name-zh" oninput="markDirty()">
+              </label>
+              <label>英文名稱
+                <input type="text" id="field-name-en" oninput="markDirty()">
+              </label>
+            </div>
+            <div class="form-row">
+              <label>主題
+                <input type="text" id="field-theme" placeholder="例：印斯茅斯、敦威治" oninput="markDirty()">
+              </label>
+              <label>難度基準
+                <select id="field-difficulty-tier" onchange="markDirty()">
+                  <option value="easy">簡單</option>
+                  <option value="standard">標準</option>
+                  <option value="hard">困難</option>
+                  <option value="expert">專家</option>
+                </select>
+              </label>
+            </div>
+            <label>封面敘事
+              <textarea id="field-cover-narrative" rows="6" oninput="markDirty()" placeholder="戰役開場白、氛圍鋪陳…"></textarea>
+            </label>
+          </div>
+
+          <div class="editor-section">
+            <h3>起始混沌袋配置</h3>
+            <div class="preset-buttons">
+              <span style="font-size:0.75rem; color:var(--text-tertiary); margin-right:0.3rem;">難度預設：</span>
+              <button type="button" onclick="applyDifficultyPreset('easy')">簡單</button>
+              <button type="button" onclick="applyDifficultyPreset('standard')">標準</button>
+              <button type="button" onclick="applyDifficultyPreset('hard')">困難</button>
+              <button type="button" onclick="applyDifficultyPreset('expert')">專家</button>
+            </div>
+            <div class="chaos-bag-editor" id="chaos-bag-editor"></div>
+            <div class="marker-summary" id="chaos-bag-summary">
+              <span>總標記數：<b id="bag-total">0</b></span>
+              <span>期望值：<b id="bag-expected">0.0</b></span>
+            </div>
+          </div>
+
+          <div class="editor-section">
+            <h3>十章骨架</h3>
+            <div class="chapter-grid" id="chapter-grid"></div>
+          </div>
+
+          <div class="editor-footer">
+            <button class="btn-primary" onclick="saveCampaign()">儲存戰役</button>
+          </div>
+        </section>
+
+        <!-- 其他分頁：stub -->
+        <section id="tab-chapters" class="tab-content">
+          <div class="placeholder">章節編輯器（Part 3 實作）</div>
+        </section>
+        <section id="tab-flags" class="tab-content">
+          <div class="placeholder">旗標字典（Part 3 實作）</div>
+        </section>
+        <section id="tab-interludes" class="tab-content">
+          <div class="placeholder">間章事件（Part 3 實作）</div>
+        </section>
+        <section id="tab-chaos-evolution" class="tab-content">
+          <div class="placeholder">混沌袋演變規則（Part 3 實作）</div>
+        </section>
+        <section id="tab-completeness" class="tab-content">
+          <div class="placeholder">完整性檢查（Part 4 實作）</div>
+        </section>
+      </div>
+    </main>
+
+    <!-- 右欄預覽 -->
+    <aside class="right-panel">
+      <div class="panel-header"><h2>即時預覽</h2></div>
+      <div id="preview-content" class="preview-content">
+        <p class="placeholder" style="padding:1.5rem;">選擇戰役後顯示預覽</p>
+      </div>
+    </aside>
   </div>
 
+  <div id="dialogs-root"></div>
+
   <script src="admin-shared.js"></script>
+  <script>
+  (() => {
+    'use strict';
+
+    const state = {
+      campaignList: [],
+      currentCampaign: null,
+      currentTab: 'overview',
+      options: null,
+      dirty: false,
+    };
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      const userRaw = localStorage.getItem('admin_user');
+      let user = null;
+      try { user = userRaw ? JSON.parse(userRaw) : null; } catch {}
+      if (!user || (user.role !== 'admin' && user.role !== 'owner')) {
+        document.querySelector('.layout-container').innerHTML =
+          '<div style="padding:3rem;text-align:center;"><h1>權限不足</h1><p>本模組僅限管理員使用。</p><p><a href="index.html">← 返回首頁</a></p></div>';
+        return;
+      }
+      document.getElementById('current-user').textContent = user.displayName || user.username || user.email || '';
+      if (typeof ADMIN_VERSION !== 'undefined') {
+        document.getElementById('admin-version-tag').textContent = 'v' + ADMIN_VERSION;
+      }
+
+      await loadOptions();
+      await loadCampaignList();
+      bindBeforeUnload();
+      bindTabBar();
+    });
+
+    async function loadOptions() {
+      try {
+        const res = await fetch('data/campaign-options.json');
+        state.options = await res.json();
+      } catch (e) {
+        console.error('無法載入 campaign-options.json', e);
+        state.options = { scenario_marker_effects: {}, difficulty_presets: {}, number_marker_values: ['+1','0','-1','-2','-3','-4'] };
+      }
+    }
+
+    // ═══ 戰役列表 ═══
+    async function loadCampaignList() {
+      try {
+        const res = await adminFetch('/api/campaigns');
+        const data = await res.json();
+        state.campaignList = (data && data.data) || [];
+        renderCampaignList();
+      } catch (e) {
+        showToast('載入戰役列表失敗：' + e.message, 'error');
+      }
+    }
+    window.loadCampaignList = loadCampaignList;
+
+    function renderCampaignList() {
+      const container = document.getElementById('campaign-list');
+      const search = (document.getElementById('campaign-search').value || '').toLowerCase();
+      const statusFilter = document.getElementById('campaign-status-filter').value;
+      const filtered = state.campaignList.filter((c) => {
+        if (statusFilter && c.design_status !== statusFilter) return false;
+        if (search && !(`${c.name_zh || ''} ${c.code || ''}`).toLowerCase().includes(search)) return false;
+        return true;
+      });
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="placeholder" style="padding:1.5rem;">（無符合戰役）</div>';
+        return;
+      }
+      container.innerHTML = filtered.map((c) => `
+        <div class="campaign-item ${state.currentCampaign?.id === c.id ? 'active' : ''}"
+             onclick="selectCampaign('${c.id}')">
+          <div class="ci-code">${escHtml(c.code)}</div>
+          <div class="ci-name">${escHtml(c.name_zh)}</div>
+          <div class="ci-meta">
+            <span class="status-${c.design_status}">${statusLabel(c.design_status)}</span>
+            · v${c.version} · ${c.chapter_count || 0} 章
+          </div>
+        </div>
+      `).join('');
+    }
+    window.renderCampaignList = renderCampaignList;
+
+    async function selectCampaign(id) {
+      if (state.dirty && !confirm('有未儲存變更，要放棄嗎？')) return;
+      try {
+        const res = await adminFetch(`/api/campaigns/${id}`);
+        const data = await res.json();
+        if (!data.success) { showToast('載入戰役失敗', 'error'); return; }
+        state.currentCampaign = data.data;
+        state.dirty = false;
+        document.getElementById('no-campaign-placeholder').style.display = 'none';
+        document.getElementById('campaign-editor').style.display = '';
+        document.getElementById('editor-title').textContent = state.currentCampaign.name_zh;
+        renderCampaignList();
+        renderCurrentTab();
+        updateRightPanel();
+      } catch (e) {
+        showToast('載入失敗：' + e.message, 'error');
+      }
+    }
+    window.selectCampaign = selectCampaign;
+
+    // ═══ 建立戰役對話框 ═══
+    function openCreateCampaignDialog() {
+      const root = document.getElementById('dialogs-root');
+      root.innerHTML = `
+        <div class="dialog-backdrop" id="dlg-create">
+          <div class="dialog-content">
+            <h3>建立新戰役</h3>
+            <label>戰役代碼（3-32 字元，小寫英數底線）
+              <input type="text" id="new-campaign-code" placeholder="例：innsmouth_shadow">
+            </label>
+            <label>中文名稱
+              <input type="text" id="new-campaign-name-zh" placeholder="例：印斯茅斯陰影">
+            </label>
+            <div class="dialog-footer">
+              <button class="btn-secondary" onclick="closeCreateDialog()">取消</button>
+              <button class="btn-primary" onclick="confirmCreateCampaign()">建立</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.getElementById('new-campaign-code').focus();
+    }
+    window.openCreateCampaignDialog = openCreateCampaignDialog;
+
+    function closeCreateDialog() {
+      document.getElementById('dialogs-root').innerHTML = '';
+    }
+    window.closeCreateDialog = closeCreateDialog;
+
+    async function confirmCreateCampaign() {
+      const code = document.getElementById('new-campaign-code').value.trim();
+      const name = document.getElementById('new-campaign-name-zh').value.trim();
+      if (!/^[a-z0-9_]{3,32}$/.test(code)) {
+        alert('戰役代碼格式錯誤（3-32 字元，小寫英數底線）');
+        return;
+      }
+      if (!name) { alert('中文名稱為必填'); return; }
+      try {
+        const res = await adminFetch('/api/campaigns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, name_zh: name }),
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || '建立失敗'); return; }
+        closeCreateDialog();
+        await loadCampaignList();
+        await selectCampaign(data.data.id);
+        showToast('戰役已建立，已自動產生十章骨架', 'success');
+      } catch (e) {
+        alert('網路錯誤：' + e.message);
+      }
+    }
+    window.confirmCreateCampaign = confirmCreateCampaign;
+
+    // ═══ 分頁切換 ═══
+    function bindTabBar() {
+      document.querySelectorAll('.tab-btn').forEach((btn) => {
+        btn.onclick = () => switchTab(btn.dataset.tab);
+      });
+    }
+
+    function switchTab(tabName) {
+      if (state.dirty && !confirm('有未儲存變更，要放棄嗎？')) return;
+      state.currentTab = tabName;
+      document.querySelectorAll('.tab-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.tab === tabName);
+      });
+      document.querySelectorAll('.tab-content').forEach((sec) => {
+        sec.classList.toggle('active', sec.id === `tab-${tabName}`);
+      });
+      renderCurrentTab();
+      updateRightPanel();
+    }
+    window.switchTab = switchTab;
+
+    function renderCurrentTab() {
+      if (state.currentTab === 'overview') renderOverviewTab();
+    }
+
+    // ═══ 戰役總覽分頁 ═══
+    function renderOverviewTab() {
+      if (!state.currentCampaign) return;
+      const c = state.currentCampaign;
+      document.getElementById('field-code').value = c.code;
+      document.getElementById('field-name-zh').value = c.name_zh;
+      document.getElementById('field-name-en').value = c.name_en || '';
+      document.getElementById('field-theme').value = c.theme || '';
+      document.getElementById('field-cover-narrative').value = c.cover_narrative || '';
+      document.getElementById('field-difficulty-tier').value = c.difficulty_tier;
+      document.getElementById('field-design-status').value = c.design_status;
+
+      renderChaosBagEditor(c.initial_chaos_bag || {});
+      renderChapterGrid(c.chapters || []);
+      updateEditorHeader();
+    }
+
+    function updateEditorHeader() {
+      const c = state.currentCampaign;
+      if (!c) return;
+      const badge = document.getElementById('editor-status-badge');
+      if (state.dirty) {
+        badge.textContent = '● 未儲存';
+        badge.className = 'badge-dirty';
+      } else {
+        badge.textContent = statusLabel(c.design_status);
+        badge.className = `status-${c.design_status}`;
+      }
+      document.getElementById('editor-version').textContent = `v${c.version}`;
+    }
+
+    // ─── 混沌袋編輯器 ───
+    function renderChaosBagEditor(bag) {
+      const container = document.getElementById('chaos-bag-editor');
+      const nums = (bag && bag.number_markers) || {};
+      const sce = (bag && bag.scenario_markers) || {};
+      const myt = (bag && bag.mythos_markers) || {};
+      const numVals = (state.options && state.options.number_marker_values) || ['+1','0','-1','-2','-3','-4'];
+
+      const numHtml = numVals.map((v) => `
+        <label>${v}
+          <input type="number" min="0" max="10" value="${nums[v] ?? 0}"
+                 data-num-marker="${v}" oninput="updateBagSummary(); markDirty();">
+        </label>
+      `).join('');
+
+      const scenarioTypes = ['skull', 'cultist', 'tablet', 'elder_thing'];
+      const scenarioNames = { skull: '骷髏', cultist: '邪教徒', tablet: '石版', elder_thing: '遠古邪物' };
+      const effectOpts = (state.options && state.options.scenario_marker_effects) || {};
+
+      const sceHtml = scenarioTypes.map((k) => {
+        const d = sce[k] || { count: 0, effect: '', value: -1 };
+        const effects = effectOpts[k] || [];
+        return `
+          <div class="marker-row">
+            <label>${scenarioNames[k]}
+              <input type="number" min="0" max="6" value="${d.count || 0}"
+                     data-sce-count="${k}" oninput="updateBagSummary(); markDirty();">
+            </label>
+            <label>效果
+              <select data-sce-effect="${k}" onchange="markDirty()">
+                <option value="">（未選）</option>
+                ${effects.map((e) => `<option value="${e.code}" ${d.effect === e.code ? 'selected' : ''}>${e.name_zh} — ${e.desc}</option>`).join('')}
+              </select>
+            </label>
+            <label>值
+              <input type="number" value="${d.value ?? -1}" min="-5" max="5"
+                     data-sce-value="${k}" oninput="updateBagSummary(); markDirty();">
+            </label>
+          </div>
+        `;
+      }).join('');
+
+      const mythosTypes = ['clue', 'headline', 'monster', 'doom', 'gate'];
+      const mythosNames = { clue: '線索', headline: '頭條', monster: '怪物', doom: '毀滅', gate: '次元門' };
+      const mytHtml = mythosTypes.map((k) => {
+        const d = myt[k] || { count: 0, value: -1 };
+        return `
+          <div class="marker-row">
+            <label>${mythosNames[k]}
+              <input type="number" min="0" max="6" value="${d.count || 0}"
+                     data-myt-count="${k}" oninput="updateBagSummary(); markDirty();">
+            </label>
+            <label>值
+              <input type="number" value="${d.value ?? -1}" min="-5" max="5"
+                     data-myt-value="${k}" oninput="updateBagSummary(); markDirty();">
+            </label>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="marker-group">
+          <h4>數字標記</h4>
+          <div class="marker-row">${numHtml}</div>
+        </div>
+        <div class="marker-group">
+          <h4>情境標記</h4>
+          ${sceHtml}
+        </div>
+        <div class="marker-group">
+          <h4>神話標記</h4>
+          ${mytHtml}
+        </div>
+        <div class="marker-group" style="opacity:0.7;">
+          <h4>極端標記（固定）</h4>
+          <p style="font-size:0.75rem; color:var(--text-secondary); margin:0;">觸手 ×1、遠古印記 ×1</p>
+        </div>
+      `;
+      updateBagSummary();
+    }
+
+    function collectChaosBagFromForm() {
+      const bag = {
+        number_markers: {}, scenario_markers: {}, mythos_markers: {},
+        extreme_markers: { tentacle: 1, elder_sign: 1 },
+        dynamic_markers: { bless: 0, curse: 0 },
+      };
+      document.querySelectorAll('[data-num-marker]').forEach((el) => {
+        bag.number_markers[el.dataset.numMarker] = parseInt(el.value, 10) || 0;
+      });
+      ['skull', 'cultist', 'tablet', 'elder_thing'].forEach((k) => {
+        const countEl = document.querySelector(`[data-sce-count="${k}"]`);
+        const effectEl = document.querySelector(`[data-sce-effect="${k}"]`);
+        const valueEl = document.querySelector(`[data-sce-value="${k}"]`);
+        bag.scenario_markers[k] = {
+          count: parseInt(countEl?.value, 10) || 0,
+          effect: effectEl?.value || '',
+          value: parseInt(valueEl?.value, 10) || 0,
+        };
+      });
+      ['clue', 'headline', 'monster', 'doom', 'gate'].forEach((k) => {
+        const countEl = document.querySelector(`[data-myt-count="${k}"]`);
+        const valueEl = document.querySelector(`[data-myt-value="${k}"]`);
+        bag.mythos_markers[k] = {
+          count: parseInt(countEl?.value, 10) || 0,
+          value: parseInt(valueEl?.value, 10) || 0,
+        };
+      });
+      return bag;
+    }
+
+    function applyDifficultyPreset(tier) {
+      const preset = state.options?.difficulty_presets?.[tier];
+      if (!preset) { showToast('找不到難度預設', 'error'); return; }
+      document.getElementById('field-difficulty-tier').value = tier;
+      const merged = {
+        number_markers: preset.number_markers || {},
+        scenario_markers: preset.scenario_markers || {},
+        mythos_markers: preset.mythos_markers || {},
+        extreme_markers: { tentacle: 1, elder_sign: 1 },
+        dynamic_markers: { bless: 0, curse: 0 },
+      };
+      renderChaosBagEditor(merged);
+      markDirty();
+      showToast(`已套用「${difficultyLabel(tier)}」預設`, 'success');
+    }
+    window.applyDifficultyPreset = applyDifficultyPreset;
+
+    function updateBagSummary() {
+      const bag = collectChaosBagFromForm();
+      let total = 2; // 極端標記固定 2
+      let sumValue = 0;
+      for (const [v, c] of Object.entries(bag.number_markers)) {
+        total += c;
+        sumValue += (parseFloat(v) || 0) * c;
+      }
+      for (const k of ['skull','cultist','tablet','elder_thing']) {
+        const d = bag.scenario_markers[k] || { count: 0, value: 0 };
+        total += d.count;
+        sumValue += (d.value || 0) * (d.count || 0);
+      }
+      for (const k of ['clue','headline','monster','doom','gate']) {
+        const d = bag.mythos_markers[k] || { count: 0, value: 0 };
+        total += d.count;
+        sumValue += (d.value || 0) * (d.count || 0);
+      }
+      const expected = total > 0 ? (sumValue / total).toFixed(2) : '0.00';
+      document.getElementById('bag-total').textContent = total;
+      document.getElementById('bag-expected').textContent = expected;
+    }
+    window.updateBagSummary = updateBagSummary;
+
+    // ─── 十章骨架網格 ───
+    function renderChapterGrid(chapters) {
+      const grid = document.getElementById('chapter-grid');
+      grid.innerHTML = chapters.map((ch) => `
+        <div class="chapter-card" onclick="jumpToChapter('${ch.id}')">
+          <div class="ch-num">${ch.chapter_number}</div>
+          <div class="ch-code">${escHtml(ch.chapter_code)}</div>
+          <div class="ch-name">${escHtml(ch.name_zh || '')}</div>
+          <div class="ch-badges">
+            <span class="status-${ch.design_status}">${statusLabel(ch.design_status)}</span>
+            <span>結果 ${ch.outcome_count || 0}</span>
+            <span>事件 ${ch.interlude_count || 0}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function jumpToChapter(chapterId) {
+      switchTab('chapters');
+      // Part 3 實作 selectChapter(chapterId);
+    }
+    window.jumpToChapter = jumpToChapter;
+
+    // ─── 儲存戰役 ───
+    async function saveCampaign() {
+      if (!state.currentCampaign) return;
+      const payload = {
+        name_zh: document.getElementById('field-name-zh').value.trim(),
+        name_en: document.getElementById('field-name-en').value.trim(),
+        theme: document.getElementById('field-theme').value.trim(),
+        cover_narrative: document.getElementById('field-cover-narrative').value,
+        difficulty_tier: document.getElementById('field-difficulty-tier').value,
+        design_status: document.getElementById('field-design-status').value,
+        initial_chaos_bag: collectChaosBagFromForm(),
+      };
+      if (!payload.name_zh) { showToast('中文名稱不可為空', 'error'); return; }
+      try {
+        const res = await adminFetch(`/api/campaigns/${state.currentCampaign.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) { showToast('儲存失敗：' + (data.error || '未知'), 'error'); return; }
+        Object.assign(state.currentCampaign, data.data);
+        state.dirty = false;
+        await loadCampaignList();
+        updateEditorHeader();
+        updateRightPanel();
+        showToast('已儲存', 'success');
+      } catch (e) {
+        showToast('網路錯誤：' + e.message, 'error');
+      }
+    }
+    window.saveCampaign = saveCampaign;
+
+    // ═══ 右欄預覽 ═══
+    function updateRightPanel() {
+      const el = document.getElementById('preview-content');
+      if (!state.currentCampaign) {
+        el.innerHTML = '<p class="placeholder" style="padding:1.5rem;">選擇戰役後顯示預覽</p>';
+        return;
+      }
+      if (state.currentTab === 'overview') {
+        renderCampaignOverviewPreview(el);
+      } else {
+        el.innerHTML = '<p class="placeholder" style="padding:1.5rem;">此分頁暫無預覽</p>';
+      }
+    }
+
+    function renderCampaignOverviewPreview(container) {
+      const c = state.currentCampaign;
+      const chapterMini = (c.chapters || []).map((ch) => `
+        <div class="mini-ch status-${ch.design_status}" title="第 ${ch.chapter_number} 章 ${escHtml(ch.name_zh || '')}">${ch.chapter_number}</div>
+      `).join('');
+      container.innerHTML = `
+        <div class="preview-card">
+          <h3>${escHtml(c.name_zh)}</h3>
+          <p class="theme">${escHtml(c.theme || '—')}</p>
+          <div><span class="status-${c.design_status}">${statusLabel(c.design_status)}</span> · <b>${difficultyLabel(c.difficulty_tier)}</b> · v${c.version}</div>
+          <p class="cover-narrative">${escHtml(c.cover_narrative || '(尚未撰寫封面敘事)')}</p>
+          <h4>十章進度</h4>
+          <div class="chapter-mini-grid">${chapterMini}</div>
+          <h4>起始混沌袋摘要</h4>
+          <div style="font-size:0.75rem; color:var(--text-secondary);">
+            總標記：${document.getElementById('bag-total')?.textContent || 0} ·
+            期望值：${document.getElementById('bag-expected')?.textContent || '0.00'}
+          </div>
+        </div>
+      `;
+    }
+
+    // ═══ 工具函式 ═══
+    function markDirty() {
+      state.dirty = true;
+      updateEditorHeader();
+    }
+    window.markDirty = markDirty;
+
+    function bindBeforeUnload() {
+      window.addEventListener('beforeunload', (e) => {
+        if (state.dirty) { e.preventDefault(); e.returnValue = ''; }
+      });
+    }
+
+    function escHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[c]));
+    }
+
+    function statusLabel(s) {
+      return { draft: '草稿', review: '審核中', published: '已發佈' }[s] || s;
+    }
+    function difficultyLabel(s) {
+      return { easy: '簡單', standard: '標準', hard: '困難', expert: '專家' }[s] || s;
+    }
+
+    let toastTimer = null;
+    function showToast(msg, type = 'success') {
+      const old = document.querySelector('.toast');
+      if (old) old.remove();
+      const div = document.createElement('div');
+      div.className = `toast ${type}`;
+      div.textContent = msg;
+      document.body.appendChild(div);
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => div.remove(), 3200);
+    }
+    window.showToast = showToast;
+  })();
+  </script>
 </body>
 </html>

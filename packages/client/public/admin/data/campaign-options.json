@@ -1,0 +1,127 @@
+{
+  "difficulty_tiers": [
+    { "code": "easy", "name_zh": "簡單" },
+    { "code": "standard", "name_zh": "標準" },
+    { "code": "hard", "name_zh": "困難" },
+    { "code": "expert", "name_zh": "專家" }
+  ],
+  "design_statuses": [
+    { "code": "draft", "name_zh": "草稿" },
+    { "code": "review", "name_zh": "審核中" },
+    { "code": "published", "name_zh": "已發佈" }
+  ],
+  "flag_categories": [
+    { "code": "act", "name_zh": "行動進度", "visibility_default": "visible" },
+    { "code": "agenda", "name_zh": "議程進度", "visibility_default": "visible" },
+    { "code": "npc", "name_zh": "NPC 狀態", "visibility_default": "conditional" },
+    { "code": "item", "name_zh": "物品取得", "visibility_default": "visible" },
+    { "code": "location", "name_zh": "地點探索", "visibility_default": "conditional" },
+    { "code": "choice", "name_zh": "玩家選擇", "visibility_default": "visible" },
+    { "code": "outcome", "name_zh": "章節結果", "visibility_default": "visible" },
+    { "code": "time", "name_zh": "時間狀態", "visibility_default": "visible" },
+    { "code": "hidden", "name_zh": "隱藏旗標", "visibility_default": "hidden" }
+  ],
+  "visibility_options": [
+    { "code": "visible", "name_zh": "可見" },
+    { "code": "conditional", "name_zh": "視設計" },
+    { "code": "hidden", "name_zh": "永遠隱藏" }
+  ],
+  "number_marker_values": ["+1", "0", "-1", "-2", "-3", "-4"],
+  "scenario_marker_effects": {
+    "skull": [
+      { "code": "death_touch", "name_zh": "死亡之觸", "desc": "施法者受 HP 傷害" },
+      { "code": "trauma_erosion", "name_zh": "創傷侵蝕", "desc": "HP 上限 -1" },
+      { "code": "blood_sacrifice", "name_zh": "血祭", "desc": "流血狀態" },
+      { "code": "life_drain", "name_zh": "生命流逝", "desc": "無力狀態" },
+      { "code": "life_cost", "name_zh": "生命代價", "desc": "失去盟友或資產" }
+    ],
+    "cultist": [
+      { "code": "doom_advance", "name_zh": "末日推進", "desc": "放置毀滅標記" },
+      { "code": "follower_response", "name_zh": "信徒回應", "desc": "生成敵人" },
+      { "code": "ritual_resonance", "name_zh": "儀式共鳴", "desc": "怪物回血" },
+      { "code": "exposure", "name_zh": "暴露", "desc": "失去隱蔽" },
+      { "code": "dark_ritual", "name_zh": "黑暗儀式", "desc": "地點進入黑暗" }
+    ],
+    "tablet": [
+      { "code": "forbidden_knowledge", "name_zh": "禁忌知識", "desc": "SAN 傷害" },
+      { "code": "mad_whispers", "name_zh": "瘋狂低語", "desc": "發瘋狀態" },
+      { "code": "memory_collapse", "name_zh": "記憶崩解", "desc": "隨機棄手牌" },
+      { "code": "mental_exhaustion", "name_zh": "精神枯竭", "desc": "疲勞狀態" },
+      { "code": "things_not_to_know", "name_zh": "不應知曉之事", "desc": "神啟卡洗入牌庫" }
+    ],
+    "elder_thing": [
+      { "code": "rift_expansion", "name_zh": "裂隙擴張", "desc": "開啟次元門" },
+      { "code": "spacetime_distortion", "name_zh": "時空扭曲", "desc": "隨機傳送" },
+      { "code": "otherworldly_seep", "name_zh": "異界滲透", "desc": "放置鬧鬼" },
+      { "code": "space_rupture", "name_zh": "空間斷裂", "desc": "斷開地點連接" },
+      { "code": "otherworldly_fire", "name_zh": "異界之火", "desc": "地點失火" },
+      { "code": "void_chill", "name_zh": "虛空寒流", "desc": "冷凍狀態" }
+    ]
+  },
+  "difficulty_presets": {
+    "easy": {
+      "number_markers": { "+1": 2, "0": 3, "-1": 2, "-2": 0, "-3": 0, "-4": 0 },
+      "scenario_markers": {
+        "skull": { "count": 1, "effect": "death_touch", "value": -1 },
+        "cultist": { "count": 1, "effect": "follower_response", "value": -1 },
+        "tablet": { "count": 0, "effect": "forbidden_knowledge", "value": -2 },
+        "elder_thing": { "count": 0, "effect": "otherworldly_seep", "value": -2 }
+      },
+      "mythos_markers": {
+        "clue": { "count": 2, "value": 0 },
+        "headline": { "count": 1, "value": -1 },
+        "monster": { "count": 1, "value": -2 },
+        "doom": { "count": 0, "value": -3 },
+        "gate": { "count": 0, "value": -3 }
+      }
+    },
+    "standard": {
+      "number_markers": { "+1": 1, "0": 2, "-1": 2, "-2": 2, "-3": 0, "-4": 0 },
+      "scenario_markers": {
+        "skull": { "count": 2, "effect": "blood_sacrifice", "value": -1 },
+        "cultist": { "count": 1, "effect": "follower_response", "value": -2 },
+        "tablet": { "count": 1, "effect": "forbidden_knowledge", "value": -2 },
+        "elder_thing": { "count": 1, "effect": "otherworldly_seep", "value": -3 }
+      },
+      "mythos_markers": {
+        "clue": { "count": 1, "value": -1 },
+        "headline": { "count": 1, "value": -1 },
+        "monster": { "count": 1, "value": -2 },
+        "doom": { "count": 1, "value": -3 },
+        "gate": { "count": 0, "value": -3 }
+      }
+    },
+    "hard": {
+      "number_markers": { "+1": 1, "0": 1, "-1": 2, "-2": 2, "-3": 1, "-4": 0 },
+      "scenario_markers": {
+        "skull": { "count": 2, "effect": "trauma_erosion", "value": -2 },
+        "cultist": { "count": 2, "effect": "doom_advance", "value": -2 },
+        "tablet": { "count": 1, "effect": "mad_whispers", "value": -2 },
+        "elder_thing": { "count": 1, "effect": "rift_expansion", "value": -3 }
+      },
+      "mythos_markers": {
+        "clue": { "count": 1, "value": -1 },
+        "headline": { "count": 0, "value": -2 },
+        "monster": { "count": 1, "value": -3 },
+        "doom": { "count": 1, "value": -3 },
+        "gate": { "count": 1, "value": -4 }
+      }
+    },
+    "expert": {
+      "number_markers": { "+1": 0, "0": 1, "-1": 2, "-2": 2, "-3": 2, "-4": 1 },
+      "scenario_markers": {
+        "skull": { "count": 2, "effect": "life_cost", "value": -2 },
+        "cultist": { "count": 2, "effect": "dark_ritual", "value": -3 },
+        "tablet": { "count": 2, "effect": "things_not_to_know", "value": -3 },
+        "elder_thing": { "count": 2, "effect": "space_rupture", "value": -4 }
+      },
+      "mythos_markers": {
+        "clue": { "count": 0, "value": -2 },
+        "headline": { "count": 0, "value": -2 },
+        "monster": { "count": 1, "value": -3 },
+        "doom": { "count": 1, "value": -4 },
+        "gate": { "count": 1, "value": -5 }
+      }
+    }
+  }
+}

@@ -2238,6 +2238,105 @@ CREATE INDEX IF NOT EXISTS idx_ai_tasks_module  ON ai_console_tasks(module_code)
 CREATE INDEX IF NOT EXISTS idx_ai_tasks_created ON ai_console_tasks(created_at DESC);
 `;
 
+// ============================================
+// Migration 017: 戰役敘事設計器 (MOD-06)
+//   campaigns / chapters / chapter_outcomes / campaign_flags / interlude_events
+// ============================================
+const MIGRATION_017_SQL = `
+CREATE TABLE IF NOT EXISTS campaigns (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code               VARCHAR(32) NOT NULL UNIQUE,
+  name_zh            VARCHAR(128) NOT NULL,
+  name_en            VARCHAR(128) NOT NULL DEFAULT '',
+  theme              VARCHAR(64) NOT NULL DEFAULT '',
+  cover_narrative    TEXT NOT NULL DEFAULT '',
+  difficulty_tier    VARCHAR(16) NOT NULL DEFAULT 'standard'
+                     CHECK (difficulty_tier IN ('easy','standard','hard','expert')),
+  initial_chaos_bag  JSONB NOT NULL DEFAULT '{}'::jsonb,
+  design_status      VARCHAR(16) NOT NULL DEFAULT 'draft'
+                     CHECK (design_status IN ('draft','review','published')),
+  version            INTEGER NOT NULL DEFAULT 1,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(design_status);
+
+CREATE TABLE IF NOT EXISTS chapters (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id        UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  chapter_number     INTEGER NOT NULL CHECK (chapter_number BETWEEN 1 AND 10),
+  chapter_code       VARCHAR(16) NOT NULL,
+  name_zh            VARCHAR(128) NOT NULL DEFAULT '',
+  name_en            VARCHAR(128) NOT NULL DEFAULT '',
+  narrative_intro    TEXT NOT NULL DEFAULT '',
+  narrative_choices  JSONB NOT NULL DEFAULT '[]'::jsonb,
+  design_status      VARCHAR(16) NOT NULL DEFAULT 'draft'
+                     CHECK (design_status IN ('draft','review','published')),
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (campaign_id, chapter_number),
+  UNIQUE (campaign_id, chapter_code)
+);
+CREATE INDEX IF NOT EXISTS idx_chapters_campaign ON chapters(campaign_id);
+
+CREATE TABLE IF NOT EXISTS chapter_outcomes (
+  id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  chapter_id             UUID NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+  outcome_code           VARCHAR(1) NOT NULL
+                         CHECK (outcome_code IN ('A','B','C','D','E')),
+  condition_expression   JSONB NOT NULL DEFAULT '{}'::jsonb,
+  narrative_text         TEXT NOT NULL DEFAULT '',
+  next_chapter_version   VARCHAR(16),
+  chaos_bag_changes      JSONB NOT NULL DEFAULT '[]'::jsonb,
+  rewards                JSONB NOT NULL DEFAULT '{}'::jsonb,
+  flag_sets              JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (chapter_id, outcome_code)
+);
+CREATE INDEX IF NOT EXISTS idx_outcomes_chapter ON chapter_outcomes(chapter_id);
+
+CREATE TABLE IF NOT EXISTS campaign_flags (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id     UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  flag_code       VARCHAR(128) NOT NULL,
+  category        VARCHAR(16) NOT NULL
+                  CHECK (category IN (
+                    'act','agenda','npc','item','location',
+                    'choice','outcome','time','hidden'
+                  )),
+  description_zh  TEXT NOT NULL DEFAULT '',
+  visibility      VARCHAR(16) NOT NULL DEFAULT 'visible'
+                  CHECK (visibility IN ('visible','conditional','hidden')),
+  chapter_code    VARCHAR(16),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (campaign_id, flag_code)
+);
+CREATE INDEX IF NOT EXISTS idx_flags_campaign ON campaign_flags(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_flags_category ON campaign_flags(campaign_id, category);
+
+CREATE TABLE IF NOT EXISTS interlude_events (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  chapter_id          UUID NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+  event_code          VARCHAR(64) NOT NULL,
+  name_zh             VARCHAR(128) NOT NULL,
+  name_en             VARCHAR(128) NOT NULL DEFAULT '',
+  insertion_point     VARCHAR(16) NOT NULL
+                      CHECK (insertion_point IN ('prologue','epilogue')),
+  trigger_condition   JSONB,
+  operations          JSONB NOT NULL DEFAULT '[]'::jsonb,
+  narrative_text_zh   TEXT NOT NULL DEFAULT '',
+  narrative_text_en   TEXT NOT NULL DEFAULT '',
+  choices             JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (chapter_id, event_code)
+);
+CREATE INDEX IF NOT EXISTS idx_interlude_chapter
+  ON interlude_events(chapter_id, insertion_point);
+`;
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -2258,6 +2357,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_014_SQL);
     await client.query(MIGRATION_015_SQL);
     await client.query(MIGRATION_016_SQL);
+    await client.query(MIGRATION_017_SQL);
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

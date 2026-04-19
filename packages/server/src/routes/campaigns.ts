@@ -979,4 +979,222 @@ export const campaignRoutes: FastifyPluginAsync = async (app) => {
       }
     },
   );
+
+  // ═══════════════════════════════════════════
+  // 匯出 / 匯入
+  // ═══════════════════════════════════════════
+
+  // GET /api/campaigns/:id/export
+  app.get<{ Params: { id: string } }>(
+    '/api/campaigns/:id/export',
+    async (request, reply) => {
+      const { id } = request.params;
+      try {
+        const cRes = await pool.query('SELECT * FROM campaigns WHERE id = $1', [id]);
+        if (cRes.rows.length === 0) {
+          return reply.status(404).send({ success: false, error: '戰役不存在' });
+        }
+        const campaign = cRes.rows[0];
+
+        const chRes = await pool.query(
+          `SELECT * FROM chapters WHERE campaign_id = $1 ORDER BY chapter_number`,
+          [id],
+        );
+        const chapterIds = chRes.rows.map((c) => c.id);
+
+        const [oRes, fRes, iRes] = await Promise.all([
+          chapterIds.length
+            ? pool.query(
+                `SELECT o.*, ch.chapter_code FROM chapter_outcomes o
+                   JOIN chapters ch ON ch.id = o.chapter_id
+                  WHERE o.chapter_id = ANY($1::uuid[])
+                  ORDER BY ch.chapter_number, o.outcome_code`,
+                [chapterIds],
+              )
+            : Promise.resolve({ rows: [] as any[] }),
+          pool.query(
+            `SELECT * FROM campaign_flags WHERE campaign_id = $1 ORDER BY flag_code`,
+            [id],
+          ),
+          chapterIds.length
+            ? pool.query(
+                `SELECT i.*, ch.chapter_code FROM interlude_events i
+                   JOIN chapters ch ON ch.id = i.chapter_id
+                  WHERE i.chapter_id = ANY($1::uuid[])
+                  ORDER BY ch.chapter_number,
+                           CASE i.insertion_point WHEN 'prologue' THEN 0 ELSE 1 END,
+                           i.created_at`,
+                [chapterIds],
+              )
+            : Promise.resolve({ rows: [] as any[] }),
+        ]);
+
+        reply.header(
+          'Content-Disposition',
+          `attachment; filename="campaign_${campaign.code}.json"`,
+        );
+        return reply.send({
+          format_version: '1.0',
+          exported_at: new Date().toISOString(),
+          campaign,
+          chapters: chRes.rows,
+          outcomes: oRes.rows,
+          flags: fRes.rows,
+          interludes: iRes.rows,
+        });
+      } catch (error) {
+        request.log.error(error, '匯出戰役失敗');
+        return reply.status(500).send({ success: false, error: '匯出戰役失敗' });
+      }
+    },
+  );
+
+  // POST /api/campaigns/import
+  app.post<{ Body: Record<string, any> }>(
+    '/api/campaigns/import',
+    async (request, reply) => {
+      const data = request.body || {};
+      if (!data.campaign || !data.campaign.code || !data.campaign.name_zh) {
+        return reply.status(400).send({ success: false, error: '匯入資料缺少 campaign.code 或 name_zh' });
+      }
+      if (!CODE_RE.test(data.campaign.code)) {
+        return reply.status(400).send({ success: false, error: '戰役代碼格式錯誤' });
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // 若代碼已存在先刪除（CASCADE 會清空子表）
+        await client.query('DELETE FROM campaigns WHERE code = $1', [data.campaign.code]);
+
+        const cRes = await client.query(
+          `INSERT INTO campaigns (code, name_zh, name_en, theme, cover_narrative,
+                                  difficulty_tier, initial_chaos_bag, design_status)
+           VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8)
+           RETURNING *`,
+          [
+            data.campaign.code,
+            data.campaign.name_zh,
+            data.campaign.name_en || '',
+            data.campaign.theme || '',
+            data.campaign.cover_narrative || '',
+            VALID_DIFFICULTY.has(data.campaign.difficulty_tier) ? data.campaign.difficulty_tier : 'standard',
+            JSON.stringify(data.campaign.initial_chaos_bag || {}),
+            VALID_DESIGN_STATUS.has(data.campaign.design_status) ? data.campaign.design_status : 'draft',
+          ],
+        );
+        const newCampaignId = cRes.rows[0].id;
+
+        // 插入章節（以 chapter_code 為 key 建對應表，供 outcomes / interludes 還原 chapter_id）
+        const chapterIdByCode: Record<string, string> = {};
+        const chaptersIn: any[] = Array.isArray(data.chapters) ? data.chapters : [];
+        for (const ch of chaptersIn) {
+          const chRes = await client.query(
+            `INSERT INTO chapters (campaign_id, chapter_number, chapter_code, name_zh, name_en,
+                                   narrative_intro, narrative_choices, design_status)
+             VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8)
+             RETURNING id`,
+            [
+              newCampaignId,
+              ch.chapter_number,
+              ch.chapter_code,
+              ch.name_zh || '',
+              ch.name_en || '',
+              ch.narrative_intro || '',
+              JSON.stringify(ch.narrative_choices || []),
+              VALID_DESIGN_STATUS.has(ch.design_status) ? ch.design_status : 'draft',
+            ],
+          );
+          chapterIdByCode[ch.chapter_code] = chRes.rows[0].id;
+        }
+
+        // 旗標
+        for (const f of (Array.isArray(data.flags) ? data.flags : [])) {
+          if (!f.flag_code || !FLAG_CODE_RE.test(f.flag_code)) continue;
+          if (!VALID_FLAG_CATEGORIES.has(f.category)) continue;
+          await client.query(
+            `INSERT INTO campaign_flags (campaign_id, flag_code, category, description_zh,
+                                         visibility, chapter_code)
+             VALUES ($1,$2,$3,$4,$5,$6)
+             ON CONFLICT (campaign_id, flag_code) DO NOTHING`,
+            [
+              newCampaignId,
+              f.flag_code,
+              f.category,
+              f.description_zh || '',
+              VALID_VISIBILITIES.has(f.visibility) ? f.visibility : 'visible',
+              f.chapter_code || null,
+            ],
+          );
+        }
+
+        // 結果分支
+        for (const o of (Array.isArray(data.outcomes) ? data.outcomes : [])) {
+          const chapterId = o.chapter_id && chaptersIn.some((ch) => ch.id === o.chapter_id)
+            ? chapterIdByCode[chaptersIn.find((ch) => ch.id === o.chapter_id).chapter_code]
+            : chapterIdByCode[o.chapter_code];
+          if (!chapterId) continue;
+          if (!VALID_OUTCOME_CODES.has(o.outcome_code)) continue;
+          await client.query(
+            `INSERT INTO chapter_outcomes (chapter_id, outcome_code, condition_expression,
+                                           narrative_text, next_chapter_version,
+                                           chaos_bag_changes, rewards, flag_sets)
+             VALUES ($1,$2,$3::jsonb,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)
+             ON CONFLICT (chapter_id, outcome_code) DO NOTHING`,
+            [
+              chapterId,
+              o.outcome_code,
+              JSON.stringify(o.condition_expression || {}),
+              o.narrative_text || '',
+              o.next_chapter_version || null,
+              JSON.stringify(o.chaos_bag_changes || []),
+              JSON.stringify(o.rewards || {}),
+              JSON.stringify(o.flag_sets || []),
+            ],
+          );
+        }
+
+        // 間章事件
+        for (const e of (Array.isArray(data.interludes) ? data.interludes : [])) {
+          const chapterId = e.chapter_id && chaptersIn.some((ch) => ch.id === e.chapter_id)
+            ? chapterIdByCode[chaptersIn.find((ch) => ch.id === e.chapter_id).chapter_code]
+            : chapterIdByCode[e.chapter_code];
+          if (!chapterId) continue;
+          if (!VALID_INSERTION_POINTS.has(e.insertion_point)) continue;
+          await client.query(
+            `INSERT INTO interlude_events (chapter_id, event_code, name_zh, name_en,
+                                           insertion_point, trigger_condition, operations,
+                                           narrative_text_zh, narrative_text_en, choices)
+             VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9,$10::jsonb)
+             ON CONFLICT (chapter_id, event_code) DO NOTHING`,
+            [
+              chapterId,
+              e.event_code,
+              e.name_zh,
+              e.name_en || '',
+              e.insertion_point,
+              e.trigger_condition ? JSON.stringify(e.trigger_condition) : null,
+              JSON.stringify(e.operations || []),
+              e.narrative_text_zh || '',
+              e.narrative_text_en || '',
+              JSON.stringify(e.choices || []),
+            ],
+          );
+        }
+
+        await client.query('COMMIT');
+        return reply.status(201).send({
+          success: true,
+          data: { id: newCampaignId, code: data.campaign.code },
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        request.log.error(error, '匯入戰役失敗');
+        return reply.status(500).send({ success: false, error: '匯入戰役失敗' });
+      } finally {
+        client.release();
+      }
+    },
+  );
 };

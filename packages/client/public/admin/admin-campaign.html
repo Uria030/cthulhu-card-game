@@ -17,17 +17,13 @@
     html, body { height: 100%; margin: 0; }
     body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg-primary); color: var(--text-primary); }
 
-    /* ── 三欄佈局 ── */
     .layout-container {
       display: grid;
       grid-template-columns: 280px 1fr 340px;
       height: calc(100vh - 52px);
       gap: 0;
     }
-    .left-panel, .right-panel {
-      background: var(--bg-card);
-      overflow-y: auto;
-    }
+    .left-panel, .right-panel { background: var(--bg-card); overflow-y: auto; }
     .left-panel { border-right: 1px solid var(--border); }
     .right-panel { border-left: 1px solid var(--border); }
     .main-panel { overflow-y: auto; padding: 1rem 1.25rem; }
@@ -47,7 +43,6 @@
       padding: 0.3rem 0.5rem; font-family: inherit; font-size: 0.8rem;
     }
 
-    /* ── 左欄：戰役列表 ── */
     .campaign-list { padding: 0.35rem 0; }
     .campaign-item {
       padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--border);
@@ -57,13 +52,11 @@
     .campaign-item:hover { background: rgba(201, 169, 97, 0.07); }
     .campaign-item.active { background: rgba(201, 169, 97, 0.15); border-left-color: var(--cam-gold); }
     .campaign-item .ci-code { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-tertiary); }
-    .campaign-item .ci-name { font-size: 0.9rem; color: var(--text-primary); margin: 0.15rem 0; }
+    .campaign-item .ci-name { font-size: 0.9rem; margin: 0.15rem 0; }
     .campaign-item .ci-meta { font-size: 0.7rem; color: var(--text-secondary); }
 
-    /* ── 主編輯區 ── */
     .placeholder {
-      text-align: center; padding: 3rem 2rem; color: var(--text-tertiary);
-      font-size: 0.9rem;
+      text-align: center; padding: 2rem 1.5rem; color: var(--text-tertiary); font-size: 0.88rem;
     }
     .editor-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -72,7 +65,6 @@
     .editor-header h2 { font-family: 'Cinzel', serif; color: var(--cam-gold); margin: 0; font-size: 1.1rem; }
     .editor-meta { display: flex; gap: 0.5rem; align-items: center; font-size: 0.75rem; color: var(--text-secondary); }
 
-    /* ── 分頁標籤 ── */
     .tab-bar {
       display: flex; border-bottom: 2px solid var(--border); margin-bottom: 1rem;
       flex-wrap: wrap;
@@ -88,7 +80,6 @@
     .tab-content { display: none; }
     .tab-content.active { display: block; }
 
-    /* ── 表單 ── */
     .editor-section {
       background: var(--bg-card); border: 1px solid var(--border);
       border-radius: 6px; padding: 1rem; margin-bottom: 1rem;
@@ -98,13 +89,8 @@
       font-size: 0.9rem; margin: 0 0 0.75rem; padding-bottom: 0.35rem;
       border-bottom: 1px solid var(--border);
     }
-    .editor-section label {
-      display: block; margin-bottom: 0.6rem;
-      font-size: 0.78rem; color: var(--text-secondary);
-    }
-    .editor-section label input,
-    .editor-section label textarea,
-    .editor-section label select {
+    .editor-section label { display: block; margin-bottom: 0.6rem; font-size: 0.78rem; color: var(--text-secondary); }
+    .editor-section label input, .editor-section label textarea, .editor-section label select {
       display: block; width: 100%; margin-top: 0.2rem; box-sizing: border-box;
       background: var(--bg-primary); color: var(--text-primary);
       border: 1px solid var(--border); border-radius: 4px;
@@ -112,27 +98,13 @@
     }
     .editor-section label textarea { resize: vertical; }
     .editor-section label input[readonly] { opacity: 0.7; cursor: not-allowed; }
-
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 
-    /* ── 混沌袋編輯 ── */
     .chaos-bag-editor { display: flex; flex-direction: column; gap: 0.85rem; }
-    .marker-group {
-      background: var(--bg-primary); border: 1px solid var(--border);
-      border-radius: 4px; padding: 0.75rem;
-    }
-    .marker-group h4 {
-      margin: 0 0 0.5rem; color: var(--cam-gold);
-      font-size: 0.82rem; font-family: 'Cinzel', serif;
-    }
-    .marker-row {
-      display: flex; flex-wrap: wrap; gap: 0.75rem;
-      align-items: center; margin-bottom: 0.35rem;
-    }
-    .marker-row label {
-      display: inline-flex; align-items: center; gap: 0.3rem; margin: 0;
-      font-size: 0.75rem; color: var(--text-secondary);
-    }
+    .marker-group { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 4px; padding: 0.75rem; }
+    .marker-group h4 { margin: 0 0 0.5rem; color: var(--cam-gold); font-size: 0.82rem; font-family: 'Cinzel', serif; }
+    .marker-row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 0.35rem; }
+    .marker-row label { display: inline-flex; align-items: center; gap: 0.3rem; margin: 0; font-size: 0.75rem; color: var(--text-secondary); }
     .marker-row input[type="number"] {
       width: 3.5rem; padding: 0.2rem 0.35rem; text-align: center;
       background: var(--bg-card); color: var(--text-primary);
@@ -140,9 +112,9 @@
       font-family: inherit; font-size: 0.78rem;
     }
     .marker-row select {
-      padding: 0.2rem 0.35rem; background: var(--bg-card);
-      color: var(--text-primary); border: 1px solid var(--border);
-      border-radius: 4px; font-family: inherit; font-size: 0.75rem; max-width: 10rem;
+      padding: 0.2rem 0.35rem; background: var(--bg-card); color: var(--text-primary);
+      border: 1px solid var(--border); border-radius: 4px;
+      font-family: inherit; font-size: 0.75rem; max-width: 10rem;
     }
     .marker-summary {
       background: rgba(201, 169, 97, 0.07); padding: 0.5rem 0.75rem;
@@ -152,44 +124,24 @@
     .preset-buttons { display: flex; gap: 0.35rem; margin-bottom: 0.5rem; flex-wrap: wrap; align-items: center; }
     .preset-buttons button {
       padding: 0.3rem 0.7rem; background: transparent; color: var(--text-secondary);
-      border: 1px solid var(--border); border-radius: 4px;
-      cursor: pointer; font-family: inherit; font-size: 0.75rem;
+      border: 1px solid var(--border); border-radius: 4px; cursor: pointer;
+      font-family: inherit; font-size: 0.75rem;
     }
     .preset-buttons button:hover { color: var(--cam-gold); border-color: var(--cam-gold-dim); }
 
-    /* ── 十章網格 ── */
-    .chapter-grid {
-      display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem;
-      margin-top: 0.35rem;
-    }
+    .chapter-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-top: 0.35rem; }
     .chapter-card {
       background: var(--bg-primary); border: 1px solid var(--border);
       border-radius: 5px; padding: 0.6rem; cursor: pointer;
       transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
       display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
     }
-    .chapter-card:hover {
-      transform: translateY(-1px);
-      border-color: var(--cam-gold-dim);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-    }
-    .chapter-card .ch-num {
-      font-size: 1.4rem; font-weight: 700; color: var(--cam-gold);
-      font-family: 'Cinzel', serif;
-    }
-    .chapter-card .ch-code {
-      font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
-      color: var(--text-tertiary);
-    }
-    .chapter-card .ch-name {
-      font-size: 0.72rem; color: var(--text-primary); text-align: center; min-height: 1.4em;
-    }
-    .chapter-card .ch-badges {
-      display: flex; flex-wrap: wrap; gap: 0.2rem; justify-content: center;
-      font-size: 0.6rem;
-    }
+    .chapter-card:hover { transform: translateY(-1px); border-color: var(--cam-gold-dim); box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
+    .chapter-card .ch-num { font-size: 1.4rem; font-weight: 700; color: var(--cam-gold); font-family: 'Cinzel', serif; }
+    .chapter-card .ch-code { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text-tertiary); }
+    .chapter-card .ch-name { font-size: 0.72rem; color: var(--text-primary); text-align: center; min-height: 1.4em; }
+    .chapter-card .ch-badges { display: flex; flex-wrap: wrap; gap: 0.2rem; justify-content: center; font-size: 0.6rem; }
 
-    /* ── 狀態徽章 ── */
     .status-draft, .status-review, .status-published {
       padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.68rem;
     }
@@ -198,51 +150,35 @@
     .status-published { background: rgba(107,156,90,0.2); color: var(--cam-success); }
     .badge-dirty { color: var(--cam-warn); font-weight: 600; }
 
-    /* ── 按鈕 ── */
     .btn-primary {
       padding: 0.35rem 0.85rem; background: var(--cam-gold-dim);
       color: var(--bg-primary); border: 1px solid var(--cam-gold);
-      border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 0.8rem;
-      font-weight: 600;
+      border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 0.8rem; font-weight: 600;
     }
     .btn-primary:hover { background: var(--cam-gold); }
     .btn-danger {
-      padding: 0.3rem 0.7rem; background: transparent;
-      color: var(--cam-danger); border: 1px solid var(--cam-danger);
-      border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 0.78rem;
+      padding: 0.3rem 0.7rem; background: transparent; color: var(--cam-danger);
+      border: 1px solid var(--cam-danger); border-radius: 4px; cursor: pointer;
+      font-family: inherit; font-size: 0.78rem;
     }
     .btn-danger:hover { background: rgba(193,74,74,0.1); }
     .btn-secondary {
-      padding: 0.3rem 0.7rem; background: transparent;
-      color: var(--text-secondary); border: 1px solid var(--border);
-      border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 0.78rem;
+      padding: 0.3rem 0.7rem; background: transparent; color: var(--text-secondary);
+      border: 1px solid var(--border); border-radius: 4px; cursor: pointer;
+      font-family: inherit; font-size: 0.78rem;
     }
     .btn-secondary:hover { color: var(--text-primary); border-color: var(--cam-gold-dim); }
+    .btn-small { padding: 0.15rem 0.45rem; font-size: 0.7rem; }
 
-    .editor-footer { margin-top: 1rem; display: flex; gap: 0.5rem; }
+    .editor-footer { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
-    /* ── 右欄預覽 ── */
     .preview-content { padding: 0.75rem; }
-    .preview-card {
-      background: var(--bg-primary); border: 1px solid var(--border);
-      border-radius: 6px; padding: 0.85rem;
-    }
-    .preview-card h3 {
-      font-family: 'Cinzel', serif; color: var(--cam-gold);
-      margin: 0 0 0.35rem; font-size: 1rem;
-    }
+    .preview-card { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 0.85rem; }
+    .preview-card h3 { font-family: 'Cinzel', serif; color: var(--cam-gold); margin: 0 0 0.35rem; font-size: 1rem; }
     .preview-card .theme { font-size: 0.75rem; color: var(--text-tertiary); margin: 0.2rem 0; }
-    .preview-card .cover-narrative {
-      font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6;
-      white-space: pre-wrap; margin: 0.5rem 0;
-    }
-    .preview-card h4 {
-      font-family: 'Cinzel', serif; font-size: 0.82rem; color: var(--cam-gold-dim);
-      margin: 0.75rem 0 0.35rem;
-    }
-    .chapter-mini-grid {
-      display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.2rem;
-    }
+    .preview-card .cover-narrative { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6; white-space: pre-wrap; margin: 0.5rem 0; }
+    .preview-card h4 { font-family: 'Cinzel', serif; font-size: 0.82rem; color: var(--cam-gold-dim); margin: 0.75rem 0 0.35rem; }
+    .chapter-mini-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.2rem; }
     .chapter-mini-grid .mini-ch {
       aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
       background: var(--bg-card); border: 1px solid var(--border);
@@ -251,30 +187,25 @@
     .chapter-mini-grid .mini-ch.status-published { border-color: var(--cam-success); color: var(--cam-success); }
     .chapter-mini-grid .mini-ch.status-review { border-color: var(--cam-warn); color: var(--cam-warn); }
 
-    /* ── 對話框 ── */
     .dialog-backdrop {
       position: fixed; inset: 0; background: rgba(0,0,0,0.65);
-      display: flex; align-items: center; justify-content: center;
-      z-index: 1000;
+      display: flex; align-items: center; justify-content: center; z-index: 1000;
     }
     .dialog-content {
       background: var(--bg-card); border: 1px solid var(--cam-gold-dim);
       border-radius: 8px; padding: 1.2rem 1.5rem;
-      min-width: 380px; max-width: 90vw;
+      min-width: 380px; max-width: 90vw; max-height: 85vh; overflow-y: auto;
     }
-    .dialog-content h3 {
-      font-family: 'Cinzel', serif; color: var(--cam-gold);
-      margin: 0 0 1rem; font-size: 1rem;
-    }
+    .dialog-content h3 { font-family: 'Cinzel', serif; color: var(--cam-gold); margin: 0 0 1rem; font-size: 1rem; }
     .dialog-content label { display: block; margin-bottom: 0.6rem; font-size: 0.8rem; color: var(--text-secondary); }
-    .dialog-content label input { display: block; width: 100%; margin-top: 0.2rem; box-sizing: border-box;
+    .dialog-content label input, .dialog-content label textarea, .dialog-content label select {
+      display: block; width: 100%; margin-top: 0.2rem; box-sizing: border-box;
       background: var(--bg-primary); color: var(--text-primary);
-      border: 1px solid var(--border); border-radius: 4px; padding: 0.35rem 0.5rem; font-family: inherit; }
-    .dialog-footer {
-      display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem;
+      border: 1px solid var(--border); border-radius: 4px; padding: 0.35rem 0.5rem;
+      font-family: inherit;
     }
+    .dialog-footer { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
 
-    /* ── Toast ── */
     .toast {
       position: fixed; top: 70px; right: 20px; z-index: 2000;
       padding: 0.6rem 1rem; border-radius: 4px;
@@ -286,13 +217,161 @@
     .toast.warn { background: rgba(201,151,56,0.95); border-left: 4px solid var(--cam-warn); }
     @keyframes slideIn { from { transform: translateX(350px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-    /* ── 版本號 ── */
     .nav-version { color: var(--text-tertiary); font-size: 0.7rem; margin-left: 0.5rem; }
 
-    /* ── Responsive ── */
+    /* ── Part 3 新增：章節編輯 ── */
+    .chapters-layout {
+      display: grid; grid-template-columns: 160px 1fr; gap: 0.75rem;
+    }
+    .chapter-nav {
+      display: flex; flex-direction: column; gap: 0.3rem;
+      padding: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;
+      max-height: calc(100vh - 200px); overflow-y: auto;
+    }
+    .chapter-tab-btn {
+      padding: 0.4rem 0.6rem; background: transparent; color: var(--text-secondary);
+      border: 1px solid var(--border); border-radius: 4px; cursor: pointer;
+      font-family: inherit; font-size: 0.75rem; text-align: left;
+      display: flex; justify-content: space-between; align-items: center; gap: 0.3rem;
+    }
+    .chapter-tab-btn:hover { background: rgba(201, 169, 97, 0.1); }
+    .chapter-tab-btn.active { background: rgba(201, 169, 97, 0.25); color: var(--cam-gold); border-color: var(--cam-gold-dim); }
+    .chapter-tab-btn .ch-num-s { font-weight: 700; font-family: 'Cinzel', serif; }
+
+    .outcome-slots { display: flex; flex-direction: column; gap: 0.75rem; }
+    .outcome-slot {
+      background: var(--bg-primary); border: 1px solid var(--border); border-radius: 5px; padding: 0.75rem;
+    }
+    .outcome-slot.disabled { opacity: 0.5; }
+    .outcome-slot.enabled { border-left: 3px solid var(--cam-gold-dim); }
+    .outcome-header { display: flex; justify-content: space-between; align-items: center; }
+    .outcome-header h4 { margin: 0; font-family: 'Cinzel', serif; font-size: 0.85rem; color: var(--cam-gold); }
+    .outcome-body { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+
+    .narrative-choices-list, .interlude-operations-list, .flag-chips { display: flex; flex-direction: column; gap: 0.4rem; }
+    .choice-row, .operation-row {
+      display: grid; grid-template-columns: 1fr auto; gap: 0.35rem; align-items: start;
+      background: var(--bg-card); padding: 0.4rem; border-radius: 4px;
+    }
+    .flag-chip {
+      display: inline-flex; align-items: center; gap: 0.2rem;
+      background: rgba(201, 169, 97, 0.1); color: var(--cam-gold);
+      padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.72rem;
+      font-family: 'JetBrains Mono', monospace;
+      margin-right: 0.3rem;
+    }
+    .flag-chip button { background: none; border: none; color: var(--cam-danger); cursor: pointer; font-size: 0.8rem; }
+
+    /* ── Part 3 新增：旗標字典 ── */
+    .flags-toolbar { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center; }
+    .flags-toolbar input, .flags-toolbar select {
+      background: var(--bg-primary); color: var(--text-primary);
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 0.3rem 0.5rem; font-family: inherit; font-size: 0.8rem;
+    }
+    .flags-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .flags-table th, .flags-table td {
+      padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); text-align: left;
+    }
+    .flags-table th {
+      background: var(--bg-card); color: var(--cam-gold-dim);
+      font-family: 'Cinzel', serif; font-size: 0.78rem;
+    }
+    .flags-table td code { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--cam-gold); }
+    .cat-badge {
+      padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.7rem;
+      background: rgba(201, 169, 97, 0.1); color: var(--cam-gold-dim);
+    }
+    .code-input-wrapper { display: flex; align-items: stretch; gap: 0; }
+    .code-prefix {
+      padding: 0.35rem 0.5rem; background: var(--bg-card);
+      border: 1px solid var(--border); border-right: none; border-radius: 4px 0 0 4px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--cam-gold);
+    }
+    .code-input-wrapper input { border-radius: 0 4px 4px 0 !important; }
+
+    /* ── Part 3 新增：間章事件 ── */
+    .interludes-layout { display: grid; grid-template-columns: 220px 1fr; gap: 0.75rem; }
+    .interludes-nav {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.5rem; max-height: calc(100vh - 200px); overflow-y: auto;
+    }
+    .interlude-group { margin-bottom: 0.5rem; }
+    .interlude-group h4 {
+      font-family: 'Cinzel', serif; color: var(--cam-gold-dim);
+      font-size: 0.75rem; margin: 0.5rem 0 0.3rem;
+    }
+    .interlude-subgroup h5 {
+      color: var(--text-tertiary); font-size: 0.7rem; margin: 0.3rem 0;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .interlude-item {
+      padding: 0.35rem 0.5rem; background: var(--bg-primary);
+      border: 1px solid var(--border); border-radius: 3px; cursor: pointer;
+      margin-bottom: 0.25rem; font-size: 0.75rem;
+    }
+    .interlude-item:hover { border-color: var(--cam-gold-dim); }
+    .interlude-item.active { border-left: 3px solid var(--cam-gold); }
+    .interlude-item code { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--cam-gold-dim); margin-right: 0.3rem; }
+
+    /* ── Part 3 新增：條件表達式 ── */
+    .cond-editor {
+      background: var(--bg-card); border: 1px dashed var(--border); border-radius: 4px;
+      padding: 0.5rem; min-height: 2.5rem;
+    }
+    .cond-row {
+      display: grid; grid-template-columns: auto 1fr auto; gap: 0.35rem;
+      align-items: center; margin-bottom: 0.35rem;
+    }
+    .cond-row select, .cond-row input {
+      padding: 0.22rem 0.35rem; background: var(--bg-primary); color: var(--text-primary);
+      border: 1px solid var(--border); border-radius: 3px;
+      font-family: inherit; font-size: 0.75rem;
+    }
+    .cond-group-type {
+      margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;
+      font-size: 0.75rem; color: var(--text-secondary);
+    }
+
+    /* ── Part 3 新增：混沌袋演變 ── */
+    .evolution-layout { display: grid; grid-template-columns: 1fr 320px; gap: 0.75rem; }
+    .evolution-matrix table {
+      width: 100%; border-collapse: collapse; font-size: 0.78rem;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;
+    }
+    .evolution-matrix th, .evolution-matrix td {
+      padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); text-align: center;
+      vertical-align: top;
+    }
+    .evolution-matrix th { background: var(--bg-primary); color: var(--cam-gold-dim); font-family: 'Cinzel', serif; }
+    .evolution-matrix td.empty { color: var(--text-tertiary); }
+    .evolution-simulator {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem;
+    }
+    .evolution-simulator h4 { font-family: 'Cinzel', serif; color: var(--cam-gold); margin: 0 0 0.5rem; font-size: 0.85rem; }
+
+    /* ── Part 4 新增：完整性檢查 ── */
+    .completeness-summary { padding: 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 0.75rem; }
+    .overall-status .status-ok { color: var(--cam-success); font-size: 1.1rem; font-weight: 700; }
+    .overall-status .status-fail { color: var(--cam-danger); font-size: 1.1rem; font-weight: 700; }
+    .check-section ul { list-style: none; padding: 0; margin: 0; }
+    .check-section li { padding: 0.25rem 0; font-size: 0.82rem; }
+    .check-section li.pass { color: var(--text-secondary); }
+    .check-section li.fail { color: var(--cam-danger); }
+    .check-section li .indicator { display: inline-block; width: 1.2em; }
+    .check-section li .detail { margin-left: 1.4em; font-size: 0.72rem; color: var(--text-tertiary); }
+    .ai-key-indicator {
+      padding: 0.3rem 0.6rem; background: transparent;
+      border: 1px dashed var(--border); color: var(--text-tertiary);
+      border-radius: 4px; font-size: 0.72rem; font-family: inherit;
+      cursor: pointer; margin-left: 0.5rem;
+    }
+    .ai-key-indicator.set { color: var(--cam-success); border-color: var(--cam-success); border-style: solid; }
+
     @media (max-width: 1100px) {
       .layout-container { grid-template-columns: 240px 1fr 280px; }
       .chapter-grid { grid-template-columns: repeat(3, 1fr); }
+      .interludes-layout, .evolution-layout, .chapters-layout { grid-template-columns: 1fr; }
     }
     @media (max-width: 800px) {
       .layout-container { grid-template-columns: 1fr; }
@@ -307,6 +386,7 @@
     <span class="nav-title">戰役敘事設計器</span>
     <span class="nav-code">MOD-06</span>
     <span class="nav-spacer"></span>
+    <button id="ai-key-status" class="ai-key-indicator" onclick="promptApiKey()">⚠ API Key 未設</button>
     <button class="btn-secondary" onclick="openModuleHelp && openModuleHelp('MOD-06')" title="使用說明">說明</button>
     <span id="current-user" class="nav-version"></span>
     <span class="nav-version" id="admin-version-tag"></span>
@@ -314,7 +394,6 @@
 
   <div class="layout-container">
 
-    <!-- 左欄：戰役列表 -->
     <aside class="left-panel">
       <div class="panel-header">
         <h2>戰役列表</h2>
@@ -328,11 +407,15 @@
           <option value="review">審核中</option>
           <option value="published">已發佈</option>
         </select>
+        <button class="btn-secondary btn-small" onclick="exportCampaignJSON()">匯出當前戰役</button>
+        <label class="btn-secondary btn-small" style="text-align:center; cursor:pointer;">
+          匯入戰役 JSON
+          <input type="file" accept=".json" style="display:none" onchange="importCampaignJSON(event)">
+        </label>
       </div>
       <div id="campaign-list" class="campaign-list"></div>
     </aside>
 
-    <!-- 主編輯區 -->
     <main class="main-panel">
       <div id="no-campaign-placeholder" class="placeholder">
         <p>請從左側選擇戰役，或建立新戰役。</p>
@@ -356,7 +439,7 @@
           <button class="tab-btn" data-tab="completeness">完整性檢查</button>
         </nav>
 
-        <!-- 戰役總覽 -->
+        <!-- ══ 戰役總覽 ══ -->
         <section id="tab-overview" class="tab-content active">
           <div class="editor-section">
             <h3>戰役元資料</h3>
@@ -378,6 +461,7 @@
               </label>
               <label>英文名稱
                 <input type="text" id="field-name-en" oninput="markDirty()">
+                <button class="btn-secondary btn-small" type="button" onclick="aiTranslate('field-name-zh','field-name-en')">中譯英</button>
               </label>
             </div>
             <div class="form-row">
@@ -395,6 +479,7 @@
             </div>
             <label>封面敘事
               <textarea id="field-cover-narrative" rows="6" oninput="markDirty()" placeholder="戰役開場白、氛圍鋪陳…"></textarea>
+              <button class="btn-secondary btn-small" type="button" onclick="aiGenerateCoverNarrative()">AI 生成封面敘事</button>
             </label>
           </div>
 
@@ -424,26 +509,115 @@
           </div>
         </section>
 
-        <!-- 其他分頁：stub -->
+        <!-- ══ 章節編輯 ══ -->
         <section id="tab-chapters" class="tab-content">
-          <div class="placeholder">章節編輯器（Part 3 實作）</div>
+          <div class="chapters-layout">
+            <div class="chapter-nav" id="chapter-nav"></div>
+            <div id="chapter-editor-container">
+              <div class="placeholder">請從左側選擇章節</div>
+            </div>
+          </div>
         </section>
+
+        <!-- ══ 旗標字典 ══ -->
         <section id="tab-flags" class="tab-content">
-          <div class="placeholder">旗標字典（Part 3 實作）</div>
+          <div class="flags-toolbar">
+            <input type="search" id="flag-search" placeholder="搜尋旗標代碼…" oninput="renderFlagsList()">
+            <select id="flag-category-filter" onchange="renderFlagsList()">
+              <option value="">全部類別</option>
+            </select>
+            <button class="btn-primary" onclick="openNewFlagDialog()">＋ 新增旗標</button>
+          </div>
+          <div class="editor-section" style="padding:0;">
+            <table class="flags-table">
+              <thead>
+                <tr>
+                  <th>旗標代碼</th>
+                  <th>類別</th>
+                  <th>章節</th>
+                  <th>描述</th>
+                  <th>可見性</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="flags-tbody"></tbody>
+            </table>
+          </div>
         </section>
+
+        <!-- ══ 間章事件 ══ -->
         <section id="tab-interludes" class="tab-content">
-          <div class="placeholder">間章事件（Part 3 實作）</div>
+          <div class="interludes-layout">
+            <div class="interludes-nav">
+              <button class="btn-primary" style="width:100%; margin-bottom:0.5rem;" onclick="openNewInterludeDialog()">＋ 新事件</button>
+              <div id="interludes-grouped-list"></div>
+            </div>
+            <div id="interlude-editor-container">
+              <div class="placeholder">請從左側選擇事件</div>
+            </div>
+          </div>
         </section>
+
+        <!-- ══ 混沌袋演變 ══ -->
         <section id="tab-chaos-evolution" class="tab-content">
-          <div class="placeholder">混沌袋演變規則（Part 3 實作）</div>
+          <div class="evolution-layout">
+            <div class="evolution-matrix">
+              <h3 style="font-family:'Cinzel',serif; color:var(--cam-gold); font-size:0.95rem; margin-top:0;">演變規則矩陣</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>章節</th>
+                    <th>結果 A</th><th>結果 B</th><th>結果 C</th><th>結果 D</th><th>結果 E</th>
+                  </tr>
+                </thead>
+                <tbody id="evolution-matrix-body"></tbody>
+              </table>
+            </div>
+            <div class="evolution-simulator">
+              <h4>終局混沌袋模擬</h4>
+              <label style="font-size:0.75rem; color:var(--text-secondary);">模擬路徑
+                <select id="sim-path-mode" onchange="runSimulation()" style="width:100%; margin-top:0.2rem; padding:0.3rem; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border); border-radius:4px;">
+                  <option value="best">最好路徑（全選 A 結果）</option>
+                  <option value="worst">最壞路徑（全選最末結果）</option>
+                  <option value="average">平均路徑（依所有結果平均）</option>
+                </select>
+              </label>
+              <button class="btn-primary" style="margin-top:0.5rem;" onclick="runSimulation()">執行模擬</button>
+              <div id="sim-result-display" style="margin-top:0.75rem; font-size:0.78rem;"></div>
+            </div>
+          </div>
         </section>
+
+        <!-- ══ 完整性檢查 ══ -->
         <section id="tab-completeness" class="tab-content">
-          <div class="placeholder">完整性檢查（Part 4 實作）</div>
+          <div class="completeness-summary overall-status">
+            <h3 style="font-family:'Cinzel',serif; color:var(--cam-gold); margin:0 0 0.5rem;">戰役發佈狀態</h3>
+            <div id="overall-badge"></div>
+            <p id="overall-message" style="font-size:0.85rem; color:var(--text-secondary); margin:0.5rem 0 0;"></p>
+          </div>
+          <div class="editor-section check-section">
+            <h3>戰役層級</h3>
+            <ul id="checks-campaign"></ul>
+          </div>
+          <div class="editor-section check-section">
+            <h3>章節層級</h3>
+            <div id="checks-chapters"></div>
+          </div>
+          <div class="editor-section check-section">
+            <h3>結構完整性</h3>
+            <ul id="checks-structure"></ul>
+          </div>
+          <div class="editor-section check-section">
+            <h3>旗標字典完整性</h3>
+            <ul id="checks-flags"></ul>
+          </div>
+          <div class="editor-footer">
+            <button class="btn-primary" onclick="runCompletenessCheck()">重新檢查</button>
+          </div>
         </section>
       </div>
     </main>
 
-    <!-- 右欄預覽 -->
     <aside class="right-panel">
       <div class="panel-header"><h2>即時預覽</h2></div>
       <div id="preview-content" class="preview-content">
@@ -459,14 +633,29 @@
   (() => {
     'use strict';
 
+    // ═══════════════════════════════════════════
+    // 狀態
+    // ═══════════════════════════════════════════
     const state = {
       campaignList: [],
       currentCampaign: null,
       currentTab: 'overview',
       options: null,
       dirty: false,
+
+      // Part 3 擴充
+      currentChapter: null,       // 當前編輯的章節（含 outcomes + interludes + linked_stages）
+      chapterOriginalOutcomes: [], // 用於 save 時對比刪除
+      currentFlags: [],           // 當前戰役的所有旗標
+      currentInterludeGroups: [], // 依章節分組的間章事件
+      currentInterlude: null,     // 當前編輯的間章事件
     };
 
+    const LS_API_KEY = 'gemini_api_key';
+
+    // ═══════════════════════════════════════════
+    // 初始化
+    // ═══════════════════════════════════════════
     window.addEventListener('DOMContentLoaded', async () => {
       const userRaw = localStorage.getItem('admin_user');
       let user = null;
@@ -480,6 +669,7 @@
       if (typeof ADMIN_VERSION !== 'undefined') {
         document.getElementById('admin-version-tag').textContent = 'v' + ADMIN_VERSION;
       }
+      updateApiKeyStatus();
 
       await loadOptions();
       await loadCampaignList();
@@ -493,11 +683,13 @@
         state.options = await res.json();
       } catch (e) {
         console.error('無法載入 campaign-options.json', e);
-        state.options = { scenario_marker_effects: {}, difficulty_presets: {}, number_marker_values: ['+1','0','-1','-2','-3','-4'] };
+        state.options = { scenario_marker_effects: {}, difficulty_presets: {}, number_marker_values: ['+1','0','-1','-2','-3','-4'], flag_categories: [] };
       }
     }
 
-    // ═══ 戰役列表 ═══
+    // ═══════════════════════════════════════════
+    // 戰役列表
+    // ═══════════════════════════════════════════
     async function loadCampaignList() {
       try {
         const res = await adminFetch('/api/campaigns');
@@ -524,8 +716,7 @@
         return;
       }
       container.innerHTML = filtered.map((c) => `
-        <div class="campaign-item ${state.currentCampaign?.id === c.id ? 'active' : ''}"
-             onclick="selectCampaign('${c.id}')">
+        <div class="campaign-item ${state.currentCampaign?.id === c.id ? 'active' : ''}" onclick="selectCampaign('${c.id}')">
           <div class="ci-code">${escHtml(c.code)}</div>
           <div class="ci-name">${escHtml(c.name_zh)}</div>
           <div class="ci-meta">
@@ -545,10 +736,12 @@
         if (!data.success) { showToast('載入戰役失敗', 'error'); return; }
         state.currentCampaign = data.data;
         state.dirty = false;
+        state.currentChapter = null;
         document.getElementById('no-campaign-placeholder').style.display = 'none';
         document.getElementById('campaign-editor').style.display = '';
         document.getElementById('editor-title').textContent = state.currentCampaign.name_zh;
         renderCampaignList();
+        await loadFlags();
         renderCurrentTab();
         updateRightPanel();
       } catch (e) {
@@ -557,87 +750,82 @@
     }
     window.selectCampaign = selectCampaign;
 
-    // ═══ 建立戰役對話框 ═══
+    // ═══════════════════════════════════════════
+    // 建立戰役對話框
+    // ═══════════════════════════════════════════
     function openCreateCampaignDialog() {
-      const root = document.getElementById('dialogs-root');
-      root.innerHTML = `
-        <div class="dialog-backdrop" id="dlg-create">
-          <div class="dialog-content">
-            <h3>建立新戰役</h3>
-            <label>戰役代碼（3-32 字元，小寫英數底線）
-              <input type="text" id="new-campaign-code" placeholder="例：innsmouth_shadow">
-            </label>
-            <label>中文名稱
-              <input type="text" id="new-campaign-name-zh" placeholder="例：印斯茅斯陰影">
-            </label>
-            <div class="dialog-footer">
-              <button class="btn-secondary" onclick="closeCreateDialog()">取消</button>
-              <button class="btn-primary" onclick="confirmCreateCampaign()">建立</button>
-            </div>
+      document.getElementById('dialogs-root').innerHTML = `
+        <div class="dialog-backdrop"><div class="dialog-content">
+          <h3>建立新戰役</h3>
+          <label>戰役代碼（3-32 字元，小寫英數底線）
+            <input type="text" id="new-campaign-code" placeholder="例：innsmouth_shadow">
+          </label>
+          <label>中文名稱
+            <input type="text" id="new-campaign-name-zh" placeholder="例：印斯茅斯陰影">
+          </label>
+          <div class="dialog-footer">
+            <button class="btn-secondary" onclick="closeDialog()">取消</button>
+            <button class="btn-primary" onclick="confirmCreateCampaign()">建立</button>
           </div>
-        </div>
+        </div></div>
       `;
       document.getElementById('new-campaign-code').focus();
     }
     window.openCreateCampaignDialog = openCreateCampaignDialog;
 
-    function closeCreateDialog() {
-      document.getElementById('dialogs-root').innerHTML = '';
-    }
-    window.closeCreateDialog = closeCreateDialog;
+    function closeDialog() { document.getElementById('dialogs-root').innerHTML = ''; }
+    window.closeDialog = closeDialog;
 
     async function confirmCreateCampaign() {
       const code = document.getElementById('new-campaign-code').value.trim();
       const name = document.getElementById('new-campaign-name-zh').value.trim();
-      if (!/^[a-z0-9_]{3,32}$/.test(code)) {
-        alert('戰役代碼格式錯誤（3-32 字元，小寫英數底線）');
-        return;
-      }
+      if (!/^[a-z0-9_]{3,32}$/.test(code)) { alert('戰役代碼格式錯誤'); return; }
       if (!name) { alert('中文名稱為必填'); return; }
       try {
         const res = await adminFetch('/api/campaigns', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code, name_zh: name }),
         });
         const data = await res.json();
         if (!res.ok) { alert(data.error || '建立失敗'); return; }
-        closeCreateDialog();
+        closeDialog();
         await loadCampaignList();
         await selectCampaign(data.data.id);
-        showToast('戰役已建立，已自動產生十章骨架', 'success');
-      } catch (e) {
-        alert('網路錯誤：' + e.message);
-      }
+        showToast('戰役已建立', 'success');
+      } catch (e) { alert('網路錯誤：' + e.message); }
     }
     window.confirmCreateCampaign = confirmCreateCampaign;
 
-    // ═══ 分頁切換 ═══
+    // ═══════════════════════════════════════════
+    // 分頁切換
+    // ═══════════════════════════════════════════
     function bindTabBar() {
-      document.querySelectorAll('.tab-btn').forEach((btn) => {
-        btn.onclick = () => switchTab(btn.dataset.tab);
-      });
+      document.querySelectorAll('.tab-btn').forEach((btn) => { btn.onclick = () => switchTab(btn.dataset.tab); });
     }
-
     function switchTab(tabName) {
       if (state.dirty && !confirm('有未儲存變更，要放棄嗎？')) return;
       state.currentTab = tabName;
-      document.querySelectorAll('.tab-btn').forEach((btn) => {
-        btn.classList.toggle('active', btn.dataset.tab === tabName);
-      });
-      document.querySelectorAll('.tab-content').forEach((sec) => {
-        sec.classList.toggle('active', sec.id === `tab-${tabName}`);
-      });
+      document.querySelectorAll('.tab-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabName));
+      document.querySelectorAll('.tab-content').forEach((sec) => sec.classList.toggle('active', sec.id === `tab-${tabName}`));
       renderCurrentTab();
       updateRightPanel();
     }
     window.switchTab = switchTab;
 
     function renderCurrentTab() {
-      if (state.currentTab === 'overview') renderOverviewTab();
+      switch (state.currentTab) {
+        case 'overview': renderOverviewTab(); break;
+        case 'chapters': renderChaptersTab(); break;
+        case 'flags': renderFlagsTab(); break;
+        case 'interludes': renderInterludesTab(); break;
+        case 'chaos-evolution': renderChaosEvolutionTab(); break;
+        case 'completeness': runCompletenessCheck(); break;
+      }
     }
 
-    // ═══ 戰役總覽分頁 ═══
+    // ═══════════════════════════════════════════
+    // 戰役總覽
+    // ═══════════════════════════════════════════
     function renderOverviewTab() {
       if (!state.currentCampaign) return;
       const c = state.currentCampaign;
@@ -648,7 +836,6 @@
       document.getElementById('field-cover-narrative').value = c.cover_narrative || '';
       document.getElementById('field-difficulty-tier').value = c.difficulty_tier;
       document.getElementById('field-design-status').value = c.design_status;
-
       renderChaosBagEditor(c.initial_chaos_bag || {});
       renderChapterGrid(c.chapters || []);
       updateEditorHeader();
@@ -658,17 +845,12 @@
       const c = state.currentCampaign;
       if (!c) return;
       const badge = document.getElementById('editor-status-badge');
-      if (state.dirty) {
-        badge.textContent = '● 未儲存';
-        badge.className = 'badge-dirty';
-      } else {
-        badge.textContent = statusLabel(c.design_status);
-        badge.className = `status-${c.design_status}`;
-      }
+      if (state.dirty) { badge.textContent = '● 未儲存'; badge.className = 'badge-dirty'; }
+      else { badge.textContent = statusLabel(c.design_status); badge.className = `status-${c.design_status}`; }
       document.getElementById('editor-version').textContent = `v${c.version}`;
     }
 
-    // ─── 混沌袋編輯器 ───
+    // ─── 混沌袋 ───
     function renderChaosBagEditor(bag) {
       const container = document.getElementById('chaos-bag-editor');
       const nums = (bag && bag.number_markers) || {};
@@ -677,10 +859,7 @@
       const numVals = (state.options && state.options.number_marker_values) || ['+1','0','-1','-2','-3','-4'];
 
       const numHtml = numVals.map((v) => `
-        <label>${v}
-          <input type="number" min="0" max="10" value="${nums[v] ?? 0}"
-                 data-num-marker="${v}" oninput="updateBagSummary(); markDirty();">
-        </label>
+        <label>${v}<input type="number" min="0" max="10" value="${nums[v] ?? 0}" data-num-marker="${v}" oninput="updateBagSummary(); markDirty();"></label>
       `).join('');
 
       const scenarioTypes = ['skull', 'cultist', 'tablet', 'elder_thing'];
@@ -692,20 +871,12 @@
         const effects = effectOpts[k] || [];
         return `
           <div class="marker-row">
-            <label>${scenarioNames[k]}
-              <input type="number" min="0" max="6" value="${d.count || 0}"
-                     data-sce-count="${k}" oninput="updateBagSummary(); markDirty();">
-            </label>
-            <label>效果
-              <select data-sce-effect="${k}" onchange="markDirty()">
-                <option value="">（未選）</option>
-                ${effects.map((e) => `<option value="${e.code}" ${d.effect === e.code ? 'selected' : ''}>${e.name_zh} — ${e.desc}</option>`).join('')}
-              </select>
-            </label>
-            <label>值
-              <input type="number" value="${d.value ?? -1}" min="-5" max="5"
-                     data-sce-value="${k}" oninput="updateBagSummary(); markDirty();">
-            </label>
+            <label>${scenarioNames[k]}<input type="number" min="0" max="6" value="${d.count || 0}" data-sce-count="${k}" oninput="updateBagSummary(); markDirty();"></label>
+            <label>效果<select data-sce-effect="${k}" onchange="markDirty()">
+              <option value="">（未選）</option>
+              ${effects.map((e) => `<option value="${e.code}" ${d.effect === e.code ? 'selected' : ''}>${e.name_zh} — ${e.desc}</option>`).join('')}
+            </select></label>
+            <label>值<input type="number" value="${d.value ?? -1}" min="-5" max="5" data-sce-value="${k}" oninput="updateBagSummary(); markDirty();"></label>
           </div>
         `;
       }).join('');
@@ -716,64 +887,35 @@
         const d = myt[k] || { count: 0, value: -1 };
         return `
           <div class="marker-row">
-            <label>${mythosNames[k]}
-              <input type="number" min="0" max="6" value="${d.count || 0}"
-                     data-myt-count="${k}" oninput="updateBagSummary(); markDirty();">
-            </label>
-            <label>值
-              <input type="number" value="${d.value ?? -1}" min="-5" max="5"
-                     data-myt-value="${k}" oninput="updateBagSummary(); markDirty();">
-            </label>
+            <label>${mythosNames[k]}<input type="number" min="0" max="6" value="${d.count || 0}" data-myt-count="${k}" oninput="updateBagSummary(); markDirty();"></label>
+            <label>值<input type="number" value="${d.value ?? -1}" min="-5" max="5" data-myt-value="${k}" oninput="updateBagSummary(); markDirty();"></label>
           </div>
         `;
       }).join('');
 
       container.innerHTML = `
-        <div class="marker-group">
-          <h4>數字標記</h4>
-          <div class="marker-row">${numHtml}</div>
-        </div>
-        <div class="marker-group">
-          <h4>情境標記</h4>
-          ${sceHtml}
-        </div>
-        <div class="marker-group">
-          <h4>神話標記</h4>
-          ${mytHtml}
-        </div>
-        <div class="marker-group" style="opacity:0.7;">
-          <h4>極端標記（固定）</h4>
-          <p style="font-size:0.75rem; color:var(--text-secondary); margin:0;">觸手 ×1、遠古印記 ×1</p>
-        </div>
+        <div class="marker-group"><h4>數字標記</h4><div class="marker-row">${numHtml}</div></div>
+        <div class="marker-group"><h4>情境標記</h4>${sceHtml}</div>
+        <div class="marker-group"><h4>神話標記</h4>${mytHtml}</div>
+        <div class="marker-group" style="opacity:0.7;"><h4>極端標記（固定）</h4><p style="font-size:0.75rem; color:var(--text-secondary); margin:0;">觸手 ×1、遠古印記 ×1</p></div>
       `;
       updateBagSummary();
     }
 
     function collectChaosBagFromForm() {
-      const bag = {
-        number_markers: {}, scenario_markers: {}, mythos_markers: {},
-        extreme_markers: { tentacle: 1, elder_sign: 1 },
-        dynamic_markers: { bless: 0, curse: 0 },
-      };
-      document.querySelectorAll('[data-num-marker]').forEach((el) => {
-        bag.number_markers[el.dataset.numMarker] = parseInt(el.value, 10) || 0;
-      });
-      ['skull', 'cultist', 'tablet', 'elder_thing'].forEach((k) => {
-        const countEl = document.querySelector(`[data-sce-count="${k}"]`);
-        const effectEl = document.querySelector(`[data-sce-effect="${k}"]`);
-        const valueEl = document.querySelector(`[data-sce-value="${k}"]`);
+      const bag = { number_markers: {}, scenario_markers: {}, mythos_markers: {}, extreme_markers: { tentacle: 1, elder_sign: 1 }, dynamic_markers: { bless: 0, curse: 0 } };
+      document.querySelectorAll('[data-num-marker]').forEach((el) => { bag.number_markers[el.dataset.numMarker] = parseInt(el.value, 10) || 0; });
+      ['skull','cultist','tablet','elder_thing'].forEach((k) => {
         bag.scenario_markers[k] = {
-          count: parseInt(countEl?.value, 10) || 0,
-          effect: effectEl?.value || '',
-          value: parseInt(valueEl?.value, 10) || 0,
+          count: parseInt(document.querySelector(`[data-sce-count="${k}"]`)?.value, 10) || 0,
+          effect: document.querySelector(`[data-sce-effect="${k}"]`)?.value || '',
+          value: parseInt(document.querySelector(`[data-sce-value="${k}"]`)?.value, 10) || 0,
         };
       });
-      ['clue', 'headline', 'monster', 'doom', 'gate'].forEach((k) => {
-        const countEl = document.querySelector(`[data-myt-count="${k}"]`);
-        const valueEl = document.querySelector(`[data-myt-value="${k}"]`);
+      ['clue','headline','monster','doom','gate'].forEach((k) => {
         bag.mythos_markers[k] = {
-          count: parseInt(countEl?.value, 10) || 0,
-          value: parseInt(valueEl?.value, 10) || 0,
+          count: parseInt(document.querySelector(`[data-myt-count="${k}"]`)?.value, 10) || 0,
+          value: parseInt(document.querySelector(`[data-myt-value="${k}"]`)?.value, 10) || 0,
         };
       });
       return bag;
@@ -783,14 +925,13 @@
       const preset = state.options?.difficulty_presets?.[tier];
       if (!preset) { showToast('找不到難度預設', 'error'); return; }
       document.getElementById('field-difficulty-tier').value = tier;
-      const merged = {
+      renderChaosBagEditor({
         number_markers: preset.number_markers || {},
         scenario_markers: preset.scenario_markers || {},
         mythos_markers: preset.mythos_markers || {},
         extreme_markers: { tentacle: 1, elder_sign: 1 },
         dynamic_markers: { bless: 0, curse: 0 },
-      };
-      renderChaosBagEditor(merged);
+      });
       markDirty();
       showToast(`已套用「${difficultyLabel(tier)}」預設`, 'success');
     }
@@ -798,29 +939,17 @@
 
     function updateBagSummary() {
       const bag = collectChaosBagFromForm();
-      let total = 2; // 極端標記固定 2
-      let sumValue = 0;
-      for (const [v, c] of Object.entries(bag.number_markers)) {
-        total += c;
-        sumValue += (parseFloat(v) || 0) * c;
-      }
-      for (const k of ['skull','cultist','tablet','elder_thing']) {
-        const d = bag.scenario_markers[k] || { count: 0, value: 0 };
-        total += d.count;
-        sumValue += (d.value || 0) * (d.count || 0);
-      }
-      for (const k of ['clue','headline','monster','doom','gate']) {
-        const d = bag.mythos_markers[k] || { count: 0, value: 0 };
-        total += d.count;
-        sumValue += (d.value || 0) * (d.count || 0);
-      }
+      let total = 2, sumValue = 0;
+      for (const [v, c] of Object.entries(bag.number_markers)) { total += c; sumValue += (parseFloat(v) || 0) * c; }
+      for (const k of ['skull','cultist','tablet','elder_thing']) { const d = bag.scenario_markers[k]; total += d.count; sumValue += (d.value || 0) * d.count; }
+      for (const k of ['clue','headline','monster','doom','gate']) { const d = bag.mythos_markers[k]; total += d.count; sumValue += (d.value || 0) * d.count; }
       const expected = total > 0 ? (sumValue / total).toFixed(2) : '0.00';
       document.getElementById('bag-total').textContent = total;
       document.getElementById('bag-expected').textContent = expected;
     }
     window.updateBagSummary = updateBagSummary;
 
-    // ─── 十章骨架網格 ───
+    // ─── 十章網格 ───
     function renderChapterGrid(chapters) {
       const grid = document.getElementById('chapter-grid');
       grid.innerHTML = chapters.map((ch) => `
@@ -839,11 +968,10 @@
 
     function jumpToChapter(chapterId) {
       switchTab('chapters');
-      // Part 3 實作 selectChapter(chapterId);
+      setTimeout(() => selectChapter(chapterId), 50);
     }
     window.jumpToChapter = jumpToChapter;
 
-    // ─── 儲存戰役 ───
     async function saveCampaign() {
       if (!state.currentCampaign) return;
       const payload = {
@@ -858,8 +986,7 @@
       if (!payload.name_zh) { showToast('中文名稱不可為空', 'error'); return; }
       try {
         const res = await adminFetch(`/api/campaigns/${state.currentCampaign.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
         const data = await res.json();
@@ -870,84 +997,1289 @@
         updateEditorHeader();
         updateRightPanel();
         showToast('已儲存', 'success');
-      } catch (e) {
-        showToast('網路錯誤：' + e.message, 'error');
-      }
+      } catch (e) { showToast('網路錯誤：' + e.message, 'error'); }
     }
     window.saveCampaign = saveCampaign;
 
-    // ═══ 右欄預覽 ═══
-    function updateRightPanel() {
-      const el = document.getElementById('preview-content');
-      if (!state.currentCampaign) {
-        el.innerHTML = '<p class="placeholder" style="padding:1.5rem;">選擇戰役後顯示預覽</p>';
+    // ═══════════════════════════════════════════
+    // Part 3：章節編輯
+    // ═══════════════════════════════════════════
+    function renderChaptersTab() {
+      if (!state.currentCampaign) return;
+      renderChapterNav();
+      if (state.currentChapter) renderChapterEditor();
+    }
+
+    function renderChapterNav() {
+      const nav = document.getElementById('chapter-nav');
+      nav.innerHTML = (state.currentCampaign.chapters || []).map((ch) => `
+        <button class="chapter-tab-btn ${state.currentChapter?.id === ch.id ? 'active' : ''}" onclick="selectChapter('${ch.id}')">
+          <span><span class="ch-num-s">${ch.chapter_number}.</span> ${escHtml(ch.name_zh || ch.chapter_code)}</span>
+          <span class="status-${ch.design_status}" style="font-size:0.6rem;">${statusLabel(ch.design_status)[0]}</span>
+        </button>
+      `).join('');
+    }
+
+    async function selectChapter(chapterId) {
+      if (state.dirty && !confirm('有未儲存變更，要放棄嗎？')) return;
+      try {
+        const res = await adminFetch(`/api/chapters/${chapterId}`);
+        const data = await res.json();
+        if (!data.success) { showToast('載入章節失敗', 'error'); return; }
+        state.currentChapter = data.data;
+        state.chapterOriginalOutcomes = JSON.parse(JSON.stringify(data.data.outcomes || []));
+        state.dirty = false;
+        renderChapterNav();
+        renderChapterEditor();
+      } catch (e) { showToast('載入章節失敗：' + e.message, 'error'); }
+    }
+    window.selectChapter = selectChapter;
+
+    function renderChapterEditor() {
+      const ch = state.currentChapter;
+      if (!ch) return;
+      const container = document.getElementById('chapter-editor-container');
+
+      const nextChapterOpts = (state.currentCampaign.chapters || [])
+        .filter((c) => c.chapter_number > ch.chapter_number)
+        .map((c) => `<option value="${escAttr(c.chapter_code)}">${escHtml(c.chapter_code)} - ${escHtml(c.name_zh)}</option>`).join('');
+
+      const outcomesHtml = ['A','B','C','D','E'].map((code) => {
+        const o = (ch.outcomes || []).find((x) => x.outcome_code === code);
+        const enabled = !!o;
+        return `
+          <div class="outcome-slot ${enabled ? 'enabled' : 'disabled'}" data-outcome-code="${code}">
+            <div class="outcome-header">
+              <h4>結果 ${code}</h4>
+              <label style="font-size:0.75rem; color:var(--text-secondary);">
+                <input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleOutcome('${code}', this.checked)"> 啟用
+              </label>
+            </div>
+            ${enabled ? `
+              <div class="outcome-body">
+                <label>判定條件
+                  <div class="cond-editor" data-outcome-cond="${code}">${renderSimpleCondEditor(o.condition_expression)}</div>
+                </label>
+                <label>敘事文字
+                  <textarea rows="3" data-outcome-narrative="${code}" oninput="markDirty()">${escHtml(o.narrative_text || '')}</textarea>
+                  <button class="btn-secondary btn-small" type="button" onclick="aiGenerateOutcomeNarrative('${code}')">AI 生成</button>
+                </label>
+                <div class="form-row">
+                  <label>下一章指向
+                    <select data-outcome-next="${code}" onchange="markDirty()">
+                      <option value="">（終局/不指向）</option>
+                      ${nextChapterOpts.replace(new RegExp(`value="${escAttr(o.next_chapter_version || '')}"`), `value="${escAttr(o.next_chapter_version || '')}" selected`)}
+                    </select>
+                  </label>
+                  <label>經驗值獎勵
+                    <input type="number" min="0" max="10" value="${(o.rewards && o.rewards.xp) || 0}" data-outcome-xp="${code}" oninput="markDirty()">
+                  </label>
+                </div>
+                <label>授予旗標
+                  <div class="flag-chips" data-outcome-flags="${code}">${renderFlagChips(o.flag_sets)}</div>
+                  <button class="btn-secondary btn-small" type="button" onclick="openFlagPicker('outcome-${code}')">＋ 加入旗標</button>
+                </label>
+                <label>混沌袋演變（JSON 陣列，格式 [{op,marker,count}]）
+                  <textarea rows="3" data-outcome-changes="${code}" oninput="markDirty()">${escHtml(JSON.stringify(o.chaos_bag_changes || [], null, 2))}</textarea>
+                </label>
+              </div>
+            ` : '<div style="color:var(--text-tertiary); font-size:0.8rem;">（此結果槽已停用）</div>'}
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="editor-section">
+          <h3>基礎資料</h3>
+          <div class="form-row">
+            <label>章節縮寫<input type="text" id="ch-code" value="${escAttr(ch.chapter_code)}" maxlength="16" oninput="markDirty()"></label>
+            <label>設計狀態
+              <select id="ch-design-status" onchange="markDirty()">
+                <option value="draft" ${ch.design_status === 'draft' ? 'selected' : ''}>草稿</option>
+                <option value="review" ${ch.design_status === 'review' ? 'selected' : ''}>審核中</option>
+                <option value="published" ${ch.design_status === 'published' ? 'selected' : ''}>已發佈</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-row">
+            <label>中文名稱<input type="text" id="ch-name-zh" value="${escAttr(ch.name_zh || '')}" oninput="markDirty()"></label>
+            <label>英文名稱<input type="text" id="ch-name-en" value="${escAttr(ch.name_en || '')}" oninput="markDirty()"></label>
+          </div>
+        </div>
+        <div class="editor-section">
+          <h3>劇情演示</h3>
+          <label>演示文字
+            <textarea id="ch-narrative-intro" rows="6" oninput="markDirty()">${escHtml(ch.narrative_intro || '')}</textarea>
+            <button class="btn-secondary btn-small" type="button" onclick="aiGenerateNarrativeIntro()">AI 生成</button>
+          </label>
+        </div>
+        <div class="editor-section">
+          <h3>結果分支（A–E，至少啟用 2 槽）</h3>
+          <div class="outcome-slots">${outcomesHtml}</div>
+        </div>
+        <div class="editor-section">
+          <h3>掛載的關卡（MOD-07 建立）</h3>
+          ${(ch.linked_stages || []).length === 0
+            ? '<p style="font-size:0.8rem; color:var(--text-tertiary); margin:0;">（尚無關卡掛載於本章）</p>'
+            : `<ul>${ch.linked_stages.map((s) => `<li><code>${escHtml(s.code)}</code> — ${escHtml(s.name_zh || '')} <span class="status-${s.design_status}">${statusLabel(s.design_status)}</span></li>`).join('')}</ul>`}
+        </div>
+        <div class="editor-footer">
+          <button class="btn-primary" onclick="saveChapter()">儲存章節</button>
+        </div>
+      `;
+      updateEditorHeader();
+    }
+
+    function toggleOutcome(code, enabled) {
+      if (!state.currentChapter) return;
+      const list = state.currentChapter.outcomes || [];
+      if (enabled) {
+        list.push({
+          outcome_code: code, condition_expression: {}, narrative_text: '',
+          next_chapter_version: null, chaos_bag_changes: [], rewards: {}, flag_sets: [],
+        });
+      } else {
+        state.currentChapter.outcomes = list.filter((o) => o.outcome_code !== code);
+      }
+      state.currentChapter.outcomes = state.currentChapter.outcomes || list;
+      markDirty();
+      renderChapterEditor();
+    }
+    window.toggleOutcome = toggleOutcome;
+
+    function collectOutcomesFromForm() {
+      if (!state.currentChapter) return [];
+      const collected = [];
+      (state.currentChapter.outcomes || []).forEach((o) => {
+        const code = o.outcome_code;
+        const narrativeEl = document.querySelector(`[data-outcome-narrative="${code}"]`);
+        const nextEl = document.querySelector(`[data-outcome-next="${code}"]`);
+        const xpEl = document.querySelector(`[data-outcome-xp="${code}"]`);
+        const changesEl = document.querySelector(`[data-outcome-changes="${code}"]`);
+        const condEl = document.querySelector(`[data-outcome-cond="${code}"]`);
+        const flagsEl = document.querySelector(`[data-outcome-flags="${code}"]`);
+        let chaos = [];
+        try { chaos = JSON.parse(changesEl?.value || '[]'); } catch {}
+        collected.push({
+          id: o.id,
+          outcome_code: code,
+          condition_expression: collectSimpleCondFromEditor(condEl),
+          narrative_text: narrativeEl?.value || '',
+          next_chapter_version: nextEl?.value || null,
+          chaos_bag_changes: chaos,
+          rewards: { xp: parseInt(xpEl?.value, 10) || 0 },
+          flag_sets: collectFlagChipsFromContainer(flagsEl),
+        });
+      });
+      return collected;
+    }
+
+    async function saveChapter() {
+      if (!state.currentChapter) return;
+      const ch = state.currentChapter;
+      const chapterPayload = {
+        chapter_code: document.getElementById('ch-code').value.trim(),
+        name_zh: document.getElementById('ch-name-zh').value.trim(),
+        name_en: document.getElementById('ch-name-en').value.trim(),
+        narrative_intro: document.getElementById('ch-narrative-intro').value,
+        narrative_choices: [],
+        design_status: document.getElementById('ch-design-status').value,
+      };
+
+      try {
+        const chRes = await adminFetch(`/api/chapters/${ch.id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(chapterPayload),
+        });
+        const chData = await chRes.json();
+        if (!chRes.ok) { showToast('儲存章節失敗：' + (chData.error || '未知'), 'error'); return; }
+
+        // 比對 outcomes：刪除原有但現在不在的、POST 新的、PUT 已有 id 的
+        const collected = collectOutcomesFromForm();
+        const origIds = state.chapterOriginalOutcomes.map((o) => o.id);
+        const currIds = collected.filter((o) => o.id).map((o) => o.id);
+        const toDelete = origIds.filter((id) => !currIds.includes(id));
+        for (const id of toDelete) await adminFetch(`/api/outcomes/${id}`, { method: 'DELETE' });
+        for (const o of collected) {
+          if (o.id) {
+            const r = await adminFetch(`/api/outcomes/${o.id}`, {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o),
+            });
+            if (!r.ok) { const d = await r.json(); showToast(`結果 ${o.outcome_code} 儲存失敗：${d.error || '未知'}`, 'error'); }
+          } else {
+            const r = await adminFetch(`/api/chapters/${ch.id}/outcomes`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o),
+            });
+            if (!r.ok) { const d = await r.json(); showToast(`結果 ${o.outcome_code} 建立失敗：${d.error || '未知'}`, 'error'); }
+          }
+        }
+
+        // 重新載入章節
+        await selectChapter(ch.id);
+        // 重載戰役詳情更新 outcome_count
+        const cRes = await adminFetch(`/api/campaigns/${state.currentCampaign.id}`);
+        const cData = await cRes.json();
+        if (cData.success) state.currentCampaign = cData.data;
+        await loadCampaignList();
+        showToast('章節已儲存', 'success');
+      } catch (e) { showToast('網路錯誤：' + e.message, 'error'); }
+    }
+    window.saveChapter = saveChapter;
+
+    // ─── 條件表達式編輯器（簡化版：flat AND + 多列） ───
+    const COND_TYPES = [
+      { type: 'flag_set', label: '旗標已設定' },
+      { type: 'flag_not_set', label: '旗標未設定' },
+      { type: 'flag_equals', label: '旗標值等於' },
+      { type: 'act_progress_gte', label: '目標進度 ≥' },
+      { type: 'agenda_progress_gte', label: '議案進度 ≥' },
+    ];
+
+    function renderSimpleCondEditor(expr) {
+      let rows = [];
+      if (expr && expr.type === 'and' && Array.isArray(expr.conditions)) rows = expr.conditions;
+      else if (expr && expr.type) rows = [expr];
+      return `
+        <div class="cond-group-type">類型：<b>AND</b>（所有條件皆需成立；如需 OR 請加入多個 AND 群組的變體）</div>
+        <div class="cond-rows">${rows.map(renderCondRow).join('')}</div>
+        <button class="btn-secondary btn-small" type="button" onclick="addCondRow(this)">＋ 加入條件</button>
+      `;
+    }
+
+    function renderCondRow(row) {
+      const t = row.type || 'flag_set';
+      const flagCode = row.flag_code || '';
+      const value = row.value !== undefined ? row.value : '';
+      const flagOpts = state.currentFlags.map((f) => `<option value="${escAttr(f.flag_code)}" ${f.flag_code === flagCode ? 'selected' : ''}>${escHtml(f.flag_code)}</option>`).join('');
+      return `
+        <div class="cond-row" data-cond-row>
+          <select data-cond-type onchange="onCondTypeChange(this)">
+            ${COND_TYPES.map((c) => `<option value="${c.type}" ${c.type === t ? 'selected' : ''}>${c.label}</option>`).join('')}
+          </select>
+          <div data-cond-params>
+            ${renderCondParams(t, flagCode, value, flagOpts)}
+          </div>
+          <button class="btn-danger btn-small" type="button" onclick="removeCondRow(this)">✕</button>
+        </div>
+      `;
+    }
+
+    function renderCondParams(type, flagCode, value, flagOpts) {
+      if (type === 'flag_set' || type === 'flag_not_set') {
+        return `<select data-cond-flag>${flagOpts || '<option value="">（無旗標）</option>'}</select>`;
+      }
+      if (type === 'flag_equals') {
+        return `<select data-cond-flag>${flagOpts || '<option value="">（無旗標）</option>'}</select>
+                <input type="text" data-cond-value value="${escAttr(value)}" placeholder="值" style="width:5rem; margin-left:0.3rem;">`;
+      }
+      // progress gte
+      return `<input type="number" data-cond-value value="${value || 0}" min="0" max="10" style="width:4rem;">`;
+    }
+
+    function onCondTypeChange(sel) {
+      const row = sel.closest('[data-cond-row]');
+      const paramsEl = row.querySelector('[data-cond-params]');
+      const flagOpts = state.currentFlags.map((f) => `<option value="${escAttr(f.flag_code)}">${escHtml(f.flag_code)}</option>`).join('');
+      paramsEl.innerHTML = renderCondParams(sel.value, '', '', flagOpts);
+      markDirty();
+    }
+    window.onCondTypeChange = onCondTypeChange;
+
+    function addCondRow(btn) {
+      const rowsEl = btn.parentElement.querySelector('.cond-rows');
+      const flagOpts = state.currentFlags.map((f) => `<option value="${escAttr(f.flag_code)}">${escHtml(f.flag_code)}</option>`).join('');
+      const div = document.createElement('div');
+      div.innerHTML = renderCondRow({ type: 'flag_set' });
+      rowsEl.appendChild(div.firstElementChild);
+      markDirty();
+    }
+    window.addCondRow = addCondRow;
+
+    function removeCondRow(btn) {
+      btn.closest('[data-cond-row]').remove();
+      markDirty();
+    }
+    window.removeCondRow = removeCondRow;
+
+    function collectSimpleCondFromEditor(container) {
+      if (!container) return {};
+      const rows = [...container.querySelectorAll('[data-cond-row]')].map((row) => {
+        const type = row.querySelector('[data-cond-type]').value;
+        const flagEl = row.querySelector('[data-cond-flag]');
+        const valueEl = row.querySelector('[data-cond-value]');
+        if (type === 'flag_set' || type === 'flag_not_set') {
+          return { type, flag_code: flagEl?.value || '' };
+        }
+        if (type === 'flag_equals') {
+          return { type, flag_code: flagEl?.value || '', value: valueEl?.value || '' };
+        }
+        return { type, value: parseInt(valueEl?.value, 10) || 0 };
+      }).filter((r) => r.type !== 'flag_set' || r.flag_code);
+      if (rows.length === 0) return {};
+      if (rows.length === 1) return rows[0];
+      return { type: 'and', conditions: rows };
+    }
+
+    // ─── 旗標 chips（小元件） ───
+    function renderFlagChips(flagSets) {
+      const codes = (flagSets || []).map((f) => typeof f === 'string' ? f : f.flag_code).filter(Boolean);
+      return codes.map((c) => `<span class="flag-chip" data-flag-code="${escAttr(c)}"><code>${escHtml(c)}</code><button type="button" onclick="removeFlagChipFromContainer(this)">×</button></span>`).join('');
+    }
+
+    function collectFlagChipsFromContainer(container) {
+      if (!container) return [];
+      return [...container.querySelectorAll('[data-flag-code]')].map((el) => ({ flag_code: el.dataset.flagCode, value: true }));
+    }
+
+    function removeFlagChipFromContainer(btn) {
+      btn.closest('[data-flag-code]').remove();
+      markDirty();
+    }
+    window.removeFlagChipFromContainer = removeFlagChipFromContainer;
+
+    // 選旗標對話框（共用）
+    let flagPickerTargetKey = null;
+    function openFlagPicker(targetKey) {
+      flagPickerTargetKey = targetKey;
+      if (state.currentFlags.length === 0) {
+        alert('目前戰役尚未有任何旗標。請先到「旗標字典」新增。');
         return;
       }
+      document.getElementById('dialogs-root').innerHTML = `
+        <div class="dialog-backdrop"><div class="dialog-content">
+          <h3>選擇旗標</h3>
+          <div style="max-height:320px; overflow-y:auto; background:var(--bg-primary); padding:0.5rem; border:1px solid var(--border); border-radius:4px;">
+            ${state.currentFlags.map((f) => `
+              <label style="display:block; padding:0.25rem; font-size:0.8rem;">
+                <input type="checkbox" value="${escAttr(f.flag_code)}"> <code style="font-family:'JetBrains Mono',monospace;">${escHtml(f.flag_code)}</code>
+                <span style="color:var(--text-tertiary); font-size:0.7rem;">${escHtml(f.description_zh || '')}</span>
+              </label>
+            `).join('')}
+          </div>
+          <div class="dialog-footer">
+            <button class="btn-secondary" onclick="closeDialog()">取消</button>
+            <button class="btn-primary" onclick="confirmFlagPicker()">加入</button>
+          </div>
+        </div></div>
+      `;
+    }
+    window.openFlagPicker = openFlagPicker;
+
+    function confirmFlagPicker() {
+      const checked = [...document.querySelectorAll('.dialog-content input[type=checkbox]:checked')].map((el) => el.value);
+      let containerEl = null;
+      if (flagPickerTargetKey && flagPickerTargetKey.startsWith('outcome-')) {
+        const code = flagPickerTargetKey.replace('outcome-', '');
+        containerEl = document.querySelector(`[data-outcome-flags="${code}"]`);
+      }
+      if (containerEl) {
+        const existing = new Set(collectFlagChipsFromContainer(containerEl).map((f) => f.flag_code));
+        for (const c of checked) {
+          if (existing.has(c)) continue;
+          const span = document.createElement('span');
+          span.className = 'flag-chip';
+          span.dataset.flagCode = c;
+          span.innerHTML = `<code>${escHtml(c)}</code><button type="button" onclick="removeFlagChipFromContainer(this)">×</button>`;
+          containerEl.appendChild(span);
+        }
+        markDirty();
+      }
+      closeDialog();
+    }
+    window.confirmFlagPicker = confirmFlagPicker;
+
+    // ═══════════════════════════════════════════
+    // Part 3：旗標字典
+    // ═══════════════════════════════════════════
+    async function loadFlags() {
+      if (!state.currentCampaign) { state.currentFlags = []; return; }
+      try {
+        const res = await adminFetch(`/api/campaigns/${state.currentCampaign.id}/flags`);
+        const data = await res.json();
+        state.currentFlags = (data && data.data) || [];
+      } catch (e) { console.error(e); state.currentFlags = []; }
+    }
+
+    function renderFlagsTab() {
+      // 填類別下拉
+      const catFilter = document.getElementById('flag-category-filter');
+      if (catFilter.children.length === 1) {
+        (state.options?.flag_categories || []).forEach((cat) => {
+          const opt = document.createElement('option');
+          opt.value = cat.code; opt.textContent = cat.name_zh;
+          catFilter.appendChild(opt);
+        });
+      }
+      renderFlagsList();
+    }
+
+    function renderFlagsList() {
+      const search = (document.getElementById('flag-search').value || '').toLowerCase();
+      const cat = document.getElementById('flag-category-filter').value;
+      const filtered = state.currentFlags.filter((f) => {
+        if (search && !f.flag_code.toLowerCase().includes(search)) return false;
+        if (cat && f.category !== cat) return false;
+        return true;
+      });
+      const tbody = document.getElementById('flags-tbody');
+      tbody.innerHTML = filtered.map((f) => `
+        <tr>
+          <td><code>${escHtml(f.flag_code)}</code></td>
+          <td><span class="cat-badge">${categoryLabel(f.category)}</span></td>
+          <td>${escHtml(f.chapter_code || '—')}</td>
+          <td>${escHtml(f.description_zh || '')}</td>
+          <td>${visibilityLabel(f.visibility)}</td>
+          <td>
+            <button class="btn-secondary btn-small" onclick="openEditFlagDialog('${f.id}')">編輯</button>
+            <button class="btn-danger btn-small" onclick="deleteFlag('${f.id}')">刪除</button>
+          </td>
+        </tr>
+      `).join('') || '<tr><td colspan="6" style="text-align:center; color:var(--text-tertiary); padding:1rem;">（無旗標）</td></tr>';
+    }
+    window.renderFlagsList = renderFlagsList;
+
+    function openNewFlagDialog(existing) {
+      const flag = existing || { flag_code: '', category: 'act', description_zh: '', visibility: 'visible', chapter_code: '' };
+      const isEdit = !!existing;
+      const categoryOpts = (state.options?.flag_categories || []).map((c) => `<option value="${c.code}" ${c.code === flag.category ? 'selected' : ''}>${c.name_zh}</option>`).join('');
+      const chapterOpts = (state.currentCampaign.chapters || []).map((c) => `<option value="${escAttr(c.chapter_code)}" ${c.chapter_code === flag.chapter_code ? 'selected' : ''}>${escHtml(c.chapter_code)}</option>`).join('');
+      const suffix = flag.flag_code.includes('.') ? flag.flag_code.split('.').slice(1).join('.') : '';
+      document.getElementById('dialogs-root').innerHTML = `
+        <div class="dialog-backdrop"><div class="dialog-content">
+          <h3>${isEdit ? '編輯旗標' : '新增旗標'}</h3>
+          <label>類別
+            <select id="fdlg-category" onchange="updateFlagCodePreview()" ${isEdit ? 'disabled' : ''}>${categoryOpts}</select>
+          </label>
+          <label>章節（可選）
+            <select id="fdlg-chapter" onchange="updateFlagCodePreview()">
+              <option value="">（戰役全域）</option>${chapterOpts}
+            </select>
+          </label>
+          <label>旗標代碼
+            <div class="code-input-wrapper">
+              <span id="fdlg-prefix" class="code-prefix"></span>
+              <input type="text" id="fdlg-suffix" value="${escAttr(suffix)}" placeholder="描述_片段" oninput="updateFlagCodePreview()" ${isEdit ? 'disabled' : ''}>
+            </div>
+            <small style="color:var(--text-tertiary); font-size:0.7rem;">預覽：<code id="fdlg-preview"></code></small>
+          </label>
+          <label>描述<textarea id="fdlg-desc" rows="2">${escHtml(flag.description_zh || '')}</textarea>
+            <button class="btn-secondary btn-small" type="button" onclick="aiGenerateFlagDescription()">AI 生成描述</button>
+          </label>
+          <label>可見性
+            <select id="fdlg-visibility">
+              <option value="visible" ${flag.visibility === 'visible' ? 'selected' : ''}>可見</option>
+              <option value="conditional" ${flag.visibility === 'conditional' ? 'selected' : ''}>視設計</option>
+              <option value="hidden" ${flag.visibility === 'hidden' ? 'selected' : ''}>永遠隱藏</option>
+            </select>
+          </label>
+          <div class="dialog-footer">
+            <button class="btn-secondary" onclick="closeDialog()">取消</button>
+            <button class="btn-primary" onclick="saveFlag('${isEdit ? flag.id : ''}')">儲存</button>
+          </div>
+        </div></div>
+      `;
+      updateFlagCodePreview();
+    }
+    window.openNewFlagDialog = openNewFlagDialog;
+
+    async function openEditFlagDialog(id) {
+      const flag = state.currentFlags.find((f) => f.id === id);
+      if (!flag) return;
+      openNewFlagDialog(flag);
+    }
+    window.openEditFlagDialog = openEditFlagDialog;
+
+    function updateFlagCodePreview() {
+      const cat = document.getElementById('fdlg-category').value;
+      const ch = document.getElementById('fdlg-chapter').value;
+      const suffix = document.getElementById('fdlg-suffix').value.trim();
+      const prefix = `${cat}.${ch ? ch + '_' : ''}`;
+      document.getElementById('fdlg-prefix').textContent = prefix;
+      document.getElementById('fdlg-preview').textContent = prefix + suffix;
+    }
+    window.updateFlagCodePreview = updateFlagCodePreview;
+
+    async function saveFlag(existingId) {
+      const cat = document.getElementById('fdlg-category').value;
+      const ch = document.getElementById('fdlg-chapter').value;
+      const suffix = document.getElementById('fdlg-suffix').value.trim();
+      const desc = document.getElementById('fdlg-desc').value.trim();
+      const vis = document.getElementById('fdlg-visibility').value;
+      if (!suffix && !existingId) { alert('請輸入旗標代碼後半部'); return; }
+      const code = `${cat}.${ch ? ch + '_' : ''}${suffix}`;
+      try {
+        let res, data;
+        if (existingId) {
+          res = await adminFetch(`/api/flags/${existingId}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: cat, description_zh: desc, visibility: vis, chapter_code: ch || null }),
+          });
+        } else {
+          res = await adminFetch(`/api/campaigns/${state.currentCampaign.id}/flags`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ flag_code: code, category: cat, description_zh: desc, visibility: vis, chapter_code: ch || null }),
+          });
+        }
+        data = await res.json();
+        if (!res.ok) { alert(data.error || '儲存失敗'); return; }
+        closeDialog();
+        await loadFlags();
+        renderFlagsList();
+        showToast(existingId ? '旗標已更新' : '旗標已建立', 'success');
+      } catch (e) { alert('網路錯誤：' + e.message); }
+    }
+    window.saveFlag = saveFlag;
+
+    async function deleteFlag(id) {
+      if (!confirm('確定刪除此旗標？')) return;
+      try {
+        const res = await adminFetch(`/api/flags/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) {
+          if (data.referenced_by && data.referenced_by.length) {
+            const lines = data.referenced_by.map((r) => `• ${r.type}: ${r.name}`).join('\n');
+            alert(`無法刪除，此旗標仍被引用：\n\n${lines}`);
+          } else { alert(data.error || '刪除失敗'); }
+          return;
+        }
+        await loadFlags();
+        renderFlagsList();
+        showToast('旗標已刪除', 'success');
+      } catch (e) { alert('網路錯誤：' + e.message); }
+    }
+    window.deleteFlag = deleteFlag;
+
+    // ═══════════════════════════════════════════
+    // Part 3：間章事件
+    // ═══════════════════════════════════════════
+    async function renderInterludesTab() {
+      if (!state.currentCampaign) return;
+      await loadAllInterludes();
+      renderInterludesGrouped();
+      if (state.currentInterlude) renderInterludeEditor();
+    }
+
+    async function loadAllInterludes() {
+      if (!state.currentCampaign) return;
+      try {
+        const groups = await Promise.all((state.currentCampaign.chapters || []).map(async (ch) => {
+          const r = await adminFetch(`/api/chapters/${ch.id}/interlude-events`);
+          const d = await r.json();
+          return { chapter: ch, events: (d && d.data) || [] };
+        }));
+        state.currentInterludeGroups = groups;
+      } catch (e) { console.error(e); state.currentInterludeGroups = []; }
+    }
+
+    function renderInterludesGrouped() {
+      const container = document.getElementById('interludes-grouped-list');
+      container.innerHTML = state.currentInterludeGroups.map((g) => `
+        <div class="interlude-group">
+          <h4>${g.chapter.chapter_number}. ${escHtml(g.chapter.name_zh || g.chapter.chapter_code)}</h4>
+          <div class="interlude-subgroup">
+            <h5>章首</h5>
+            ${g.events.filter((e) => e.insertion_point === 'prologue').map(renderInterludeListItem).join('') || '<p style="font-size:0.7rem; color:var(--text-tertiary); margin:0.2rem 0;">（無）</p>'}
+          </div>
+          <div class="interlude-subgroup">
+            <h5>章末</h5>
+            ${g.events.filter((e) => e.insertion_point === 'epilogue').map(renderInterludeListItem).join('') || '<p style="font-size:0.7rem; color:var(--text-tertiary); margin:0.2rem 0;">（無）</p>'}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderInterludeListItem(event) {
+      const active = state.currentInterlude?.id === event.id ? 'active' : '';
+      return `<div class="interlude-item ${active}" onclick="selectInterlude('${event.id}')"><code>${escHtml(event.event_code)}</code>${escHtml(event.name_zh)}</div>`;
+    }
+
+    function selectInterlude(eventId) {
+      if (state.dirty && !confirm('有未儲存變更，要放棄嗎？')) return;
+      let found = null;
+      for (const g of state.currentInterludeGroups) {
+        const e = g.events.find((x) => x.id === eventId);
+        if (e) { found = e; break; }
+      }
+      if (!found) return;
+      state.currentInterlude = JSON.parse(JSON.stringify(found));
+      state.dirty = false;
+      renderInterludesGrouped();
+      renderInterludeEditor();
+    }
+    window.selectInterlude = selectInterlude;
+
+    function openNewInterludeDialog() {
+      state.currentInterlude = {
+        id: null, chapter_id: state.currentCampaign.chapters[0]?.id,
+        event_code: '', name_zh: '', name_en: '', insertion_point: 'prologue',
+        trigger_condition: null, operations: [],
+        narrative_text_zh: '', narrative_text_en: '', choices: [],
+      };
+      state.dirty = false;
+      renderInterludeEditor();
+    }
+    window.openNewInterludeDialog = openNewInterludeDialog;
+
+    function renderInterludeEditor() {
+      const e = state.currentInterlude;
+      if (!e) return;
+      const chapterOpts = (state.currentCampaign.chapters || []).map((c) => `<option value="${c.id}" ${c.id === e.chapter_id ? 'selected' : ''}>${c.chapter_number}. ${escHtml(c.name_zh || c.chapter_code)}</option>`).join('');
+      const hasCond = !!e.trigger_condition;
+      document.getElementById('interlude-editor-container').innerHTML = `
+        <div class="editor-section">
+          <h3>基礎資料</h3>
+          <div class="form-row">
+            <label>事件代碼<input type="text" id="iv-event-code" value="${escAttr(e.event_code)}" maxlength="64" oninput="markDirty()"></label>
+            <label>插入點
+              <select id="iv-insertion-point" onchange="markDirty()">
+                <option value="prologue" ${e.insertion_point === 'prologue' ? 'selected' : ''}>章首</option>
+                <option value="epilogue" ${e.insertion_point === 'epilogue' ? 'selected' : ''}>章末</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-row">
+            <label>中文名稱<input type="text" id="iv-name-zh" value="${escAttr(e.name_zh)}" oninput="markDirty()"></label>
+            <label>英文名稱<input type="text" id="iv-name-en" value="${escAttr(e.name_en || '')}" oninput="markDirty()"></label>
+          </div>
+          <label>綁定章節
+            <select id="iv-chapter" onchange="markDirty()">${chapterOpts}</select>
+          </label>
+        </div>
+        <div class="editor-section">
+          <h3>觸發條件</h3>
+          <label style="display:inline-flex; align-items:center; gap:0.3rem; font-size:0.8rem;">
+            <input type="checkbox" id="iv-has-condition" ${hasCond ? 'checked' : ''} onchange="toggleInterludeCondition()"> 有觸發條件（否則無條件觸發）
+          </label>
+          <div id="iv-condition-editor" style="display:${hasCond ? 'block' : 'none'};">
+            <div class="cond-editor" id="iv-cond-container">${renderSimpleCondEditor(e.trigger_condition || {})}</div>
+          </div>
+        </div>
+        <div class="editor-section">
+          <h3>執行操作</h3>
+          <div class="interlude-operations-list" id="iv-operations-list">${(e.operations || []).map((op, i) => renderOperationRow(op, i)).join('')}</div>
+          <button class="btn-secondary btn-small" type="button" onclick="addInterludeOperation()">＋ 新增操作</button>
+        </div>
+        <div class="editor-section">
+          <h3>敘事文字</h3>
+          <label>中文敘事
+            <textarea id="iv-narrative-zh" rows="4" oninput="markDirty()">${escHtml(e.narrative_text_zh || '')}</textarea>
+            <button class="btn-secondary btn-small" type="button" onclick="aiGenerateInterludeNarrative()">AI 生成</button>
+          </label>
+          <label>英文敘事
+            <textarea id="iv-narrative-en" rows="4" oninput="markDirty()">${escHtml(e.narrative_text_en || '')}</textarea>
+            <button class="btn-secondary btn-small" type="button" onclick="aiTranslate('iv-narrative-zh','iv-narrative-en')">中譯英</button>
+          </label>
+        </div>
+        <div class="editor-footer">
+          <button class="btn-primary" onclick="saveInterludeEvent()">儲存事件</button>
+          ${e.id ? `<button class="btn-danger" onclick="deleteInterludeEvent()">刪除</button>` : ''}
+        </div>
+      `;
+      updateEditorHeader();
+    }
+
+    function toggleInterludeCondition() {
+      const has = document.getElementById('iv-has-condition').checked;
+      document.getElementById('iv-condition-editor').style.display = has ? 'block' : 'none';
+      markDirty();
+    }
+    window.toggleInterludeCondition = toggleInterludeCondition;
+
+    const OPERATION_TYPES = [
+      { type: 'consume_resource', label: '損耗物資' },
+      { type: 'set_flag', label: '設定旗標' },
+      { type: 'trigger_test', label: '觸發檢定' },
+      { type: 'give_choice', label: '給予選擇' },
+      { type: 'grant_reward', label: '授予獎勵' },
+      { type: 'apply_penalty', label: '施加懲罰' },
+    ];
+
+    function renderOperationRow(op, idx) {
+      const type = op.type || 'set_flag';
+      return `
+        <div class="operation-row" data-op-row="${idx}">
+          <div>
+            <select data-op-type="${idx}" onchange="markDirty()">
+              ${OPERATION_TYPES.map((o) => `<option value="${o.type}" ${o.type === type ? 'selected' : ''}>${o.label}</option>`).join('')}
+            </select>
+            <textarea data-op-params="${idx}" rows="2" oninput="markDirty()" placeholder='參數 JSON，例：{"flag_code":"npc.ch1_alive","value":true}' style="width:100%; margin-top:0.25rem; font-family:'JetBrains Mono',monospace; font-size:0.75rem;">${escHtml(JSON.stringify(op.params || {}, null, 0))}</textarea>
+          </div>
+          <button class="btn-danger btn-small" type="button" onclick="removeInterludeOperation(${idx})">✕</button>
+        </div>
+      `;
+    }
+
+    function addInterludeOperation() {
+      state.currentInterlude.operations = state.currentInterlude.operations || [];
+      state.currentInterlude.operations.push({ type: 'set_flag', params: {} });
+      renderInterludeEditor();
+      markDirty();
+    }
+    window.addInterludeOperation = addInterludeOperation;
+
+    function removeInterludeOperation(idx) {
+      state.currentInterlude.operations.splice(idx, 1);
+      renderInterludeEditor();
+      markDirty();
+    }
+    window.removeInterludeOperation = removeInterludeOperation;
+
+    function collectInterludeOperations() {
+      const rows = [...document.querySelectorAll('[data-op-row]')];
+      return rows.map((row) => {
+        const idx = row.dataset.opRow;
+        const type = document.querySelector(`[data-op-type="${idx}"]`).value;
+        let params = {};
+        try { params = JSON.parse(document.querySelector(`[data-op-params="${idx}"]`).value || '{}'); }
+        catch { params = {}; }
+        return { type, params };
+      });
+    }
+
+    async function saveInterludeEvent() {
+      const e = state.currentInterlude;
+      if (!e) return;
+      const hasCond = document.getElementById('iv-has-condition').checked;
+      const condContainer = hasCond ? document.getElementById('iv-cond-container') : null;
+      const payload = {
+        event_code: document.getElementById('iv-event-code').value.trim(),
+        name_zh: document.getElementById('iv-name-zh').value.trim(),
+        name_en: document.getElementById('iv-name-en').value.trim(),
+        insertion_point: document.getElementById('iv-insertion-point').value,
+        trigger_condition: hasCond ? collectSimpleCondFromEditor(condContainer) : null,
+        operations: collectInterludeOperations(),
+        narrative_text_zh: document.getElementById('iv-narrative-zh').value,
+        narrative_text_en: document.getElementById('iv-narrative-en').value,
+        choices: [],
+      };
+      if (!payload.event_code || !payload.name_zh) { showToast('事件代碼與中文名稱為必填', 'error'); return; }
+      const chapterId = document.getElementById('iv-chapter').value;
+      try {
+        const url = e.id ? `/api/interlude-events/${e.id}` : `/api/chapters/${chapterId}/interlude-events`;
+        const res = await adminFetch(url, {
+          method: e.id ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          if (data.details) {
+            const parts = [];
+            if (data.details.missing_flags?.length) parts.push('缺漏旗標：' + data.details.missing_flags.join(', '));
+            if (data.details.missing_families?.length) parts.push('缺漏怪物家族：' + data.details.missing_families.join(', '));
+            if (data.details.missing_mythos?.length) parts.push('缺漏神話卡：' + data.details.missing_mythos.join(', '));
+            alert('儲存失敗：\n' + parts.join('\n'));
+          } else { alert(data.error || '儲存失敗'); }
+          return;
+        }
+        state.currentInterlude = data.data;
+        state.dirty = false;
+        await loadAllInterludes();
+        renderInterludesGrouped();
+        renderInterludeEditor();
+        showToast('事件已儲存', 'success');
+      } catch (err) { alert('網路錯誤：' + err.message); }
+    }
+    window.saveInterludeEvent = saveInterludeEvent;
+
+    async function deleteInterludeEvent() {
+      const e = state.currentInterlude;
+      if (!e || !e.id) return;
+      if (!confirm('確定刪除此間章事件？')) return;
+      try {
+        const res = await adminFetch(`/api/interlude-events/${e.id}`, { method: 'DELETE' });
+        if (!res.ok) { const d = await res.json(); alert(d.error || '刪除失敗'); return; }
+        state.currentInterlude = null;
+        await loadAllInterludes();
+        renderInterludesGrouped();
+        document.getElementById('interlude-editor-container').innerHTML = '<div class="placeholder">請從左側選擇事件</div>';
+        showToast('事件已刪除', 'success');
+      } catch (err) { alert('網路錯誤：' + err.message); }
+    }
+    window.deleteInterludeEvent = deleteInterludeEvent;
+
+    // ═══════════════════════════════════════════
+    // Part 3：混沌袋演變
+    // ═══════════════════════════════════════════
+    function renderChaosEvolutionTab() {
+      if (!state.currentCampaign) return;
+      renderEvolutionMatrix();
+      runSimulation();
+    }
+
+    function renderEvolutionMatrix() {
+      const tbody = document.getElementById('evolution-matrix-body');
+      const chapters = state.currentCampaign.chapters || [];
+      tbody.innerHTML = chapters.map((ch) => `
+        <tr>
+          <td>第 ${ch.chapter_number} 章</td>
+          ${['A','B','C','D','E'].map((code) => {
+            const o = (ch.outcomes || []).find((x) => x.outcome_code === code);
+            if (!o) return '<td class="empty">—</td>';
+            return `<td>${renderChangeSummary(o.chaos_bag_changes)}</td>`;
+          }).join('')}
+        </tr>
+      `).join('');
+    }
+
+    function renderChangeSummary(changes) {
+      if (!Array.isArray(changes) || changes.length === 0) return '—';
+      return changes.map((c) => `${c.op === 'add' ? '+' : '−'}${c.count} ${escHtml(c.marker)}`).join('<br>');
+    }
+
+    function runSimulation() {
+      if (!state.currentCampaign) return;
+      const mode = document.getElementById('sim-path-mode').value;
+      const chapters = state.currentCampaign.chapters || [];
+      let allChanges = [];
+      for (const ch of chapters) {
+        const outcomes = ch.outcomes || [];
+        if (outcomes.length === 0) continue;
+        if (mode === 'best') {
+          const o = outcomes.find((x) => x.outcome_code === 'A') || outcomes[0];
+          allChanges.push(...(o.chaos_bag_changes || []));
+        } else if (mode === 'worst') {
+          const o = outcomes[outcomes.length - 1];
+          allChanges.push(...(o.chaos_bag_changes || []));
+        } else {
+          // average：取所有變化、次數按 1/N 縮放（simplified）
+          outcomes.forEach((o) => {
+            (o.chaos_bag_changes || []).forEach((c) => {
+              allChanges.push({ ...c, count: Math.max(1, Math.round((c.count || 1) / outcomes.length)) });
+            });
+          });
+        }
+      }
+      const bag = JSON.parse(JSON.stringify(state.currentCampaign.initial_chaos_bag || {}));
+      applyAllChanges(bag, allChanges);
+      renderSimResult(bag);
+    }
+    window.runSimulation = runSimulation;
+
+    function applyAllChanges(bag, changes) {
+      for (const c of changes) {
+        let group = null;
+        if (['skull','cultist','tablet','elder_thing'].includes(c.marker)) group = bag.scenario_markers;
+        else if (['clue','headline','monster','doom','gate'].includes(c.marker)) group = bag.mythos_markers;
+        else if (['bless','curse'].includes(c.marker)) group = bag.dynamic_markers;
+        if (!group) continue;
+        if (group[c.marker] == null) group[c.marker] = typeof group[c.marker] === 'object' ? { count: 0 } : 0;
+        if (typeof group[c.marker] === 'object') {
+          group[c.marker].count = Math.max(0, (group[c.marker].count || 0) + (c.op === 'add' ? c.count : -c.count));
+        } else {
+          group[c.marker] = Math.max(0, group[c.marker] + (c.op === 'add' ? c.count : -c.count));
+        }
+      }
+    }
+
+    function renderSimResult(bag) {
+      const el = document.getElementById('sim-result-display');
+      let total = 2, sum = 0;
+      for (const [v, n] of Object.entries(bag.number_markers || {})) { total += n; sum += (parseFloat(v) || 0) * n; }
+      for (const k of ['skull','cultist','tablet','elder_thing']) {
+        const d = bag.scenario_markers?.[k] || { count: 0, value: 0 };
+        total += d.count; sum += (d.value || 0) * d.count;
+      }
+      for (const k of ['clue','headline','monster','doom','gate']) {
+        const d = bag.mythos_markers?.[k] || { count: 0, value: 0 };
+        total += d.count; sum += (d.value || 0) * d.count;
+      }
+      const exp = total > 0 ? (sum / total).toFixed(2) : '0.00';
+      el.innerHTML = `
+        <div><b>總標記：</b>${total}</div>
+        <div><b>期望值：</b>${exp}</div>
+        <div style="margin-top:0.5rem; color:var(--text-tertiary); font-size:0.72rem;">（依據所選路徑套用所有章節的演變規則到初始混沌袋）</div>
+      `;
+    }
+
+    // ═══════════════════════════════════════════
+    // Part 4：完整性檢查
+    // ═══════════════════════════════════════════
+    async function runCompletenessCheck() {
+      if (!state.currentCampaign) return;
+      await loadFlags();
+      // 重載章節（含 outcomes）
+      const cRes = await adminFetch(`/api/campaigns/${state.currentCampaign.id}`);
+      const cData = await cRes.json();
+      if (cData.success) state.currentCampaign = cData.data;
+      // 各章節的 outcomes 需要逐章讀
+      await Promise.all(state.currentCampaign.chapters.map(async (ch) => {
+        const r = await adminFetch(`/api/chapters/${ch.id}`);
+        const d = await r.json();
+        if (d.success) {
+          ch.outcomes = d.data.outcomes || [];
+          ch.interlude_events = d.data.interlude_events || [];
+          ch.linked_stages = d.data.linked_stages || [];
+        }
+      }));
+
+      const report = {
+        campaign: checkCampaignLevel(),
+        chapters: checkAllChapters(),
+        structure: checkStructuralIntegrity(),
+        flags: checkFlagsIntegrity(),
+      };
+      renderCompletenessReport(report);
+    }
+    window.runCompletenessCheck = runCompletenessCheck;
+
+    function checkCampaignLevel() {
+      const c = state.currentCampaign;
+      return [
+        { pass: !!c.name_zh, label: '中文名稱已填寫' },
+        { pass: (c.cover_narrative || '').length >= 50, label: '封面敘事已撰寫（至少 50 字）' },
+        { pass: (c.chapters || []).length === 10, label: '十章骨架齊備' },
+      ];
+    }
+
+    function checkAllChapters() {
+      return (state.currentCampaign.chapters || []).map((ch) => {
+        const checks = [
+          { pass: !!ch.name_zh, label: '章節名稱已填' },
+          { pass: (ch.narrative_intro || '').length >= 30, label: '劇情演示（至少 30 字）' },
+          { pass: (ch.outcomes || []).length >= 2, label: '至少 2 種結果分支' },
+          { pass: (ch.outcomes || []).every((o) => (o.narrative_text || '').length > 10), label: '每個結果有敘事' },
+        ];
+        if (ch.chapter_number === 10) {
+          checks.push({ pass: (ch.outcomes || []).every((o) => o.next_chapter_version == null), label: '終局章節不指向下一章' });
+        } else {
+          checks.push({ pass: (ch.outcomes || []).every((o) => !!o.next_chapter_version), label: '每個結果都有下一章指向' });
+        }
+        return { chapter: ch, checks, overallPass: checks.every((c) => c.pass) };
+      });
+    }
+
+    function checkStructuralIntegrity() {
+      const broken = [];
+      for (const ch of state.currentCampaign.chapters || []) {
+        if (ch.chapter_number === 10) continue;
+        const nextCodes = new Set((state.currentCampaign.chapters || []).map((c) => c.chapter_code));
+        for (const o of (ch.outcomes || [])) {
+          if (o.next_chapter_version && !nextCodes.has(o.next_chapter_version)) {
+            broken.push(`第 ${ch.chapter_number} 章 結果 ${o.outcome_code} → ${o.next_chapter_version}`);
+          }
+        }
+      }
+      return [{
+        pass: broken.length === 0,
+        label: '章節結果指向無斷裂',
+        details: broken.length ? `斷裂項：${broken.slice(0, 5).join(', ')}` : null,
+      }];
+    }
+
+    function checkFlagsIntegrity() {
+      const referenced = new Set();
+      const collectFrom = (expr) => {
+        if (!expr || typeof expr !== 'object') return;
+        if (expr.flag_code) referenced.add(expr.flag_code);
+        if (Array.isArray(expr.conditions)) expr.conditions.forEach(collectFrom);
+      };
+      for (const ch of state.currentCampaign.chapters || []) {
+        for (const o of (ch.outcomes || [])) {
+          collectFrom(o.condition_expression);
+          (o.flag_sets || []).forEach((f) => { const c = typeof f === 'string' ? f : f.flag_code; if (c) referenced.add(c); });
+        }
+        for (const i of (ch.interlude_events || [])) {
+          collectFrom(i.trigger_condition);
+          (i.operations || []).forEach((op) => { if (op?.params?.flag_code) referenced.add(op.params.flag_code); });
+        }
+      }
+      const defined = new Set(state.currentFlags.map((f) => f.flag_code));
+      const orphaned = [...defined].filter((c) => !referenced.has(c));
+      const dangling = [...referenced].filter((c) => !defined.has(c));
+      return [
+        { pass: orphaned.length === 0, label: '無孤立旗標（定義未引用）', details: orphaned.length ? `${orphaned.slice(0, 5).join(', ')}${orphaned.length > 5 ? '…' : ''}` : null },
+        { pass: dangling.length === 0, label: '無懸空引用（引用未定義）', details: dangling.length ? `${dangling.slice(0, 5).join(', ')}${dangling.length > 5 ? '…' : ''}` : null },
+      ];
+    }
+
+    function renderCompletenessReport(report) {
+      const allChecks = [...report.campaign, ...report.chapters.flatMap((c) => c.checks), ...report.structure, ...report.flags];
+      const allPass = allChecks.every((c) => c.pass);
+      const badge = document.getElementById('overall-badge');
+      const message = document.getElementById('overall-message');
+      if (allPass) { badge.innerHTML = '<span class="status-ok">✓ 可發佈</span>'; message.textContent = '所有檢查通過。'; }
+      else { badge.innerHTML = '<span class="status-fail">✗ 尚未就緒</span>'; message.textContent = '以下項目未通過檢查，請先修正。'; }
+      renderCheckList('checks-campaign', report.campaign);
+      renderCheckList('checks-structure', report.structure);
+      renderCheckList('checks-flags', report.flags);
+      const chaptersEl = document.getElementById('checks-chapters');
+      chaptersEl.innerHTML = report.chapters.map((item) => `
+        <details ${item.overallPass ? '' : 'open'} style="margin-bottom:0.4rem;">
+          <summary style="cursor:pointer; padding:0.3rem 0;"><span class="${item.overallPass ? 'status-published' : 'status-draft'}" style="margin-right:0.4rem;">${item.overallPass ? '✓' : '✗'}</span>第 ${item.chapter.chapter_number} 章 · ${escHtml(item.chapter.name_zh || item.chapter.chapter_code)}</summary>
+          <ul>${item.checks.map((c) => `<li class="${c.pass ? 'pass' : 'fail'}"><span class="indicator">${c.pass ? '✓' : '✗'}</span>${escHtml(c.label)}${c.details ? `<div class="detail">${escHtml(c.details)}</div>` : ''}</li>`).join('')}</ul>
+        </details>
+      `).join('');
+    }
+
+    function renderCheckList(containerId, checks) {
+      document.getElementById(containerId).innerHTML = checks.map((c) => `
+        <li class="${c.pass ? 'pass' : 'fail'}"><span class="indicator">${c.pass ? '✓' : '✗'}</span>${escHtml(c.label)}${c.details ? `<div class="detail">${escHtml(c.details)}</div>` : ''}</li>
+      `).join('');
+    }
+
+    // ═══════════════════════════════════════════
+    // Part 4：AI 整合（Gemini 2.5 Flash 前端直連）
+    // ═══════════════════════════════════════════
+    function getGeminiKey() { return localStorage.getItem(LS_API_KEY) || ''; }
+    function promptApiKey() {
+      const k = prompt('請輸入 Gemini API Key（儲存在瀏覽器本機，與 MOD-01 共用）：', getGeminiKey());
+      if (k !== null) { localStorage.setItem(LS_API_KEY, k.trim()); updateApiKeyStatus(); }
+    }
+    window.promptApiKey = promptApiKey;
+
+    function updateApiKeyStatus() {
+      const el = document.getElementById('ai-key-status');
+      if (!el) return;
+      const has = !!getGeminiKey();
+      el.textContent = has ? '🔑 API Key 已設' : '⚠ API Key 未設';
+      el.classList.toggle('set', has);
+    }
+    window.updateApiKeyStatus = updateApiKeyStatus;
+
+    const CTHULHU_SYSTEM = `你是一個克蘇魯神話背景的卡牌合作冒險遊戲的敘事設計助手。
+專案特色：
+- 背景：1920–30 年代偵探黑色電影 × 宇宙恐怖
+- 情感基調：渺小感、未知的不安、真實的代價、探索的驚奇
+- 敘事風格：簡潔克制、重氛圍、避免過度血腥、保留想像空間
+- 術語規範：克蘇魯神話專有名詞採用台灣 TRPG/桌遊社群慣用譯名（克蘇魯/奈亞拉托提普/印斯茅斯/敦威治/阿卡姆）
+設計紅線：
+- 不使用網路用語
+- 不寫成恐怖片誇張式的血腥
+- 不讓角色「無敵」或「樂觀」，保持克蘇魯宿命感
+- 傷亡與代價要真實、有重量`;
+
+    async function callGemini(userPrompt, opts = {}) {
+      const key = getGeminiKey();
+      if (!key) { alert('請先設定 Gemini API Key'); promptApiKey(); throw new Error('no_key'); }
+      const model = opts.model || 'gemini-2.5-flash';
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+      const body = {
+        contents: [{ role: 'user', parts: [{ text: CTHULHU_SYSTEM + '\n\n' + userPrompt }] }],
+        generationConfig: { temperature: opts.temperature ?? 0.9, topP: 0.95, maxOutputTokens: 2048 },
+      };
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) { throw new Error('Gemini API 錯誤 ' + res.status); }
+      const data = await res.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    }
+
+    function extractJson(text) {
+      const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*$/g, '').trim();
+      try { return JSON.parse(cleaned); } catch {
+        const m = cleaned.match(/\{[\s\S]*\}/);
+        if (m) { try { return JSON.parse(m[0]); } catch {} }
+        throw new Error('AI 回應無法解析為 JSON');
+      }
+    }
+
+    async function aiGenerateCoverNarrative() {
+      const c = state.currentCampaign; if (!c) return;
+      const p = `請為以下戰役撰寫封面敘事。
+戰役名稱：${c.name_zh}
+主題：${c.theme || '(未設定)'}
+難度：${difficultyLabel(c.difficulty_tier)}
+章節數：10 章
+
+要求：
+1. 300-500 字中文敘事，第二人稱視角
+2. 營造調查員收到線索/邀請/信件的開場氛圍
+3. 提示神話威脅但不明示真相
+4. 最後以開放性問句或未明結尾收束
+5. 同時產出英文翻譯
+
+回應格式（嚴格 JSON）：{"narrative_zh":"...","narrative_en":"..."}`;
+      try {
+        const text = await callGemini(p);
+        const j = extractJson(text);
+        if (j.narrative_zh) { document.getElementById('field-cover-narrative').value = j.narrative_zh; markDirty(); showToast('封面敘事已生成', 'success'); }
+      } catch (e) { showToast('AI 生成失敗：' + e.message, 'error'); }
+    }
+    window.aiGenerateCoverNarrative = aiGenerateCoverNarrative;
+
+    async function aiGenerateNarrativeIntro() {
+      const ch = state.currentChapter, c = state.currentCampaign; if (!ch || !c) return;
+      const p = `請為以下章節撰寫劇情演示。
+戰役：${c.name_zh}
+本章：第 ${ch.chapter_number} 章 ${ch.name_zh || ch.chapter_code}
+要求：
+1. 演示文字 200-400 字，第二人稱視角
+2. 營造場景、氛圍、情感鋪墊
+3. 僅回傳中文演示文字，不要 JSON 包裝`;
+      try {
+        const text = await callGemini(p);
+        document.getElementById('ch-narrative-intro').value = text.trim();
+        markDirty(); showToast('劇情演示已生成', 'success');
+      } catch (e) { showToast('AI 生成失敗：' + e.message, 'error'); }
+    }
+    window.aiGenerateNarrativeIntro = aiGenerateNarrativeIntro;
+
+    async function aiGenerateOutcomeNarrative(code) {
+      const ch = state.currentChapter; if (!ch) return;
+      const contexts = {
+        A: '完美成功（目標達成、關鍵旗標保留）',
+        B: '帶代價的成功',
+        C: '失敗（目標未達成，議案推進）',
+        D: '災難級失敗',
+        E: '隱藏路線/特殊結果',
+      };
+      const p = `請為以下章節結果撰寫結算敘事。
+戰役：${state.currentCampaign.name_zh}
+章節：第 ${ch.chapter_number} 章
+結果代碼：${code}
+結果含義：${contexts[code]}
+要求：100-200 字中文敘事，帶情緒衝擊，與結果基調一致。僅回傳敘事文字。`;
+      try {
+        const text = await callGemini(p);
+        const ta = document.querySelector(`[data-outcome-narrative="${code}"]`);
+        if (ta) { ta.value = text.trim(); markDirty(); showToast('結果敘事已生成', 'success'); }
+      } catch (e) { showToast('AI 生成失敗：' + e.message, 'error'); }
+    }
+    window.aiGenerateOutcomeNarrative = aiGenerateOutcomeNarrative;
+
+    async function aiGenerateInterludeNarrative() {
+      const e = state.currentInterlude, c = state.currentCampaign; if (!e || !c) return;
+      const chapterEl = document.getElementById('iv-chapter');
+      const chapter = (c.chapters || []).find((ch) => ch.id === chapterEl.value);
+      const ip = document.getElementById('iv-insertion-point').value;
+      const p = `請為以下間章事件撰寫敘事。
+戰役：${c.name_zh}
+章節：第 ${chapter?.chapter_number ?? '?'} 章 ${chapter?.name_zh || ''}
+插入點：${ip === 'prologue' ? '章首（長休息後）' : '章末（關卡結束後）'}
+要求：
+1. 中文敘事 150-300 字
+2. 銜接前後章節
+3. 同時產出英文翻譯
+回應格式（嚴格 JSON）：{"narrative_zh":"...","narrative_en":"..."}`;
+      try {
+        const text = await callGemini(p);
+        const j = extractJson(text);
+        if (j.narrative_zh) document.getElementById('iv-narrative-zh').value = j.narrative_zh;
+        if (j.narrative_en) document.getElementById('iv-narrative-en').value = j.narrative_en;
+        markDirty(); showToast('間章敘事已生成', 'success');
+      } catch (err) { showToast('AI 生成失敗：' + err.message, 'error'); }
+    }
+    window.aiGenerateInterludeNarrative = aiGenerateInterludeNarrative;
+
+    async function aiGenerateFlagDescription() {
+      const cat = document.getElementById('fdlg-category').value;
+      const ch = document.getElementById('fdlg-chapter').value;
+      const suffix = document.getElementById('fdlg-suffix').value.trim();
+      const code = `${cat}.${ch ? ch + '_' : ''}${suffix}`;
+      if (!suffix) { alert('請先輸入旗標代碼後半部'); return; }
+      const p = `請為以下旗標撰寫一句中文描述（15-40 字）。
+旗標代碼：${code}
+類別：${cat}
+所屬章節：${ch || '戰役全域'}
+要求：描述該旗標所記錄的遊戲狀態，使用設計師視角語氣。僅回傳描述文字。`;
+      try {
+        const text = await callGemini(p);
+        document.getElementById('fdlg-desc').value = text.trim();
+        showToast('旗標描述已生成', 'success');
+      } catch (e) { showToast('AI 生成失敗：' + e.message, 'error'); }
+    }
+    window.aiGenerateFlagDescription = aiGenerateFlagDescription;
+
+    async function aiTranslate(srcId, dstId) {
+      const src = document.getElementById(srcId);
+      const dst = document.getElementById(dstId);
+      if (!src || !dst) return;
+      const text = src.value.trim();
+      if (!text) { showToast('請先填寫中文內容', 'warn'); return; }
+      const p = `請將以下繁體中文翻譯為英文（Lovecraftian 風格，專有名詞保留英文原名）：\n\n${text}\n\n僅回傳英文翻譯，不加說明。`;
+      try {
+        const out = await callGemini(p, { temperature: 0.3 });
+        dst.value = out.trim(); markDirty(); showToast('翻譯完成', 'success');
+      } catch (e) { showToast('AI 翻譯失敗：' + e.message, 'error'); }
+    }
+    window.aiTranslate = aiTranslate;
+
+    // ═══════════════════════════════════════════
+    // Part 4：匯出 / 匯入
+    // ═══════════════════════════════════════════
+    async function exportCampaignJSON() {
+      if (!state.currentCampaign) { showToast('請先選擇戰役', 'warn'); return; }
+      try {
+        const res = await adminFetch(`/api/campaigns/${state.currentCampaign.id}/export`);
+        const data = await res.json();
+        if (!res.ok) { alert('匯出失敗：' + (data.error || '')); return; }
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `campaign_${state.currentCampaign.code}_v${state.currentCampaign.version}.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        showToast('已匯出 JSON 檔', 'success');
+      } catch (e) { alert('網路錯誤：' + e.message); }
+    }
+    window.exportCampaignJSON = exportCampaignJSON;
+
+    async function importCampaignJSON(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (!data.campaign?.code) { alert('檔案格式不正確'); return; }
+        if (!confirm(`將匯入戰役「${data.campaign.name_zh}」（代碼 ${data.campaign.code}）。若代碼已存在將覆蓋，確定繼續？`)) return;
+        const res = await adminFetch('/api/campaigns/import', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        const r = await res.json();
+        if (!res.ok) { alert('匯入失敗：' + (r.error || '')); return; }
+        await loadCampaignList();
+        showToast('戰役已匯入', 'success');
+      } catch (e) { alert('匯入失敗：' + e.message); }
+      finally { event.target.value = ''; }
+    }
+    window.importCampaignJSON = importCampaignJSON;
+
+    // ═══════════════════════════════════════════
+    // 右欄預覽
+    // ═══════════════════════════════════════════
+    function updateRightPanel() {
+      const el = document.getElementById('preview-content');
+      if (!state.currentCampaign) { el.innerHTML = '<p class="placeholder" style="padding:1.5rem;">選擇戰役後顯示預覽</p>'; return; }
       if (state.currentTab === 'overview') {
-        renderCampaignOverviewPreview(el);
+        const c = state.currentCampaign;
+        const chMini = (c.chapters || []).map((ch) => `<div class="mini-ch status-${ch.design_status}" title="第 ${ch.chapter_number} 章 ${escHtml(ch.name_zh || '')}">${ch.chapter_number}</div>`).join('');
+        el.innerHTML = `
+          <div class="preview-card">
+            <h3>${escHtml(c.name_zh)}</h3>
+            <p class="theme">${escHtml(c.theme || '—')}</p>
+            <div><span class="status-${c.design_status}">${statusLabel(c.design_status)}</span> · <b>${difficultyLabel(c.difficulty_tier)}</b> · v${c.version}</div>
+            <p class="cover-narrative">${escHtml(c.cover_narrative || '(尚未撰寫)')}</p>
+            <h4>十章進度</h4><div class="chapter-mini-grid">${chMini}</div>
+          </div>
+        `;
       } else {
         el.innerHTML = '<p class="placeholder" style="padding:1.5rem;">此分頁暫無預覽</p>';
       }
     }
 
-    function renderCampaignOverviewPreview(container) {
-      const c = state.currentCampaign;
-      const chapterMini = (c.chapters || []).map((ch) => `
-        <div class="mini-ch status-${ch.design_status}" title="第 ${ch.chapter_number} 章 ${escHtml(ch.name_zh || '')}">${ch.chapter_number}</div>
-      `).join('');
-      container.innerHTML = `
-        <div class="preview-card">
-          <h3>${escHtml(c.name_zh)}</h3>
-          <p class="theme">${escHtml(c.theme || '—')}</p>
-          <div><span class="status-${c.design_status}">${statusLabel(c.design_status)}</span> · <b>${difficultyLabel(c.difficulty_tier)}</b> · v${c.version}</div>
-          <p class="cover-narrative">${escHtml(c.cover_narrative || '(尚未撰寫封面敘事)')}</p>
-          <h4>十章進度</h4>
-          <div class="chapter-mini-grid">${chapterMini}</div>
-          <h4>起始混沌袋摘要</h4>
-          <div style="font-size:0.75rem; color:var(--text-secondary);">
-            總標記：${document.getElementById('bag-total')?.textContent || 0} ·
-            期望值：${document.getElementById('bag-expected')?.textContent || '0.00'}
-          </div>
-        </div>
-      `;
-    }
-
-    // ═══ 工具函式 ═══
-    function markDirty() {
-      state.dirty = true;
-      updateEditorHeader();
-    }
+    // ═══════════════════════════════════════════
+    // 工具函式
+    // ═══════════════════════════════════════════
+    function markDirty() { state.dirty = true; updateEditorHeader(); }
     window.markDirty = markDirty;
-
-    function bindBeforeUnload() {
-      window.addEventListener('beforeunload', (e) => {
-        if (state.dirty) { e.preventDefault(); e.returnValue = ''; }
-      });
+    function bindBeforeUnload() { window.addEventListener('beforeunload', (e) => { if (state.dirty) { e.preventDefault(); e.returnValue = ''; } }); }
+    function escHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+    function escAttr(s) { return escHtml(s); }
+    function statusLabel(s) { return { draft:'草稿', review:'審核中', published:'已發佈' }[s] || s; }
+    function difficultyLabel(s) { return { easy:'簡單', standard:'標準', hard:'困難', expert:'專家' }[s] || s; }
+    function categoryLabel(s) {
+      const c = (state.options?.flag_categories || []).find((x) => x.code === s);
+      return c ? c.name_zh : s;
     }
-
-    function escHtml(s) {
-      return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-      }[c]));
-    }
-
-    function statusLabel(s) {
-      return { draft: '草稿', review: '審核中', published: '已發佈' }[s] || s;
-    }
-    function difficultyLabel(s) {
-      return { easy: '簡單', standard: '標準', hard: '困難', expert: '專家' }[s] || s;
-    }
+    function visibilityLabel(s) { return { visible:'可見', conditional:'視設計', hidden:'永遠隱藏' }[s] || s; }
 
     let toastTimer = null;
     function showToast(msg, type = 'success') {
-      const old = document.querySelector('.toast');
-      if (old) old.remove();
-      const div = document.createElement('div');
-      div.className = `toast ${type}`;
-      div.textContent = msg;
-      document.body.appendChild(div);
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => div.remove(), 3200);
+      const old = document.querySelector('.toast'); if (old) old.remove();
+      const d = document.createElement('div'); d.className = `toast ${type}`; d.textContent = msg;
+      document.body.appendChild(d); clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => d.remove(), 3200);
     }
     window.showToast = showToast;
   })();

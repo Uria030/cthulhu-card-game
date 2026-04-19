@@ -1,4 +1,6 @@
 import { pool } from './pool.js';
+import type { PoolClient } from 'pg';
+import { innsmouthCampaignSeed } from './seeds/mod06-campaigns.js';
 
 const MIGRATION_SQL = `
 -- ============================================
@@ -2337,6 +2339,153 @@ CREATE INDEX IF NOT EXISTS idx_interlude_chapter
   ON interlude_events(chapter_id, insertion_point);
 `;
 
+// ============================================
+// MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
+// ============================================
+const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+
+async function seedInnsmouthCampaign(client: PoolClient) {
+  const existing = await client.query('SELECT COUNT(*)::int AS n FROM campaigns');
+  if ((existing.rows[0].n as number) > 0) return;
+
+  const seed: any = innsmouthCampaignSeed;
+
+  const campaignRes = await client.query(
+    `INSERT INTO campaigns (code, name_zh, name_en, theme, cover_narrative,
+                            difficulty_tier, initial_chaos_bag, design_status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,'published')
+     RETURNING id`,
+    [
+      seed.campaign.code,
+      seed.campaign.name_zh,
+      seed.campaign.name_en || '',
+      seed.campaign.theme || '',
+      seed.campaign.cover_narrative || '',
+      seed.campaign.difficulty_tier || 'standard',
+      JSON.stringify(seed.campaign.initial_chaos_bag || {}),
+    ],
+  );
+  const campaignId: string = campaignRes.rows[0].id;
+
+  // 建章骨架：第 1、2 章用完整資料；第 3–10 章使用 chapters_skeleton 或自動生成
+  const chapterIdByCode: Record<string, string> = {};
+  const skeletons: any[] = Array.isArray(seed.chapters_skeleton) ? seed.chapters_skeleton : [];
+  for (let n = 1; n <= 10; n++) {
+    const fullKey = `chapter_${n}_full`;
+    const full = seed[fullKey];
+    let ch: any;
+    if (full) {
+      ch = full;
+    } else {
+      const sk = skeletons.find((s) => s.chapter_number === n);
+      ch = {
+        chapter_number: n,
+        chapter_code: sk?.chapter_code || `ch${n}`,
+        name_zh: sk?.name_zh || `第${CHINESE_DIGITS_ARR[n]}章（待設計）`,
+        name_en: sk?.name_en || '',
+        narrative_intro: '',
+        narrative_choices: [],
+        design_status: 'draft',
+      };
+    }
+    const chRes = await client.query(
+      `INSERT INTO chapters (campaign_id, chapter_number, chapter_code, name_zh, name_en,
+                             narrative_intro, narrative_choices, design_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8)
+       RETURNING id`,
+      [
+        campaignId,
+        ch.chapter_number,
+        ch.chapter_code,
+        ch.name_zh || '',
+        ch.name_en || '',
+        ch.narrative_intro || '',
+        JSON.stringify(ch.narrative_choices || []),
+        ch.design_status || 'draft',
+      ],
+    );
+    chapterIdByCode[ch.chapter_code] = chRes.rows[0].id;
+  }
+
+  // 旗標
+  const allFlags: any[] = [
+    ...(seed.chapter_1_flags || []),
+    ...(seed.chapter_2_flags || []),
+  ];
+  for (const f of allFlags) {
+    await client.query(
+      `INSERT INTO campaign_flags (campaign_id, flag_code, category, description_zh,
+                                   visibility, chapter_code)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (campaign_id, flag_code) DO NOTHING`,
+      [
+        campaignId,
+        f.flag_code,
+        f.category,
+        f.description_zh || '',
+        f.visibility || 'visible',
+        f.chapter_code || null,
+      ],
+    );
+  }
+
+  // 結果分支
+  const outcomeGroups: Array<[string, any[]]> = [
+    ['ch1', seed.chapter_1_outcomes || []],
+    ['ch2', seed.chapter_2_outcomes || []],
+  ];
+  for (const [chCode, outcomes] of outcomeGroups) {
+    const chapterId = chapterIdByCode[chCode];
+    if (!chapterId) continue;
+    for (const o of outcomes) {
+      await client.query(
+        `INSERT INTO chapter_outcomes (chapter_id, outcome_code, condition_expression,
+                                       narrative_text, next_chapter_version,
+                                       chaos_bag_changes, rewards, flag_sets)
+         VALUES ($1,$2,$3::jsonb,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb)
+         ON CONFLICT (chapter_id, outcome_code) DO NOTHING`,
+        [
+          chapterId,
+          o.outcome_code,
+          JSON.stringify(o.condition_expression || {}),
+          o.narrative_text || '',
+          o.next_chapter_version || null,
+          JSON.stringify(o.chaos_bag_changes || []),
+          JSON.stringify(o.rewards || {}),
+          JSON.stringify(o.flag_sets || []),
+        ],
+      );
+    }
+  }
+
+  // 間章事件
+  for (const e of (seed.chapter_1_interludes || [])) {
+    const chapterId = chapterIdByCode['ch1'];
+    if (!chapterId) continue;
+    await client.query(
+      `INSERT INTO interlude_events (chapter_id, event_code, name_zh, name_en,
+                                     insertion_point, trigger_condition, operations,
+                                     narrative_text_zh, narrative_text_en, choices)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9,$10::jsonb)
+       ON CONFLICT (chapter_id, event_code) DO NOTHING`,
+      [
+        chapterId,
+        e.event_code,
+        e.name_zh,
+        e.name_en || '',
+        e.insertion_point,
+        e.trigger_condition ? JSON.stringify(e.trigger_condition) : null,
+        JSON.stringify(e.operations || []),
+        e.narrative_text_zh || '',
+        e.narrative_text_en || '',
+        JSON.stringify(e.choices || []),
+      ],
+    );
+  }
+
+  console.log('[MOD-06 seed] 示範戰役「印斯茅斯陰影」已建立');
+}
+
 export async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -2358,6 +2507,11 @@ export async function runMigrations() {
     await client.query(MIGRATION_015_SQL);
     await client.query(MIGRATION_016_SQL);
     await client.query(MIGRATION_017_SQL);
+    try {
+      await seedInnsmouthCampaign(client);
+    } catch (seedErr) {
+      console.warn('[MOD-06 seed] 種子資料插入失敗（不影響 migration）:', seedErr);
+    }
     console.log('All migrations completed successfully!');
   } catch (error) {
     console.error('Migration failed:', error);

@@ -429,6 +429,71 @@
 
           </div><!-- /secConsume -->
 
+          <!-- Talisman (雙軸戰鬥草案 v1.0) -->
+          <div class="section-label" id="secTalismanHead" style="display:flex;align-items:center;gap:0.5rem;">
+            <span>法器（破事軸）</span>
+            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.75rem;font-family:'Noto Sans TC',sans-serif;color:var(--text-secondary);cursor:pointer;margin-left:auto;"><input type="checkbox" id="f_is_talisman" onchange="toggleTalismanSection()">啟用</label>
+            <span class="eff-value-tag" id="talismanTotalTag" style="display:none;"></span>
+          </div>
+          <div id="secTalisman" style="display:none;">
+            <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.5rem;">雙軸戰鬥草案 v1.0：法器卡對遭遇卡形成破事軸（與殺敵軸正交）。此區塊僅法器卡需填寫。</div>
+
+            <div class="form-grid">
+              <div class="form-group"><label>法器物質類型</label>
+                <select id="f_talisman_type">
+                  <option value="">— 選擇 —</option>
+                </select>
+              </div>
+              <div class="form-group"><label>破除時機</label>
+                <select id="f_break_timing" onchange="onBreakTimingChange()">
+                  <option value="">— 選擇 —</option>
+                  <option value="instant">即時（Instant）</option>
+                  <option value="test">檢定（Test）</option>
+                  <option value="stockpile">儲蓄（Stockpile）</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group full" style="margin-top:0.35rem;">
+              <label>適用遭遇卡類型（可複選）</label>
+              <div id="targetThreatTypes" style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.35rem;"></div>
+            </div>
+
+            <div class="form-grid" style="margin-top:0.35rem;">
+              <div class="form-group"><label>破事強度上限 (S_max)</label><input type="number" id="f_break_strength_max" value="0" min="0" max="10"></div>
+              <div class="form-group"><label>充能顯示名稱</label><input type="text" id="f_break_charge_label" placeholder="例：神聖度、預兆、封印"></div>
+              <div class="form-group"><label>充能上限</label><input type="number" id="f_break_charge_max" value="0" min="0" max="20"></div>
+              <div class="form-group" id="breakTestAttrGroup" style="display:none;"><label>檢定屬性</label>
+                <select id="f_break_test_attribute">
+                  <option value="">— 選擇 —</option>
+                  <option value="strength">力量</option>
+                  <option value="agility">敏捷</option>
+                  <option value="constitution">體質</option>
+                  <option value="reflex">反應</option>
+                  <option value="intellect">智力</option>
+                  <option value="willpower">意志</option>
+                  <option value="perception">感知</option>
+                  <option value="charisma">魅力</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group full" id="stockpileRuleGroup" style="display:none;margin-top:0.35rem;">
+              <label>累積規則（儲蓄型）</label>
+              <input type="text" id="f_stockpile_accumulation_rule" placeholder="例：每回合開始 +1 預兆；每次研究遺跡 +1 洞察">
+            </div>
+
+            <div style="margin-top:0.5rem;padding:0.4rem;background:var(--bg-primary);border-radius:4px;border:1px solid var(--border);font-size:0.7rem;" id="tollPreview">
+              <span style="color:var(--text-tertiary);">過路費函數預覽：填入破事時機與強度上限後自動計算。</span>
+            </div>
+
+            <div class="form-grid" style="margin-top:0.5rem;">
+              <div class="form-group"><label>破事軸 V 值</label><input type="number" id="f_break_axis_value" value="0" min="0" max="20" step="0.1"></div>
+              <div class="form-group"><label>殺敵軸 V 值（雙用途卡）</label><input type="number" id="f_kill_axis_value" value="0" min="0" max="20" step="0.1"></div>
+              <div class="form-group"><label>槓桿修正（雙用途）</label><input type="number" id="f_leverage_modifier" value="0" min="0" max="5" step="0.1"></div>
+            </div>
+          </div>
+
           <!-- Effects -->
           <div class="section-label">效果資訊</div>
           <div id="effectsList"></div>
@@ -1035,11 +1100,140 @@
   async function init() {
     await loadEffectLanguageOptions();
     populateSelects();
+    await loadTalismanAndThreatTypes();
     await loadCards();
     renderList();
     bindLivePreview();
     updateApiKeyStatus();
     clearForm();
+  }
+
+  // 雙軸戰鬥草案 v1.0：法器卡相關邏輯
+  let TALISMAN_TYPES_CACHE = [];
+  let THREAT_TYPES_CACHE = [];
+
+  async function loadTalismanAndThreatTypes() {
+    try {
+      const [tRes, eRes] = await Promise.all([
+        adminFetch(ADMIN_API_BASE + '/api/admin/talisman-types'),
+        adminFetch(ADMIN_API_BASE + '/api/admin/threat-types')
+      ]);
+      if (tRes.ok) { const j = await tRes.json(); TALISMAN_TYPES_CACHE = j.data || []; }
+      if (eRes.ok) { const j = await eRes.json(); THREAT_TYPES_CACHE = j.data || []; }
+
+      const tSel = el('f_talisman_type');
+      if (tSel) {
+        tSel.innerHTML = '<option value="">— 選擇 —</option>';
+        for (const t of TALISMAN_TYPES_CACHE) tSel.innerHTML += `<option value="${t.code}">${t.name_zh}</option>`;
+      }
+
+      const etDiv = el('targetThreatTypes');
+      if (etDiv) {
+        etDiv.innerHTML = '';
+        for (const e of THREAT_TYPES_CACHE) {
+          etDiv.innerHTML += `<label style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.75rem;cursor:pointer;">
+            <input type="checkbox" class="target-threat-type" value="${e.code}" onchange="updateTollPreview()"> ${e.name_zh}
+          </label>`;
+        }
+      }
+    } catch (err) {
+      console.warn('loadTalismanAndThreatTypes failed', err);
+    }
+  }
+
+  function toggleTalismanSection() {
+    const on = el('f_is_talisman')?.checked;
+    el('secTalisman').style.display = on ? '' : 'none';
+    if (on) updateTollPreview();
+  }
+
+  function onBreakTimingChange() {
+    const timing = el('f_break_timing').value;
+    el('breakTestAttrGroup').style.display = (timing === 'test') ? '' : 'none';
+    el('stockpileRuleGroup').style.display = (timing === 'stockpile') ? '' : 'none';
+    updateTollPreview();
+  }
+
+  function collectTargetThreatTypes() {
+    const boxes = document.querySelectorAll('.target-threat-type:checked');
+    return Array.from(boxes).map(b => b.value);
+  }
+
+  function updateTollPreview() {
+    const on = el('f_is_talisman')?.checked;
+    const previewEl = el('tollPreview');
+    if (!on) { previewEl.innerHTML = '<span style="color:var(--text-tertiary);">法器未啟用。</span>'; return; }
+
+    const timing = el('f_break_timing').value;
+    const sMax = parseInt(el('f_break_strength_max').value) || 0;
+    const chargeLabel = el('f_break_charge_label').value.trim() || '充能';
+    const chargeMax = parseInt(el('f_break_charge_max').value) || 0;
+    const types = collectTargetThreatTypes();
+    const testAttr = el('f_break_test_attribute').value;
+
+    if (!timing) { previewEl.innerHTML = '<span style="color:var(--text-tertiary);">選擇破除時機以顯示過路費函數。</span>'; return; }
+
+    let formula = '';
+    let examples = [];
+    const typesLabel = types.length ? types.map(t => (THREAT_TYPES_CACHE.find(e => e.code === t)?.name_zh) || t).join(' / ') : '（未選類型）';
+
+    if (timing === 'instant') {
+      formula = `f(S, N) = ⌈S / 2⌉ + N （${chargeLabel}消耗）`;
+      const rows = [];
+      for (let s = 1; s <= Math.min(6, sMax || 6); s++) {
+        const cost2 = Math.ceil(s / 2) + 2;
+        const within = cost2 <= chargeMax;
+        rows.push(`強度 ${s} (2 子程式) → ${cost2} ${chargeLabel} ${within ? '' : '<span style="color:#e04">（超過上限 '+chargeMax+'）</span>'}`);
+      }
+      examples = rows;
+    } else if (timing === 'test') {
+      const attrLabel = (ATTRIBUTES[testAttr]?.zh) || '屬性';
+      formula = `f(S, N) = 1 ${chargeLabel} + ${attrLabel}檢定 (DC = S)；成功完全破除、失敗費用消耗`;
+      examples = [`強度 3 → 1 ${chargeLabel} + DC 3 檢定`, `強度 5 → 1 ${chargeLabel} + DC 5 檢定`];
+    } else if (timing === 'stockpile') {
+      formula = `f(S, N) = S （${chargeLabel}消耗）`;
+      examples = [`強度 3 → 3 ${chargeLabel}`, `強度 6 → 6 ${chargeLabel}`, chargeMax ? `可累積至多 ${chargeMax} ${chargeLabel}` : ''].filter(Boolean);
+    }
+
+    previewEl.innerHTML = `<div style="font-weight:600;color:var(--text-primary);">${formula}</div>
+      <div style="color:var(--text-secondary);margin-top:0.25rem;">適用類型：${typesLabel}</div>
+      <div style="color:var(--text-secondary);margin-top:0.25rem;">${examples.map(e => '・ ' + e).join('<br>')}</div>`;
+  }
+
+  function collectTalismanFields() {
+    return {
+      is_talisman: el('f_is_talisman')?.checked || false,
+      talisman_type: el('f_talisman_type')?.value || null,
+      target_threat_types: collectTargetThreatTypes(),
+      break_timing: el('f_break_timing')?.value || null,
+      break_strength_max: intVal('f_break_strength_max') || null,
+      break_charge_label: el('f_break_charge_label')?.value?.trim() || null,
+      break_charge_max: intVal('f_break_charge_max') || null,
+      break_test_attribute: el('f_break_test_attribute')?.value || null,
+      stockpile_accumulation_rule: el('f_stockpile_accumulation_rule')?.value?.trim() || null,
+      break_axis_value: parseFloat(el('f_break_axis_value')?.value) || null,
+      kill_axis_value: parseFloat(el('f_kill_axis_value')?.value) || null,
+      leverage_modifier: parseFloat(el('f_leverage_modifier')?.value) || null,
+    };
+  }
+
+  function loadTalismanFields(c) {
+    if (!el('f_is_talisman')) return;
+    el('f_is_talisman').checked = !!c.is_talisman;
+    el('f_talisman_type').value = c.talisman_type || '';
+    el('f_break_timing').value = c.break_timing || '';
+    el('f_break_strength_max').value = c.break_strength_max ?? 0;
+    el('f_break_charge_label').value = c.break_charge_label || '';
+    el('f_break_charge_max').value = c.break_charge_max ?? 0;
+    el('f_break_test_attribute').value = c.break_test_attribute || '';
+    el('f_stockpile_accumulation_rule').value = c.stockpile_accumulation_rule || '';
+    el('f_break_axis_value').value = c.break_axis_value ?? 0;
+    el('f_kill_axis_value').value = c.kill_axis_value ?? 0;
+    el('f_leverage_modifier').value = c.leverage_modifier ?? 0;
+    const targets = Array.isArray(c.target_threat_types) ? c.target_threat_types : [];
+    document.querySelectorAll('.target-threat-type').forEach(b => { b.checked = targets.includes(b.value); });
+    toggleTalismanSection();
+    onBreakTimingChange();
   }
 
   function populateSelects() {
@@ -1294,13 +1488,16 @@
     });
     renderEffects(effects);
     toggleConditionalFields();
+    if (typeof loadTalismanFields === 'function') loadTalismanFields(c);
     updateCodePreview();
     updatePreview();
     renderList();
   }
 
   function collectForm() {
+    const talisman = typeof collectTalismanFields === 'function' ? collectTalismanFields() : {};
     return {
+      ...talisman,
       id: editingId || null,
       series: el('f_series').value,
       name_zh: el('f_name_zh').value.trim(),

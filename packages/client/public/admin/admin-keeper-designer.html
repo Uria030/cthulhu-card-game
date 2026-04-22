@@ -570,6 +570,40 @@
             </div>
           </div>
 
+          <!-- 6.3b 威脅類型與子程式（雙軸戰鬥草案 v1.0） -->
+          <div class="section-card">
+            <div class="section-title collapsed" onclick="toggleSection('eSecThreat')">⚠ 威脅類型 × 子程式 <span id="eSubCountBadge" style="font-size:0.75rem;color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;margin-left:0.5rem;">(0)</span></div>
+            <div class="section-content collapsed" id="eSecThreat">
+              <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.5rem;">雙軸戰鬥草案 v1.0：威脅類型決定遭遇卡能被哪些法器破除；子程式為強制結算的多段負面效果（1-4 條）。選填。</div>
+
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>威脅類型（Threat）</label>
+                  <select id="e_threat_type" onchange="markDirty(); updateDvPreview();">
+                    <option value="">— 無 —</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>威脅強度 S (1-9)</label>
+                  <input type="number" id="e_threat_strength" min="1" max="9" oninput="markDirty(); updateDvPreview();">
+                </div>
+                <div class="form-group">
+                  <label>設計師 DV（唯讀）</label>
+                  <input type="text" id="e_designer_dv_preview" readonly>
+                </div>
+              </div>
+
+              <div style="margin-top:0.5rem;padding:0.4rem;background:var(--bg-primary);border-radius:4px;border:1px solid var(--border);font-size:0.7rem;" id="eDvWarn"></div>
+
+              <div style="margin-top:0.75rem;">
+                <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.35rem;">子程式（每條獨立結算；建議強度 1-2 配 1 條、3-4 配 2 條、5-6 配 3 條、7+ 配 4 條）</div>
+                <div id="eSubroutineList"></div>
+                <button class="btn" type="button" onclick="addSubroutine()" style="margin-top:0.35rem;">+ 新增子程式</button>
+                <span style="font-size:0.7rem;color:var(--text-tertiary);margin-left:0.5rem;">最多 4 條</span>
+              </div>
+            </div>
+          </div>
+
           <!-- 6.4 視覺素材 -->
           <div class="section-card">
             <div class="section-title collapsed" onclick="toggleSection('eSecArt')">🎨 視覺素材</div>
@@ -1618,6 +1652,10 @@
       el('e_scenario_text_en').value = c.scenario_text_en || '';
       el('e_art_url').value = c.art_url || '';
       el('e_design_notes').value = c.design_notes || '';
+      // 雙軸戰鬥草案 v1.0：威脅類型與子程式
+      if (el('e_threat_type')) el('e_threat_type').value = c.threat_type || '';
+      if (el('e_threat_strength')) el('e_threat_strength').value = c.threat_strength ?? '';
+      if (typeof renderSubroutines === 'function') renderSubroutines();
       renderEncounterTagsSection();
       renderEncounterOptions();
       renderEncounterCompleteness();
@@ -1962,6 +2000,9 @@
             return;
           }
         } else {
+          const threatStrengthRaw = el('e_threat_strength')?.value;
+          const subs = currentCard.subroutines || [];
+          const designerDv = calcDesignerDV(parseInt(threatStrengthRaw) || 0, subs);
           const body = {
             name_zh: el('e_name_zh').value.trim(),
             name_en: el('e_name_en').value.trim(),
@@ -1971,6 +2012,9 @@
             art_url: el('e_art_url').value.trim() || null,
             design_notes: el('e_design_notes').value.trim() || null,
             design_status: el('e_design_status').value,
+            threat_type: el('e_threat_type')?.value || null,
+            threat_strength: threatStrengthRaw ? parseInt(threatStrengthRaw) : null,
+            designer_dv: threatStrengthRaw ? designerDv : null,
           };
           const res = await adminFetch(`/api/admin/keeper/encounter-cards/${currentCard.id}`, {
             method: 'PUT', body: JSON.stringify(body),
@@ -1984,6 +2028,10 @@
           const tagIds = (currentCard.tags || []).map(t => t.id);
           await adminFetch(`/api/admin/keeper/encounter-cards/${currentCard.id}/tags`, {
             method: 'PUT', body: JSON.stringify({ tag_ids: tagIds }),
+          });
+          // 同步子程式（批次覆寫）
+          await adminFetch(`/api/admin/keeper/encounter-cards/${currentCard.id}/subroutines`, {
+            method: 'PUT', body: JSON.stringify({ subroutines: subs }),
           });
           // 同步所有選項
           for (const opt of (currentCard.options || [])) {
@@ -2550,9 +2598,111 @@ ${userNote ? `6. 額外要求：${userNote}` : ''}
     // ════════════════════════════════════════════════════════════
     //  INIT
     // ════════════════════════════════════════════════════════════
+    // 雙軸戰鬥草案 v1.0：威脅類型與子程式
+    let THREAT_TYPES_CACHE = [];
+
+    async function loadThreatTypes() {
+      try {
+        const r = await adminFetch('/api/admin/threat-types');
+        if (r.ok) { const j = await r.json(); THREAT_TYPES_CACHE = j.data || []; }
+      } catch (err) { console.warn('loadThreatTypes failed', err); }
+      const sel = el('e_threat_type');
+      if (sel) {
+        sel.innerHTML = '<option value="">— 無 —</option>';
+        for (const t of THREAT_TYPES_CACHE) sel.innerHTML += `<option value="${t.code}">${t.name_zh}</option>`;
+      }
+    }
+
+    function suggestedSubCount(strength) {
+      if (!strength) return 0;
+      if (strength <= 2) return 1;
+      if (strength <= 4) return 2;
+      if (strength <= 6) return 3;
+      return 4;
+    }
+
+    function calcDesignerDV(strength, subs, mechanics) {
+      const s = Number(strength) || 0;
+      const n = Array.isArray(subs) ? subs.length : 0;
+      let special = 0;
+      if (Array.isArray(subs)) {
+        for (const sub of subs) {
+          const m = sub.mechanics || {};
+          if (m.delayed) special += 2;
+          if (m.curse_marker) special += 2;
+          if (m.doom_marker) special += 3;
+          if (m.trauma_cap_reduce) special += 5;
+        }
+      }
+      return s * 1 + n * 1 + special;
+    }
+
+    function updateDvPreview() {
+      const s = parseInt(el('e_threat_strength').value) || 0;
+      const subs = currentCard?.subroutines || [];
+      const dv = calcDesignerDV(s, subs);
+      el('e_designer_dv_preview').value = dv.toFixed(1);
+
+      const warnBox = el('eDvWarn');
+      const suggested = suggestedSubCount(s);
+      const warnings = [];
+      if (s && suggested !== subs.length) {
+        warnings.push(`強度 ${s} 建議子程式數 ${suggested} 條，目前 ${subs.length} 條`);
+      }
+      if (s >= 1 && s <= 2) {
+        for (const sub of subs) if (sub.mechanics?.trauma_cap_reduce) warnings.push('紅線：強度 1-2 不得造成創傷上限 -1');
+      }
+      if (s >= 5 && dv > 18) warnings.push(`DV ${dv} 偏高，注意章節出現時機（紅線二：強度 5+ 需議程推進後才出現）`);
+      warnBox.innerHTML = warnings.length
+        ? warnings.map(w => `<div style="color:#e04;">⚠ ${w}</div>`).join('')
+        : '<span style="color:var(--text-tertiary);">無警告（填入強度與子程式以啟動驗證）</span>';
+
+      el('eSubCountBadge').textContent = `(${subs.length})`;
+    }
+
+    function renderSubroutines() {
+      const list = el('eSubroutineList');
+      const subs = currentCard?.subroutines || [];
+      if (!subs.length) {
+        list.innerHTML = '<div style="color:var(--text-tertiary);font-size:0.75rem;padding:0.35rem 0;">尚無子程式。新增 1-4 條代表強制結算的多段負面效果。</div>';
+      } else {
+        list.innerHTML = subs.map((s, i) => `
+          <div class="subroutine-row" style="display:flex;align-items:flex-start;gap:0.4rem;padding:0.4rem;border:1px solid var(--border);border-radius:4px;margin-bottom:0.35rem;">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--text-secondary);padding-top:0.25rem;">▸${i + 1}</span>
+            <textarea style="flex:1;min-height:2rem;" placeholder="效果描述（例：失去 2 SAN / 棄 1 張手牌）"
+              oninput="updateSubroutineText(${i}, this.value)">${s.effect_description || ''}</textarea>
+            <button class="btn" type="button" onclick="removeSubroutine(${i})" style="font-size:0.7rem;">✕</button>
+          </div>
+        `).join('');
+      }
+      updateDvPreview();
+    }
+
+    function addSubroutine() {
+      if (!currentCard) return;
+      currentCard.subroutines = currentCard.subroutines || [];
+      if (currentCard.subroutines.length >= 4) { alert('最多 4 條子程式'); return; }
+      currentCard.subroutines.push({ effect_description: '', mechanics: {} });
+      renderSubroutines();
+      markDirty();
+    }
+
+    function removeSubroutine(idx) {
+      if (!currentCard?.subroutines) return;
+      currentCard.subroutines.splice(idx, 1);
+      renderSubroutines();
+      markDirty();
+    }
+
+    function updateSubroutineText(idx, txt) {
+      if (!currentCard?.subroutines?.[idx]) return;
+      currentCard.subroutines[idx].effect_description = txt;
+      markDirty();
+    }
+
     (async function init() {
       populateAllStaticSelects();
-      await Promise.all([loadTags(), loadMonsterFamilies()]);
+      await Promise.all([loadTags(), loadMonsterFamilies(), loadThreatTypes()]);
       await loadMythosCards();
     })();
   </script>

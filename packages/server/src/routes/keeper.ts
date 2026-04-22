@@ -703,14 +703,16 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
       await client.query('BEGIN');
       const result = await client.query(`
         INSERT INTO encounter_cards (code, name_zh, name_en, scenario_text_zh, scenario_text_en,
-          encounter_type, art_url, design_notes, design_status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          encounter_type, art_url, design_notes, design_status,
+          threat_type, threat_strength, designer_dv)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING *
       `, [body.code, body.name_zh, body.name_en || '',
           body.scenario_text_zh || '', body.scenario_text_en || null,
           body.encounter_type || 'choice',
           body.art_url || null, body.design_notes || null,
-          body.design_status || 'draft']);
+          body.design_status || 'draft',
+          body.threat_type || null, body.threat_strength || null, body.designer_dv ?? null]);
       const newId = (result.rows[0] as any).id;
 
       // 自動建立 2 個空選項
@@ -752,11 +754,17 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
         ORDER BY lst.sort_order
       `, [id]);
 
+      const subroutinesRes = await pool.query(
+        'SELECT id, sub_order, effect_description, mechanics FROM encounter_subroutines WHERE encounter_card_id = $1 ORDER BY sub_order',
+        [id]
+      );
+
       return reply.send({
         encounter_card: {
           ...(cardRes.rows[0] as any),
           options: optionsRes.rows,
           tags: tagsRes.rows,
+          subroutines: subroutinesRes.rows,
         },
       });
     } catch (error) {
@@ -793,11 +801,15 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
           art_url = $7,
           design_notes = $8,
           design_status = COALESCE($9, design_status),
+          threat_type = $10,
+          threat_strength = $11,
+          designer_dv = $12,
           updated_at = NOW()
         WHERE id = $1
         RETURNING *
       `, [id, body.name_zh, body.name_en, body.scenario_text_zh, body.scenario_text_en,
-          body.encounter_type, body.art_url, body.design_notes, body.design_status]);
+          body.encounter_type, body.art_url, body.design_notes, body.design_status,
+          body.threat_type ?? null, body.threat_strength ?? null, body.designer_dv ?? null]);
       if (result.rows.length === 0) return reply.status(404).send({ error: 'encounter_card_not_found' });
       return reply.send({ encounter_card: result.rows[0] });
     } catch (error) {
@@ -879,4 +891,48 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
       client.release();
     }
   });
+
+  // ════════════════════════════════════════════════════════════════
+  //  雙軸戰鬥草案 v1.0：encounter_subroutines CRUD
+  // ════════════════════════════════════════════════════════════════
+
+  // PUT 批次覆寫：刪除既有 + 重建，作為前端「整段編輯」的最簡單 API
+  app.put<{ Params: { id: string }; Body: { subroutines: any[] } }>(
+    '/api/admin/keeper/encounter-cards/:id/subroutines',
+    async (request, reply) => {
+      const { id } = request.params;
+      const subs = Array.isArray(request.body?.subroutines) ? request.body.subroutines : [];
+      if (subs.length > 4) return reply.status(400).send({ error: 'max_4_subroutines' });
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const card = await client.query('SELECT id FROM encounter_cards WHERE id = $1', [id]);
+        if (card.rowCount === 0) {
+          await client.query('ROLLBACK');
+          return reply.status(404).send({ error: 'encounter_card_not_found' });
+        }
+        await client.query('DELETE FROM encounter_subroutines WHERE encounter_card_id = $1', [id]);
+        for (let i = 0; i < subs.length; i++) {
+          const s = subs[i];
+          await client.query(
+            `INSERT INTO encounter_subroutines (encounter_card_id, sub_order, effect_description, mechanics)
+             VALUES ($1, $2, $3, $4)`,
+            [id, i + 1, s.effect_description || '', JSON.stringify(s.mechanics || {})]
+          );
+        }
+        await client.query('COMMIT');
+        const rows = await pool.query(
+          'SELECT id, sub_order, effect_description, mechanics FROM encounter_subroutines WHERE encounter_card_id = $1 ORDER BY sub_order',
+          [id]
+        );
+        return reply.send({ subroutines: rows.rows });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        request.log.error(error, 'PUT subroutines error');
+        return reply.status(500).send({ error: 'update_subroutines_failed' });
+      } finally {
+        client.release();
+      }
+    }
+  );
 };

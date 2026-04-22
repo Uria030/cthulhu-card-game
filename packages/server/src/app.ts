@@ -14,6 +14,7 @@ import { forgeCraftRoutes } from './routes/forge-craft.js';
 import { aiConsoleRoutes } from './routes/ai-console.js';
 import { campaignRoutes } from './routes/campaigns.js';
 import { stageRoutes } from './routes/stages.js';
+import { typesRegistryRoutes } from './routes/types-registry.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -45,6 +46,7 @@ export async function buildApp() {
   await app.register(investigatorRoutes);
   await app.register(forgeCraftRoutes);
   await app.register(aiConsoleRoutes);
+  await app.register(typesRegistryRoutes);
 
   return app;
 }

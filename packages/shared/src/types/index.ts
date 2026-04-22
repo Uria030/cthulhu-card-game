@@ -19,3 +19,14 @@ export type {
   RandomDungeonGenerator,
   ObjectiveType,
 } from './scenario';
+export type {
+  ThreatTypeCode,
+  BreakTiming,
+  BreakTestAttribute,
+  ThreatType,
+  TalismanType,
+  TalismanFields,
+  EncounterSubroutine,
+  ThreatTypingFields,
+} from './talisman';
+export { TOLL_FUNCTIONS, AXIS_REFERENCE_TEMPLATES } from './talisman';

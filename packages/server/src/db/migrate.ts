@@ -2578,6 +2578,95 @@ UPDATE talent_trees
 `;
 
 // ============================================
+// Migration 021: 雙軸戰鬥草案 v1.0 — 基礎類型表
+// 依據：卡片軸向系統與雙軸戰鬥規劃草案 v1.0 檔案二、檔案三
+// - threat_types（3 遭遇卡類型：mental/physical/ritual）
+// - talisman_types（6 法器物質類型：wooden_peach/silver/steel/crystal/salt/scroll）
+// - encounter_subroutines（遭遇卡子程式表，每張卡 1-4 條）
+// ============================================
+const MIGRATION_021_SQL = `
+CREATE TABLE IF NOT EXISTS threat_types (
+  code                VARCHAR(32) PRIMARY KEY,
+  name_zh             VARCHAR(64) NOT NULL,
+  name_en             VARCHAR(64),
+  description         TEXT,
+  narrative_archetype TEXT,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO threat_types (code, name_zh, name_en, description, narrative_archetype) VALUES
+  ('mental',   '精神侵蝕', 'Mental Erosion',
+   '直接作用於調查員心智的威脅。主要後果：SAN 傷害、棄手牌、神啟卡洗入牌庫、發瘋狀態。',
+   '翻開禁忌典籍、聽見外神之名、目睹不可名狀之物、經歷超自然夢境。你看到了不該看的東西，你的心智開始崩潰。'),
+  ('physical', '物質異變', 'Physical Mutation',
+   '物理世界本身的扭曲與腐敗。主要後果：HP 傷害、地點變異、物品腐敗、行動點扣減。',
+   '地面浮現觸手、空氣凝結成血、屍體重組、植物異常生長、空間非歐幾何化。你所站立的世界開始不再是你熟悉的世界。'),
+  ('ritual',   '儀式詛咒', 'Ritual Curse',
+   '超自然力量的主動施為。主要後果：詛咒標記、議程牌堆推進、敵人增援、延遲效果。',
+   '邪教徒完成儀式、契約印記被啟動、次元門被打開、神話生物的詛咒生效。某些力量正在透過儀式作用於世界，你被牽涉進去。')
+ON CONFLICT (code) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS talisman_types (
+  code         VARCHAR(32) PRIMARY KEY,
+  name_zh      VARCHAR(64) NOT NULL,
+  name_en      VARCHAR(64),
+  description  TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO talisman_types (code, name_zh, name_en, description) VALUES
+  ('wooden_peach', '桃木', 'Wooden Peach', '克蘇魯東方法器原型；桃木具有傳統驅邪意義，對儀式詛咒類遭遇卡最具效果。'),
+  ('silver',       '銀製', 'Silver',       '傳統驅魔金屬；對精神侵蝕與物質異變類遭遇卡有效，是物質派玩家常用法器。'),
+  ('steel',        '鋼製', 'Steel',        '工業時代的聖物；十字架、釘子、儀式匕首的基底。對物質異變類尤其有效。'),
+  ('crystal',      '水晶', 'Crystal',      '蓄積型法器的典型材質；累積預兆、能量、神秘訊息。對精神侵蝕類最為契合。'),
+  ('salt',         '鹽',   'Salt',         '驅邪最原始的物質；一次性防護、圍圈結界。對物質異變類極具效果。'),
+  ('scroll',       '符卷', 'Scroll',       '書寫的符印、古卷、契約文書。配合學者玩法累積封印；對儀式詛咒類最為契合。')
+ON CONFLICT (code) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS encounter_subroutines (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  encounter_card_id    UUID NOT NULL REFERENCES encounter_cards(id) ON DELETE CASCADE,
+  sub_order            INTEGER NOT NULL CHECK (sub_order BETWEEN 1 AND 4),
+  effect_description   TEXT NOT NULL,
+  mechanics            JSONB DEFAULT '{}'::jsonb,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (encounter_card_id, sub_order)
+);
+CREATE INDEX IF NOT EXISTS idx_enc_subr_card ON encounter_subroutines(encounter_card_id);
+`;
+
+// ============================================
+// Migration 022: 雙軸戰鬥草案 v1.0 — 既有表欄位擴充
+// - card_definitions 新增 11 法器欄位
+// - encounter_cards 新增 3 欄位（encounter_type / encounter_strength / designer_dv）
+// ============================================
+const MIGRATION_022_SQL = `
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS is_talisman                    BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS talisman_type                  VARCHAR(32) REFERENCES talisman_types(code);
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS target_threat_types            JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS break_timing                   VARCHAR(16) CHECK (break_timing IS NULL OR break_timing IN ('instant','test','stockpile'));
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS break_strength_max             INTEGER CHECK (break_strength_max IS NULL OR break_strength_max BETWEEN 1 AND 10);
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS break_charge_label             VARCHAR(32);
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS break_charge_max               INTEGER CHECK (break_charge_max IS NULL OR break_charge_max BETWEEN 0 AND 20);
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS break_test_attribute           VARCHAR(16) CHECK (break_test_attribute IS NULL OR break_test_attribute IN ('strength','agility','constitution','reflex','intellect','willpower','perception','charisma'));
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS stockpile_accumulation_rule    TEXT;
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS break_axis_value               DECIMAL(5,2);
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS kill_axis_value                DECIMAL(5,2);
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS leverage_modifier              DECIMAL(5,2);
+
+CREATE INDEX IF NOT EXISTS idx_card_def_is_talisman ON card_definitions(is_talisman) WHERE is_talisman = TRUE;
+CREATE INDEX IF NOT EXISTS idx_card_def_talisman_type ON card_definitions(talisman_type) WHERE talisman_type IS NOT NULL;
+
+-- encounter_cards.encounter_type 既有為「交互類型」（thriller/choice/trade/...），不動。
+-- 這裡新增 threat_type（威脅類型）為草案 v1.0 的三分類，與既有交互類型正交並存。
+ALTER TABLE encounter_cards ADD COLUMN IF NOT EXISTS threat_type                     VARCHAR(16) REFERENCES threat_types(code);
+ALTER TABLE encounter_cards ADD COLUMN IF NOT EXISTS threat_strength                 INTEGER CHECK (threat_strength IS NULL OR threat_strength BETWEEN 1 AND 9);
+ALTER TABLE encounter_cards ADD COLUMN IF NOT EXISTS designer_dv                     DECIMAL(5,2);
+
+CREATE INDEX IF NOT EXISTS idx_enc_cards_threat_type ON encounter_cards(threat_type) WHERE threat_type IS NOT NULL;
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -2748,10 +2837,18 @@ export async function runMigrations() {
     await client.query(MIGRATION_018_SQL);
     await client.query(MIGRATION_019_SQL);
     await client.query(MIGRATION_020_SQL);
+    await client.query(MIGRATION_021_SQL);
+    await client.query(MIGRATION_022_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {
       console.warn('[MOD-06 seed] 種子資料插入失敗（不影響 migration）:', seedErr);
+    }
+    try {
+      const { seedTalismanTemplates } = await import('./seeds/talisman-templates.js');
+      await seedTalismanTemplates(client);
+    } catch (seedErr) {
+      console.warn('[talisman seed] 種子資料插入失敗（不影響 migration）:', seedErr);
     }
     console.log('All migrations completed successfully!');
   } catch (error) {

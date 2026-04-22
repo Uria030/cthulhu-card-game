@@ -129,11 +129,15 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
           commit_icons, consume_enabled, consume_effect,
           is_book, is_relic, study_method, study_required,
           study_test_attribute, study_test_dc, study_difficulty_tier, study_upgrade_card,
-          upgrades, transform_to, transform_condition, transform_reversible
+          upgrades, transform_to, transform_condition, transform_reversible,
+          is_talisman, talisman_type, target_threat_types, break_timing, break_strength_max,
+          break_charge_label, break_charge_max, break_test_attribute, stockpile_accumulation_rule,
+          break_axis_value, kill_axis_value, leverage_modifier
         ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
           $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,
-          $39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54
+          $39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,
+          $55,$56,$57,$58,$59,$60,$61,$62,$63,$64,$65,$66
         ) RETURNING *`;
 
       const vals = [
@@ -147,7 +151,10 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
         JSON.stringify(b.commit_icons || {}), b.consume_enabled || false, b.consume_effect ? JSON.stringify(b.consume_effect) : null,
         b.is_book || false, b.is_relic || false, b.study_method || null, b.study_required || null,
         b.study_test_attribute || null, b.study_test_dc || null, b.study_difficulty_tier || null, b.study_upgrade_card || null,
-        JSON.stringify(b.upgrades || {}), b.transform_to || null, b.transform_condition || null, b.transform_reversible || false
+        JSON.stringify(b.upgrades || {}), b.transform_to || null, b.transform_condition || null, b.transform_reversible || false,
+        b.is_talisman || false, b.talisman_type || null, JSON.stringify(b.target_threat_types || []), b.break_timing || null, b.break_strength_max || null,
+        b.break_charge_label || null, b.break_charge_max || null, b.break_test_attribute || null, b.stockpile_accumulation_rule || null,
+        b.break_axis_value ?? null, b.kill_axis_value ?? null, b.leverage_modifier ?? null
       ];
 
       const cardResult = await client.query(insertSQL, vals);
@@ -201,8 +208,11 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
           is_book=$38, is_relic=$39, study_method=$40, study_required=$41,
           study_test_attribute=$42, study_test_dc=$43, study_difficulty_tier=$44, study_upgrade_card=$45,
           upgrades=$46, transform_to=$47, transform_condition=$48, transform_reversible=$49,
+          is_talisman=$50, talisman_type=$51, target_threat_types=$52, break_timing=$53, break_strength_max=$54,
+          break_charge_label=$55, break_charge_max=$56, break_test_attribute=$57, stockpile_accumulation_rule=$58,
+          break_axis_value=$59, kill_axis_value=$60, leverage_modifier=$61,
           version = version + 1, updated_at = NOW()
-        WHERE id = $50 RETURNING *`;
+        WHERE id = $62 RETURNING *`;
 
       const vals = [
         b.name_zh, b.name_en, b.slot || 'none',
@@ -217,6 +227,9 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
         b.is_book || false, b.is_relic || false, b.study_method || null, b.study_required || null,
         b.study_test_attribute || null, b.study_test_dc || null, b.study_difficulty_tier || null, b.study_upgrade_card || null,
         JSON.stringify(b.upgrades || {}), b.transform_to || null, b.transform_condition || null, b.transform_reversible || false,
+        b.is_talisman || false, b.talisman_type || null, JSON.stringify(b.target_threat_types || []), b.break_timing || null, b.break_strength_max || null,
+        b.break_charge_label || null, b.break_charge_max || null, b.break_test_attribute || null, b.stockpile_accumulation_rule || null,
+        b.break_axis_value ?? null, b.kill_axis_value ?? null, b.leverage_modifier ?? null,
         id
       ];
 
@@ -289,8 +302,11 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
             ally_hp,ally_san,xp_cost,subtypes,flavor_text,removable,committable,lethal_count,owner_investigator,
             commit_icons,consume_enabled,consume_effect,
             is_book,is_relic,study_method,study_required,study_test_attribute,study_test_dc,study_difficulty_tier,study_upgrade_card,upgrades,
-            transform_to,transform_condition,transform_reversible
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54) RETURNING id`,
+            transform_to,transform_condition,transform_reversible,
+            is_talisman,talisman_type,target_threat_types,break_timing,break_strength_max,
+            break_charge_label,break_charge_max,break_test_attribute,stockpile_accumulation_rule,
+            break_axis_value,kill_axis_value,leverage_modifier
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56,$57,$58,$59,$60,$61,$62,$63,$64,$65,$66) RETURNING id`,
           [code,seriesCode,card.name_zh,card.name_en,card.faction,card.style,card.card_type||card.type,card.slot||'none',
            card.is_unique||false,card.is_signature||false,card.is_weakness||false,card.is_revelation||false,card.is_exceptional||false,
            card.level||0,card.cost||0,card.cost_currency||'resource',card.skill_value||0,card.damage||0,card.horror||0,
@@ -301,7 +317,10 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
            JSON.stringify(card.commit_icons||{}),card.consume_enabled||false,card.consume_effect?JSON.stringify(card.consume_effect):null,
            card.is_book||false,card.is_relic||false,card.study_method||null,card.study_required||null,
            card.study_test_attribute||null,card.study_test_dc||null,card.study_difficulty_tier||null,card.study_upgrade_card||null,
-           JSON.stringify(card.upgrades||{}),card.transform_to||null,card.transform_condition||null,card.transform_reversible||false]
+           JSON.stringify(card.upgrades||{}),card.transform_to||null,card.transform_condition||null,card.transform_reversible||false,
+           card.is_talisman||false,card.talisman_type||null,JSON.stringify(card.target_threat_types||[]),card.break_timing||null,card.break_strength_max||null,
+           card.break_charge_label||null,card.break_charge_max||null,card.break_test_attribute||null,card.stockpile_accumulation_rule||null,
+           card.break_axis_value??null,card.kill_axis_value??null,card.leverage_modifier??null]
         );
         await insertEffects(client, insertRes.rows[0].id, card.effects);
         await client.query('COMMIT');

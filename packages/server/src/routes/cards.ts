@@ -267,6 +267,53 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
+  // ── POST /api/cards/bulk-delete ── 批次刪除（含自動清理兩個非 CASCADE 的外鍵引用）
+  app.post<{ Body: { ids: string[] } }>('/api/cards/bulk-delete', async (request, reply) => {
+    const { ids } = request.body || ({} as any);
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return reply.status(400).send({ success: false, error: 'Expected { ids: [uuid, ...] }' });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // 1. 先把起始牌組對舊卡的引用設為 NULL（避免 FK 違約）
+      const deckClear = await client.query(
+        `UPDATE investigator_starting_deck SET card_definition_id = NULL WHERE card_definition_id = ANY($1::uuid[]) RETURNING id`,
+        [ids]
+      );
+      // 2. 把鍛造配方對舊卡的 output 引用設為 NULL
+      const recipeClear = await client.query(
+        `UPDATE crafting_recipes SET output_card_id = NULL WHERE output_card_id = ANY($1::uuid[]) RETURNING id`,
+        [ids]
+      );
+      // 3. 實際刪除（card_effects 會自動 CASCADE）
+      const del = await client.query(
+        `DELETE FROM card_definitions WHERE id = ANY($1::uuid[]) RETURNING id, code, name_zh`,
+        [ids]
+      );
+      await client.query('COMMIT');
+      return reply.send({
+        success: true,
+        data: {
+          deleted: del.rows,
+          deleted_count: del.rows.length,
+          starting_deck_refs_cleared: deckClear.rows.length,
+          crafting_recipe_refs_cleared: recipeClear.rows.length,
+        },
+      });
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      request.log.error(error, 'bulk-delete error');
+      return reply.status(500).send({
+        success: false,
+        error: 'Failed to bulk-delete cards',
+        dbError: { code: error.code || null, message: error.message || String(error), detail: error.detail || null },
+      });
+    } finally {
+      client.release();
+    }
+  });
+
   // ── POST /api/cards/import ── bulk import
   app.post<{ Body: { cards: any[] } }>('/api/cards/import', async (request, reply) => {
     const { cards } = request.body;

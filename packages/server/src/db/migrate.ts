@@ -577,9 +577,9 @@ CREATE INDEX IF NOT EXISTS idx_talent_effects_node ON talent_node_effects(node_i
 
 -- Seed: 8 talent trees
 INSERT INTO talent_trees (faction_code, name_zh, name_en, primary_attribute, secondary_attribute, combat_proficiency_primary, combat_proficiency_secondary, description_zh) VALUES
-('E', '號令天賦樹', 'Herald Talent Tree', 'charisma', 'strength', 'military', 'brawl',
+('E', '號令天賦樹', 'Herald Talent Tree', 'charisma', 'strength', 'sidearm', 'brawl',
  '團隊增益、共享資源、NPC 互動、領導光環。號令者是隊伍的核心，透過指揮和激勵讓全隊更強。'),
-('I', '深淵天賦樹', 'Abyss Talent Tree', 'intellect', 'willpower', 'arcane', 'assassin',
+('I', '深淵天賦樹', 'Abyss Talent Tree', 'intellect', 'willpower', 'assassin', 'arcane',
  '單獨加成、牌庫操控、自我增幅、專精強化。凝視深淵的學者，在孤獨中找到別人找不到的答案。'),
 ('S', '鐵證天賦樹', 'Witness Talent Tree', 'perception', 'strength', 'shooting', 'sidearm',
  '裝備加成、物理攻擊、消耗品效率、環境互動。鐵證如山的調查員，用物理手段解決問題。'),
@@ -591,7 +591,7 @@ INSERT INTO talent_trees (faction_code, name_zh, name_en, primary_attribute, sec
  '治療、替人承傷、犧牲換效果、信念計數器。燃燒自己照亮他人的守護者。'),
 ('J', '鐵壁天賦樹', 'Bastion Talent Tree', 'constitution', 'strength', 'military', 'sidearm',
  '傷害減免、回合佈局、牌組一致性、堅守強化。不動如山的堡壘，隊伍最後的防線。'),
-('P', '流影天賦樹', 'Flux Talent Tree', 'agility', 'perception', 'assassin', 'archery',
+('P', '流影天賦樹', 'Flux Talent Tree', 'agility', 'perception', 'archery', 'assassin',
  '反應行動、棄牌堆回收、隨機獎勵、逆境觸發。在混亂中起舞的幸運兒，越絕望越強大。')
 ON CONFLICT (faction_code) DO NOTHING;
 
@@ -2547,6 +2547,37 @@ ALTER TABLE investigator_templates
 `;
 
 // ============================================
+// Migration 020: 支柱一 v0.3 配對修訂（E/I/P 戰鬥風格主熟練）
+// 依據：支柱一 v0.3 §1.1 八陣營×戰鬥風格完整配對表
+// - E 號令 primary: military → sidearm (配對修訂)
+// - I 深淵 primary: arcane → assassin (配對修訂)
+// - P 流影 primary: assassin → archery (v0.2 應為敏捷=敏捷型弓術，v0.3 改反應=反應型弓術)
+// 條件式 UPDATE：僅在當前 primary 為舊預設值時才更新，避免覆蓋設計者手動修改
+// ============================================
+const MIGRATION_020_SQL = `
+UPDATE talent_trees
+   SET combat_proficiency_primary = 'sidearm',
+       combat_proficiency_secondary = 'brawl'
+ WHERE faction_code = 'E'
+   AND combat_proficiency_primary = 'military'
+   AND combat_proficiency_secondary = 'brawl';
+
+UPDATE talent_trees
+   SET combat_proficiency_primary = 'assassin',
+       combat_proficiency_secondary = 'arcane'
+ WHERE faction_code = 'I'
+   AND combat_proficiency_primary = 'arcane'
+   AND combat_proficiency_secondary = 'assassin';
+
+UPDATE talent_trees
+   SET combat_proficiency_primary = 'archery',
+       combat_proficiency_secondary = 'assassin'
+ WHERE faction_code = 'P'
+   AND combat_proficiency_primary = 'assassin'
+   AND combat_proficiency_secondary = 'archery';
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -2716,6 +2747,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_017_SQL);
     await client.query(MIGRATION_018_SQL);
     await client.query(MIGRATION_019_SQL);
+    await client.query(MIGRATION_020_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

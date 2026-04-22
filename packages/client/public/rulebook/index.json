@@ -1,5 +1,5 @@
 {
-  "version": "v03",
+  "version": "v04",
   "frozen_at": "2026-04-22",
   "sections": [
     {
@@ -25,7 +25,8 @@
         { "file": "s03_card_design_spec.md", "title": "卡片設計規範 v0.2", "lines": 518 },
         { "file": "s04_card_value_spec.md", "title": "卡片價值計算規範 v1.1 修正案", "lines": 634 },
         { "file": "s05_faction_pillars.md", "title": "支柱一 · 陣營與構築 v0.1（八陣營極完整定義）", "lines": 268 },
-        { "file": "s06_card_text_style.md", "title": "卡片敘述文法規範 v0.2（三 Part 合併：基礎 / 句型 / 進階）", "lines": 1464 }
+        { "file": "s06_card_text_style.md", "title": "卡片敘述文法規範 v0.3（三 Part 合併：基礎 / 句型 / 進階）", "lines": 1467 },
+        { "file": "s07_faction_narrative.md", "title": "支柱一 v0.3（八陣營詳細敘述 + 違和即資產設計哲學 + 先攻勘誤）", "lines": 951 }
       ]
     },
     {

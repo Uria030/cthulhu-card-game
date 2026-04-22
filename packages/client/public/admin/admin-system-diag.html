@@ -161,6 +161,12 @@
       <button class="diag-btn" id="btnProbeModels">5. 測試 Gemini 模型</button>
     </div>
 
+    <div class="diag-action-row" style="border-top:1px solid var(--border);">
+      <strong style="align-self:center;margin-right:0.5rem;font-size:0.85rem;color:var(--text-secondary);">卡片批次刪除測試：</strong>
+      <button class="diag-btn" id="btnCardCount">A. 清點遠端卡片</button>
+      <button class="diag-btn danger" id="btnBulkDeleteLegacy">B. 批次刪除非法器卡（實際執行）</button>
+    </div>
+
     <div class="diag-status-grid">
       <div class="diag-card" id="cardAuth">
         <div class="diag-card-title">Admin 認證</div>
@@ -453,6 +459,109 @@
       log('info', '════ 診斷結束 ════');
     }
 
+    // ════════════════════════════════════════════════
+    //  卡片批次刪除測試（隔離驗證 bulk-delete 端點）
+    // ════════════════════════════════════════════════
+
+    async function test_cardCount() {
+      log('info', '== 清點遠端卡片 ==');
+      log('info', `GET ${window.ADMIN_API_BASE || ''}/api/cards`);
+      try {
+        const res = await adminFetch('/api/cards');
+        log('info', `HTTP ${res.status} ${res.statusText || ''}`);
+        const raw = await res.text();
+        let data;
+        try { data = JSON.parse(raw); } catch { data = null; }
+        if (!res.ok) {
+          log('err', `GET /api/cards 失敗`, raw.slice(0, 800));
+          return null;
+        }
+        if (!data || !Array.isArray(data.data)) {
+          log('err', 'Response 格式不符預期（缺 data 陣列）', raw.slice(0, 800));
+          return null;
+        }
+        const total = data.data.length;
+        const talisman = data.data.filter(c => c.is_talisman).length;
+        const nonTalisman = total - talisman;
+        log('ok', `總卡片數：${total}｜法器：${talisman}｜非法器（舊卡）：${nonTalisman}`);
+        if (nonTalisman > 0) {
+          const sample = data.data.filter(c => !c.is_talisman).slice(0, 3).map(c => `${c.code}(${c.name_zh})`).join('、');
+          log('info', `非法器樣本（前 3 張）：${sample}`);
+        }
+        return data.data;
+      } catch (e) {
+        log('err', `clients 發生例外：${e.message || e}`, e.stack || String(e));
+        return null;
+      }
+    }
+
+    async function test_bulkDeleteLegacy() {
+      log('info', '== 批次刪除非法器卡（隔離測試）==');
+
+      // 1. 先清點
+      const all = await test_cardCount();
+      if (!all) { log('err', '清點失敗，放棄批次刪除'); return; }
+      const targets = all.filter(c => !c.is_talisman);
+      if (targets.length === 0) {
+        log('ok', '沒有非法器卡需要刪除（法器以外的卡片數為 0）');
+        return;
+      }
+
+      // 2. 確認
+      const confirmWord = `DELETE ${targets.length}`;
+      const input = prompt(`將從資料庫永久刪除 ${targets.length} 張非法器卡片。\n\n此操作透過 POST /api/cards/bulk-delete 執行，在 transaction 內自動清理 investigator_starting_deck 與 crafting_recipes 的 FK 引用。\n\n若確定執行，請輸入：${confirmWord}`);
+      if (input !== confirmWord) { log('warn', '輸入不一致，已取消'); return; }
+
+      // 3. 送 POST
+      const ids = targets.map(c => c.id);
+      const endpoint = (window.ADMIN_API_BASE || '') + '/api/cards/bulk-delete';
+      log('info', `POST ${endpoint}`);
+      log('info', `Body: { "ids": [ … ${ids.length} 個 UUID … ] }（首 3 個：${ids.slice(0, 3).join(', ')}）`);
+
+      try {
+        const res = await adminFetch('/api/cards/bulk-delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids }),
+        });
+        log('info', `HTTP ${res.status} ${res.statusText || ''}`);
+
+        // 印出 headers
+        const headerLines = [];
+        try { res.headers.forEach((v, k) => headerLines.push(`${k}: ${v}`)); } catch {}
+        if (headerLines.length) log('info', 'Response Headers', headerLines.join('\n'));
+
+        const raw = await res.text();
+        log('info', `Response body（${raw.length} 字元）`, raw.slice(0, 1500) + (raw.length > 1500 ? `\n…（截斷，完整長度 ${raw.length}）` : ''));
+
+        if (!res.ok) {
+          log('err', `bulk-delete 失敗（HTTP ${res.status}）`);
+          try {
+            const j = JSON.parse(raw);
+            if (j.dbError) log('err', 'dbError 細節', j.dbError);
+          } catch {}
+          return;
+        }
+
+        let parsed;
+        try { parsed = JSON.parse(raw); }
+        catch (e) {
+          log('err', 'Response 不是合法 JSON', e.message);
+          return;
+        }
+
+        const d = parsed.data || {};
+        log('ok', `bulk-delete 成功：刪除 ${d.deleted_count ?? '?'} 張｜起始牌組引用清空 ${d.starting_deck_refs_cleared ?? '?'} 筆｜鍛造配方引用清空 ${d.crafting_recipe_refs_cleared ?? '?'} 筆`);
+        if (Array.isArray(d.deleted) && d.deleted.length) {
+          const samples = d.deleted.slice(0, 5).map(r => `${r.code}(${r.name_zh || '—'})`).join('、');
+          log('info', `已刪樣本：${samples}${d.deleted.length > 5 ? ` …（共 ${d.deleted.length} 張）` : ''}`);
+        }
+      } catch (e) {
+        log('err', `fetch 例外：${e.message || e}`, e.stack || String(e));
+        log('err', '提示：若是 TypeError/Failed to fetch，通常是網路或 CORS；若是 timeout，可能 Railway 未部署完成');
+      }
+    }
+
     // wire buttons
     document.getElementById('btnRunAll').onclick = runAll;
     document.getElementById('btnAuth').onclick = test_auth;
@@ -460,6 +569,8 @@
     document.getElementById('btnBridgeTask').onclick = test_bridgeTask;
     document.getElementById('btnClientInfo').onclick = test_clientInfo;
     document.getElementById('btnProbeModels').onclick = test_probeModels;
+    document.getElementById('btnCardCount').onclick = test_cardCount;
+    document.getElementById('btnBulkDeleteLegacy').onclick = test_bulkDeleteLegacy;
     document.getElementById('btnClearLog').onclick = () => { logArea.textContent = ''; };
     document.getElementById('btnCopyLog').onclick = async () => {
       const text = logArea.innerText;

@@ -565,7 +565,7 @@
     };
     const FACTION_ZH = { E:'號令', I:'深淵', S:'鐵證', N:'天啟', T:'解析', F:'聖燼', J:'鐵壁', P:'流影' };
     const ATTR_META = [
-      ['strength','力量','STR'], ['agility','敏捷','AGI'], ['constitution','體質','CON'],
+      ['strength','力量','STR'], ['agility','敏捷','AGI'], ['constitution','體質','CON'], ['reflex','反應','REF'],
       ['intellect','智力','INT'], ['willpower','意志','WIL'], ['perception','感知','PER'],
       ['charisma','魅力','CHA']
     ];
@@ -778,14 +778,14 @@
     // ══════════════════════════════════════════════
     function renderAttrs() {
       const t = state.current;
-      const base = calculateBaseAttributes(t.mbti_code || 'XXXX') || { attrs: {}, freePoints: 5 };
+      const base = calculateBaseAttributes(t.mbti_code || 'XXXX') || { attrs: {}, freePoints: 4 };
       const cur = {};
       for (const [k] of ATTR_META) cur[k] = t['attr_'+k] || 1;
       const sum = ATTR_META.reduce((s,[k]) => s + cur[k], 0);
       const allocated = sum;
-      const free = 18 - (base.totalAllocated || 13);
-      const used = allocated - (base.totalAllocated || 13);
-      $('attr-summary').innerHTML = `<span>基礎總計 <b>${base.totalAllocated||13}</b></span><span>自由已用 <b>${used}</b> / ${free}</span><span>總計 <b>${sum}</b> / 18</span><span>HP ${cur.constitution*2+5}　SAN ${cur.willpower*2+5}</span>`;
+      const free = 18 - (base.totalAllocated || 14);
+      const used = allocated - (base.totalAllocated || 14);
+      $('attr-summary').innerHTML = `<span>基礎總計 <b>${base.totalAllocated||14}</b></span><span>自由已用 <b>${used}</b> / ${free}</span><span>總計 <b>${sum}</b> / 18</span><span>HP ${cur.constitution*2+5}　SAN ${cur.willpower*2+5}</span>`;
       const rows = ATTR_META.map(([k,zh,abbr]) => {
         const b = 1;
         const fac = (base.attrs[k]||1) - 1;

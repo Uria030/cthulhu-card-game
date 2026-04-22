@@ -3,7 +3,7 @@ import { pool } from '../db/pool.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const ATTR_KEYS = [
-  'attr_strength','attr_agility','attr_constitution',
+  'attr_strength','attr_agility','attr_constitution','attr_reflex',
   'attr_intellect','attr_willpower','attr_perception','attr_charisma'
 ];
 
@@ -329,7 +329,7 @@ export const investigatorRoutes: FastifyPluginAsync = async (app) => {
     const b = request.body as any;
     const mbti = b.mbti_code || null;
     let attrs: Record<string, number> = {
-      attr_strength: 1, attr_agility: 1, attr_constitution: 1,
+      attr_strength: 1, attr_agility: 1, attr_constitution: 1, attr_reflex: 1,
       attr_intellect: 1, attr_willpower: 1, attr_perception: 1, attr_charisma: 1,
     };
     if (mbti && /^[EIST NFP JT]{4}$/i.test(mbti)) {
@@ -339,6 +339,7 @@ export const investigatorRoutes: FastifyPluginAsync = async (app) => {
           1 + CASE WHEN main_attr_is('strength',     $1) THEN 3 ELSE 0 END + sub_attr_count('strength',     $1) AS s,
           1 + CASE WHEN main_attr_is('agility',      $1) THEN 3 ELSE 0 END + sub_attr_count('agility',      $1) AS a,
           1 + CASE WHEN main_attr_is('constitution', $1) THEN 3 ELSE 0 END + sub_attr_count('constitution', $1) AS c,
+          1 + CASE WHEN main_attr_is('reflex',       $1) THEN 3 ELSE 0 END + sub_attr_count('reflex',       $1) AS rf,
           1 + CASE WHEN main_attr_is('intellect',    $1) THEN 3 ELSE 0 END + sub_attr_count('intellect',    $1) AS i,
           1 + CASE WHEN main_attr_is('willpower',    $1) THEN 3 ELSE 0 END + sub_attr_count('willpower',    $1) AS w,
           1 + CASE WHEN main_attr_is('perception',   $1) THEN 3 ELSE 0 END + sub_attr_count('perception',   $1) AS p,
@@ -346,7 +347,7 @@ export const investigatorRoutes: FastifyPluginAsync = async (app) => {
       `, [mbti.toUpperCase()]);
       const row = base.rows[0] as any;
       attrs = {
-        attr_strength: row.s, attr_agility: row.a, attr_constitution: row.c,
+        attr_strength: row.s, attr_agility: row.a, attr_constitution: row.c, attr_reflex: row.rf,
         attr_intellect: row.i, attr_willpower: row.w, attr_perception: row.p, attr_charisma: row.ch,
       };
     }
@@ -356,9 +357,9 @@ export const investigatorRoutes: FastifyPluginAsync = async (app) => {
        (code, faction_code, mbti_code, career_index, dominant_letter,
         name_zh, name_en, title_zh, title_en, backstory, ability_text_zh, ability_text_en,
         era_tags, portrait_url,
-        attr_strength, attr_agility, attr_constitution, attr_intellect, attr_willpower, attr_perception, attr_charisma,
+        attr_strength, attr_agility, attr_constitution, attr_reflex, attr_intellect, attr_willpower, attr_perception, attr_charisma,
         is_preset, is_completed)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21, FALSE, FALSE)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22, FALSE, FALSE)
        RETURNING *`,
       [
         code,
@@ -369,7 +370,7 @@ export const investigatorRoutes: FastifyPluginAsync = async (app) => {
         b.name_zh ?? null, b.name_en ?? null, b.title_zh ?? null, b.title_en ?? null,
         b.backstory ?? null, b.ability_text_zh ?? null, b.ability_text_en ?? null,
         b.era_tags ?? null, b.portrait_url ?? null,
-        attrs.attr_strength, attrs.attr_agility, attrs.attr_constitution,
+        attrs.attr_strength, attrs.attr_agility, attrs.attr_constitution, attrs.attr_reflex,
         attrs.attr_intellect, attrs.attr_willpower, attrs.attr_perception, attrs.attr_charisma,
       ]
     );
@@ -429,12 +430,13 @@ export const investigatorRoutes: FastifyPluginAsync = async (app) => {
     if (!row.is_preset) return reply.code(400).send({ error: 'only preset templates can be cleared' });
     const mbti = row.mbti_code as string;
 
-    // 重置屬性為基礎 13 點
+    // 重置屬性為基礎 14 點（v0.2 八屬性：8 基礎 + 主陣營 +3 + 三副陣營各 +1）
     const base = await pool.query(`
       SELECT
         1 + CASE WHEN main_attr_is('strength',     $1) THEN 3 ELSE 0 END + sub_attr_count('strength',     $1) AS s,
         1 + CASE WHEN main_attr_is('agility',      $1) THEN 3 ELSE 0 END + sub_attr_count('agility',      $1) AS a,
         1 + CASE WHEN main_attr_is('constitution', $1) THEN 3 ELSE 0 END + sub_attr_count('constitution', $1) AS c,
+        1 + CASE WHEN main_attr_is('reflex',       $1) THEN 3 ELSE 0 END + sub_attr_count('reflex',       $1) AS rf,
         1 + CASE WHEN main_attr_is('intellect',    $1) THEN 3 ELSE 0 END + sub_attr_count('intellect',    $1) AS i,
         1 + CASE WHEN main_attr_is('willpower',    $1) THEN 3 ELSE 0 END + sub_attr_count('willpower',    $1) AS w,
         1 + CASE WHEN main_attr_is('perception',   $1) THEN 3 ELSE 0 END + sub_attr_count('perception',   $1) AS p,
@@ -452,12 +454,12 @@ export const investigatorRoutes: FastifyPluginAsync = async (app) => {
          backstory=NULL, ability_text_zh=NULL, ability_text_en=NULL,
          era_tags=NULL, portrait_url=NULL,
          proficiency_ids='{}',
-         attr_strength=$2, attr_agility=$3, attr_constitution=$4,
-         attr_intellect=$5, attr_willpower=$6, attr_perception=$7, attr_charisma=$8,
+         attr_strength=$2, attr_agility=$3, attr_constitution=$4, attr_reflex=$5,
+         attr_intellect=$6, attr_willpower=$7, attr_perception=$8, attr_charisma=$9,
          ability_text_value=0, ability_value_source='manual',
          is_completed=FALSE, updated_at=NOW()
        WHERE id=$1`,
-      [id, b.s, b.a, b.c, b.i, b.w, b.p, b.ch]
+      [id, b.s, b.a, b.c, b.rf, b.i, b.w, b.p, b.ch]
     );
     const fresh = await pool.query('SELECT * FROM investigator_templates WHERE id=$1', [id]);
     return reply.send(fresh.rows[0]);
@@ -475,15 +477,15 @@ export const investigatorRoutes: FastifyPluginAsync = async (app) => {
        (code, faction_code, mbti_code, career_index, dominant_letter,
         name_zh, name_en, title_zh, title_en, backstory, ability_text_zh, ability_text_en,
         era_tags, portrait_url, proficiency_ids,
-        attr_strength, attr_agility, attr_constitution, attr_intellect, attr_willpower, attr_perception, attr_charisma,
+        attr_strength, attr_agility, attr_constitution, attr_reflex, attr_intellect, attr_willpower, attr_perception, attr_charisma,
         is_preset, is_completed)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22, FALSE, FALSE)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23, FALSE, FALSE)
        RETURNING *`,
       [
         newCode, src.faction_code, src.mbti_code, src.career_index, src.dominant_letter,
         src.name_zh, src.name_en, src.title_zh, src.title_en, src.backstory, src.ability_text_zh, src.ability_text_en,
         src.era_tags, src.portrait_url, src.proficiency_ids,
-        src.attr_strength, src.attr_agility, src.attr_constitution, src.attr_intellect,
+        src.attr_strength, src.attr_agility, src.attr_constitution, src.attr_reflex, src.attr_intellect,
         src.attr_willpower, src.attr_perception, src.attr_charisma,
       ]
     );

@@ -419,7 +419,7 @@
         <div id="attrTable" class="attr-table"></div>
         <div class="free-points-bar">
           <span class="free-points-label">剩餘自由點數</span>
-          <span id="freePointsDisplay" class="free-points-value has-points">5</span>
+          <span id="freePointsDisplay" class="free-points-value has-points">4</span>
         </div>
         <div class="reset-row">
           <button class="btn btn-danger" onclick="resetFreePoints()">重置自由點數</button>
@@ -509,10 +509,10 @@
       I: 'perception',
       S: 'strength',
       N: 'willpower',
-      T: 'intellect',
+      T: 'agility',
       F: 'willpower',
       J: 'constitution',
-      P: 'agility',
+      P: 'reflex',
     };
 
     // Letter → attribute zh short
@@ -521,15 +521,15 @@
       I: 'PER 感知',
       S: 'STR 力量',
       N: 'WIL 意志',
-      T: 'INT 智力',
+      T: 'AGI 敏捷',
       F: 'WIL 意志',
       J: 'CON 體質',
-      P: 'DEX 敏捷',
+      P: 'REF 反應',
     };
 
-    const ATTR_KEYS = ['strength','agility','constitution','intellect','willpower','perception','charisma'];
+    const ATTR_KEYS = ['strength','agility','constitution','reflex','intellect','willpower','perception','charisma'];
     const MAX_VAL = GAME_RULES.ATTRIBUTE_CREATION_MAX; // 5
-    const TOTAL_FREE = 5;
+    const TOTAL_FREE = 4; // 支柱五 v0.2：八屬性化後自由分配由 5 調整為 4
 
     // State
     let selectedFaction = '';
@@ -553,25 +553,25 @@
         name: '守護者 / 前線型',
         desc: '高體質力量，抗打輸出',
         faction: 'J',
-        free: { strength: 2, constitution: 1, agility: 1, willpower: 1, intellect: 0, perception: 0, charisma: 0 }
+        free: { strength: 2, constitution: 1, agility: 1, reflex: 0, willpower: 0, intellect: 0, perception: 0, charisma: 0 }
       },
       {
         name: '神秘學家 / 法師型',
         desc: '高意志智力，施法核心',
         faction: 'N',
-        free: { willpower: 1, intellect: 2, perception: 1, charisma: 1, strength: 0, agility: 0, constitution: 0 }
+        free: { willpower: 1, intellect: 2, perception: 1, charisma: 0, strength: 0, agility: 0, constitution: 0, reflex: 0 }
       },
       {
         name: '偵探 / 調查型',
         desc: '高感知智力，線索收集',
         faction: 'T',
-        free: { perception: 1, intellect: 1, charisma: 2, agility: 1, strength: 0, constitution: 0, willpower: 0 }
+        free: { perception: 1, intellect: 0, charisma: 2, agility: 1, reflex: 0, strength: 0, constitution: 0, willpower: 0 }
       },
       {
         name: '通才 / 平衡型',
         desc: '均衡配點，泛用角色',
         faction: 'E',
-        free: { strength: 1, agility: 1, constitution: 1, perception: 1, willpower: 1, intellect: 0, charisma: 0 }
+        free: { strength: 1, agility: 1, constitution: 0, reflex: 1, perception: 1, willpower: 0, intellect: 0, charisma: 0 }
       },
     ];
 

@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.13.0+b25';
+const ADMIN_VERSION = '0.14.0+b26';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -83,8 +83,9 @@ const GAME_RULES = {
   ATTRIBUTE_MIN: 1,
   ATTRIBUTE_MAX: 10,
   ATTRIBUTE_CREATION_MAX: 5,
-  CREATION_TOTAL_POINTS: 18,  // GDD05: 18 點創角，差額 5 點由天賦樹補回
-  ATTRIBUTE_COUNT: 7,
+  CREATION_TOTAL_POINTS: 18,  // 支柱五 v0.2: 8 基礎 + 3 主陣營 + 3 副陣營 + 4 自由 = 18
+  CREATION_FREE_POINTS: 4,    // 支柱五 v0.2: 八屬性化後自由分配由 5 調整為 4
+  ATTRIBUTE_COUNT: 8,
   HP_BASE: 5,
   SAN_BASE: 5,
   getMaxHP: (con) => con * 2 + 5,
@@ -100,13 +101,14 @@ const GAME_RULES = {
 };
 
 const ATTRIBUTES = {
-  strength:     { id: 'strength',     zh: '力量', en: 'Strength',     abbr: 'STR' },
-  agility:      { id: 'agility',      zh: '敏捷', en: 'Agility',      abbr: 'DEX' },
-  constitution: { id: 'constitution', zh: '體質', en: 'Constitution', abbr: 'CON' },
-  intellect:    { id: 'intellect',    zh: '智力', en: 'Intellect',    abbr: 'INT' },
-  willpower:    { id: 'willpower',    zh: '意志', en: 'Willpower',    abbr: 'WIL' },
-  perception:   { id: 'perception',   zh: '感知', en: 'Perception',   abbr: 'PER' },
-  charisma:     { id: 'charisma',     zh: '魅力', en: 'Charisma',     abbr: 'CHA' },
+  strength:     { id: 'strength',     zh: '力量', en: 'Strength',     abbr: 'STR', category: 'physical' },
+  agility:      { id: 'agility',      zh: '敏捷', en: 'Agility',      abbr: 'DEX', category: 'physical' },
+  constitution: { id: 'constitution', zh: '體質', en: 'Constitution', abbr: 'CON', category: 'physical' },
+  reflex:       { id: 'reflex',       zh: '反應', en: 'Reflex',       abbr: 'REF', category: 'physical' },
+  intellect:    { id: 'intellect',    zh: '智力', en: 'Intellect',    abbr: 'INT', category: 'mental'   },
+  willpower:    { id: 'willpower',    zh: '意志', en: 'Willpower',    abbr: 'WIL', category: 'mental'   },
+  perception:   { id: 'perception',   zh: '感知', en: 'Perception',   abbr: 'PER', category: 'mental'   },
+  charisma:     { id: 'charisma',     zh: '魅力', en: 'Charisma',     abbr: 'CHA', category: 'mental'   },
 };
 
 const FACTIONS = {
@@ -120,16 +122,16 @@ const FACTIONS = {
   P: { code: 'P', zh: '流影', en: 'The Flux',    color: '#2D8B6F' },
 };
 
-// 依支柱五 §1.2 修正案：I 與 T 共享 intellect（八陣營對七屬性必有一組共享）
+// 支柱一 v0.2：八陣營主屬性與八屬性一對一對應，T 智力→敏捷、P 敏捷→反應，全部 isShared:false
 const FACTION_ATTRIBUTE_MAP = {
   E: { attribute: 'charisma',     isShared: false },
-  I: { attribute: 'intellect',    isShared: true  },
+  I: { attribute: 'intellect',    isShared: false },
   S: { attribute: 'perception',   isShared: false },
   N: { attribute: 'willpower',    isShared: false },
-  T: { attribute: 'intellect',    isShared: true  },
+  T: { attribute: 'agility',      isShared: false },
   F: { attribute: 'strength',     isShared: false },
   J: { attribute: 'constitution', isShared: false },
-  P: { attribute: 'agility',      isShared: false },
+  P: { attribute: 'reflex',       isShared: false },
 };
 
 const MBTI_TYPES = {
@@ -151,12 +153,12 @@ const MBTI_TYPES = {
   ESFP: { code: 'ESFP', zh: '表演者',   en: 'Entertainer',  group: 'Explorers' },
 };
 
-// 依四字碼計算屬性基礎 13 點：基礎 7 + 主陣營主屬性 +3 + 三副陣營各 +1
+// 依四字碼計算屬性基礎 14 點：基礎 8（八屬性各 1）+ 主陣營主屬性 +3 + 三副陣營各 +1
 // 回傳：{ attrs, totalAllocated, freePoints } — freePoints 為剩餘自由分配點數（目標 18）
 function calculateBaseAttributes(mbti) {
   if (!mbti || mbti.length !== 4) return null;
   const attrs = {
-    strength: 1, agility: 1, constitution: 1,
+    strength: 1, agility: 1, constitution: 1, reflex: 1,
     intellect: 1, willpower: 1, perception: 1, charisma: 1
   };
   const letters = mbti.split('');

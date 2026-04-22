@@ -333,6 +333,7 @@
               <div class="form-group"><label>力量</label><input type="number" id="f_am_strength" value="" min="-5" max="5" placeholder="—"></div>
               <div class="form-group"><label>敏捷</label><input type="number" id="f_am_agility" value="" min="-5" max="5" placeholder="—"></div>
               <div class="form-group"><label>體質</label><input type="number" id="f_am_constitution" value="" min="-5" max="5" placeholder="—"></div>
+              <div class="form-group"><label>反應</label><input type="number" id="f_am_reflex" value="" min="-5" max="5" placeholder="—"></div>
               <div class="form-group"><label>智力</label><input type="number" id="f_am_intellect" value="" min="-5" max="5" placeholder="—"></div>
               <div class="form-group"><label>意志</label><input type="number" id="f_am_willpower" value="" min="-5" max="5" placeholder="—"></div>
               <div class="form-group"><label>感知</label><input type="number" id="f_am_perception" value="" min="-5" max="5" placeholder="—"></div>
@@ -356,6 +357,7 @@
               <div class="commit-attr-row" data-attr="strength"><span style="font-size:0.75rem;width:80px;display:inline-block;">力量 (STR)</span><button type="button" class="btn" onclick="stepCommitAttr('strength',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_strength">0</span><button type="button" class="btn" onclick="stepCommitAttr('strength',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_strength">0V</span></div>
               <div class="commit-attr-row" data-attr="agility"><span style="font-size:0.75rem;width:80px;display:inline-block;">敏捷 (AGI)</span><button type="button" class="btn" onclick="stepCommitAttr('agility',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_agility">0</span><button type="button" class="btn" onclick="stepCommitAttr('agility',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_agility">0V</span></div>
               <div class="commit-attr-row" data-attr="constitution"><span style="font-size:0.75rem;width:80px;display:inline-block;">體質 (CON)</span><button type="button" class="btn" onclick="stepCommitAttr('constitution',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_constitution">0</span><button type="button" class="btn" onclick="stepCommitAttr('constitution',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_constitution">0V</span></div>
+              <div class="commit-attr-row" data-attr="reflex"><span style="font-size:0.75rem;width:80px;display:inline-block;">反應 (REF)</span><button type="button" class="btn" onclick="stepCommitAttr('reflex',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_reflex">0</span><button type="button" class="btn" onclick="stepCommitAttr('reflex',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_reflex">0V</span></div>
               <div class="commit-attr-row" data-attr="intellect"><span style="font-size:0.75rem;width:80px;display:inline-block;">智力 (INT)</span><button type="button" class="btn" onclick="stepCommitAttr('intellect',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_intellect">0</span><button type="button" class="btn" onclick="stepCommitAttr('intellect',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_intellect">0V</span></div>
               <div class="commit-attr-row" data-attr="willpower"><span style="font-size:0.75rem;width:80px;display:inline-block;">意志 (WIL)</span><button type="button" class="btn" onclick="stepCommitAttr('willpower',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_willpower">0</span><button type="button" class="btn" onclick="stepCommitAttr('willpower',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_willpower">0V</span></div>
               <div class="commit-attr-row" data-attr="perception"><span style="font-size:0.75rem;width:80px;display:inline-block;">感知 (PER)</span><button type="button" class="btn" onclick="stepCommitAttr('perception',-1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">-</button><span class="commit-attr-val" id="ci_perception">0</span><button type="button" class="btn" onclick="stepCommitAttr('perception',1)" style="padding:0.1rem 0.4rem;font-size:0.75rem;">+</button><span class="eff-value-tag commit-attr-v" id="civ_perception">0V</span></div>
@@ -675,7 +677,7 @@
   /* ── Commit Icons (attribute icon system) ── */
   const SINGLE_ATTR_VALUE = { 0:0, 1:0.5, 2:1.5, 3:3, 4:5, 5:7.5, 6:10 };
   const WILD_ATTR_VALUE = { 0:0, 1:1, 2:3, 3:6, 4:9, 5:13.5 };
-  const COMMIT_ATTRS = ['strength','agility','constitution','intellect','willpower','perception','charisma'];
+  const COMMIT_ATTRS = ['strength','agility','constitution','reflex','intellect','willpower','perception','charisma'];
 
   function getCommitIcons() {
     if (el('f_commit_wild')?.checked) {
@@ -2151,7 +2153,7 @@
     // Clear all
     el('f_attrmod_single_val').value = 0;
     el('f_am_all').value = 0;
-    ['strength','agility','constitution','intellect','willpower','perception','charisma'].forEach(a => { const inp = el('f_am_' + a); if (inp) inp.value = ''; });
+    ['strength','agility','constitution','reflex','intellect','willpower','perception','charisma'].forEach(a => { const inp = el('f_am_' + a); if (inp) inp.value = ''; });
 
     if (mods.all !== undefined) {
       document.querySelector('input[name="attrModMode"][value="all"]').checked = true;
@@ -2183,7 +2185,7 @@
     }
     if (mode === 'multi') {
       const result = {};
-      ['strength','agility','constitution','intellect','willpower','perception','charisma'].forEach(a => {
+      ['strength','agility','constitution','reflex','intellect','willpower','perception','charisma'].forEach(a => {
         const inp = el('f_am_' + a);
         if (inp && inp.value !== '') result[a] = parseInt(inp.value) || 0;
       });
@@ -2298,7 +2300,7 @@
     // Commit icons preview
     const ci = getCommitIcons();
     const ciParts = [];
-    const attrAbbr = { strength:'力', agility:'敏', constitution:'體', intellect:'智', willpower:'意', perception:'感', charisma:'魅', all:'萬能' };
+    const attrAbbr = { strength:'力', agility:'敏', constitution:'體', reflex:'反', intellect:'智', willpower:'意', perception:'感', charisma:'魅', all:'萬能' };
     for (const [k, v] of Object.entries(ci)) {
       if (v > 0) ciParts.push(`[${attrAbbr[k]||k}]×${v}`);
     }
@@ -2670,7 +2672,7 @@ ${userDescription}
 
     // Validate attribute_modifiers
     if (d.attribute_modifiers && typeof d.attribute_modifiers === 'object') {
-      const validKeys = ['strength','agility','constitution','intellect','willpower','perception','charisma','all'];
+      const validKeys = ['strength','agility','constitution','reflex','intellect','willpower','perception','charisma','all'];
       for (const key of Object.keys(d.attribute_modifiers)) {
         if (!validKeys.includes(key)) { delete d.attribute_modifiers[key]; continue; }
         const val = d.attribute_modifiers[key];

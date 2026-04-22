@@ -446,7 +446,7 @@ function validateAndFixCardData(d) {
   }
 
   if (d.attribute_modifiers && typeof d.attribute_modifiers === 'object') {
-    const validKeys = ['strength','agility','constitution','intellect','willpower','perception','charisma','all'];
+    const validKeys = ['strength','agility','constitution','reflex','intellect','willpower','perception','charisma','all'];
     for (const key of Object.keys(d.attribute_modifiers)) {
       if (!validKeys.includes(key)) { delete d.attribute_modifiers[key]; continue; }
       const val = d.attribute_modifiers[key];

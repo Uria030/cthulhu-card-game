@@ -2487,6 +2487,66 @@ CREATE TABLE IF NOT EXISTS random_dungeon_generators (
 `;
 
 // ============================================
+// Migration 019: 支柱一 v0.2 八屬性化連動
+// - 新增「反應」屬性 (reflex, 肉體類)
+// - 八陣營主屬性一對一對應：T 智力→敏捷、P 敏捷→反應（I、T 不再共享智力）
+// - investigator_templates 新增 attr_reflex 欄
+// - 骨架模板依新 faction_attribute_map 重算八屬性
+// - 總和約束改為八屬性總和（NOT VALID 避開既有資料）
+// ============================================
+const MIGRATION_019_SQL = `
+-- 0. 更新 faction_attribute_map：T→agility、P→reflex、I/F/T 全部 is_shared=FALSE
+UPDATE faction_attribute_map
+   SET main_attribute='agility', is_shared=FALSE,
+       note='戰場流體智力：即時計算彈道、瞬間判斷（v0.2 由 intellect 改為 agility）'
+ WHERE faction_code='T';
+
+UPDATE faction_attribute_map
+   SET main_attribute='reflex', is_shared=FALSE,
+       note='對外界刺激的瞬間應對，直接呼應陣營被動「每回合額外 1 次反應行動」（v0.2 由 agility 改為 reflex）'
+ WHERE faction_code='P';
+
+UPDATE faction_attribute_map
+   SET is_shared=FALSE,
+       note='凝視深淵需要深邃思維（結晶智力：累積的禁忌知識）'
+ WHERE faction_code='I';
+
+-- 1. 既有 CHECK 約束移除（將被八屬性版本取代）
+ALTER TABLE investigator_templates DROP CONSTRAINT IF EXISTS chk_inv_total_points;
+
+-- 2. 新增 attr_reflex 欄位（DEFAULT 1，與八屬性基礎值一致）
+ALTER TABLE investigator_templates
+  ADD COLUMN IF NOT EXISTS attr_reflex INTEGER NOT NULL DEFAULT 1
+  CHECK (attr_reflex BETWEEN 1 AND 5);
+
+-- 3. 對「骨架」預設模板（is_preset=TRUE AND is_completed=FALSE）以新 faction_attribute_map 重算八屬性
+UPDATE investigator_templates SET
+  attr_strength     = 1 + CASE WHEN main_attr_is('strength',     mbti_code) THEN 3 ELSE 0 END + sub_attr_count('strength',     mbti_code),
+  attr_agility      = 1 + CASE WHEN main_attr_is('agility',      mbti_code) THEN 3 ELSE 0 END + sub_attr_count('agility',      mbti_code),
+  attr_constitution = 1 + CASE WHEN main_attr_is('constitution', mbti_code) THEN 3 ELSE 0 END + sub_attr_count('constitution', mbti_code),
+  attr_reflex       = 1 + CASE WHEN main_attr_is('reflex',       mbti_code) THEN 3 ELSE 0 END + sub_attr_count('reflex',       mbti_code),
+  attr_intellect    = 1 + CASE WHEN main_attr_is('intellect',    mbti_code) THEN 3 ELSE 0 END + sub_attr_count('intellect',    mbti_code),
+  attr_willpower    = 1 + CASE WHEN main_attr_is('willpower',    mbti_code) THEN 3 ELSE 0 END + sub_attr_count('willpower',    mbti_code),
+  attr_perception   = 1 + CASE WHEN main_attr_is('perception',   mbti_code) THEN 3 ELSE 0 END + sub_attr_count('perception',   mbti_code),
+  attr_charisma     = 1 + CASE WHEN main_attr_is('charisma',     mbti_code) THEN 3 ELSE 0 END + sub_attr_count('charisma',     mbti_code)
+WHERE is_preset = TRUE AND is_completed = FALSE;
+
+-- 4. 加回總和約束（八屬性版）
+--    完成時總和必為 18；骨架允許 14-18
+--    使用 NOT VALID 避免既有自建/已完成模板（如有）被擋下；新操作仍會被檢查。
+ALTER TABLE investigator_templates
+  ADD CONSTRAINT chk_inv_total_points CHECK (
+    CASE WHEN is_completed THEN
+      (attr_strength + attr_agility + attr_constitution + attr_reflex +
+       attr_intellect + attr_willpower + attr_perception + attr_charisma) = 18
+    ELSE
+      (attr_strength + attr_agility + attr_constitution + attr_reflex +
+       attr_intellect + attr_willpower + attr_perception + attr_charisma) BETWEEN 14 AND 18
+    END
+  ) NOT VALID;
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -2655,6 +2715,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_016_SQL);
     await client.query(MIGRATION_017_SQL);
     await client.query(MIGRATION_018_SQL);
+    await client.query(MIGRATION_019_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

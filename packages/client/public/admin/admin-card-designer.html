@@ -2694,6 +2694,35 @@ ${userDescription}
         }
       }
     }
+
+    // 卡片敘述文法規範 v0.2（s06）：低風險自動修正 + 禁用詞掃描
+    if (typeof window.normalizeCardText === 'function') {
+      if (d.name_zh) d.name_zh = window.normalizeCardText(d.name_zh);
+      if (d.description_zh) d.description_zh = window.normalizeCardText(d.description_zh);
+      if (d.flavor_text) d.flavor_text = window.normalizeCardText(d.flavor_text);
+      if (Array.isArray(d.effects)) {
+        for (const eff of d.effects) {
+          if (eff.desc_zh) eff.desc_zh = window.normalizeCardText(eff.desc_zh);
+        }
+      }
+    }
+    if (typeof window.scanForbiddenTerms === 'function') {
+      const warnFields = [];
+      const scan = (label, txt) => {
+        if (!txt) return;
+        const w = window.scanForbiddenTerms(txt);
+        if (w.length) warnFields.push({ label, warnings: w });
+      };
+      scan('name_zh', d.name_zh);
+      scan('description_zh', d.description_zh);
+      scan('flavor_text', d.flavor_text);
+      if (Array.isArray(d.effects)) d.effects.forEach((e, i) => scan('effects[' + i + '].desc_zh', e.desc_zh));
+      if (warnFields.length) {
+        console.warn('[規範掃描 v0.2]', warnFields);
+        d._style_warnings = warnFields;
+      }
+    }
+
     return d;
   }
 

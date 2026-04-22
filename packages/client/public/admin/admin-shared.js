@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.14.0+b26';
+const ADMIN_VERSION = '0.14.1+b27';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -905,3 +905,85 @@ function closeModuleHelp() {
 window.openModuleHelp = openModuleHelp;
 window.closeModuleHelp = closeModuleHelp;
 window._switchHelpTab = _switchHelpTab;
+
+// ============================================
+// 卡片敘述文法規範 v0.2（s06）：低風險自動修正 + 禁用詞掃描
+// ============================================
+// 規範依據：rulebook/s06_card_text_style.md Part 3 §7.1（低風險自動修正）+ Part 1 §3-5（禁用詞）。
+// 原則：只對「明確句型邊界」做替換；不碰可能是卡名/風味/目標用語的情境（例如「一位調查員」中的「調查員」是目標詞，禁止替換）。
+
+const CARD_TEXT_FORBIDDEN_TERMS = {
+  // 主詞錯誤（明確語境才替換；「調查員」作為 target 是合法的，故不列入）
+  '該玩家': '你',
+  '我方': '你的',
+  '我的': '你的',
+  // 連接詞（句型重構類）
+  '否則': '請改用「如果失敗,...」獨立句',
+  '反之': '請改用另起獨立「如果 X,...」句',
+  '及': '和',
+  '跟': '和',
+  // 傷害/恢復動詞
+  '打他': '造成',
+  '扣血': '造成 N 點傷害',
+  '扣掉': '造成',
+  '補血': '治癒 N 點傷害',
+  '補理智': '治癒 N 點恐懼',
+  '療傷': '治癒 N 點傷害',
+  // 狀態操作
+  '橫置': '消耗',
+  '冷卻': '消耗',
+  // 八屬性化前的殘留術語
+  '七屬性': '八屬性',
+  '七大屬性': '八大屬性',
+  '反射神經': '反應',
+  // 取消/忽略/預防混用
+  '無視該次': '（Cancel 用「取消」/Ignore 用「忽略」/Prevent 用「預防」,視語意選擇）',
+};
+
+/**
+ * 低風險自動修正（規範 Part 3 §7.1）：僅做「風險低」類替換,不碰句型結構。
+ * @param {string} text
+ * @returns {string}
+ */
+function normalizeCardText(text) {
+  if (!text || typeof text !== 'string') return text;
+  let out = text;
+
+  // 1. 半形減號「-」→ 全形減號「−」(規範 Part 3 §2.4)
+  //    僅限「空白或標點 + 減號 + 數字」的明確修正值情境,避免誤動英文專有名詞
+  out = out.replace(/([\s:：,，(（+\-])-(\d)/g, (_m, pre, d) => pre + '−' + d);
+  out = out.replace(/^-(\d)/g, '−$1');
+
+  // 2. 中文數字量詞 → 阿拉伯數字（規範 Part 3 §2.1 / §2.2）
+  //    僅限「數字 + 點/張/次/個」的明確量詞情境
+  const CJK_NUM = { '零': '0', '一': '1', '兩': '2', '二': '2', '三': '3', '四': '4', '五': '5', '六': '6', '七': '7', '八': '8', '九': '9', '十': '10' };
+  out = out.replace(/([零一兩二三四五六七八九十])(點|張|次|個|名|位)/g, (_m, n, u) => (CJK_NUM[n] || n) + ' ' + u);
+
+  // 3. 全形阿拉伯數字 → 半形阿拉伯數字（規範 Part 3 §2.1）
+  out = out.replace(/[0-9]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+
+  return out;
+}
+
+/**
+ * 掃描卡片敘述中的禁用詞（規範 Part 1 §3-5),回傳警告清單。
+ * 不修改原文,由呼叫端決定要不要顯示 / 阻擋儲存。
+ * @param {string} text
+ * @returns {Array<{term: string, suggestion: string, index: number}>}
+ */
+function scanForbiddenTerms(text) {
+  if (!text || typeof text !== 'string') return [];
+  const warnings = [];
+  for (const [bad, good] of Object.entries(CARD_TEXT_FORBIDDEN_TERMS)) {
+    let idx = text.indexOf(bad);
+    while (idx !== -1) {
+      warnings.push({ term: bad, suggestion: good, index: idx });
+      idx = text.indexOf(bad, idx + bad.length);
+    }
+  }
+  return warnings;
+}
+
+window.normalizeCardText = normalizeCardText;
+window.scanForbiddenTerms = scanForbiddenTerms;
+window.CARD_TEXT_FORBIDDEN_TERMS = CARD_TEXT_FORBIDDEN_TERMS;

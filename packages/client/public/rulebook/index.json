@@ -1,6 +1,6 @@
 {
-  "version": "v02",
-  "frozen_at": "2026-04-19",
+  "version": "v03",
+  "frozen_at": "2026-04-22",
   "sections": [
     {
       "id": "rulebook",
@@ -24,7 +24,8 @@
         { "file": "s02_mythos_terms.md", "title": "克蘇魯神話專有名詞對照表 v0.1", "lines": 185 },
         { "file": "s03_card_design_spec.md", "title": "卡片設計規範 v0.2", "lines": 518 },
         { "file": "s04_card_value_spec.md", "title": "卡片價值計算規範 v1.1 修正案", "lines": 634 },
-        { "file": "s05_faction_pillars.md", "title": "支柱一 · 陣營與構築 v0.1（八陣營極完整定義）", "lines": 268 }
+        { "file": "s05_faction_pillars.md", "title": "支柱一 · 陣營與構築 v0.1（八陣營極完整定義）", "lines": 268 },
+        { "file": "s06_card_text_style.md", "title": "卡片敘述文法規範 v0.2（三 Part 合併：基礎 / 句型 / 進階）", "lines": 1464 }
       ]
     },
     {

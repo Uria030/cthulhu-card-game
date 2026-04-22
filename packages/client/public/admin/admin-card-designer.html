@@ -173,13 +173,6 @@
         <select id="filterType"><option value="">全部類別</option></select>
         <select id="filterCombatStyle"><option value="">全部戰鬥風格</option></select>
       </div>
-      <div id="bulkBar" style="display:flex;flex-wrap:wrap;gap:0.25rem;padding:0.4rem 0.5rem;margin:0.35rem 0;border:1px solid var(--border);border-radius:4px;background:var(--bg-primary);font-size:0.7rem;">
-        <span id="bulkSelCount" style="align-self:center;color:var(--text-secondary);margin-right:auto;">已選 0 張</span>
-        <button type="button" class="btn" onclick="bulkSelectAll()" style="padding:0.15rem 0.4rem;font-size:0.7rem;">全選</button>
-        <button type="button" class="btn" onclick="bulkSelectNonTalisman()" style="padding:0.15rem 0.4rem;font-size:0.7rem;" title="選取所有非法器的舊卡（保留 9 張範本法器）">非法器全選</button>
-        <button type="button" class="btn" onclick="bulkClearSelection()" style="padding:0.15rem 0.4rem;font-size:0.7rem;">清除選取</button>
-        <button type="button" class="btn" onclick="bulkDeleteSelected()" id="bulkDelBtn" disabled style="padding:0.15rem 0.4rem;font-size:0.7rem;border-color:#c62828;color:#c62828;">🗑 刪除選取</button>
-      </div>
       <div id="cardList"></div>
       <div class="list-stats" id="listStats">0 張卡片</div>
     </div>
@@ -1396,8 +1389,6 @@
   }
 
   /* ── Card List ── */
-  const selectedIds = new Set();
-
   function renderList() {
     const search = el('searchInput').value.toLowerCase();
     const fFac = el('filterFaction').value;
@@ -1417,116 +1408,22 @@
       const facLabel = c.faction === 'neutral' ? '中立' : (FACTIONS[c.faction]?.zh || c.faction);
       const typeLabel = CARD_TYPES[c.type]?.zh || c.type;
       const isActive = c.id === editingId ? ' active' : '';
-      const isChecked = selectedIds.has(c.id) ? ' checked' : '';
       let badges = '';
       if (c.is_signature) badges += '<span class="mini-tag" style="border-color:var(--gold);color:var(--gold)">簽名</span>';
       if (c.is_weakness) badges += '<span class="mini-tag" style="border-color:var(--danger);color:var(--danger)">弱點</span>';
       if (c.is_exceptional) badges += '<span class="mini-tag" style="border-color:var(--gold-dim);color:var(--gold-dim)">Exceptional</span>';
       if (c.is_revelation) badges += '<span class="mini-tag" style="border-color:var(--oracle);color:var(--oracle)">神啟</span>';
       if (c.is_talisman) badges += '<span class="mini-tag" style="border-color:#6D4C41;color:#6D4C41">法器</span>';
-      return `<div class="card-list-item${isActive}" style="display:flex;align-items:flex-start;gap:0.4rem;">
-        <input type="checkbox" class="bulk-sel" data-id="${c.id}"${isChecked} onclick="event.stopPropagation(); toggleCardSelect('${c.id}')" style="margin-top:0.15rem;cursor:pointer;">
-        <div style="flex:1;cursor:pointer;" onclick="loadCard('${c.id}')">
-          <div class="item-name">${c.name_zh || '(未命名)'}</div>
-          <div class="item-code">${c.code || '—'}</div>
-          <div class="item-tags">
-            <span class="mini-tag" style="border-color:${FACTIONS[c.faction]?.color || 'var(--border)'};color:${FACTIONS[c.faction]?.color || 'var(--text-secondary)'}">${facLabel}</span>
-            <span class="mini-tag">${typeLabel}</span>${badges}
-          </div>
+      return `<div class="card-list-item${isActive}" onclick="loadCard('${c.id}')">
+        <div class="item-name">${c.name_zh || '(未命名)'}</div>
+        <div class="item-code">${c.code || '—'}</div>
+        <div class="item-tags">
+          <span class="mini-tag" style="border-color:${FACTIONS[c.faction]?.color || 'var(--border)'};color:${FACTIONS[c.faction]?.color || 'var(--text-secondary)'}">${facLabel}</span>
+          <span class="mini-tag">${typeLabel}</span>${badges}
         </div>
       </div>`;
     }).join('');
     el('listStats').textContent = `${filtered.length} / ${cards.length} 張卡片`;
-    updateBulkBar();
-  }
-
-  function updateBulkBar() {
-    const n = selectedIds.size;
-    const cntEl = el('bulkSelCount');
-    const btn = el('bulkDelBtn');
-    if (cntEl) cntEl.textContent = `已選 ${n} 張`;
-    if (btn) btn.disabled = n === 0;
-  }
-
-  function toggleCardSelect(id) {
-    if (selectedIds.has(id)) selectedIds.delete(id);
-    else selectedIds.add(id);
-    updateBulkBar();
-  }
-
-  function bulkSelectAll() {
-    // 只選當前可見（符合篩選）的卡片
-    const search = el('searchInput').value.toLowerCase();
-    const fFac = el('filterFaction').value;
-    const fSty = el('filterStyle').value;
-    const fTyp = el('filterType').value;
-    const fCS = el('filterCombatStyle').value;
-    for (const c of cards) {
-      if (search && !(c.name_zh||'').toLowerCase().includes(search) && !(c.name_en||'').toLowerCase().includes(search) && !(c.code||'').toLowerCase().includes(search)) continue;
-      if (fFac && c.faction !== fFac) continue;
-      if (fSty && c.style !== fSty) continue;
-      if (fTyp && c.type !== fTyp) continue;
-      if (fCS && c.combat_style !== fCS) continue;
-      selectedIds.add(c.id);
-    }
-    renderList();
-  }
-
-  function bulkSelectNonTalisman() {
-    // 選取所有 is_talisman=false 的卡片（保留 9 張範本法器）
-    for (const c of cards) {
-      if (!c.is_talisman) selectedIds.add(c.id);
-    }
-    renderList();
-  }
-
-  function bulkClearSelection() {
-    selectedIds.clear();
-    renderList();
-  }
-
-  async function bulkDeleteSelected() {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-    const confirmWord = `DELETE ${ids.length}`;
-    const input = prompt(
-      `將從資料庫永久刪除 ${ids.length} 張卡片（含其效果、起始牌組引用、鍛造配方引用會自動清空）。\n\n` +
-      `⚠ 此操作無法復原。\n\n` +
-      `若確定執行，請在下方輸入：\n${confirmWord}`
-    );
-    if (input !== confirmWord) {
-      alert('輸入不一致，已取消刪除。');
-      return;
-    }
-    try {
-      const res = await adminFetch(ADMIN_API_BASE + '/api/cards/bulk-delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert('刪除失敗：' + (err.error || res.status) + (err.dbError?.detail ? '\n\n' + err.dbError.detail : ''));
-        return;
-      }
-      const j = await res.json();
-      const d = j.data || {};
-      alert(
-        `✓ 已刪除 ${d.deleted_count ?? 0} 張卡片\n` +
-        `起始牌組引用清空：${d.starting_deck_refs_cleared ?? 0} 筆\n` +
-        `鍛造配方引用清空：${d.crafting_recipe_refs_cleared ?? 0} 筆`
-      );
-      selectedIds.clear();
-      // 若刪除包含正在編輯的卡，清空表單
-      if (editingId && ids.includes(editingId)) {
-        clearForm();
-        editingId = null;
-      }
-      await loadCards();
-      renderList();
-    } catch (err) {
-      alert('刪除失敗：' + (err.message || err));
-    }
   }
 
   /* ── Load / Collect / Save ── */

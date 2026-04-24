@@ -14,7 +14,10 @@ window.buildCardGeminiPrompt = function(userDescription, options) {
     var batchOutputNote = isBatch
       ? ('\n\n## 十一、批次輸出格式（batchCount=' + batchCount + '）\n批次模式必須回傳一個 JSON 物件 `{ "cards": [ ... ] }`，陣列內放 ' + batchCount + ' 張卡片，每張卡遵循下方第九部定義的 JSON 結構。不要回傳單一卡片物件，不要外層加 markdown fence。\n')
       : '';
-    return `你是一個克蘇魯神話卡牌遊戲的卡片設計師。請根據以下完整規則和使用者需求，生成${plural}**數值平衡**的卡片。${batchOutputNote}
+    var existingCardsBlock = (opts.existingCardsContext && String(opts.existingCardsContext).trim())
+      ? ('\n\n## 負一、既有卡池上下文（**不要重複，不要衝突**）\n\n以下是目前資料庫內與本次需求相關的既有卡片。你生成的新卡必須：\n1. **不得重名** name_zh：新卡 name_zh 一律避開上清單出現過的卡名（包含近似名，例如「老警長的配槍」已存在時，「老警長的配槍 II」也算同名衝突，請換一個有辨識度的新名）\n2. **不得重疊軸向指認句型**：如果某張既有卡已經用「在你打出另一張 X 卡時...」觸發 A 效果，新卡就不要也寫 A 效果（要補位其他效果）\n3. **補空白而非堆疊**：以下清單的分佈已經告訴你「哪些等級/費用/類型已經飽和」，新卡要填空白（例：如果 LV2 資產卡已 3 張，優先生 LV3 或事件/技能類型）\n4. **同主軸系列要有設計呼應**：維持風味連貫，但機制切角要互補（前排/後排/支援/反應/消費...）\n\n' + String(opts.existingCardsContext).trim() + '\n')
+      : '';
+    return `你是一個克蘇魯神話卡牌遊戲的卡片設計師。請根據以下完整規則和使用者需求，生成${plural}**數值平衡**的卡片。${batchOutputNote}${existingCardsBlock}
 
 ## 零、價值計算系統（最重要）
 

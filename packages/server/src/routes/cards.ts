@@ -7,10 +7,10 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', requireAuth);
 
   // ── GET /api/cards ── list with filters
-  app.get<{ Querystring: { faction?: string; style?: string; type?: string; search?: string; series?: string; combat_style?: string } }>(
+  app.get<{ Querystring: { faction?: string; style?: string; type?: string; search?: string; series?: string; combat_style?: string; primary_axis_layer?: string; primary_axis_value?: string; is_talisman?: string } }>(
     '/api/cards',
     async (request, reply) => {
-      const { faction, style, type, search, series, combat_style } = request.query;
+      const { faction, style, type, search, series, combat_style, primary_axis_layer, primary_axis_value, is_talisman } = request.query;
       let query = `
         SELECT c.*,
           COALESCE(json_agg(e.* ORDER BY e.sort_order) FILTER (WHERE e.id IS NOT NULL), '[]') AS effects
@@ -25,6 +25,10 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
       if (type) { conditions.push(`c.card_type = $${pi++}`); params.push(type); }
       if (series) { conditions.push(`c.series = $${pi++}`); params.push(series); }
       if (combat_style) { conditions.push(`c.combat_style = $${pi++}`); params.push(combat_style); }
+      if (primary_axis_layer) { conditions.push(`c.primary_axis_layer = $${pi++}`); params.push(primary_axis_layer); }
+      if (primary_axis_value) { conditions.push(`c.primary_axis_value = $${pi++}`); params.push(primary_axis_value); }
+      if (is_talisman === 'true') { conditions.push(`c.is_talisman = TRUE`); }
+      if (is_talisman === 'false') { conditions.push(`c.is_talisman = FALSE`); }
       if (search) { conditions.push(`(c.name_zh ILIKE $${pi} OR c.name_en ILIKE $${pi} OR c.code ILIKE $${pi})`); params.push(`%${search}%`); pi++; }
       if (conditions.length) query += ` WHERE ${conditions.join(' AND ')}`;
       query += ` GROUP BY c.id ORDER BY c.code ASC`;

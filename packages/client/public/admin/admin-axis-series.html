@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>主軸系列編輯器 — AXIS</title>
+  <link rel="stylesheet" href="admin-shared.css" />
+  <style>
+    .axis-container { padding: 1rem; max-width: 1400px; margin: 0 auto; }
+    .axis-header { margin-bottom: 1rem; }
+    .axis-header h1 { margin: 0 0 0.25rem 0; font-size: 1.3rem; }
+    .axis-header p { margin: 0; font-size: 0.8rem; color: var(--text-secondary); }
+
+    .summary-row {
+      display: flex; gap: 1rem; flex-wrap: wrap;
+      padding: 0.75rem; background: var(--bg-secondary);
+      border: 1px solid var(--border); border-radius: 4px;
+      margin-bottom: 1rem; font-size: 0.85rem;
+    }
+    .summary-row .stat { display: flex; gap: 0.5rem; align-items: center; }
+    .summary-row .stat strong { font-size: 1.1rem; color: var(--text-primary); }
+
+    .matrix-panel {
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 4px; padding: 0.75rem; margin-bottom: 1rem;
+    }
+    .matrix-panel h2 { margin: 0 0 0.5rem 0; font-size: 0.95rem; }
+    .matrix-panel .sub-hint { font-size: 0.7rem; color: var(--text-tertiary); margin-bottom: 0.5rem; }
+    .matrix-grid {
+      display: grid; grid-template-columns: 100px repeat(3, 1fr); gap: 4px;
+      font-size: 0.75rem;
+    }
+    .matrix-grid .head {
+      padding: 0.4rem 0.3rem; text-align: center;
+      background: #1a1a1a; color: var(--text-secondary); border-radius: 3px;
+    }
+    .matrix-grid .row-head {
+      padding: 0.4rem 0.3rem; text-align: right;
+      background: #1a1a1a; color: var(--text-secondary); border-radius: 3px;
+    }
+    .matrix-cell {
+      padding: 0.6rem 0.3rem; text-align: center; border-radius: 3px;
+      background: #222; border: 1px solid #333; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .matrix-cell:hover { background: #2e2e2e; border-color: #4a7fa0; }
+    .matrix-cell .n { font-size: 1.1rem; font-weight: 600; color: #fff; }
+    .matrix-cell .label { font-size: 0.65rem; color: var(--text-tertiary); margin-top: 0.2rem; }
+    .matrix-cell[data-count="0"] .n { color: #555; }
+    .matrix-cell[data-count="0"] { background: #181818; }
+    .matrix-cell.active { border-color: #d4a95a; background: #2d1f0a; }
+
+    .axis-section {
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 4px; padding: 0.75rem; margin-bottom: 0.75rem;
+    }
+    .axis-section-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 0.5rem; gap: 0.5rem; flex-wrap: wrap;
+    }
+    .axis-section-head .layer-tag {
+      display: inline-block; padding: 2px 6px; font-size: 0.65rem;
+      border-radius: 3px; color: #fff;
+    }
+    .layer-none { background: #555; }
+    .layer-faction { background: #4a6880; }
+    .layer-combat_style { background: #5a7f4a; }
+    .layer-proficiency { background: #8a6f3a; }
+    .layer-card_name { background: #9a4a4a; }
+    .layer-talisman_type { background: #8a4a8a; }
+    .axis-title {
+      font-weight: 600; font-size: 0.9rem; display: inline-block;
+    }
+    .axis-count {
+      font-size: 0.75rem; color: var(--text-secondary);
+    }
+    .axis-cards {
+      margin: 0; padding: 0; list-style: none; font-size: 0.75rem;
+    }
+    .axis-cards li {
+      padding: 3px 6px; border-bottom: 1px solid #222;
+      display: flex; gap: 8px; align-items: center;
+    }
+    .axis-cards li:last-child { border-bottom: none; }
+    .card-code-mini {
+      font-family: monospace; color: var(--text-tertiary);
+      min-width: 70px;
+    }
+    .card-name-mini { flex: 1; }
+    .card-meta-mini { color: var(--text-tertiary); font-size: 0.7rem; }
+
+    .btn-to-mod12 {
+      padding: 4px 10px; font-size: 0.72rem;
+      background: #3a5f7f; color: #fff; border: none;
+      border-radius: 3px; cursor: pointer;
+    }
+    .btn-to-mod12:hover { background: #4a7598; }
+
+    .filter-bar {
+      display: flex; gap: 0.5rem; align-items: center;
+      padding: 0.5rem 0; margin-bottom: 0.5rem; font-size: 0.8rem;
+    }
+    .filter-bar input, .filter-bar select {
+      padding: 4px 6px; font-size: 0.8rem;
+      background: #1a1a1a; color: var(--text-primary);
+      border: 1px solid #333; border-radius: 3px;
+    }
+    .filter-bar .clear-btn {
+      padding: 4px 10px; background: #333; color: #fff;
+      border: none; border-radius: 3px; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <nav class="admin-nav">
+    <a href="index.html" class="nav-back">← 返回首頁</a>
+    <span class="nav-title">主軸系列編輯器</span>
+    <span class="nav-code">AXIS</span>
+  </nav>
+
+  <div class="axis-container">
+    <div class="axis-header">
+      <h1>主軸系列編輯器</h1>
+      <p>以主軸為單位檢視卡池分佈,補位 AI 批次寫卡。點 3×3 矩陣格或軸向標籤可過濾下方列表。</p>
+    </div>
+
+    <div class="summary-row" id="summaryRow">
+      <div class="stat">載入中…</div>
+    </div>
+
+    <div class="matrix-panel">
+      <h2>法器 3×3 威脅類型 × 破除時機 矩陣</h2>
+      <div class="sub-hint">點格子把清單篩到對應威脅類型 + 破除時機。數字 = 既有法器卡數量。</div>
+      <div class="matrix-grid" id="matrixGrid"></div>
+    </div>
+
+    <div class="filter-bar">
+      <label>層：
+        <select id="filterLayer">
+          <option value="">全部</option>
+          <option value="none">none</option>
+          <option value="faction">faction</option>
+          <option value="combat_style">combat_style</option>
+          <option value="proficiency">proficiency</option>
+          <option value="card_name">card_name</option>
+          <option value="talisman_type">talisman_type</option>
+        </select>
+      </label>
+      <label>搜尋軸值:<input type="text" id="filterValue" placeholder="例:E / 『老警長』 / crystal" /></label>
+      <button class="clear-btn" id="btnClearFilter">清除</button>
+      <span id="filterSummary" style="margin-left:auto;color:var(--text-tertiary);"></span>
+    </div>
+
+    <div id="axisList"></div>
+  </div>
+
+  <script src="admin-shared.js"></script>
+  <script>
+  (() => {
+    'use strict';
+
+    const userRaw = localStorage.getItem('admin_user');
+    let user = null;
+    try { user = userRaw ? JSON.parse(userRaw) : null; } catch { user = null; }
+    if (!user || (user.role !== 'admin' && user.role !== 'owner')) {
+      document.querySelector('.axis-container').innerHTML =
+        '<div style="padding:2rem;text-align:center;"><h1>權限不足</h1><p>本模組僅限管理員。</p><p><a href="index.html">← 返回首頁</a></p></div>';
+      return;
+    }
+
+    const state = {
+      cards: [],
+      byAxis: new Map(),          // key = layer + '::' + value  → { layer, value, cards[] }
+      talismanMatrix: new Map(),  // key = threat + '::' + timing → count
+      filterLayer: '',
+      filterValue: '',
+      filterMatrix: null,         // { threat, timing } or null
+    };
+
+    const THREAT_LABELS = { mental: '精神侵蝕', physical: '物質異變', ritual: '儀式詛咒' };
+    const TIMING_LABELS = { instant: '即時 instant', test: '檢定 test', stockpile: '儲蓄 stockpile' };
+    const THREATS = ['mental', 'physical', 'ritual'];
+    const TIMINGS = ['instant', 'test', 'stockpile'];
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function loadCards() {
+      const res = await window.adminFetch('/api/cards');
+      const payload = await res.json();
+      if (!payload || !payload.success) {
+        document.getElementById('summaryRow').innerHTML = '<div style="color:#ff6a6a;">載入卡片失敗</div>';
+        return;
+      }
+      state.cards = payload.data || [];
+      buildAggregates();
+      renderAll();
+    }
+
+    function buildAggregates() {
+      state.byAxis.clear();
+      state.talismanMatrix.clear();
+
+      for (const c of state.cards) {
+        const layer = c.primary_axis_layer || 'none';
+        const value = c.primary_axis_value || '';
+        const key = layer + '::' + value;
+        if (!state.byAxis.has(key)) {
+          state.byAxis.set(key, { layer, value, cards: [] });
+        }
+        state.byAxis.get(key).cards.push(c);
+
+        // 3×3 法器矩陣覆蓋率:依 target_threat_types[0] + break_timing
+        if (c.is_talisman) {
+          const timing = c.break_timing;
+          const threats = Array.isArray(c.target_threat_types) ? c.target_threat_types
+                        : (typeof c.target_threat_types === 'string'
+                           ? (() => { try { return JSON.parse(c.target_threat_types); } catch { return []; } })()
+                           : []);
+          for (const th of threats) {
+            if (THREATS.includes(th) && TIMINGS.includes(timing)) {
+              const mkey = th + '::' + timing;
+              state.talismanMatrix.set(mkey, (state.talismanMatrix.get(mkey) || 0) + 1);
+            }
+          }
+        }
+      }
+    }
+
+    function renderSummary() {
+      const total = state.cards.length;
+      const axesCount = state.byAxis.size;
+      const talismanCount = state.cards.filter(c => c.is_talisman).length;
+      const permanentCount = state.cards.filter(c => c.is_permanent).length;
+      const extraCount = state.cards.filter(c => c.is_extra).length;
+      const el = document.getElementById('summaryRow');
+      el.innerHTML = `
+        <div class="stat">卡總數 <strong>${total}</strong></div>
+        <div class="stat">軸向群組 <strong>${axesCount}</strong></div>
+        <div class="stat">法器 <strong>${talismanCount}</strong></div>
+        <div class="stat">永久卡 <strong>${permanentCount}</strong></div>
+        <div class="stat">額外卡 <strong>${extraCount}</strong></div>
+      `;
+    }
+
+    function renderMatrix() {
+      const g = document.getElementById('matrixGrid');
+      const cells = [];
+      cells.push('<div class="head"></div>');
+      for (const th of THREATS) cells.push('<div class="head">' + THREAT_LABELS[th] + '</div>');
+      for (const timing of TIMINGS) {
+        cells.push('<div class="row-head">' + TIMING_LABELS[timing] + '</div>');
+        for (const th of THREATS) {
+          const n = state.talismanMatrix.get(th + '::' + timing) || 0;
+          const isActive = state.filterMatrix && state.filterMatrix.threat === th && state.filterMatrix.timing === timing;
+          cells.push(
+            '<div class="matrix-cell' + (isActive ? ' active' : '') +
+            '" data-count="' + n + '" data-threat="' + th + '" data-timing="' + timing + '">' +
+            '<div class="n">' + n + '</div>' +
+            '<div class="label">' + th + ' × ' + timing + '</div>' +
+            '</div>'
+          );
+        }
+      }
+      g.innerHTML = cells.join('');
+      g.querySelectorAll('.matrix-cell').forEach(el => {
+        el.addEventListener('click', () => {
+          const threat = el.dataset.threat;
+          const timing = el.dataset.timing;
+          if (state.filterMatrix && state.filterMatrix.threat === threat && state.filterMatrix.timing === timing) {
+            state.filterMatrix = null;
+          } else {
+            state.filterMatrix = { threat, timing };
+          }
+          renderList();
+          renderMatrix();
+        });
+      });
+    }
+
+    function matchesFilter(group) {
+      if (state.filterLayer && group.layer !== state.filterLayer) return false;
+      if (state.filterValue) {
+        const v = state.filterValue.toLowerCase();
+        if (!group.value.toLowerCase().includes(v)) return false;
+      }
+      if (state.filterMatrix) {
+        const hasMatch = group.cards.some(c => {
+          if (!c.is_talisman) return false;
+          if (c.break_timing !== state.filterMatrix.timing) return false;
+          const threats = Array.isArray(c.target_threat_types) ? c.target_threat_types
+                        : (typeof c.target_threat_types === 'string'
+                           ? (() => { try { return JSON.parse(c.target_threat_types); } catch { return []; } })()
+                           : []);
+          return threats.includes(state.filterMatrix.threat);
+        });
+        if (!hasMatch) return false;
+      }
+      return true;
+    }
+
+    function renderList() {
+      const out = [];
+      const groups = [...state.byAxis.values()].filter(matchesFilter)
+        .sort((a, b) => {
+          // layer 排序:card_name > proficiency > combat_style > faction > talisman_type > none
+          const order = { card_name: 0, proficiency: 1, combat_style: 2, talisman_type: 3, faction: 4, none: 5 };
+          const la = order[a.layer] ?? 9;
+          const lb = order[b.layer] ?? 9;
+          if (la !== lb) return la - lb;
+          if (a.value !== b.value) return a.value.localeCompare(b.value);
+          return 0;
+        });
+
+      document.getElementById('filterSummary').textContent =
+        '顯示 ' + groups.length + ' / ' + state.byAxis.size + ' 群組';
+
+      if (groups.length === 0) {
+        out.push('<div style="padding:2rem;text-align:center;color:var(--text-tertiary);">沒有符合條件的軸向群組</div>');
+      }
+
+      for (const g of groups) {
+        const axisLabel = g.value || '(未宣告)';
+        const cardList = g.cards.slice(0, 12).map(c => {
+          const parts = [];
+          parts.push('<span class="card-code-mini">' + escapeHtml(c.code || '?') + '</span>');
+          parts.push('<span class="card-name-mini">' + escapeHtml(c.name_zh || '(無名)') + '</span>');
+          const meta = [];
+          if (c.faction) meta.push('F=' + c.faction);
+          if (c.style) meta.push(c.style);
+          if (c.card_type) meta.push(c.card_type);
+          if (c.level != null) meta.push('LV' + c.level);
+          if (c.cost != null) meta.push('cost=' + c.cost);
+          if (c.is_talisman) meta.push('[法器]');
+          if (c.is_permanent) meta.push('[永久]');
+          if (c.is_extra) meta.push('[額外]');
+          parts.push('<span class="card-meta-mini">' + meta.join(' · ') + '</span>');
+          return '<li>' + parts.join('') + '</li>';
+        }).join('');
+        const moreNote = g.cards.length > 12 ? '<div style="font-size:0.7rem;color:var(--text-tertiary);padding:3px 6px;">（僅顯示前 12 張，共 ' + g.cards.length + ' 張）</div>' : '';
+
+        // 批次補寫指令組裝
+        const mod12Hint = buildMod12Hint(g);
+
+        out.push(
+          '<div class="axis-section">' +
+            '<div class="axis-section-head">' +
+              '<div>' +
+                '<span class="layer-tag layer-' + g.layer + '">' + g.layer + '</span> ' +
+                '<span class="axis-title">' + escapeHtml(axisLabel) + '</span> ' +
+                '<span class="axis-count">共 ' + g.cards.length + ' 張</span>' +
+              '</div>' +
+              '<button class="btn-to-mod12" data-hint="' + encodeURIComponent(mod12Hint) + '">→ MOD-12 批次補寫</button>' +
+            '</div>' +
+            '<ol class="axis-cards">' + cardList + '</ol>' +
+            moreNote +
+          '</div>'
+        );
+      }
+
+      const listEl = document.getElementById('axisList');
+      listEl.innerHTML = out.join('');
+      listEl.querySelectorAll('.btn-to-mod12').forEach(btn => {
+        btn.addEventListener('click', (ev) => {
+          const hint = decodeURIComponent(ev.currentTarget.dataset.hint || '');
+          window.location.href = 'admin-ai-console.html#prefill=' + encodeURIComponent(hint);
+        });
+      });
+    }
+
+    function buildMod12Hint(group) {
+      const existing = group.cards.slice(0, 8).map(c => '  - ' + (c.name_zh || '(無名)') + ' (LV' + (c.level ?? '?') + ' cost=' + (c.cost ?? '?') + ')').join('\n');
+      const header = '為軸向【' + group.layer + ':' + (group.value || '(未宣告)') + '】批次補寫 3 張卡:\n\n' +
+        '已存在 ' + group.cards.length + ' 張:\n' + existing + '\n\n' +
+        '請補位尚未覆蓋的等級/費用/類型（不要重名、不要重複既有效果指認句）。';
+      return header;
+    }
+
+    function renderAll() {
+      renderSummary();
+      renderMatrix();
+      renderList();
+    }
+
+    document.getElementById('filterLayer').addEventListener('change', (e) => {
+      state.filterLayer = e.target.value;
+      renderList();
+    });
+    document.getElementById('filterValue').addEventListener('input', (e) => {
+      state.filterValue = e.target.value.trim();
+      renderList();
+    });
+    document.getElementById('btnClearFilter').addEventListener('click', () => {
+      state.filterLayer = '';
+      state.filterValue = '';
+      state.filterMatrix = null;
+      document.getElementById('filterLayer').value = '';
+      document.getElementById('filterValue').value = '';
+      renderList();
+      renderMatrix();
+    });
+
+    loadCards();
+  })();
+  </script>
+</body>
+</html>

@@ -112,6 +112,24 @@ window.addEventListener('DOMContentLoaded', async () => {
   redetectBridge();
   renderTaskPanel();
   setInterval(renderTaskPanel, 3000);
+
+  // Phase C：從主軸系列編輯器跳過來時,URL hash 帶 prefill=...
+  if (location.hash && location.hash.startsWith('#prefill=')) {
+    try {
+      const raw = decodeURIComponent(location.hash.slice('#prefill='.length));
+      onSelectModule('MOD-01');
+      setTimeout(() => {
+        const input = document.getElementById('chatInput');
+        if (input) {
+          input.value = raw;
+          input.focus();
+        }
+        history.replaceState(null, '', location.pathname + location.search);
+      }, 100);
+    } catch (e) {
+      console.warn('[prefill] 解析 hash 失敗:', e);
+    }
+  }
 });
 
 // ────────────────────────────────────────────
@@ -478,7 +496,7 @@ async function onSendMessage() {
     }
 
     state.pendingPlan = { ...plan, userPrompt: text };
-    renderPlanForConfirmation(plan, text);
+    await renderPlanForConfirmation(plan, text);
   } catch (err) {
     thinking.remove();
     appendChatMessage('error', '呼叫 bridge 失敗：' + escapeHtml(err.message || String(err)));
@@ -488,17 +506,62 @@ async function onSendMessage() {
 }
 window.onSendMessage = onSendMessage;
 
-function renderPlanForConfirmation(plan, userPrompt) {
+// Phase B：MOD-01 寫卡預覽階段，檢查 name_zh 是否與資料庫或批次內重名
+async function checkCardNameCollisions(items, moduleCode) {
+  if (moduleCode !== 'MOD-01') return items.map(() => null);
+  let dbNames = new Map();
+  try {
+    const res = await window.adminFetch('/api/cards');
+    const payload = await res.json();
+    if (payload && payload.success && Array.isArray(payload.data)) {
+      for (const c of payload.data) {
+        if (c.name_zh) dbNames.set(String(c.name_zh).trim(), c.code || c.id);
+      }
+    }
+  } catch (e) {
+    console.warn('[collision check] 查既有卡片失敗，略過 DB 碰撞檢查：', e.message || e);
+  }
+
+  // 批次內名字出現次數（找自家 6 張裡互撞）
+  const batchCounts = new Map();
+  for (const it of items) {
+    const n = (it && it.name_zh ? String(it.name_zh).trim() : '');
+    if (n) batchCounts.set(n, (batchCounts.get(n) || 0) + 1);
+  }
+
+  return items.map((it) => {
+    const name = (it && it.name_zh ? String(it.name_zh).trim() : '');
+    if (!name) return null;
+    const warnings = [];
+    const dbHit = dbNames.get(name);
+    if (dbHit) warnings.push('DB 已有同名 [' + dbHit + ']');
+    if ((batchCounts.get(name) || 0) > 1) warnings.push('批次內重複 ×' + batchCounts.get(name));
+    return warnings.length ? warnings.join('；') : null;
+  });
+}
+
+async function renderPlanForConfirmation(plan, userPrompt) {
   const items = plan.items;
+  const moduleCode = (window.state && state.selectedModule && state.selectedModule.code) || '';
+  const collisions = await checkCardNameCollisions(items, moduleCode);
+
   const listHtml = items.slice(0, 10).map((it, i) => {
     const name = it.name_zh || it.code || `#${i + 1}`;
-    return `<li>${escapeHtml(String(name))}</li>`;
+    const warn = collisions[i];
+    const warnHtml = warn ? ` <span style="color:#ff9a6a;font-size:0.7rem;">⚠ ${escapeHtml(warn)}</span>` : '';
+    return `<li>${escapeHtml(String(name))}${warnHtml}</li>`;
   }).join('');
   const moreNote = items.length > 10 ? `<div style="font-size:0.6875rem;color:var(--text-tertiary);margin-top:4px;">（僅顯示前 10 項，共 ${items.length} 項）</div>` : '';
+
+  const collisionCount = collisions.filter(Boolean).length;
+  const collisionBanner = collisionCount > 0
+    ? `<div style="background:#3a1e12;border:1px solid #ff9a6a;color:#ffc89a;padding:0.5rem 0.75rem;border-radius:4px;margin:0.5rem 0;font-size:0.8rem;">⚠ 有 ${collisionCount} 張與 DB 或批次內重名。執行後同名 POST 會觸發 code UNIQUE 衝突，建議先取消並請 AI 改名。</div>`
+    : '';
 
   const html = `
     <div class="plan-summary">AI 計畫：產出 ${items.length} 項</div>
     <div class="plan-count">模型：${plan.bridgeResult.modelUsed} · 任務類型：${plan.taskType}</div>
+    ${collisionBanner}
     <ol class="plan-item-list">${listHtml}</ol>
     ${moreNote}
     <div class="plan-actions">

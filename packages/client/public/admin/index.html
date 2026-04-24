@@ -252,6 +252,20 @@
         designGrid.appendChild(card);
       }
 
+      // 主軸系列編輯器（AXIS）：僅 admin / owner 可見，掛在設計模組區底部
+      if (designGrid) {
+        const axis = document.createElement('a');
+        axis.href = 'admin-axis-series.html';
+        axis.className = 'module-card';
+        axis.innerHTML = `
+          <div class="card-code"><span>AXIS</span><span class="badge-ready">READY</span></div>
+          <div class="card-title">主軸系列編輯器</div>
+          <div class="card-en">Axis Series Editor</div>
+          <div class="card-desc">以主軸為單位檢視卡池分佈 + 3×3 法器矩陣覆蓋率 + 一鍵到 MOD-12 批次補寫（僅 admin 可見）</div>
+        `;
+        designGrid.appendChild(axis);
+      }
+
       // 系統診斷面板：僅 admin / owner 可見，掛在 SIM 工具區
       const simGrid = document.querySelectorAll('.module-grid')[1];
       if (simGrid) {

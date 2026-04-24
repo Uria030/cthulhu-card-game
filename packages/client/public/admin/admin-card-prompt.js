@@ -246,9 +246,9 @@ wooden_peach（桃木，驅邪）、silver（銀製）、steel（鋼製）、cry
 依敘事自訂：神聖度（銀製/鋼製類）、純度（鋼製）、木質（桃木）、共鳴（警徽）、預兆（水晶）、鹽、封印（符卷）、洞察（禁忌筆記）、信仰（聖物）。
 
 ### target_threat_types 規則
-- 單一類型為主：`["mental"]`、`["physical"]`、`["ritual"]`
-- 雙類型（進階稀有度以上）：`["mental", "physical"]` 等
-- 通用法器（僅傳奇稀有度）：`["mental", "physical", "ritual"]`
+- 單一類型為主：["mental"]、["physical"]、["ritual"]
+- 雙類型（進階稀有度以上）：["mental", "physical"] 等
+- 通用法器（僅傳奇稀有度）：["mental", "physical", "ritual"]
 
 ## 八、使用者需求
 ${userDescription}

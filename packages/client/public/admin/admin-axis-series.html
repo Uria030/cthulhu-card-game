@@ -128,11 +128,8 @@
       <div class="stat">載入中…</div>
     </div>
 
-    <div class="matrix-panel">
-      <h2>法器 3×3 威脅類型 × 破除時機 矩陣</h2>
-      <div class="sub-hint">點格子把清單篩到對應威脅類型 + 破除時機。數字 = 既有法器卡數量。</div>
-      <div class="matrix-grid" id="matrixGrid"></div>
-    </div>
+    <h2 style="font-size:1.05rem;margin:1rem 0 0.5rem 0;">📋 主軸群組（核心視圖）</h2>
+    <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.5rem;">所有卡片按 <code>primary_axis_layer + primary_axis_value</code> 分組,按軸向強度排序(卡名 > 專精 > 風格 > 法器類型 > 陣營 > 無軸向)。點「→ MOD-12 批次補寫」會把該群組既有卡帶為上下文,跳回 MOD-12 自動填入指令。</div>
 
     <div class="filter-bar">
       <label>層：
@@ -152,6 +149,14 @@
     </div>
 
     <div id="axisList"></div>
+
+    <details style="margin-top:1.5rem;" open>
+      <summary style="cursor:pointer;font-size:1.05rem;font-weight:600;padding:0.5rem 0;">🎯 法器 3×3 威脅 × 時機 矩陣（輔助視角）</summary>
+      <div class="matrix-panel" style="margin-top:0.5rem;">
+        <div class="sub-hint">只看法器類型軸(正交於前 4 層)的覆蓋率。點格子會把上方主軸列表過濾到對應 威脅 × 時機 的法器;再點一次取消。</div>
+        <div class="matrix-grid" id="matrixGrid"></div>
+      </div>
+    </details>
   </div>
 
   <script src="admin-shared.js"></script>

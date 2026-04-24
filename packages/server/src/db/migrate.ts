@@ -2584,7 +2584,7 @@ UPDATE talent_trees
 // - talisman_types（6 法器物質類型：wooden_peach/silver/steel/crystal/salt/scroll）
 // - encounter_subroutines（遭遇卡子程式表，每張卡 1-4 條）
 // ============================================
-const MIGRATION_021_SQL = `
+export const MIGRATION_021_SQL = `
 CREATE TABLE IF NOT EXISTS threat_types (
   code                VARCHAR(32) PRIMARY KEY,
   name_zh             VARCHAR(64) NOT NULL,
@@ -2640,7 +2640,7 @@ CREATE INDEX IF NOT EXISTS idx_enc_subr_card ON encounter_subroutines(encounter_
 // - card_definitions 新增 11 法器欄位
 // - encounter_cards 新增 3 欄位（encounter_type / encounter_strength / designer_dv）
 // ============================================
-const MIGRATION_022_SQL = `
+export const MIGRATION_022_SQL = `
 ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS is_talisman                    BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS talisman_type                  VARCHAR(32) REFERENCES talisman_types(code);
 ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS target_threat_types            JSONB NOT NULL DEFAULT '[]'::jsonb;
@@ -2673,7 +2673,7 @@ CREATE INDEX IF NOT EXISTS idx_enc_cards_threat_type ON encounter_cards(threat_t
 // - 主軸值：依層填值（例：card_name 層填「老警長」；faction 層填「E」）
 // - 9 張範本法器卡順手 backfill 主軸（以 talisman_type 層為主）
 // ============================================
-const MIGRATION_023_SQL = `
+export const MIGRATION_023_SQL = `
 ALTER TABLE card_definitions
   ADD COLUMN IF NOT EXISTS primary_axis_layer VARCHAR(16) NOT NULL DEFAULT 'none'
   CHECK (primary_axis_layer IN ('none', 'faction', 'combat_style', 'proficiency', 'card_name', 'talisman_type'));
@@ -2722,7 +2722,7 @@ UPDATE card_definitions SET primary_axis_layer = 'talisman_type', primary_axis_v
 // - 兩者互斥：一張卡不能同時是永久又是額外
 // - CHECK 約束用 NOT VALID 避開既有 153 張卡的檢查（它們都已刪除只剩 9 張法器範本）
 // ============================================
-const MIGRATION_024_SQL = `
+export const MIGRATION_024_SQL = `
 ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS is_permanent BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS is_extra BOOLEAN NOT NULL DEFAULT FALSE;
 
@@ -2754,7 +2754,7 @@ CREATE INDEX IF NOT EXISTS idx_card_is_extra ON card_definitions(is_extra) WHERE
 // Uria 2026-04-24 澄清：額外卡只有「反應」或「行動」兩種召喚方式，皆可支付費用。
 // 原 MIGRATION_024 的「額外卡 cost=0」過於嚴格，此 migration 撤銷該約束。
 // ============================================
-const MIGRATION_025_SQL = `
+export const MIGRATION_025_SQL = `
 ALTER TABLE card_definitions DROP CONSTRAINT IF EXISTS chk_extra_cost;
 `;
 

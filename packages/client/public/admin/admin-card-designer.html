@@ -272,6 +272,8 @@
               <div class="check-row"><input type="checkbox" id="f_is_weakness"><label for="f_is_weakness">弱點 — 負面卡，強制納入牌組</label></div>
               <div class="check-row"><input type="checkbox" id="f_is_revelation"><label for="f_is_revelation">神啟卡 — 詛咒卡，抽到即觸發</label></div>
               <div class="check-row"><input type="checkbox" id="f_is_exceptional"><label for="f_is_exceptional">Exceptional — 經驗值 ×2，額外抵扣 -2V</label></div>
+              <div class="check-row"><input type="checkbox" id="f_is_permanent" onchange="onPermanentChange()"><label for="f_is_permanent">永久卡 — 買來直接進場、僅被動能力、EXP ×2</label></div>
+              <div class="check-row"><input type="checkbox" id="f_is_extra" onchange="onExtraChange()"><label for="f_is_extra">額外卡 — 放額外牌組、由自身敘述召喚</label></div>
             </div>
           </div>
           <!-- Signature sub-fields -->
@@ -1355,6 +1357,29 @@
     return { primary_axis_layer: layer, primary_axis_value: v || null };
   }
 
+  /* ─── 永久 / 額外 卡連動（v0.14.0） ─── */
+  function onPermanentChange() {
+    const on = el('f_is_permanent')?.checked;
+    if (on) {
+      // 永久與額外互斥
+      if (el('f_is_extra')) el('f_is_extra').checked = false;
+      // 永久卡 cost 強制 0
+      if (el('f_cost')) el('f_cost').value = 0;
+      // 提示設計者 xp_cost 建議兩倍
+      const xpEl = el('f_xp_cost');
+      if (xpEl && (parseInt(xpEl.value) || 0) < 1) xpEl.value = 2;
+    }
+    updatePreview();
+  }
+  function onExtraChange() {
+    const on = el('f_is_extra')?.checked;
+    if (on) {
+      if (el('f_is_permanent')) el('f_is_permanent').checked = false;
+      if (el('f_cost')) el('f_cost').value = 0;
+    }
+    updatePreview();
+  }
+
   function loadPrimaryAxis(c) {
     const sel = el('f_primary_axis_layer');
     if (!sel) return;
@@ -1574,6 +1599,8 @@
     el('f_is_weakness').checked = !!c.is_weakness;
     el('f_is_exceptional').checked = !!c.is_exceptional;
     el('f_is_revelation').checked = !!c.is_revelation;
+    if (el('f_is_permanent')) el('f_is_permanent').checked = !!c.is_permanent;
+    if (el('f_is_extra')) el('f_is_extra').checked = !!c.is_extra;
     el('f_owner_investigator').value = c.owner_investigator || '';
     el('f_removable').checked = !!c.removable;
     el('f_committable').checked = !!c.committable;
@@ -1647,6 +1674,8 @@
       is_weakness: el('f_is_weakness').checked,
       is_exceptional: el('f_is_exceptional').checked,
       is_revelation: el('f_is_revelation').checked,
+      is_permanent: el('f_is_permanent')?.checked || false,
+      is_extra: el('f_is_extra')?.checked || false,
       owner_investigator: el('f_owner_investigator').value.trim() || null,
       removable: el('f_removable').checked,
       committable: el('f_committable').checked,
@@ -2910,6 +2939,46 @@
       }
     }
 
+    // 永久卡 / 額外卡（v0.14.0）互斥與必要條件
+    if (d.is_permanent && d.is_extra) {
+      (d._talisman_warnings = d._talisman_warnings || []).push('永久卡與額外卡互斥，已清除 is_extra');
+      d.is_extra = false;
+    }
+    if (d.is_permanent) {
+      if (d.cost !== 0) {
+        (d._talisman_warnings = d._talisman_warnings || []).push(`永久卡必須 cost=0，已強制（原值 ${d.cost}）`);
+        d.cost = 0;
+      }
+      if (!d.xp_cost || d.xp_cost < 1) {
+        (d._talisman_warnings = d._talisman_warnings || []).push('永久卡 xp_cost 不得為 0，已強制最低 2（建議為普通版的 2 倍）');
+        d.xp_cost = 2;
+      }
+      // 所有 effects 建議 passive trigger
+      if (Array.isArray(d.effects)) {
+        d.effects.forEach((e, i) => {
+          if (e.trigger && e.trigger !== 'passive') {
+            (d._talisman_warnings = d._talisman_warnings || []).push(`永久卡 effect[${i}] trigger='${e.trigger}' 非 passive — 永久卡規則僅允許被動能力`);
+          }
+        });
+      }
+    }
+    if (d.is_extra) {
+      if (d.cost !== 0) {
+        (d._talisman_warnings = d._talisman_warnings || []).push(`額外卡必須 cost=0，已強制（原值 ${d.cost}）`);
+        d.cost = 0;
+      }
+      // 額外卡需於至少一條 effect 描述召喚條件（簡單 heuristic：檢查 desc_zh 是否含「召喚」「進場」「當」等字樣）
+      if (Array.isArray(d.effects) && d.effects.length > 0) {
+        const hasSummon = d.effects.some(e => {
+          const txt = String(e.desc_zh || '');
+          return /召喚|從額外|當|若|進場|觸發/.test(txt);
+        });
+        if (!hasSummon) {
+          (d._talisman_warnings = d._talisman_warnings || []).push('額外卡的 effects 未明確描述召喚條件 — 建議在某一條 desc_zh 寫「當…時，從額外牌組召喚此卡」');
+        }
+      }
+    }
+
     return d;
   }
 
@@ -2964,6 +3033,10 @@
         }
       }
       else if (key === '法器類型' || key === 'talisman_type') parsed.talisman_type = val;
+      else if (key === '永久' || key === 'permanent') parsed.is_permanent = /^(true|是|y|yes|1)$/i.test(val);
+      else if (key === '額外' || key === 'extra') parsed.is_extra = /^(true|是|y|yes|1)$/i.test(val);
+      else if (key === '簽名' || key === 'signature') parsed.is_signature = /^(true|是|y|yes|1)$/i.test(val);
+      else if (key === '神啟' || key === 'revelation') parsed.is_revelation = /^(true|是|y|yes|1)$/i.test(val);
       else if (key === '敘事' || key === '描述' || key === 'narrative') narrativeLines.push(val);
       else narrativeLines.push(trimmed);
     }

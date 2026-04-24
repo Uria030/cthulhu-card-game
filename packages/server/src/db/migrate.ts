@@ -2714,6 +2714,42 @@ UPDATE card_definitions SET primary_axis_layer = 'talisman_type', primary_axis_v
 `;
 
 // ============================================
+// Migration 024: 永久 / 額外卡片身份標記
+// - is_permanent：永久卡（無打出費用、必花 EXP 購買、買來直接進場、僅被動能力）
+//   EXP 花費建議為普通卡的兩倍（由設計者在 xp_cost 自行反映）
+//   可同時是神啟（is_revelation=true + is_permanent=true = 超級副作用永久卡）
+// - is_extra：額外卡（不在主牌組、遊戲中無主動取用功能、由卡片自身敘述說明召喚條件）
+// - 兩者互斥：一張卡不能同時是永久又是額外
+// - CHECK 約束用 NOT VALID 避開既有 153 張卡的檢查（它們都已刪除只剩 9 張法器範本）
+// ============================================
+const MIGRATION_024_SQL = `
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS is_permanent BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS is_extra BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- 永久 / 額外 互斥
+ALTER TABLE card_definitions DROP CONSTRAINT IF EXISTS chk_permanent_extra_mutex;
+ALTER TABLE card_definitions ADD CONSTRAINT chk_permanent_extra_mutex CHECK (
+  NOT (is_permanent AND is_extra)
+) NOT VALID;
+
+-- 永久卡：cost=0 且 xp_cost>=1
+ALTER TABLE card_definitions DROP CONSTRAINT IF EXISTS chk_permanent_cost;
+ALTER TABLE card_definitions ADD CONSTRAINT chk_permanent_cost CHECK (
+  NOT is_permanent OR (cost = 0 AND xp_cost >= 1)
+) NOT VALID;
+
+-- 額外卡：cost=0
+ALTER TABLE card_definitions DROP CONSTRAINT IF EXISTS chk_extra_cost;
+ALTER TABLE card_definitions ADD CONSTRAINT chk_extra_cost CHECK (
+  NOT is_extra OR cost = 0
+) NOT VALID;
+
+-- 部分索引供快速過濾
+CREATE INDEX IF NOT EXISTS idx_card_is_permanent ON card_definitions(is_permanent) WHERE is_permanent = TRUE;
+CREATE INDEX IF NOT EXISTS idx_card_is_extra ON card_definitions(is_extra) WHERE is_extra = TRUE;
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -2887,6 +2923,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_021_SQL);
     await client.query(MIGRATION_022_SQL);
     await client.query(MIGRATION_023_SQL);
+    await client.query(MIGRATION_024_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

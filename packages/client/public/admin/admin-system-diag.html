@@ -153,60 +153,13 @@
     </div>
 
     <div class="diag-action-row">
-      <button class="diag-btn primary" id="btnRunAll">▶ 執行全套診斷</button>
-      <button class="diag-btn" id="btnAuth">1. 認證檢查</button>
-      <button class="diag-btn" id="btnBridgeHealth">2. Bridge 健康</button>
-      <button class="diag-btn" id="btnBridgeTask">3. Bridge 任務測試</button>
-      <button class="diag-btn" id="btnClientInfo">4. 客戶端資訊</button>
-      <button class="diag-btn" id="btnProbeModels">5. 測試 Gemini 模型</button>
+      <button class="diag-btn primary" id="btnTestCardAi">▶ 測試 MOD-01 AI 生成流程</button>
+      <button class="diag-btn" id="btnEditPrompt">📝 編輯測試敘述</button>
     </div>
 
-    <div class="diag-status-grid">
-      <div class="diag-card" id="cardAuth">
-        <div class="diag-card-title">Admin 認證</div>
-        <div class="diag-card-status" data-status>—</div>
-        <div class="diag-card-detail" data-detail>尚未測試</div>
-      </div>
-      <div class="diag-card" id="cardBridge">
-        <div class="diag-card-title">Bridge 代理</div>
-        <div class="diag-card-status" data-status>—</div>
-        <div class="diag-card-detail" data-detail>尚未測試</div>
-      </div>
-      <div class="diag-card" id="cardOllama">
-        <div class="diag-card-title">Ollama（本地 Gemma）</div>
-        <div class="diag-card-status" data-status>—</div>
-        <div class="diag-card-detail" data-detail>尚未測試</div>
-      </div>
-      <div class="diag-card" id="cardGemini">
-        <div class="diag-card-title">Gemini（遠端 API）</div>
-        <div class="diag-card-status" data-status>—</div>
-        <div class="diag-card-detail" data-detail>尚未測試</div>
-      </div>
-      <div class="diag-card" id="cardModel25Pro">
-        <div class="diag-card-title">模型：gemini-2.5-pro</div>
-        <div class="diag-card-status" data-status>—</div>
-        <div class="diag-card-detail" data-detail>尚未測試</div>
-      </div>
-      <div class="diag-card" id="cardModel25Flash">
-        <div class="diag-card-title">模型：gemini-2.5-flash</div>
-        <div class="diag-card-status" data-status>—</div>
-        <div class="diag-card-detail" data-detail>尚未測試</div>
-      </div>
-      <div class="diag-card" id="cardModel31ProPreview">
-        <div class="diag-card-title">模型：gemini-3.1-pro-preview</div>
-        <div class="diag-card-status" data-status>—</div>
-        <div class="diag-card-detail" data-detail>尚未測試</div>
-      </div>
-      <div class="diag-card" id="cardModel3FlashPreview">
-        <div class="diag-card-title">模型：gemini-3-flash-preview</div>
-        <div class="diag-card-status" data-status>—</div>
-        <div class="diag-card-detail" data-detail>尚未測試</div>
-      </div>
-      <div class="diag-card" id="cardModel31FlashLitePreview">
-        <div class="diag-card-title">模型：gemini-3.1-flash-lite-preview</div>
-        <div class="diag-card-status" data-status>—</div>
-        <div class="diag-card-detail" data-detail>尚未測試</div>
-      </div>
+    <div style="padding:0.75rem 0;border-bottom:1px solid var(--border);font-size:0.75rem;color:var(--text-secondary);">
+      <p style="margin:0.25rem 0;"><strong>用途：</strong>在隔離環境複製 MOD-01 的 Gemini 呼叫流程，完整 log 每個階段（prompt 建構、API 請求、HTTP status、原始回應、JSON 解析、法器欄位檢查），用來診斷 Gemini「跑不出結果」的實際原因。</p>
+      <p style="margin:0.25rem 0;">此按鈕與 MOD-01 卡片設計器共用同一份 <code>admin-card-prompt.js</code>，確保測試的 prompt 與實際生成一致（不會漂移）。</p>
     </div>
 
     <div class="diag-log-header">
@@ -220,6 +173,7 @@
   </div>
 
   <script src="admin-shared.js"></script>
+  <script src="admin-card-prompt.js"></script>
   <script src="admin-ai-tasks/geminiDirectClient.js"></script>
   <script>
   (() => {
@@ -267,199 +221,224 @@
       logArea.scrollTop = logArea.scrollHeight;
     }
 
-    function setCard(id, status, statusText, detailText) {
-      const card = document.getElementById(id);
-      card.classList.remove('ok', 'warn', 'err');
-      if (status) card.classList.add(status);
-      card.querySelector('[data-status]').textContent = statusText;
-      card.querySelector('[data-detail]').textContent = detailText || '';
+    // ════════════════════════════════════════════════
+    //  MOD-01 AI 生成流程測試（共用 admin-card-prompt.js）
+    // ════════════════════════════════════════════════
+
+    const DEFAULT_TEST_DESCRIPTION = [
+      '老警長的舊警徽（主卡 / 法器）',
+      '這是本軸向的「主卡」，透過明確指認『老警長』來觸發強大的協同效果。同時也是一張符合Ｅ陣營氣質的檢定型法器。',
+      '類型：資產',
+      '子類型：法器: 精神 - 檢定 (共鳴)',
+      '費用:2',
+      '效果:',
+      ' 【被動】你的魅力 +1。',
+      ' 【反應】在你打出另一張『老警長』卡時:治癒你所在地點一名隊友 1 點恐懼。',
+      ' 【行動】花費 1 共鳴:對應一張精神侵蝕類遭遇卡，進行魅力檢定。如果成功，完全破除遭遇卡。',
+      '風味:「這塊磨損的銅牌不只是權力，更是這條街的規矩。」',
+    ].join('\n');
+
+    const LS_DIAG_PROMPT = 'diag_card_ai_test_prompt';
+
+    function getTestDescription() {
+      return localStorage.getItem(LS_DIAG_PROMPT) || DEFAULT_TEST_DESCRIPTION;
     }
 
-    async function test_auth() {
-      log('info', '檢查 admin 認證 /api/auth/me …');
-      try {
-        const res = await adminFetch('/api/auth/me');
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.success) {
-          setCard('cardAuth', 'err', '失敗', `HTTP ${res.status} ${data.error || ''}`);
-          log('err', `認證失敗 HTTP ${res.status}`, data);
-          return false;
-        }
-        setCard('cardAuth', 'ok', '已登入', `${data.data?.username || ''} (${data.data?.role || ''})`);
-        log('ok', '認證成功', data.data);
-        return true;
-      } catch (e) {
-        setCard('cardAuth', 'err', '錯誤', e.message);
-        log('err', `認證異常：${e.message}`);
-        return false;
+    function editTestDescription() {
+      const current = getTestDescription();
+      const next = prompt('編輯要送給 Gemini 的卡片敘述（留空=恢復預設老警長範例）：', current);
+      if (next === null) return;
+      if (next.trim() === '') {
+        localStorage.removeItem(LS_DIAG_PROMPT);
+        log('ok', '已恢復預設敘述（老警長範例）');
+      } else {
+        localStorage.setItem(LS_DIAG_PROMPT, next);
+        log('ok', '已儲存自訂敘述（' + next.length + ' 字）');
       }
     }
 
-    async function test_bridgeHealth() {
-      log('info', '檢查 bridge 代理 /api/ai-console/bridge/health …');
-      try {
-        const res = await adminFetch('/api/ai-console/bridge/health');
-        const data = await res.json().catch(() => ({}));
-        const bridgeUrl = data.bridgeUrl || '（未知）';
-        if (!res.ok || !data.success) {
-          setCard('cardBridge', 'err', 'Bridge 不可達', `${bridgeUrl} · ${data.error || 'HTTP ' + res.status}`);
-          setCard('cardOllama', 'err', '無法檢測', 'Bridge 斷線');
-          setCard('cardGemini', 'err', '無法檢測', 'Bridge 斷線');
-          log('err', `Bridge 代理失敗 HTTP ${res.status}`, data);
-          return null;
-        }
-        const inner = data.data || {};
-        setCard('cardBridge', 'ok', '連線正常', bridgeUrl);
-        log('ok', `Bridge 代理通 · ${bridgeUrl}`, inner);
+    async function test_cardAiGenerate() {
+      log('info', '════ 測試 MOD-01 AI 生成流程 ════');
 
-        const up = inner.upstreams || {};
-        // Ollama
-        if (up.ollama === 'up') {
-          setCard('cardOllama', 'ok', 'Up', (inner.config?.ollamaModel || '未知 model') + ' · 本地 Gemma 可用');
-          log('ok', `Ollama up · ${inner.config?.ollamaModel || ''}`);
-        } else {
-          setCard('cardOllama', 'warn', up.ollama || '未知', '本地 Gemma 不可用（遠端存取時此項預期為 down）');
-          log('warn', `Ollama ${up.ollama || '?'}`);
-        }
-        // Gemini
-        if (up.gemini === 'up') {
-          setCard('cardGemini', 'ok', 'Up', `${inner.config?.geminiFlashModel || ''} / ${inner.config?.geminiProModel || ''}`);
-          log('ok', `Gemini up · flash=${inner.config?.geminiFlashModel} pro=${inner.config?.geminiProModel}`);
-        } else {
-          setCard('cardGemini', 'err', up.gemini || '未知', '遠端 API 不可用（檢查 GEMINI_API_KEY）');
-          log('err', `Gemini ${up.gemini || '?'}`);
-        }
-        return inner;
-      } catch (e) {
-        setCard('cardBridge', 'err', '錯誤', e.message);
-        setCard('cardOllama', 'err', '無法檢測', '');
-        setCard('cardGemini', 'err', '無法檢測', '');
-        log('err', `Bridge 代理異常：${e.message}`);
-        return null;
+      log('info', 'Step 1: 檢查 admin-card-prompt.js 載入狀態');
+      if (typeof window.buildCardGeminiPrompt !== 'function') {
+        log('err', 'window.buildCardGeminiPrompt 未定義 — admin-card-prompt.js 未載入');
+        return;
       }
-    }
+      log('ok', 'admin-card-prompt.js 已載入');
 
-    async function test_bridgeTask() {
-      log('info', '執行最小 bridge 任務測試（card_design, writeToDb=false）…');
+      log('info', 'Step 2: 檢查 Gemini API Key');
+      const apiKey = localStorage.getItem('gemini_api_key');
+      if (!apiKey) {
+        log('err', 'localStorage.gemini_api_key 未設定 — 需先到 MOD-01 點「設定 API Key」');
+        return;
+      }
+      log('ok', 'API Key 已設（長度 ' + apiKey.length + '，前綴 ' + apiKey.slice(0, 6) + '…）');
+
+      log('info', 'Step 3: 載入測試敘述');
+      const userDesc = getTestDescription();
+      log('info', '敘述長度:' + userDesc.length + ' 字', userDesc.slice(0, 200) + (userDesc.length > 200 ? '…' : ''));
+
+      log('info', 'Step 4: 透過 window.buildCardGeminiPrompt 建構完整 prompt');
+      let fullPrompt;
       try {
-        const t0 = Date.now();
-        const res = await adminFetch('/api/ai-console/bridge/run-task', {
+        fullPrompt = window.buildCardGeminiPrompt(userDesc);
+      } catch (e) {
+        log('err', '建構 prompt 失敗:' + e.message, e.stack || String(e));
+        return;
+      }
+      log('ok', 'Prompt 建構完成，總長度 ' + fullPrompt.length + ' 字');
+      log('info', 'Prompt 前 300 字', fullPrompt.slice(0, 300));
+      log('info', 'Prompt 尾 300 字', fullPrompt.slice(-300));
+
+      const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
+      log('info', 'Step 5: 送 POST 到 Gemini API');
+      log('info', 'Endpoint:' + endpoint.replace(apiKey, '***APIKEY***'));
+      log('info', 'Model:gemini-2.5-flash | responseMimeType:application/json | temperature:0.7');
+
+      const requestBody = {
+        contents: [{ parts: [{ text: fullPrompt }] }],
+        generationConfig: { responseMimeType: 'application/json', temperature: 0.7 },
+      };
+      log('info', 'Request body 大小:' + JSON.stringify(requestBody).length + ' 字元');
+
+      const t0 = Date.now();
+      let res;
+      try {
+        res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            taskType: 'card_design',
-            input: '一張 LV0 的基本武器卡，手槍類型，敏捷檢定',
-            writeToDb: false,
-            batchCount: 1,
-          }),
-        });
-        const elapsed = Date.now() - t0;
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          log('err', `Bridge 任務失敗 HTTP ${res.status} (${elapsed}ms)`, data);
-          return;
-        }
-        const preview = data.items?.[0] || data.result || data;
-        log('ok', `Bridge 任務成功 (${elapsed}ms)`, {
-          itemsCount: data.items?.length,
-          firstItem: preview?.name_zh ? { name_zh: preview.name_zh, cost: preview.cost, faction: preview.faction } : preview,
+          body: JSON.stringify(requestBody),
         });
       } catch (e) {
-        log('err', `Bridge 任務異常：${e.message}`);
-      }
-    }
-
-    async function test_probeModels() {
-      log('info', '════ 測試 Gemini 模型可用性 ════');
-      if (!window.callGeminiDirect) {
-        log('err', 'geminiDirectClient.js 未載入');
+        log('err', 'fetch 發生例外（' + (Date.now() - t0) + 'ms）:' + e.message, e.stack || String(e));
+        log('err', '提示:通常是網路錯誤 / CORS / API Key 格式不合法 / DNS 解析失敗');
         return;
       }
-      if (!window.hasGeminiApiKey || !window.hasGeminiApiKey()) {
-        const k = window.promptForGeminiApiKey && window.promptForGeminiApiKey('測試模型前需先設定 Gemini API Key：');
-        if (!k) {
-          log('warn', '未設定 API Key，取消模型測試');
-          return;
-        }
+      const elapsed = Date.now() - t0;
+      log('info', 'HTTP ' + res.status + ' ' + (res.statusText || '') + '（耗時 ' + elapsed + 'ms）');
+
+      const headerLines = [];
+      try { res.headers.forEach((v, k) => headerLines.push(k + ': ' + v)); } catch (_e) {}
+      if (headerLines.length) log('info', 'Response Headers', headerLines.join('\n'));
+
+      log('info', 'Step 6: 讀取 Response body');
+      let raw;
+      try {
+        raw = await res.text();
+      } catch (e) {
+        log('err', '讀 body 失敗:' + e.message);
+        return;
       }
+      log('info', 'Response body 長度 ' + raw.length + ' 字');
+      log('info', 'Response body（前 2000 字）', raw.slice(0, 2000) + (raw.length > 2000 ? '\n…（截斷）' : ''));
 
-      const models = [
-        { name: 'gemini-2.5-pro',                 card: 'cardModel25Pro' },
-        { name: 'gemini-2.5-flash',               card: 'cardModel25Flash' },
-        { name: 'gemini-3.1-pro-preview',         card: 'cardModel31ProPreview' },
-        { name: 'gemini-3-flash-preview',         card: 'cardModel3FlashPreview' },
-        { name: 'gemini-3.1-flash-lite-preview',  card: 'cardModel31FlashLitePreview' },
-      ];
-      const probePrompt = '回傳合法 JSON：{"ok":true,"echo":"diag"}';
-
-      for (const m of models) {
-        setCard(m.card, '', '測試中…', '');
-        log('info', `測試 ${m.name} …`);
-        const t0 = Date.now();
+      if (!res.ok) {
+        log('err', 'Gemini API 回非 2xx（HTTP ' + res.status + '）');
         try {
-          const { text, modelName } = await window.callGeminiDirect({
-            prompt: probePrompt,
-            model: m.name,
-            temperature: 0,
-            responseMimeType: 'application/json',
-          });
-          const elapsed = Date.now() - t0;
-          let parsed = null;
-          try { parsed = JSON.parse(text); } catch (_) { /* keep raw */ }
-          setCard(m.card, 'ok', '可用', `${elapsed}ms · ${modelName}`);
-          log('ok', `${m.name} 可用 (${elapsed}ms)`, parsed || text.slice(0, 120));
-        } catch (e) {
-          const elapsed = Date.now() - t0;
-          const msg = e.message || String(e);
-          const isNotFound = /404|not found|is not found|does not exist/i.test(msg);
-          const isAuth = /401|403|permission|api key|unauth/i.test(msg);
-          setCard(
-            m.card,
-            isNotFound ? 'warn' : 'err',
-            isNotFound ? '模型不存在' : isAuth ? 'API Key 問題' : '失敗',
-            `${elapsed}ms · ${msg.slice(0, 140)}`,
-          );
-          log(isNotFound ? 'warn' : 'err', `${m.name}：${msg}`);
-        }
-      }
-      log('info', '════ 模型測試結束 ════');
-    }
-
-    function test_clientInfo() {
-      const info = {
-        url: location.href,
-        userAgent: navigator.userAgent,
-        platform: navigator.platform,
-        viewport: `${window.innerWidth}×${window.innerHeight}`,
-        screen: `${screen.width}×${screen.height}`,
-        online: navigator.onLine,
-        language: navigator.language,
-        adminApiBase: window.ADMIN_API_BASE || '（未設）',
-        time: new Date().toString(),
-      };
-      log('info', '客戶端資訊', info);
-    }
-
-    async function runAll() {
-      log('info', '════ 開始全套診斷 ════');
-      const authOk = await test_auth();
-      if (!authOk) {
-        log('warn', '因認證失敗，跳過後續 bridge 測試');
+          const err = JSON.parse(raw);
+          if (err.error) {
+            log('err', 'error.code=' + err.error.code + ' status=' + err.error.status, err.error.message);
+            if (err.error.status === 'INVALID_ARGUMENT') log('warn', '提示:prompt 可能違反 API 格式或被 safety 擋下');
+            if (err.error.status === 'RESOURCE_EXHAUSTED') log('warn', '提示:API 配額用完（429）');
+            if (err.error.status === 'PERMISSION_DENIED' || err.error.code === 403) log('warn', '提示:API Key 無效或未啟用 Gemini API');
+            if (err.error.status === 'NOT_FOUND') log('warn', '提示:model 名稱錯誤，或 Key 不允許此 model');
+          }
+        } catch (_e) {}
         return;
       }
-      const health = await test_bridgeHealth();
-      if (health) await test_bridgeTask();
-      test_clientInfo();
-      log('info', '════ 診斷結束 ════');
+
+      log('info', 'Step 7: 解析 Gemini 外層回應');
+      let outer;
+      try {
+        outer = JSON.parse(raw);
+      } catch (e) {
+        log('err', '外層 JSON 解析失敗:' + e.message);
+        return;
+      }
+
+      if (!outer.candidates || !outer.candidates.length) {
+        log('err', 'Response 沒有 candidates（Gemini 可能被 safety 全部擋下）', outer);
+        if (outer.promptFeedback) log('warn', 'promptFeedback', outer.promptFeedback);
+        return;
+      }
+      const cand = outer.candidates[0];
+      log('info', 'candidate finishReason=' + (cand.finishReason || '(無)'));
+      if (cand.finishReason && cand.finishReason !== 'STOP') {
+        log('warn', 'finishReason 非 STOP:' + cand.finishReason);
+        if (cand.finishReason === 'SAFETY') log('err', 'Gemini 以 SAFETY 原因中止回應（prompt 或輸出被認為不安全）');
+        if (cand.finishReason === 'MAX_TOKENS') log('err', '輸出被 MAX_TOKENS 截斷');
+        if (cand.safetyRatings) log('warn', 'safetyRatings', cand.safetyRatings);
+      }
+      const cardTextRaw = cand && cand.content && cand.content.parts && cand.content.parts[0] && cand.content.parts[0].text;
+      if (!cardTextRaw) {
+        log('err', 'candidates[0].content.parts[0].text 為空', cand);
+        return;
+      }
+      log('ok', '卡片 JSON 字串長度 ' + cardTextRaw.length + ' 字');
+      log('info', '卡片 JSON 字串（前 1200 字）', cardTextRaw.slice(0, 1200) + (cardTextRaw.length > 1200 ? '\n…（截斷）' : ''));
+
+      log('info', 'Step 8: 解析內層卡片 JSON');
+      const cleanJson = cardTextRaw.replace(/```json\n?|\n?```/g, '').trim();
+      let card;
+      try {
+        card = JSON.parse(cleanJson);
+      } catch (e) {
+        log('err', '內層 JSON 解析失敗:' + e.message);
+        log('err', '提示:Gemini 可能沒回合法 JSON，回傳的可能是 markdown 包著 JSON 或純文字');
+        return;
+      }
+      log('ok', '內層卡片 JSON 解析成功');
+
+      log('info', 'Step 9: 卡片核心欄位檢查');
+      log('info', 'name_zh=' + (card.name_zh || '(無)'));
+      log('info', 'faction=' + (card.faction || '(無)') + ' | style=' + (card.style || '(無)') + ' | type=' + (card.type || '(無)'));
+      log('info', 'cost=' + (card.cost == null ? '(無)' : card.cost) + ' | level=' + (card.level == null ? '(無)' : card.level) + ' | slot=' + (card.slot || '(無)'));
+
+      log('info', 'Step 10: 法器欄位檢查');
+      if (card.is_talisman) {
+        log('ok', 'is_talisman = true（Gemini 進入法器模式）');
+        const fields = {
+          talisman_type: card.talisman_type,
+          target_threat_types: card.target_threat_types,
+          break_timing: card.break_timing,
+          break_strength_max: card.break_strength_max,
+          break_charge_label: card.break_charge_label,
+          break_charge_max: card.break_charge_max,
+          break_test_attribute: card.break_test_attribute,
+          stockpile_accumulation_rule: card.stockpile_accumulation_rule,
+          break_axis_value: card.break_axis_value,
+          kill_axis_value: card.kill_axis_value,
+          leverage_modifier: card.leverage_modifier,
+        };
+        log('info', '法器 12 欄位', fields);
+        const TT = new Set(['wooden_peach', 'silver', 'steel', 'crystal', 'salt', 'scroll']);
+        const THR = new Set(['mental', 'physical', 'ritual']);
+        const BT = new Set(['instant', 'test', 'stockpile']);
+        if (card.talisman_type && !TT.has(card.talisman_type)) log('warn', 'talisman_type 非白名單:' + card.talisman_type);
+        if (!Array.isArray(card.target_threat_types)) log('warn', 'target_threat_types 不是陣列:' + typeof card.target_threat_types);
+        else card.target_threat_types.forEach(t => { if (!THR.has(t)) log('warn', 'target_threat_types 含非法項:' + t); });
+        if (card.break_timing && !BT.has(card.break_timing)) log('warn', 'break_timing 非白名單:' + card.break_timing);
+        if (card.break_timing === 'test' && !card.break_test_attribute) log('warn', 'break_timing=test 但缺 break_test_attribute（實際流程會以陣營主屬性 fallback）');
+      } else {
+        log('warn', 'is_talisman = false（Gemini 未進入法器模式）— 若描述明確是法器卡，此為異常');
+      }
+
+      log('info', 'Step 11: effects 陣列');
+      if (Array.isArray(card.effects)) {
+        log('ok', '產生 ' + card.effects.length + ' 個效果');
+        card.effects.forEach((e, i) => {
+          log('info', 'effect[' + i + '] trigger=' + (e.trigger || '?') + ' code=' + (e.effect_code || '?'), e.desc_zh || '(無描述)');
+        });
+      } else {
+        log('warn', 'effects 欄位缺失或非陣列');
+      }
+
+      log('ok', '════ 測試結束:Gemini 流程成功，資料已完整 log ════');
     }
 
-    // wire buttons
-    document.getElementById('btnRunAll').onclick = runAll;
-    document.getElementById('btnAuth').onclick = test_auth;
-    document.getElementById('btnBridgeHealth').onclick = test_bridgeHealth;
-    document.getElementById('btnBridgeTask').onclick = test_bridgeTask;
-    document.getElementById('btnClientInfo').onclick = test_clientInfo;
-    document.getElementById('btnProbeModels').onclick = test_probeModels;
+    document.getElementById('btnTestCardAi').onclick = test_cardAiGenerate;
+    document.getElementById('btnEditPrompt').onclick = editTestDescription;
     document.getElementById('btnClearLog').onclick = () => { logArea.textContent = ''; };
     document.getElementById('btnCopyLog').onclick = async () => {
       const text = logArea.innerText;

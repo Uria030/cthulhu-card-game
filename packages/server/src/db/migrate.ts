@@ -2750,6 +2750,15 @@ CREATE INDEX IF NOT EXISTS idx_card_is_extra ON card_definitions(is_extra) WHERE
 `;
 
 // ============================================
+// Migration 025: 額外卡可支付費用（撤銷 chk_extra_cost）
+// Uria 2026-04-24 澄清：額外卡只有「反應」或「行動」兩種召喚方式，皆可支付費用。
+// 原 MIGRATION_024 的「額外卡 cost=0」過於嚴格，此 migration 撤銷該約束。
+// ============================================
+const MIGRATION_025_SQL = `
+ALTER TABLE card_definitions DROP CONSTRAINT IF EXISTS chk_extra_cost;
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -2924,6 +2933,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_022_SQL);
     await client.query(MIGRATION_023_SQL);
     await client.query(MIGRATION_024_SQL);
+    await client.query(MIGRATION_025_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

@@ -273,7 +273,7 @@
               <div class="check-row"><input type="checkbox" id="f_is_revelation"><label for="f_is_revelation">神啟卡 — 詛咒卡，抽到即觸發</label></div>
               <div class="check-row"><input type="checkbox" id="f_is_exceptional"><label for="f_is_exceptional">Exceptional — 經驗值 ×2，額外抵扣 -2V</label></div>
               <div class="check-row"><input type="checkbox" id="f_is_permanent" onchange="onPermanentChange()"><label for="f_is_permanent">永久卡 — 買來直接進場、僅被動能力、EXP ×2</label></div>
-              <div class="check-row"><input type="checkbox" id="f_is_extra" onchange="onExtraChange()"><label for="f_is_extra">額外卡 — 放額外牌組、由自身敘述召喚</label></div>
+              <div class="check-row"><input type="checkbox" id="f_is_extra" onchange="onExtraChange()"><label for="f_is_extra">額外卡 — 放額外牌組、僅能透過【反應】或【行動】從額外牌組打出（可支付費用）</label></div>
             </div>
           </div>
           <!-- Signature sub-fields -->
@@ -1374,8 +1374,9 @@
   function onExtraChange() {
     const on = el('f_is_extra')?.checked;
     if (on) {
+      // 額外卡與永久卡互斥
       if (el('f_is_permanent')) el('f_is_permanent').checked = false;
-      if (el('f_cost')) el('f_cost').value = 0;
+      // 額外卡可支付費用，cost 不強制 0（Uria 澄清 2026-04-24：反應或行動召喚時支付費用）
     }
     updatePreview();
   }
@@ -2963,19 +2964,21 @@
       }
     }
     if (d.is_extra) {
-      if (d.cost !== 0) {
-        (d._talisman_warnings = d._talisman_warnings || []).push(`額外卡必須 cost=0，已強制（原值 ${d.cost}）`);
-        d.cost = 0;
-      }
-      // 額外卡需於至少一條 effect 描述召喚條件（簡單 heuristic：檢查 desc_zh 是否含「召喚」「進場」「當」等字樣）
+      // Uria 澄清 2026-04-24：額外卡只有兩種召喚方式 — reaction 或 action，皆可支付費用
+      // 規則書 §13b.3 要求：至少一條 effect 的 trigger ∈ {reaction, action}，且 desc_zh 含「從額外牌組打出」
       if (Array.isArray(d.effects) && d.effects.length > 0) {
-        const hasSummon = d.effects.some(e => {
+        const hasValidSummon = d.effects.some(e => {
+          const trigger = String(e.trigger || '');
           const txt = String(e.desc_zh || '');
-          return /召喚|從額外|當|若|進場|觸發/.test(txt);
+          const triggerOk = trigger === 'reaction' || trigger === 'action';
+          const summonOk = /從額外牌組打出|從額外牌組召喚/.test(txt);
+          return triggerOk && summonOk;
         });
-        if (!hasSummon) {
-          (d._talisman_warnings = d._talisman_warnings || []).push('額外卡的 effects 未明確描述召喚條件 — 建議在某一條 desc_zh 寫「當…時，從額外牌組召喚此卡」');
+        if (!hasValidSummon) {
+          (d._talisman_warnings = d._talisman_warnings || []).push('額外卡 effects 需至少一條 trigger=reaction 或 action 且 desc_zh 含「從額外牌組打出」— 例：【反應】在場上有 3 張『老警長』卡時:從額外牌組打出此卡，支付 2 資源。');
         }
+      } else {
+        (d._talisman_warnings = d._talisman_warnings || []).push('額外卡至少需一條 effect 描述召喚方式（反應或行動觸發 + 從額外牌組打出）');
       }
     }
 

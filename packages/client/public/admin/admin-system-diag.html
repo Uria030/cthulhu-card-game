@@ -480,7 +480,7 @@
       if (!ok) { log('warn', '使用者取消補跑'); return; }
       log('info', '呼叫 POST /api/admin/db-diag/rerun-axis-migrations ...');
       try {
-        const res = await window.adminFetch('/api/admin/db-diag/rerun-axis-migrations', { method: 'POST' });
+        const res = await window.adminFetch('/api/admin/db-diag/rerun-axis-migrations', { method: 'POST', body: '{}' });
         const data = await res.json();
         if (!data.success) {
           log('error', '補跑失敗', data);

@@ -159,7 +159,15 @@
 
     <div style="padding:0.75rem 0;border-bottom:1px solid var(--border);font-size:0.75rem;color:var(--text-secondary);">
       <p style="margin:0.25rem 0;"><strong>用途：</strong>在隔離環境複製 MOD-01 的 Gemini 呼叫流程，完整 log 每個階段（prompt 建構、API 請求、HTTP status、原始回應、JSON 解析、法器欄位檢查），用來診斷 Gemini「跑不出結果」的實際原因。</p>
-      <p style="margin:0.25rem 0;">此按鈕與 MOD-01 卡片設計器共用同一份 <code>admin-card-prompt.js</code>，確保測試的 prompt 與實際生成一致（不會漂移）。</p>
+      <p style="margin:0.25rem 0;">此按鈕與 MOD-01 卡片設計器共用同一份 <code>admin-card-prompt.js</code>,確保測試的 prompt 與實際生成一致(不會漂移)。</p>
+    </div>
+
+    <div class="diag-action-row" style="margin-top:0.75rem;">
+      <button class="diag-btn" id="btnCheckCardColumns">🔍 列出 card_definitions 欄位</button>
+      <button class="diag-btn primary" id="btnRerunAxisMigrations">🔧 補跑 MIGRATION_021-025（雙軸/主軸/永久額外）</button>
+    </div>
+    <div style="padding:0.75rem 0;border-bottom:1px solid var(--border);font-size:0.75rem;color:var(--text-secondary);">
+      <p style="margin:0.25rem 0;"><strong>用途：</strong>當 MOD-12 批次寫卡或 MOD-01 儲存時跳「column X does not exist」這類 DB 42703 錯誤,代表 Railway 遠端資料庫的 schema 落後於程式碼。按<strong>「列出欄位」</strong>先確認缺哪些,再按<strong>「補跑」</strong>強制重跑 MIGRATION_021-025(使用 IF NOT EXISTS / ON CONFLICT,重跑安全)。補跑完成後回到 MOD-12 再試一次即可。</p>
     </div>
 
     <div class="diag-log-header">
@@ -439,6 +447,67 @@
 
     document.getElementById('btnTestCardAi').onclick = test_cardAiGenerate;
     document.getElementById('btnEditPrompt').onclick = editTestDescription;
+
+    // ════════════════════════════════════════════════
+    //  DB 診斷：列欄位 + 補跑 MIGRATION_021-025
+    // ════════════════════════════════════════════════
+    async function checkCardColumns() {
+      log('info', '呼叫 GET /api/admin/db-diag/columns?table=card_definitions ...');
+      try {
+        const res = await window.adminFetch('/api/admin/db-diag/columns?table=card_definitions');
+        const data = await res.json();
+        if (!data.success) {
+          log('error', '查詢失敗', data);
+          return;
+        }
+        log('ok', `card_definitions 共 ${data.count} 欄`);
+        const keyCols = ['is_talisman','talisman_type','target_threat_types','break_timing','primary_axis_layer','primary_axis_value','is_permanent','is_extra'];
+        const names = data.columns.map(c => c.column_name);
+        const missing = keyCols.filter(k => !names.includes(k));
+        if (missing.length === 0) {
+          log('ok', '✓ 本次檢查的 8 個關鍵欄位全部存在（雙軸/主軸/永久額外）');
+        } else {
+          log('warn', '缺少 ' + missing.length + ' 個關鍵欄位，需按「補跑」修復', missing);
+        }
+        log('info', '完整欄位清單', names.join(', '));
+      } catch (e) {
+        log('error', '查詢例外', e.message || String(e));
+      }
+    }
+
+    async function rerunAxisMigrations() {
+      const ok = confirm('將在遠端資料庫補跑 MIGRATION_021-025（雙軸戰鬥 v1.0 / 主軸 v0.13 / 永久額外卡 v0.14）。\n\n所有 migration 使用 IF NOT EXISTS / ON CONFLICT，重跑安全不會破壞既有資料。\n\n確定要執行嗎？');
+      if (!ok) { log('warn', '使用者取消補跑'); return; }
+      log('info', '呼叫 POST /api/admin/db-diag/rerun-axis-migrations ...');
+      try {
+        const res = await window.adminFetch('/api/admin/db-diag/rerun-axis-migrations', { method: 'POST' });
+        const data = await res.json();
+        if (!data.success) {
+          log('error', '補跑失敗', data);
+          return;
+        }
+        for (const r of data.results) {
+          if (r.ok) log('ok', '  ✓ ' + r.name + ' 成功');
+          else log('error', '  ✗ ' + r.name + ' 失敗：' + r.error, r.detail || '');
+        }
+        log('info', '最終欄位狀態', {
+          is_talisman: data.has_is_talisman ? '✓' : '✗',
+          primary_axis_layer: data.has_primary_axis ? '✓' : '✗',
+          is_permanent: data.has_is_permanent ? '✓' : '✗',
+        });
+        if (data.has_is_talisman && data.has_primary_axis && data.has_is_permanent) {
+          log('ok', '✓ 全部修復完成！回到 MOD-12 重試批次寫卡。');
+        } else {
+          log('warn', '仍有欄位缺席，請把完整 log 貼給 Claude 接著排。');
+        }
+      } catch (e) {
+        log('error', '補跑例外', e.message || String(e));
+      }
+    }
+
+    document.getElementById('btnCheckCardColumns').onclick = checkCardColumns;
+    document.getElementById('btnRerunAxisMigrations').onclick = rerunAxisMigrations;
+
     document.getElementById('btnClearLog').onclick = () => { logArea.textContent = ''; };
     document.getElementById('btnCopyLog').onclick = async () => {
       const text = logArea.innerText;

@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.18.0+b45';
+const ADMIN_VERSION = '0.18.1+b46';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -987,3 +987,84 @@ function scanForbiddenTerms(text) {
 window.normalizeCardText = normalizeCardText;
 window.scanForbiddenTerms = scanForbiddenTerms;
 window.CARD_TEXT_FORBIDDEN_TERMS = CARD_TEXT_FORBIDDEN_TERMS;
+
+/* ========================================
+   卡片 hallucination 掃描(合法關鍵字/狀態白名單)
+   掃 desc_zh 找出 AI 發明的關鍵字/狀態/術語,Non-blocking 警告。
+   偵測句型：「獲得『X』關鍵字」「賦予『X』標記」「施加『X』狀態」等
+   對比合法清單,找出不在清單內的就是 hallucination。
+   ======================================== */
+const LEGAL_CARD_KEYWORDS = new Set(['fast_play', '快速', 'target_other']);
+const LEGAL_CARD_STATUSES = new Set([
+  'poison','bleed','burning','frozen','doom_status','madness','marked','vulnerable','weakness_status','wet','weakened',
+  'darkness','disarm','fatigue','silence',
+  'empowered','armor','ward','haste','regeneration',
+  'stealth',
+  // 中文同義詞白名單(s06 允許的呈現)
+  '中毒','流血','燃燒','冷凍','毀滅','發瘋','標記','脆弱','弱點','潮濕','虛弱',
+  '黑暗','繳械','疲勞','沉默',
+  '強化','護甲','護盾','加速','再生',
+  '隱蔽',
+]);
+const LEGAL_EFFECT_VERBS_AS_NOUN = new Set([
+  // 這些是 effect_code 動詞,AI 有時誤當關鍵字用;列出來幫使用者辨識
+  'counterattack','反擊','taunt','嘲諷','extra_attack','額外攻擊','evade','閃避',
+]);
+
+/**
+ * 掃描 card 的所有 effect.desc_zh + flavor_text,找出 AI 發明的關鍵字/狀態/術語
+ * @param {object} card - 卡片 JSON(含 effects 陣列)
+ * @returns {Array<{field: string, type: string, term: string, context: string, hint?: string}>}
+ */
+function scanCardDescForHallucinations(card) {
+  if (!card || typeof card !== 'object') return [];
+  const warnings = [];
+  const fields = [];
+  if (Array.isArray(card.effects)) {
+    card.effects.forEach((e, i) => {
+      if (e && typeof e.desc_zh === 'string') fields.push({ field: 'effects[' + i + '].desc_zh', text: e.desc_zh });
+    });
+  }
+  if (typeof card.flavor_text === 'string') fields.push({ field: 'flavor_text', text: card.flavor_text });
+
+  // 可疑句型:「獲得/賦予/施加/具備/擁有/得到『X』關鍵字/狀態/標記」
+  const patterns = [
+    /(?:獲得|賦予|施加|具備|擁有|得到|加上|附加|掛上)(?:[^『「]{0,6})[『「]([^』」]{1,16})[』」]\s*(?:關鍵字|狀態|標記|屬性|能力)/g,
+    /[『「]([^』」]{1,16})[』」]\s*(?:關鍵字|狀態|標記)/g,
+  ];
+
+  const seen = new Set();
+  for (const { field, text } of fields) {
+    for (const re of patterns) {
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        const term = (m[1] || '').trim();
+        if (!term) continue;
+        const isLegalKeyword = LEGAL_CARD_KEYWORDS.has(term);
+        const isLegalStatus = LEGAL_CARD_STATUSES.has(term);
+        const isEffectVerbMisuse = LEGAL_EFFECT_VERBS_AS_NOUN.has(term);
+        if (isLegalKeyword || isLegalStatus) continue;
+        const dedupKey = field + '::' + term;
+        if (seen.has(dedupKey)) continue;
+        seen.add(dedupKey);
+        const ctxStart = Math.max(0, m.index - 4);
+        const ctxEnd = Math.min(text.length, m.index + m[0].length + 4);
+        warnings.push({
+          field,
+          type: isEffectVerbMisuse ? 'effect_verb_as_keyword' : 'unknown_term',
+          term,
+          context: text.slice(ctxStart, ctxEnd),
+          hint: isEffectVerbMisuse
+            ? ('「' + term + '」是 effect_code 動詞,不是關鍵字/狀態——應寫成一條獨立 effect 帶 trigger,而非掛關鍵字標籤')
+            : ('「' + term + '」不在合法關鍵字/狀態清單,疑似 AI 發明術語'),
+        });
+      }
+    }
+  }
+  return warnings;
+}
+
+window.scanCardDescForHallucinations = scanCardDescForHallucinations;
+window.LEGAL_CARD_KEYWORDS = LEGAL_CARD_KEYWORDS;
+window.LEGAL_CARD_STATUSES = LEGAL_CARD_STATUSES;

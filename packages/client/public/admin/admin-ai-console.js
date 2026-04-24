@@ -545,23 +545,42 @@ async function renderPlanForConfirmation(plan, userPrompt) {
   const moduleCode = (window.state && state.selectedModule && state.selectedModule.code) || '';
   const collisions = await checkCardNameCollisions(items, moduleCode);
 
+  // Phase D-1：hallucination 掃描(僅 MOD-01 卡片)
+  const hallucinations = moduleCode === 'MOD-01' && typeof window.scanCardDescForHallucinations === 'function'
+    ? items.map(it => window.scanCardDescForHallucinations(it) || [])
+    : items.map(() => []);
+
   const listHtml = items.slice(0, 10).map((it, i) => {
     const name = it.name_zh || it.code || `#${i + 1}`;
     const warn = collisions[i];
-    const warnHtml = warn ? ` <span style="color:#ff9a6a;font-size:0.7rem;">⚠ ${escapeHtml(warn)}</span>` : '';
+    const halluc = hallucinations[i] || [];
+    const parts = [];
+    if (warn) parts.push('<span style="color:#ff9a6a;font-size:0.7rem;">⚠ ' + escapeHtml(warn) + '</span>');
+    if (halluc.length > 0) {
+      const termList = halluc.slice(0, 3).map(h => '「' + h.term + '」').join('、');
+      const moreTag = halluc.length > 3 ? ' +' + (halluc.length - 3) : '';
+      parts.push('<span style="color:#ffd666;font-size:0.7rem;" title="' + escapeHtml(halluc.map(h => h.field + ': ' + h.hint).join('\n')) + '">🚨 疑似發明術語 ' + termList + moreTag + '</span>');
+    }
+    const warnHtml = parts.length ? ' ' + parts.join(' / ') : '';
     return `<li>${escapeHtml(String(name))}${warnHtml}</li>`;
   }).join('');
   const moreNote = items.length > 10 ? `<div style="font-size:0.6875rem;color:var(--text-tertiary);margin-top:4px;">（僅顯示前 10 項，共 ${items.length} 項）</div>` : '';
 
   const collisionCount = collisions.filter(Boolean).length;
-  const collisionBanner = collisionCount > 0
-    ? `<div style="background:#3a1e12;border:1px solid #ff9a6a;color:#ffc89a;padding:0.5rem 0.75rem;border-radius:4px;margin:0.5rem 0;font-size:0.8rem;">⚠ 有 ${collisionCount} 張與 DB 或批次內重名。執行後同名 POST 會觸發 code UNIQUE 衝突，建議先取消並請 AI 改名。</div>`
-    : '';
+  const hallucCount = hallucinations.filter(h => h.length > 0).length;
+  const banners = [];
+  if (collisionCount > 0) {
+    banners.push('<div style="background:#3a1e12;border:1px solid #ff9a6a;color:#ffc89a;padding:0.5rem 0.75rem;border-radius:4px;margin:0.5rem 0;font-size:0.8rem;">⚠ 有 ' + collisionCount + ' 張與 DB 或批次內重名。執行後同名 POST 會觸發 code UNIQUE 衝突,建議先取消並請 AI 改名。</div>');
+  }
+  if (hallucCount > 0) {
+    const totalTerms = hallucinations.reduce((a, h) => a + h.length, 0);
+    banners.push('<div style="background:#3a2e0a;border:1px solid #ffd666;color:#ffe9a0;padding:0.5rem 0.75rem;border-radius:4px;margin:0.5rem 0;font-size:0.8rem;">🚨 偵測到 ' + hallucCount + ' 張卡的 desc_zh 含疑似 AI 發明術語,共 ' + totalTerms + ' 筆(例「反擊」關鍵字、「眩暈」狀態等不在合法清單)。寫入後這些術語不會被遊戲引擎識別,建議取消並請 AI 改用合法術語或拆成獨立 effect。滑鼠移到 🚨 看詳情。</div>');
+  }
 
   const html = `
     <div class="plan-summary">AI 計畫：產出 ${items.length} 項</div>
     <div class="plan-count">模型：${plan.bridgeResult.modelUsed} · 任務類型：${plan.taskType}</div>
-    ${collisionBanner}
+    ${banners.join('')}
     <ol class="plan-item-list">${listHtml}</ol>
     ${moreNote}
     <div class="plan-actions">

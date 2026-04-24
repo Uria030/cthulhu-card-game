@@ -461,7 +461,13 @@ ${userDescription}
     - 自指避免：寫「打出另一張 X 卡時」（加「另一張」避免觸發自己）
 26. **反應屬性（reflex）**：八屬性之一，處理閃避/即時反應/中斷/應激判定。**本專案無先攻值機制**——不要在 desc_zh 寫「先攻 +N」「先攻順序」這類字樣，改寫「你的反應檢定 +N」。P 流影陣營主屬性為 reflex（非敏捷）。
 27. **E/S 戰鬥風格互換（v0.3 §1.1）**：E 號令預設 sidearm（不是 shooting）、S 鐵證預設 shooting（不是 sidearm）。若生成 E 陣營卡給 combat_style，優先選 sidearm；S 陣營優先選 shooting。
-28. **違和即資產（v0.3 §11）**：E 號令×隨身武器、I 深淵×暗殺 是刻意保留的張力配對——生成這兩組卡時要把違和感寫進 flavor_text，不要「修正」成更直覺的配對。`;
+28. **違和即資產（v0.3 §11）**：E 號令×隨身武器、I 深淵×暗殺 是刻意保留的張力配對——生成這兩組卡時要把違和感寫進 flavor_text，不要「修正」成更直覺的配對。
+29. **🚨 嚴禁發明關鍵字、狀態、術語**：
+    - **合法「關鍵字」僅 2 個**：`fast_play`(快速／不使用行動點)、`target_other`(可指定其他調查員)
+    - **合法「狀態」清單**：poison, bleed, burning, frozen, doom_status, madness, marked, vulnerable, weakness_status, wet, weakened（數值型負面）／ darkness, disarm, fatigue, silence（開關型負面）／ empowered, armor, ward, haste, regeneration（數值型正面）／ stealth（特殊正面）
+    - **絕對禁止**在 desc_zh 寫「獲得『反擊』關鍵字」「施加『眩暈』狀態」「賦予『命中』標記」這類**發明的術語**。所有術語必須從上方清單選,**不能音譯、不能意譯、不能混用中文代稱**
+    - \`counterattack\`、\`taunt\`、\`extra_attack\` 這些是 **effect_code(動詞,要寫進 effects 陣列)**,不是關鍵字。如果要做「敵人打你時反擊」,寫一條 effect:trigger=on_take_damage、effect_code=counterattack、params={amount:N},而不是寫「獲得反擊關鍵字」
+    - 若需要的概念不在清單內,用敘述性描述代替(例「此武器被攻擊時自動反擊 1 點傷害」),**但絕不加書名號/引號當成正式術語**`;
 };
 
 /**

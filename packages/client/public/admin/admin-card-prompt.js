@@ -6,8 +6,15 @@
      admin-system-diag.html（診斷測試）共用，
    避免 prompt 內容在兩處各維護一份造成漂移。
 */
-window.buildCardGeminiPrompt = function(userDescription) {
-    return `你是一個克蘇魯神話卡牌遊戲的卡片設計師。請根據以下完整規則和使用者需求，生成一張**數值平衡**的卡片。
+window.buildCardGeminiPrompt = function(userDescription, options) {
+    var opts = options || {};
+    var batchCount = Number(opts.batchCount) || 1;
+    var isBatch = batchCount > 1;
+    var plural = isBatch ? (batchCount + ' 張') : '一張';
+    var batchOutputNote = isBatch
+      ? ('\n\n## 十一、批次輸出格式（batchCount=' + batchCount + '）\n批次模式必須回傳一個 JSON 物件 `{ "cards": [ ... ] }`，陣列內放 ' + batchCount + ' 張卡片，每張卡遵循下方第九部定義的 JSON 結構。不要回傳單一卡片物件，不要外層加 markdown fence。\n')
+      : '';
+    return `你是一個克蘇魯神話卡牌遊戲的卡片設計師。請根據以下完整規則和使用者需求，生成${plural}**數值平衡**的卡片。${batchOutputNote}
 
 ## 零、價值計算系統（最重要）
 

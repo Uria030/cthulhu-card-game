@@ -10,6 +10,7 @@ const API_FIELD_WHITELIST = {
   'MOD-01': [
     'series', 'name_zh', 'name_en', 'faction', 'style', 'card_type', 'slot',
     'is_unique', 'is_signature', 'is_weakness', 'is_revelation', 'is_exceptional',
+    'is_permanent', 'is_extra',
     'level', 'cost', 'cost_currency', 'skill_value',
     'damage', 'horror', 'health_boost', 'sanity_boost',
     'weapon_tier', 'ammo', 'uses', 'consume_type',
@@ -20,6 +21,13 @@ const API_FIELD_WHITELIST = {
     'is_book', 'is_relic', 'study_method', 'study_required',
     'study_test_attribute', 'study_test_dc', 'study_difficulty_tier', 'study_upgrade_card',
     'upgrades', 'transform_to', 'transform_condition', 'transform_reversible',
+    // 雙軸戰鬥 v1.0（支柱一 v0.3+）：talisman 11 欄 + 軸向 1 欄
+    'is_talisman', 'talisman_type', 'target_threat_types',
+    'break_timing', 'break_strength_max', 'break_charge_label', 'break_charge_max',
+    'break_test_attribute', 'stockpile_accumulation_rule',
+    'break_axis_value', 'kill_axis_value', 'leverage_modifier',
+    // 主軸宣告（MOD-01 快速輸入 + 預覽彈窗）
+    'primary_axis_layer', 'primary_axis_value',
     'effects',
   ],
 

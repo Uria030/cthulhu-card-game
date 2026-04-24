@@ -2667,6 +2667,53 @@ CREATE INDEX IF NOT EXISTS idx_enc_cards_threat_type ON encounter_cards(threat_t
 `;
 
 // ============================================
+// Migration 023: 主軸欄位（Primary Axis）— 雙軸戰鬥草案 s08 軸向系統實作落地
+// - 每張卡片在設計時必須宣告一個主軸（或明確為 'none'）
+// - 主軸層：none / faction / combat_style / proficiency / card_name / talisman_type
+// - 主軸值：依層填值（例：card_name 層填「老警長」；faction 層填「E」）
+// - 9 張範本法器卡順手 backfill 主軸（以 talisman_type 層為主）
+// ============================================
+const MIGRATION_023_SQL = `
+ALTER TABLE card_definitions
+  ADD COLUMN IF NOT EXISTS primary_axis_layer VARCHAR(16) NOT NULL DEFAULT 'none'
+  CHECK (primary_axis_layer IN ('none', 'faction', 'combat_style', 'proficiency', 'card_name', 'talisman_type'));
+
+ALTER TABLE card_definitions
+  ADD COLUMN IF NOT EXISTS primary_axis_value VARCHAR(64);
+
+-- layer != 'none' 時必填 value；layer = 'none' 時 value 必為 NULL
+ALTER TABLE card_definitions DROP CONSTRAINT IF EXISTS chk_primary_axis_consistency;
+ALTER TABLE card_definitions ADD CONSTRAINT chk_primary_axis_consistency CHECK (
+  (primary_axis_layer = 'none' AND primary_axis_value IS NULL) OR
+  (primary_axis_layer != 'none' AND primary_axis_value IS NOT NULL AND primary_axis_value != '')
+) NOT VALID;
+
+-- 組合索引：僅索引 layer != 'none' 的資料，節省空間 + 加速查詢
+CREATE INDEX IF NOT EXISTS idx_card_primary_axis ON card_definitions(primary_axis_layer, primary_axis_value)
+  WHERE primary_axis_layer != 'none';
+
+-- 9 張範本法器卡的主軸 backfill（條件式：僅在 primary_axis_layer 仍是預設 'none' 時才動）
+UPDATE card_definitions SET primary_axis_layer = 'talisman_type', primary_axis_value = 'silver'
+  WHERE code = 'CS0AH-T01' AND primary_axis_layer = 'none';
+UPDATE card_definitions SET primary_axis_layer = 'talisman_type', primary_axis_value = 'steel'
+  WHERE code = 'CJ0AH-T02' AND primary_axis_layer = 'none';
+UPDATE card_definitions SET primary_axis_layer = 'talisman_type', primary_axis_value = 'wooden_peach'
+  WHERE code = 'CS0AH-T03' AND primary_axis_layer = 'none';
+UPDATE card_definitions SET primary_axis_layer = 'faction', primary_axis_value = 'E'
+  WHERE code = 'CE0OH-T04' AND primary_axis_layer = 'none';
+UPDATE card_definitions SET primary_axis_layer = 'combat_style', primary_axis_value = 'sidearm'
+  WHERE code = 'CF0AH-T05' AND primary_axis_layer = 'none';
+UPDATE card_definitions SET primary_axis_layer = 'talisman_type', primary_axis_value = 'steel'
+  WHERE code = 'CT0AC-T06' AND primary_axis_layer = 'none';
+UPDATE card_definitions SET primary_axis_layer = 'talisman_type', primary_axis_value = 'crystal'
+  WHERE code = 'CN0OH-T07' AND primary_axis_layer = 'none';
+UPDATE card_definitions SET primary_axis_layer = 'talisman_type', primary_axis_value = 'salt'
+  WHERE code = 'CI0OC-T08' AND primary_axis_layer = 'none';
+UPDATE card_definitions SET primary_axis_layer = 'talisman_type', primary_axis_value = 'scroll'
+  WHERE code = 'CP0OH-T09' AND primary_axis_layer = 'none';
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -2839,6 +2886,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_020_SQL);
     await client.query(MIGRATION_021_SQL);
     await client.query(MIGRATION_022_SQL);
+    await client.query(MIGRATION_023_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

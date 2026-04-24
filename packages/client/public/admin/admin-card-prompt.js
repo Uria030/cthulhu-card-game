@@ -330,3 +330,103 @@ ${userDescription}
 20. **chargeable 法器必填 break_charge_label**：instant 與 stockpile 時機必須填寫充能顯示名稱（例：神聖度/預兆/木質）；test 時機充能名稱可選但建議填（代表擲骰前的固定費用單位）。
 21. **軸向指認句型的強度合約**：在 effect.desc_zh 寫「打出另一張 X 卡時」這類指認時，陣營極軸只給風味或 +1 以內數值；卡名軸（'X' 系列）才能給 +2 以上強效果。`;
 };
+
+/**
+ * 精簡版 prompt — 供快速輸入模式使用
+ * 前端已 parse 出結構化欄位（faction/style/type/level/cost/slot/axis/talisman 欄位），
+ * Gemini 只負責創意層：name_en、effects 陣列、attribute_modifiers、flavor_text、V 值估算。
+ */
+window.buildMiniCardGeminiPrompt = function(parsed) {
+  const p = parsed || {};
+  const ud = p.userDescription || '';
+  const known = [
+    p.name_zh && ('卡名:' + p.name_zh),
+    p.faction && ('陣營:' + p.faction),
+    p.style && ('風格:' + p.style),
+    p.card_type && ('類型:' + p.card_type),
+    p.level != null && ('等級:' + p.level),
+    p.cost != null && ('費用:' + p.cost),
+    p.slot && ('配件欄:' + p.slot),
+    p.combat_style && ('戰鬥風格:' + p.combat_style),
+    p.primary_axis_layer && p.primary_axis_layer !== 'none' && ('主軸:' + p.primary_axis_layer + '/' + (p.primary_axis_value || '')),
+    p.is_talisman && ('法器:true'),
+    p.talisman_type && ('物質:' + p.talisman_type),
+    Array.isArray(p.target_threat_types) && p.target_threat_types.length > 0 && ('威脅類型:' + p.target_threat_types.join(',')),
+    p.break_timing && ('破除時機:' + p.break_timing),
+    p.break_charge_label && ('充能標籤:' + p.break_charge_label),
+    p.break_charge_max != null && ('充能上限:' + p.break_charge_max),
+    p.break_test_attribute && ('檢定屬性:' + p.break_test_attribute),
+  ].filter(Boolean).join(' | ');
+
+  return `你是克蘇魯神話卡牌遊戲的卡片設計師。下面的結構化欄位已由前端決定，你**不要覆蓋這些值**；你只需要產出創意層的 JSON 欄位。
+
+## 已確定欄位（請照抄回 JSON，勿改）
+${known || '（無）'}
+
+## 你要產出的欄位（JSON 形式回傳）
+- name_en: 英譯卡名
+- attribute_modifiers: 物件，例 {"charisma": 1}（武器卡才需要；其他類型留 {}）
+- effects: 陣列，每個元素為 {trigger, condition, cost, target, effect_code, params, duration, desc_zh, desc_en}
+- flavor_text: 風味文字（一句話，不含機制用語，符合克蘇魯氛圍）
+- break_axis_value: 法器的破事軸 V 值估算（僅 is_talisman=true 時填；範圍 0-6）
+- kill_axis_value: 殺敵軸 V 值（純法器為 0；雙用途卡依傷害 × 使用次數估）
+- leverage_modifier: 雙用途卡的槓桿修正（單用途為 0；雙用途 0.5-2.0）
+- value_calculation: {effects: [{name, value}], total_effect_value, level_discount, cost, required_rarity_discount, calculated_rarity}
+
+## V 值公式（摘要）
+- 1V = 1 行動點 = 1 資源 = 抽 1 張牌 = 造成 1 點傷害
+- 恐懼傷害 3V/點；恢復 HP/SAN 1.5V/點；抽牌 1V/張；搜尋 6V；移動 1V/格
+- 施加正面狀態 3-6V/層；快速 +1V；可指定他人 +2V
+- **等級抵扣**（支柱五 v0.2）：LV0=0, LV1=-0.5V, LV2=-1V, LV3=-2V, LV4=-3V, LV5=-4V
+- **所有卡型 1:1**（含資產卡；原 2:1 已廢）：稀有度抵扣 = 總效果 V - 等級抵扣 - 費用
+- 稀有度：≤0 隨身 / 0.1~1 基礎 / 1.1~2 標準 / 2.1~3 進階 / 3.1~4 稀有 / 4.1~5 傳奇
+- 雙用途卡合約：破事 V + 殺敵 V ≤ 9，單軸不得 > 6
+
+## 八陣營氣質（主屬性 / 一句話）
+E 號令 魅力 團隊增益與資源放大；I 深淵 智力 牌庫操控與獨處強化；S 鐵證 感知 裝備堆疊；N 天啟 意志 混沌袋與預知；T 解析 敏捷 戰場計算與弱點揭露；F 聖燼 力量 治療與以身擋傷；J 鐵壁 體質 傷害減免與佈局；P 流影 反應 反應行動與棄牌堆回收
+
+## 雙軸戰鬥 / 法器（is_talisman=true 時適用）
+威脅類型（target_threat_types）：mental 精神 / physical 物質 / ritual 儀式（陣列，允許多值）
+破除時機（break_timing）：
+- instant 即時：過路費 f(S,N) = ⌈S/2⌉ + N 充能消耗
+- test 檢定：f(S,N) = 1 充能 + 屬性檢定 DC=S（break_test_attribute 必填）
+- stockpile 儲蓄：f(S,N) = S 計量消耗
+物質類型（talisman_type）：wooden_peach/silver/steel/crystal/salt/scroll
+
+## 效果動詞（effect_code，必從以下選）
+deal_damage, deal_horror, heal_hp, heal_san, draw_card, search_deck, retrieve_card, return_to_deck, discard_card, gain_resource, spend_resource, move_investigator, swap_position, engage_enemy, disengage_enemy, exhaust_card, ready_card, stun_enemy, add_status, remove_status, make_test, modify_test, reroll, auto_success, attack, evade, taunt, counterattack, place_clue, discover_clue, place_doom, remove_doom, spawn_enemy, remove_enemy, look_chaos_bag, manipulate_chaos_bag, fast_play, target_other, add_bless, add_curse, remove_bless, remove_curse
+
+## 觸發時機（trigger，必從以下選）
+on_play, on_commit, on_consume, on_enter, on_leave, on_draw, on_success, on_fail, on_take_damage, on_take_horror, before_take_damage, before_take_horror, before_downed, round_start, round_end, action, reaction, passive, free_action
+
+## 軸向指認句型（寫入 effect.desc_zh 時使用）
+- 觸發型：在你打出/獲得/消費另一張 [軸向] 卡時，[效果]
+- 持續型：只要你場上有 N 張 [軸向] 卡，[效果]
+- 強化型：你打出的 [軸向] 卡 [修改效果]
+- 強度與廣度反比：faction 軸要淡、card_name 軸可強
+
+## 敘事輸入
+${ud || '（使用者未提供額外敘事，請依結構化欄位合理推斷）'}
+
+## 輸出格式
+只回傳 JSON，不加 markdown 圍欄、不加任何解釋。範本（請保留所有欄位、值照實際填）：
+{
+  "name_en": "...",
+  "attribute_modifiers": {},
+  "effects": [
+    {"trigger": "passive", "condition": null, "cost": null, "target": "self", "effect_code": "...", "params": {}, "duration": "permanent", "desc_zh": "...", "desc_en": "..."}
+  ],
+  "flavor_text": "...",
+  "break_axis_value": 0,
+  "kill_axis_value": 0,
+  "leverage_modifier": 0,
+  "value_calculation": {"effects": [], "total_effect_value": 0, "level_discount": 0, "cost": 0, "required_rarity_discount": 0, "calculated_rarity": "..."}
+}
+
+## 重要提醒
+1. **不要覆蓋已確定欄位**：上方「已確定欄位」的值前端會覆蓋你的輸出，但請你照抄過去避免 JSON 不完整。
+2. **effect.desc_zh 必遵循 s06 規範**：主詞「你」、數字阿拉伯、減號全形「−」、禁用「若/否則」改用「如果/如果失敗…」。
+3. **軸向指認**：若主軸為 card_name，請在 effects 中至少一條觸發型 desc_zh 明確寫「打出另一張『${p.primary_axis_value || 'X'}』卡時」。
+4. **法器 desc_zh**：instant 型「花費 X 充能:對應強度 X 的 [類型] 類遭遇卡，立即破除」；test 型「花費 1 充能：對應一張 [類型] 類遭遇卡，進行 [屬性] 檢定 (DC 為其強度)」；stockpile 型「花費 X 計量：...」。
+5. **attribute_modifiers 僅武器卡填**；純法器/事件/盟友/技能留 {}。`;
+};

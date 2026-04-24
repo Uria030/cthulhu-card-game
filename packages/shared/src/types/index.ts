@@ -30,3 +30,5 @@ export type {
   ThreatTypingFields,
 } from './talisman';
 export { TOLL_FUNCTIONS, AXIS_REFERENCE_TEMPLATES } from './talisman';
+export type { PrimaryAxisLayer, PrimaryAxisFields } from './axis';
+export { PRIMARY_AXIS_LAYER_LABELS, PRIMARY_AXIS_LAYER_STRENGTH } from './axis';

@@ -193,22 +193,44 @@
       <!-- AI -->
       <div class="ai-section">
         <div class="ai-title">AI 卡片生成</div>
-        <div class="ai-input-row">
-          <textarea id="aiPrompt" placeholder="輸入你想要的卡片描述…&#10;例如：S陣營的進階武器，獵槍，費用4"></textarea>
-          <div style="display:flex;flex-direction:column;gap:0.25rem;">
-            <button class="btn btn-primary" id="aiGenBtn" onclick="aiGenerate()">生成</button>
-            <button class="btn" onclick="el('aiPrompt').value=''" style="font-size:0.75rem;">清除</button>
+
+        <!-- 模式切換 tab -->
+        <div style="display:flex;gap:0.25rem;margin-bottom:0.35rem;font-size:0.75rem;">
+          <button type="button" class="btn" id="aiModeTabQuick" onclick="switchAiMode('quick')" style="flex:1;">✦ 快速輸入（精簡 prompt）</button>
+          <button type="button" class="btn" id="aiModeTabFree" onclick="switchAiMode('free')" style="flex:1;">🖊 自由輸入（完整 prompt）</button>
+        </div>
+
+        <!-- 快速輸入區 -->
+        <div id="aiModeQuick">
+          <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.35rem;">結構化輸入，系統自動 parse 可決定的欄位，Gemini 只補創意層。prompt 僅 ~3500 字、速度快 3-5 倍。</div>
+          <textarea id="aiPromptQuick" placeholder="卡名:老警長的舊警徽&#10;軸:card_name / 老警長&#10;陣營:E 風格:OH 類型:asset&#10;等級:0 費用:2 配件欄:accessory&#10;法器:mental / test / 共鳴 / 3 / 魅力&#10;敘事:主卡、指認『老警長』軸、被動魅力+1、治癒隊友 1 SAN、破精神遭遇卡"></textarea>
+          <div style="display:flex;gap:0.25rem;margin-top:0.25rem;">
+            <button class="btn btn-primary" id="aiGenQuickBtn" onclick="aiGenerate('quick')" style="flex:1;">生成並預覽</button>
+            <button class="btn" onclick="el('aiPromptQuick').value=''" style="font-size:0.75rem;">清除</button>
           </div>
         </div>
-        <div class="ai-templates">
-          <span style="font-size:0.6875rem;color:var(--text-tertiary);margin-right:0.25rem;">快速模板：</span>
-          <button class="btn" onclick="aiTemplate('weapon')">武器</button>
-          <button class="btn" onclick="aiTemplate('spell')">法術</button>
-          <button class="btn" onclick="aiTemplate('heal')">治療</button>
-          <button class="btn" onclick="aiTemplate('event')">事件</button>
-          <button class="btn" onclick="aiTemplate('ally')">盟友</button>
-          <button class="btn" onclick="aiTemplate('revelation')">神啟</button>
+
+        <!-- 自由輸入區 -->
+        <div id="aiModeFree" style="display:none;">
+          <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.35rem;">純敘述，Gemini 推斷所有欄位。prompt 完整 12590 字、模型若品質不夠可升 2.5-pro。</div>
+          <div class="ai-input-row">
+            <textarea id="aiPrompt" placeholder="輸入你想要的卡片描述…&#10;例如:S陣營的進階武器，獵槍，費用4"></textarea>
+            <div style="display:flex;flex-direction:column;gap:0.25rem;">
+              <button class="btn btn-primary" id="aiGenBtn" onclick="aiGenerate('free')">生成並預覽</button>
+              <button class="btn" onclick="el('aiPrompt').value=''" style="font-size:0.75rem;">清除</button>
+            </div>
+          </div>
+          <div class="ai-templates">
+            <span style="font-size:0.6875rem;color:var(--text-tertiary);margin-right:0.25rem;">快速模板:</span>
+            <button class="btn" onclick="aiTemplate('weapon')">武器</button>
+            <button class="btn" onclick="aiTemplate('spell')">法術</button>
+            <button class="btn" onclick="aiTemplate('heal')">治療</button>
+            <button class="btn" onclick="aiTemplate('event')">事件</button>
+            <button class="btn" onclick="aiTemplate('ally')">盟友</button>
+            <button class="btn" onclick="aiTemplate('revelation')">神啟</button>
+          </div>
         </div>
+
         <div id="aiStatusMsg" class="ai-status"></div>
       </div>
 
@@ -345,6 +367,30 @@
           </div>
 
           </div><!-- /secPlay -->
+
+          <!-- 🎯 主軸（軸向宣告，雙軸戰鬥 s08 §2.1） -->
+          <div class="section-label collapsible open" id="secAxisHead" onclick="toggleSection('secAxis')">🎯 主軸（軸向宣告）<span id="axisLayerTag" style="display:inline-block;margin-left:0.5rem;padding:0.1rem 0.5rem;border-radius:3px;font-size:0.7rem;background:#6a6a6a;color:#fff;">無軸向</span></div>
+          <div class="section-content" id="secAxis">
+            <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.5rem;">宣告此卡設計時心中最強的軸向。強度合約：由粗到細 faction → combat_style → proficiency → card_name，軸向越細效果可越強。</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>主軸層</label>
+                <select id="f_primary_axis_layer" onchange="onPrimaryAxisLayerChange()">
+                  <option value="none">無軸向（工具卡）</option>
+                  <option value="faction">陣營極軸（最廣 · 效果要淡）</option>
+                  <option value="combat_style">戰鬥風格軸</option>
+                  <option value="proficiency">戰鬥專精軸</option>
+                  <option value="card_name">卡名軸（最細 · 效果可強）</option>
+                  <option value="talisman_type">法器類型軸（正交）</option>
+                </select>
+              </div>
+              <div class="form-group" id="primaryAxisValueGroup" style="display:none;">
+                <label>主軸值</label>
+                <div id="primaryAxisValueInputSlot"></div>
+              </div>
+            </div>
+            <div id="primaryAxisHint" style="font-size:0.7rem;color:var(--text-tertiary);margin-top:0.35rem;"></div>
+          </div><!-- /secAxis -->
 
           <!-- Stats: 加值數據 (Commit) -->
           <div class="section-label collapsible open" id="secCommitHead" onclick="toggleSection('secCommit')">加值數據（Commit）<span class="eff-value-tag" id="commitTotalTag">0V</span></div>
@@ -1237,6 +1283,89 @@
     onBreakTimingChange();
   }
 
+  /* ─── 主軸（Primary Axis，s08 §2.1） ─── */
+  const PRIMARY_AXIS_META = {
+    none:          { label: '無軸向',      color: '#6a6a6a', hint: '此卡為單純工具卡，不參與軸向協同（可後續調整）' },
+    faction:       { label: '陣營極軸',    color: '#c62828', hint: '最廣 — 效果應為風味或 +1 以內的數值' },
+    combat_style:  { label: '戰鬥風格軸',  color: '#ef6c00', hint: '中廣 — 手感建構、中等加成' },
+    proficiency:   { label: '戰鬥專精軸',  color: '#f9a825', hint: '中細 — 天賦樹專精回報、顯著加成' },
+    card_name:     { label: '卡名軸',      color: '#2e7d32', hint: '最細 — 專屬家族（5-8 張）、可爆發式加成' },
+    talisman_type: { label: '法器類型軸',  color: '#6D4C41', hint: '與其他層正交 — 跨戰鬥風格的物質系列' },
+  };
+
+  function onPrimaryAxisLayerChange() {
+    const layer = el('f_primary_axis_layer').value;
+    const meta = PRIMARY_AXIS_META[layer] || PRIMARY_AXIS_META.none;
+    const tag = el('axisLayerTag');
+    if (tag) { tag.textContent = meta.label; tag.style.background = meta.color; }
+    const hint = el('primaryAxisHint');
+    if (hint) hint.textContent = meta.hint;
+
+    const group = el('primaryAxisValueGroup');
+    const slot = el('primaryAxisValueInputSlot');
+    if (layer === 'none') {
+      group.style.display = 'none';
+      slot.innerHTML = '';
+      return;
+    }
+    group.style.display = '';
+    // 依層產生合適的輸入控件
+    const current = slot.dataset.currentValue || '';
+    let html = '';
+    if (layer === 'faction') {
+      html = `<select id="f_primary_axis_value" onchange="onPrimaryAxisValueChange()">` +
+        `<option value="">— 選擇陣營 —</option>` +
+        `<option value="E">E 號令</option><option value="I">I 深淵</option>` +
+        `<option value="S">S 鐵證</option><option value="N">N 天啟</option>` +
+        `<option value="T">T 解析</option><option value="F">F 聖燼</option>` +
+        `<option value="J">J 鐵壁</option><option value="P">P 流影</option>` +
+        `<option value="neutral">中立</option></select>`;
+    } else if (layer === 'combat_style') {
+      html = `<select id="f_primary_axis_value" onchange="onPrimaryAxisValueChange()">` +
+        `<option value="">— 選擇戰鬥風格 —</option>` +
+        Object.entries(COMBAT_STYLES).map(([k, v]) => `<option value="${k}">${v.zh} (${v.en})</option>`).join('') +
+        `</select>`;
+    } else if (layer === 'proficiency') {
+      html = `<select id="f_primary_axis_value" onchange="onPrimaryAxisValueChange()">` +
+        `<option value="">— 選擇戰鬥專精 —</option>` +
+        Object.entries(COMBAT_SPECIALIZATIONS).map(([k, v]) => `<option value="${k}">${v.zh}（${COMBAT_STYLES[v.parent]?.zh || v.parent}）</option>`).join('') +
+        `</select>`;
+    } else if (layer === 'talisman_type') {
+      const types = (window.TALISMAN_TYPES_CACHE || []);
+      html = `<select id="f_primary_axis_value" onchange="onPrimaryAxisValueChange()">` +
+        `<option value="">— 選擇法器類型 —</option>` +
+        types.map(t => `<option value="${t.code}">${t.name_zh}</option>`).join('') +
+        `</select>`;
+    } else if (layer === 'card_name') {
+      html = `<input type="text" id="f_primary_axis_value" placeholder="例：老警長、.45、契約、米斯卡塔尼克" oninput="onPrimaryAxisValueChange()">`;
+    }
+    slot.innerHTML = html;
+    if (current) el('f_primary_axis_value').value = current;
+  }
+
+  function onPrimaryAxisValueChange() {
+    const el2 = el('f_primary_axis_value');
+    if (el2) el('primaryAxisValueInputSlot').dataset.currentValue = el2.value;
+  }
+
+  function collectPrimaryAxis() {
+    const layer = el('f_primary_axis_layer')?.value || 'none';
+    if (layer === 'none') return { primary_axis_layer: 'none', primary_axis_value: null };
+    const v = el('f_primary_axis_value')?.value?.trim();
+    return { primary_axis_layer: layer, primary_axis_value: v || null };
+  }
+
+  function loadPrimaryAxis(c) {
+    const sel = el('f_primary_axis_layer');
+    if (!sel) return;
+    sel.value = c.primary_axis_layer || 'none';
+    const slot = el('primaryAxisValueInputSlot');
+    if (slot) slot.dataset.currentValue = c.primary_axis_value || '';
+    onPrimaryAxisLayerChange();
+    const v = el('f_primary_axis_value');
+    if (v && c.primary_axis_value) v.value = c.primary_axis_value;
+  }
+
   function populateSelects() {
     // Series
     const srSel = el('f_series');
@@ -1491,6 +1620,7 @@
     renderEffects(effects);
     toggleConditionalFields();
     if (typeof loadTalismanFields === 'function') loadTalismanFields(c);
+    if (typeof loadPrimaryAxis === 'function') loadPrimaryAxis(c);
     updateCodePreview();
     updatePreview();
     renderList();
@@ -1498,8 +1628,10 @@
 
   function collectForm() {
     const talisman = typeof collectTalismanFields === 'function' ? collectTalismanFields() : {};
+    const axis = typeof collectPrimaryAxis === 'function' ? collectPrimaryAxis() : {};
     return {
       ...talisman,
+      ...axis,
       id: editingId || null,
       series: el('f_series').value,
       name_zh: el('f_name_zh').value.trim(),
@@ -2748,21 +2880,125 @@
       d._talisman_warnings = talismanWarns;
     }
 
+    // 主軸（Primary Axis）— s08 §2.1 一致性檢查
+    const AXIS_LAYER_WHITELIST = new Set(['none', 'faction', 'combat_style', 'proficiency', 'card_name', 'talisman_type']);
+    if (!AXIS_LAYER_WHITELIST.has(d.primary_axis_layer)) {
+      (d._talisman_warnings = d._talisman_warnings || []).push(`primary_axis_layer 非法(${d.primary_axis_layer})，歸為 'none'`);
+      d.primary_axis_layer = 'none';
+    }
+    if (d.primary_axis_layer === 'none') {
+      d.primary_axis_value = null;
+    } else {
+      if (!d.primary_axis_value || !String(d.primary_axis_value).trim()) {
+        (d._talisman_warnings = d._talisman_warnings || []).push(`primary_axis_layer='${d.primary_axis_layer}' 但 primary_axis_value 為空，歸為 'none'`);
+        d.primary_axis_layer = 'none';
+        d.primary_axis_value = null;
+      } else {
+        // 一致性檢查：主軸值與該層對應欄位是否吻合
+        if (d.primary_axis_layer === 'card_name' && d.name_zh && !String(d.name_zh).includes(d.primary_axis_value)) {
+          (d._talisman_warnings = d._talisman_warnings || []).push(`主軸為卡名軸『${d.primary_axis_value}』，但 name_zh『${d.name_zh}』不含此字串 — 軸向將無法被辨識`);
+        }
+        if (d.primary_axis_layer === 'faction' && d.faction && d.faction !== d.primary_axis_value) {
+          (d._talisman_warnings = d._talisman_warnings || []).push(`主軸為陣營軸『${d.primary_axis_value}』，但 faction='${d.faction}' — 兩者應一致`);
+        }
+        if (d.primary_axis_layer === 'combat_style' && d.combat_style && d.combat_style !== d.primary_axis_value) {
+          (d._talisman_warnings = d._talisman_warnings || []).push(`主軸為戰鬥風格軸『${d.primary_axis_value}』，但 combat_style='${d.combat_style}' — 兩者應一致`);
+        }
+        if (d.primary_axis_layer === 'talisman_type' && d.talisman_type && d.talisman_type !== d.primary_axis_value) {
+          (d._talisman_warnings = d._talisman_warnings || []).push(`主軸為法器類型軸『${d.primary_axis_value}』，但 talisman_type='${d.talisman_type}' — 兩者應一致`);
+        }
+      }
+    }
+
     return d;
   }
 
-  async function aiGenerate() {
+  // AI 模式切換（快速輸入 vs 自由輸入）
+  let currentAiMode = 'quick';
+  function switchAiMode(mode) {
+    currentAiMode = mode;
+    el('aiModeQuick').style.display = mode === 'quick' ? '' : 'none';
+    el('aiModeFree').style.display = mode === 'free' ? '' : 'none';
+    const qBtn = el('aiModeTabQuick');
+    const fBtn = el('aiModeTabFree');
+    if (qBtn) qBtn.classList.toggle('btn-primary', mode === 'quick');
+    if (fBtn) fBtn.classList.toggle('btn-primary', mode === 'free');
+  }
+
+  // 快速輸入 parser：解析 Uria 的結構化語法
+  function parseQuickInput(text) {
+    const parsed = { userDescription: '' };
+    const narrativeLines = [];
+    const lines = text.split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      // 匹配「鍵:值」或「鍵：值」
+      const m = trimmed.match(/^([^:：]+)[：:]\s*(.+)$/);
+      if (!m) { narrativeLines.push(trimmed); continue; }
+      const key = m[1].trim().toLowerCase();
+      const val = m[2].trim();
+      if (key === '卡名' || key === 'name') parsed.name_zh = val;
+      else if (key === '軸' || key === '主軸' || key === 'axis') {
+        const [layer, ...rest] = val.split(/[\/／]/);
+        parsed.primary_axis_layer = (layer || '').trim();
+        parsed.primary_axis_value = rest.join('/').trim() || null;
+      }
+      else if (key === '陣營' || key === 'faction') parsed.faction = val;
+      else if (key === '風格' || key === 'style') parsed.style = val;
+      else if (key === '類型' || key === 'type') parsed.card_type = val;
+      else if (key === '等級' || key === 'level' || key === 'lv') parsed.level = parseInt(val.replace(/[^0-9]/g, '')) || 0;
+      else if (key === '費用' || key === 'cost') parsed.cost = parseInt(val.replace(/[^0-9]/g, '')) || 0;
+      else if (key === '配件欄' || key === 'slot') parsed.slot = val;
+      else if (key === '戰鬥風格' || key === 'combat_style') parsed.combat_style = val;
+      else if (key === '法器' || key === 'talisman') {
+        const parts = val.split(/[\/／]/).map(s => s.trim());
+        parsed.is_talisman = true;
+        if (parts[0]) parsed.target_threat_types = [parts[0]];
+        if (parts[1]) parsed.break_timing = parts[1];
+        if (parts[2]) parsed.break_charge_label = parts[2];
+        if (parts[3]) parsed.break_charge_max = parseInt(parts[3]) || null;
+        if (parts[4]) {
+          const attrMap = { 力量: 'strength', 敏捷: 'agility', 體質: 'constitution', 反應: 'reflex', 智力: 'intellect', 意志: 'willpower', 感知: 'perception', 魅力: 'charisma' };
+          parsed.break_test_attribute = attrMap[parts[4]] || parts[4];
+        }
+      }
+      else if (key === '法器類型' || key === 'talisman_type') parsed.talisman_type = val;
+      else if (key === '敘事' || key === '描述' || key === 'narrative') narrativeLines.push(val);
+      else narrativeLines.push(trimmed);
+    }
+    parsed.userDescription = narrativeLines.join('\n');
+    return parsed;
+  }
+
+  async function aiGenerate(mode) {
+    mode = mode || currentAiMode || 'quick';
     const apiKey = localStorage.getItem(LS_API_KEY);
     if (!apiKey) { alert('請先設定 Gemini API Key'); return; }
-    const userDesc = el('aiPrompt').value.trim();
-    if (!userDesc) { alert('請輸入卡片描述'); return; }
-    const statusEl = el('aiStatusMsg'); const btn = el('aiGenBtn');
+
+    const inputEl = mode === 'quick' ? el('aiPromptQuick') : el('aiPrompt');
+    const rawText = inputEl.value.trim();
+    if (!rawText) { alert('請輸入卡片描述'); return; }
+
+    const statusEl = el('aiStatusMsg');
+    const btn = mode === 'quick' ? el('aiGenQuickBtn') : el('aiGenBtn');
     btn.disabled = true;
     statusEl.innerHTML = '<span class="ai-loading">&#8635;</span> 生成中…';
     statusEl.className = 'ai-status';
 
-    const prompt = buildGeminiPrompt(userDesc);
+    let prompt, parsedStructured = null;
+    if (mode === 'quick') {
+      parsedStructured = parseQuickInput(rawText);
+      if (typeof window.buildMiniCardGeminiPrompt === 'function') {
+        prompt = window.buildMiniCardGeminiPrompt(parsedStructured);
+      } else {
+        prompt = buildGeminiPrompt(parsedStructured.userDescription || rawText);
+      }
+    } else {
+      prompt = buildGeminiPrompt(rawText);
+    }
 
+    const t0 = Date.now();
     try {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2773,10 +3009,25 @@
       const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!text) throw new Error('API 回應為空');
       const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
-      const d = validateAndFixCardData(JSON.parse(cleanJson));
-      fillFormFromData(d);
-      statusEl.textContent = '生成完成！請檢查並儲存。'; statusEl.className = 'ai-status ok';
-    } catch (err) { statusEl.textContent = '生成失敗：' + err.message; statusEl.className = 'ai-status err'; }
+      let d = JSON.parse(cleanJson);
+
+      // 快速模式：把前端 parse 的結構化欄位覆蓋到 AI 結果上（前端權威）
+      if (mode === 'quick' && parsedStructured) {
+        const override = { ...parsedStructured };
+        delete override.userDescription;
+        // 把已知欄位覆蓋（前端 parse 為準），但不覆蓋 AI 生成的創意欄位
+        d = { ...d, ...override };
+      }
+      d = validateAndFixCardData(d);
+
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+      statusEl.textContent = `生成完成（${elapsed} 秒），請在預覽確認後套用。`;
+      statusEl.className = 'ai-status ok';
+      showCardPreviewModal(d, mode);
+    } catch (err) {
+      statusEl.textContent = '生成失敗：' + err.message;
+      statusEl.className = 'ai-status err';
+    }
     finally { btn.disabled = false; }
   }
 
@@ -2818,6 +3069,108 @@
       const en = await aiTranslate(zh);
       if (en) { enField.value = en; updatePreview(); }
     } catch (err) { alert('翻譯失敗：' + err.message); }
+  }
+
+  // AI 生成預覽 Modal — 按「套用」才呼叫 fillFormFromData
+  let _previewPendingData = null;
+
+  function showCardPreviewModal(d, mode) {
+    _previewPendingData = d;
+    let overlay = document.getElementById('cardPreviewModal');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'cardPreviewModal';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;font-family:inherit;';
+      overlay.onclick = (e) => { if (e.target === overlay) closeCardPreviewModal(); };
+      document.body.appendChild(overlay);
+    }
+
+    const sec = (title, body) => `<div style="margin-bottom:0.5rem;padding:0.5rem;background:var(--bg-primary);border-radius:4px;border:1px solid var(--border);">
+      <div style="font-weight:600;font-size:0.75rem;color:var(--gold-dim);margin-bottom:0.3rem;">${title}</div>
+      <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.5;">${body}</div>
+    </div>`;
+
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    const axisLabel = PRIMARY_AXIS_META[d.primary_axis_layer]?.label || d.primary_axis_layer;
+    const axisColor = PRIMARY_AXIS_META[d.primary_axis_layer]?.color || '#6a6a6a';
+    const axisBadge = `<span style="display:inline-block;padding:0.05rem 0.4rem;border-radius:3px;background:${axisColor};color:#fff;font-size:0.7rem;margin-right:0.3rem;">${axisLabel}</span>`;
+
+    const basicBody = `
+      卡名：<b>${esc(d.name_zh)}</b> / ${esc(d.name_en)}<br>
+      陣營：${esc(d.faction)} · 風格：${esc(d.style)} · 類型：${esc(d.type || d.card_type)}<br>
+      等級 ${d.level ?? 0} · 費用 ${d.cost ?? 0} · 配件欄 ${esc(d.slot)}
+    `;
+
+    const axisBody = d.primary_axis_layer === 'none'
+      ? `${axisBadge}單純工具卡，不參與軸向協同`
+      : `${axisBadge}值：<b>${esc(d.primary_axis_value)}</b>`;
+
+    const attrModBody = (() => {
+      const m = d.attribute_modifiers || {};
+      const entries = Object.entries(m).filter(([k, v]) => v != null && v !== 0);
+      if (!entries.length) return '<span style="color:var(--text-tertiary);">無</span>';
+      return entries.map(([k, v]) => `${esc(k)} ${v >= 0 ? '+' : ''}${v}`).join('、');
+    })();
+
+    const talismanBody = d.is_talisman ? `
+      物質：${esc(d.talisman_type)} · 威脅類型：${(d.target_threat_types || []).join('、')}<br>
+      破除時機：${esc(d.break_timing)} · ${esc(d.break_charge_label || '—')} × ${d.break_charge_max ?? 0}<br>
+      ${d.break_test_attribute ? '檢定屬性：' + esc(d.break_test_attribute) : ''}${d.stockpile_accumulation_rule ? '<br>累積：' + esc(d.stockpile_accumulation_rule) : ''}<br>
+      破事 V ${d.break_axis_value ?? 0} · 殺敵 V ${d.kill_axis_value ?? 0} · 槓桿 ${d.leverage_modifier ?? 0}
+    ` : '<span style="color:var(--text-tertiary);">非法器卡</span>';
+
+    const effectsBody = (() => {
+      const effects = Array.isArray(d.effects) ? d.effects : [];
+      if (!effects.length) return '<span style="color:var(--text-tertiary);">無效果</span>';
+      return effects.map((e, i) => `[${i + 1}] <b>${esc(e.trigger || '?')}</b> · ${esc(e.effect_code || '?')}<br>　${esc(e.desc_zh || '')}`).join('<br><br>');
+    })();
+
+    const flavorBody = d.flavor_text ? `<i>「${esc(d.flavor_text)}」</i>` : '<span style="color:var(--text-tertiary);">無</span>';
+
+    const warnings = [];
+    if (Array.isArray(d._talisman_warnings)) warnings.push(...d._talisman_warnings);
+    if (Array.isArray(d._style_warnings) && d._style_warnings.length) {
+      warnings.push(...d._style_warnings.map(w => `${w.label}: 含 ${w.warnings.length} 個禁用詞`));
+    }
+    const warningsBody = warnings.length
+      ? warnings.map(w => `⚠ ${esc(w)}`).join('<br>')
+      : '<span style="color:var(--text-tertiary);">無警告</span>';
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;width:min(640px, 92vw);max-height:88vh;overflow-y:auto;padding:1rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+          <strong style="font-size:1rem;color:var(--gold);">AI 生成結果預覽（${mode === 'quick' ? '快速輸入' : '自由輸入'}模式）</strong>
+          <button onclick="closeCardPreviewModal()" style="background:none;border:none;color:var(--text-secondary);font-size:1.2rem;cursor:pointer;">✕</button>
+        </div>
+        ${sec('📋 基本資料', basicBody)}
+        ${sec('🎯 主軸', axisBody)}
+        ${sec('💪 屬性修正', attrModBody)}
+        ${sec('📿 法器（破事軸）', talismanBody)}
+        ${sec('⚡ 效果', effectsBody)}
+        ${sec('🌙 風味', flavorBody)}
+        ${sec('⚠ 警告', warningsBody)}
+        <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+          <button class="btn" onclick="closeCardPreviewModal()" style="flex:1;">取消</button>
+          <button class="btn btn-primary" onclick="applyPreviewedCard()" style="flex:2;">套用到表單</button>
+        </div>
+      </div>
+    `;
+    overlay.style.display = 'flex';
+  }
+
+  function closeCardPreviewModal() {
+    const overlay = document.getElementById('cardPreviewModal');
+    if (overlay) overlay.style.display = 'none';
+    _previewPendingData = null;
+  }
+
+  function applyPreviewedCard() {
+    if (!_previewPendingData) { closeCardPreviewModal(); return; }
+    fillFormFromData(_previewPendingData);
+    closeCardPreviewModal();
+    const statusEl = el('aiStatusMsg');
+    if (statusEl) { statusEl.textContent = '已套用到表單，請檢查並儲存。'; statusEl.className = 'ai-status ok'; }
   }
 
   function fillFormFromData(d) {

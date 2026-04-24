@@ -1,6 +1,6 @@
 {
-  "version": "v05",
-  "frozen_at": "2026-04-22",
+  "version": "v06",
+  "frozen_at": "2026-04-24",
   "sections": [
     {
       "id": "rulebook",
@@ -9,7 +9,7 @@
       "items": [
         { "file": "01_rulebook_ch1.md", "title": "第一章 · 核心設計原則", "lines": 413 },
         { "file": "02_rulebook_ch2.md", "title": "第二章 · 遊戲規則總綱", "lines": 778 },
-        { "file": "03_rulebook_ch3.md", "title": "第三章 · 卡片系統總綱", "lines": 857, "has_override": true, "override_id": "v_value_formula" },
+        { "file": "03_rulebook_ch3.md", "title": "第三章 · 卡片系統總綱（v1.1.1 含永久/額外卡身份標記）", "lines": 942, "has_override": true, "override_id": "v_value_formula" },
         { "file": "04_rulebook_ch4.md", "title": "第四章 · 成長系統總綱", "lines": 467 },
         { "file": "05_rulebook_ch5.md", "title": "第五章 · 場景系統總綱", "lines": 407 },
         { "file": "06_rulebook_ch6.md", "title": "第六章 · 數值規格", "lines": 398 }
@@ -24,8 +24,8 @@
         { "file": "s02_mythos_terms.md", "title": "克蘇魯神話專有名詞對照表 v0.1", "lines": 185 },
         { "file": "s03_card_design_spec.md", "title": "卡片設計規範 v0.2", "lines": 518 },
         { "file": "s04_card_value_spec.md", "title": "卡片價值計算規範 v1.1 修正案", "lines": 634 },
-        { "file": "s05_faction_pillars.md", "title": "支柱一 · 陣營與構築 v0.1（八陣營極完整定義）", "lines": 268 },
-        { "file": "s06_card_text_style.md", "title": "卡片敘述文法規範 v0.3（三 Part 合併：基礎 / 句型 / 進階）", "lines": 1467 },
+        { "file": "s05_faction_pillars.md", "title": "支柱一 · 陣營與構築 v0.2（八陣營極定義 + 八屬性化修訂 + T/P 主屬性調整）", "lines": 350 },
+        { "file": "s06_card_text_style.md", "title": "卡片敘述文法規範 v0.3（三 Part 合併：基礎 / 句型 / 進階；含支柱一 v0.3 §12.4 勘誤連動）", "lines": 1468 },
         { "file": "s07_faction_narrative.md", "title": "支柱一 v0.3（八陣營詳細敘述 + 違和即資產設計哲學 + 先攻勘誤）", "lines": 951 },
         { "file": "s08_axis_dual_combat_part1.md", "title": "卡片軸向系統與雙軸戰鬥 v1.0 檔案一（設計哲學、軸向系統、雙軸戰鬥）", "lines": 515 },
         { "file": "s09_axis_dual_combat_part2.md", "title": "卡片軸向系統與雙軸戰鬥 v1.0 檔案二（遭遇卡類型、法器系統、V 值規範）", "lines": 744 },

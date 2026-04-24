@@ -26,7 +26,11 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
       if (series) { conditions.push(`c.series = $${pi++}`); params.push(series); }
       if (combat_style) { conditions.push(`c.combat_style = $${pi++}`); params.push(combat_style); }
       if (primary_axis_layer) { conditions.push(`c.primary_axis_layer = $${pi++}`); params.push(primary_axis_layer); }
-      if (primary_axis_value) { conditions.push(`c.primary_axis_value = $${pi++}`); params.push(primary_axis_value); }
+      if (primary_axis_value) {
+        // 正規化比對：去除 DB 值內的 『』「」 引號再與使用者輸入(亦去除引號)比對，讓新舊資料(未加書名號 vs 加書名號)匹配成同一軸
+        conditions.push(`REGEXP_REPLACE(COALESCE(c.primary_axis_value, ''), '[『』「」"''""'']', '', 'g') = REGEXP_REPLACE($${pi++}, '[『』「」"''""'']', '', 'g')`);
+        params.push(primary_axis_value);
+      }
       if (is_talisman === 'true') { conditions.push(`c.is_talisman = TRUE`); }
       if (is_talisman === 'false') { conditions.push(`c.is_talisman = FALSE`); }
       if (search) { conditions.push(`(c.name_zh ILIKE $${pi} OR c.name_en ILIKE $${pi} OR c.code ILIKE $${pi})`); params.push(`%${search}%`); pi++; }

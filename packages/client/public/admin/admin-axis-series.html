@@ -203,13 +203,20 @@
       renderAll();
     }
 
+    // 軸值正規化:脫去書名號『』「」、全半形雙引號、前後空白,只保留純名
+    // 讓「老警長」與「『老警長』」被視為同一軸
+    function normalizeAxisValue(v) {
+      if (!v) return '';
+      return String(v).replace(/[『』「」"'“”‘’]/g, '').trim();
+    }
+
     function buildAggregates() {
       state.byAxis.clear();
       state.talismanMatrix.clear();
 
       for (const c of state.cards) {
         const layer = c.primary_axis_layer || 'none';
-        const value = c.primary_axis_value || '';
+        const value = normalizeAxisValue(c.primary_axis_value || '');
         const key = layer + '::' + value;
         if (!state.byAxis.has(key)) {
           state.byAxis.set(key, { layer, value, cards: [] });
@@ -287,7 +294,7 @@
     function matchesFilter(group) {
       if (state.filterLayer && group.layer !== state.filterLayer) return false;
       if (state.filterValue) {
-        const v = state.filterValue.toLowerCase();
+        const v = normalizeAxisValue(state.filterValue).toLowerCase();
         if (!group.value.toLowerCase().includes(v)) return false;
       }
       if (state.filterMatrix) {

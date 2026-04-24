@@ -235,7 +235,7 @@ async function fetchExistingCardsForPromptContext(userDescription) {
     if (factionMatch && factionMatch[1]) params.set('faction', factionMatch[1].toUpperCase());
     if (cardNameAxisMatch && cardNameAxisMatch[1]) {
       params.set('primary_axis_layer', 'card_name');
-      params.set('primary_axis_value', '『' + cardNameAxisMatch[1] + '』');
+      params.set('primary_axis_value', cardNameAxisMatch[1]); // 純名,後端會正規化比對兼容舊書名號資料
     } else if (isTalismanHint) {
       params.set('is_talisman', 'true');
     }

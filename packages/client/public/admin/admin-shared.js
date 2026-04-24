@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.18.1+b46';
+const ADMIN_VERSION = '0.18.2+b47';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -55,7 +55,11 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================
 async function adminFetch(url, options = {}) {
   const token = localStorage.getItem('admin_token');
-  const headers = { 'Content-Type': 'application/json', ...options.headers };
+  const headers = { ...(options.headers || {}) };
+  // Content-Type: application/json 僅在確實帶 body 時才加（空 body + JSON header 會被 Fastify 擋 400 Bad Request）
+  if (options.body !== undefined && options.body !== null && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const response = await fetch(`${ADMIN_API_BASE}${url}`, { ...options, headers });
   if (response.status === 401) {

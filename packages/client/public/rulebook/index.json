@@ -1,6 +1,6 @@
 {
-  "version": "v06",
-  "frozen_at": "2026-04-24",
+  "version": "v07",
+  "frozen_at": "2026-04-26",
   "sections": [
     {
       "id": "rulebook",
@@ -9,7 +9,7 @@
       "items": [
         { "file": "01_rulebook_ch1.md", "title": "第一章 · 核心設計原則", "lines": 413 },
         { "file": "02_rulebook_ch2.md", "title": "第二章 · 遊戲規則總綱", "lines": 778 },
-        { "file": "03_rulebook_ch3.md", "title": "第三章 · 卡片系統總綱（v1.1.1 含永久/額外卡身份標記）", "lines": 942, "has_override": true, "override_id": "v_value_formula" },
+        { "file": "03_rulebook_ch3.md", "title": "第三章 · 卡片系統總綱(v1.1.1 含永久/額外卡身份標記;§8.5 起始投入抵扣已套用 v1 重構)", "lines": 945, "has_override": true, "override_id": "v_value_formula" },
         { "file": "04_rulebook_ch4.md", "title": "第四章 · 成長系統總綱", "lines": 467 },
         { "file": "05_rulebook_ch5.md", "title": "第五章 · 場景系統總綱", "lines": 407 },
         { "file": "06_rulebook_ch6.md", "title": "第六章 · 數值規格", "lines": 398 }
@@ -29,7 +29,10 @@
         { "file": "s07_faction_narrative.md", "title": "支柱一 v0.3（八陣營詳細敘述 + 違和即資產設計哲學 + 先攻勘誤）", "lines": 951 },
         { "file": "s08_axis_dual_combat_part1.md", "title": "卡片軸向系統與雙軸戰鬥 v1.0 檔案一（設計哲學、軸向系統、雙軸戰鬥）", "lines": 515 },
         { "file": "s09_axis_dual_combat_part2.md", "title": "卡片軸向系統與雙軸戰鬥 v1.0 檔案二（遭遇卡類型、法器系統、V 值規範）", "lines": 744 },
-        { "file": "s10_axis_dual_combat_part3.md", "title": "卡片軸向系統與雙軸戰鬥 v1.0 檔案三（卡面架構、創作者指引、技術落地）", "lines": 917 }
+        { "file": "s10_axis_dual_combat_part3.md", "title": "卡片軸向系統與雙軸戰鬥 v1.0 檔案三（卡面架構、創作者指引、技術落地）", "lines": 917 },
+        { "file": "s11_card_upgrade_v1_part1.md", "title": "卡片升級系統重構 v1 · Part 1 核心機制篇(5 點配額 / 起始投入 / 玩家強化 / 卓越雙重特性 / 天賦鎖每 2 級解 1 點)", "lines": 309 },
+        { "file": "s12_card_upgrade_v1_part2.md", "title": "卡片升級系統重構 v1 · Part 2 費用公式與 V 值體系篇(線性起始投入抵扣 1V/點 + 各卡型公式重寫 + 與 v1.1 案例相容性驗證)", "lines": 320 },
+        { "file": "s13_card_upgrade_v1_part3.md", "title": "卡片升級系統重構 v1 · Part 3 實作與遷移篇(MIGRATION_026 / MOD-01 重構 / AI prompt 更新 / 規則書文字替換 / 舊資料遷移流程)", "lines": 710 }
       ]
     },
     {
@@ -52,8 +55,8 @@
   ],
   "overrides": {
     "v_value_formula": {
-      "title": "V 值計算公式已更新（2026-04-18）",
-      "body": "規則書 v1.0 第三章本文中的 V 值計算公式為 **待更新文字**，請以下列新版為準：\n\n- **所有卡片類型統一為 1:1**（含資產卡；原 2:1 作廢）\n- **事件卡、盟友卡、技能卡**亦為 1:1；技能卡費用固定為 0\n- **等級抵扣新階梯**：LV1 -0.5V / LV2 -1V / LV3 -2V / LV4 -3V / LV5 -4V（非舊版 -1V/-2V/...）\n- 驗證器、Prompt、程式碼以 1:1 為準；若看到本章的 2:1 公式，視為待更新文字，不要採用\n\n依據：記憶 `project_v_value_formula.md`、`docs/04_SystemPrompt模板庫_卡片設計篇.md`"
+      "title": "V 值計算公式已更新(2026-04-25 卡片升級系統重構 v1)",
+      "body": "規則書 v1.0 第三章與卡片價值計算規範 v1.1 的 V 值公式已更新,以下為現行版本:\n\n- **所有卡片類型統一為 1:1**(含資產卡;原 2:1 作廢)\n- **事件卡、盟友卡、技能卡**亦為 1:1;技能卡費用固定為 0\n- **起始投入抵扣(取代等級抵扣)**:starting_xp 點數 × 1V 線性。★0=0, ★1=-1V, ★2=-2V, ★3=-3V, ★4=-4V, ★5=-5V\n- **5 點配額硬上限**:設計師起始投入 + 玩家後續投入 ≤ 5\n- **Exceptional(卓越)**:額外 -2V + 玩家購買 XP ×2 倍率(雙重特性)\n- 驗證器、Prompt、程式碼以新公式為準\n- 若看到本章舊文字含 2:1 比例 / LV0-5 升級 / 舊等級抵扣階梯,**視為待更新文字,不要採用**\n\n權威依據:s11/s12/s13《卡片升級系統重構 v1》Part 1+2+3、s04 卡片價值計算規範 v1.1"
     }
   }
 }

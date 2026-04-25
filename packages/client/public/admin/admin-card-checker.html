@@ -83,6 +83,35 @@
       padding: 2rem; text-align: center; color: var(--text-tertiary);
       background: var(--bg-secondary); border-radius: 4px;
     }
+    .card-row .actions button.ai {
+      background: #6f4a8a;
+    }
+    .card-row .actions button.ai:hover { background: #8a5fa8; }
+
+    /* AI result modal */
+    .ai-modal-bg {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      z-index: 1000; display: flex; align-items: center; justify-content: center;
+    }
+    .ai-modal {
+      background: var(--bg-primary, #1a1a1a); border: 1px solid var(--border, #333);
+      border-radius: 6px; padding: 1.25rem; max-width: 800px; width: 90vw;
+      max-height: 85vh; overflow-y: auto; font-size: 0.85rem;
+    }
+    .ai-modal h2 { margin: 0 0 0.5rem 0; font-size: 1.1rem; }
+    .ai-modal pre {
+      background: #111; border: 1px solid #333; border-radius: 4px;
+      padding: 0.5rem; font-size: 0.75rem; overflow-x: auto; white-space: pre-wrap;
+    }
+    .ai-modal .actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; }
+    .ai-modal .actions button {
+      padding: 6px 12px; border: none; border-radius: 3px;
+      cursor: pointer; font-size: 0.8rem;
+    }
+    .ai-modal button.apply { background: #4a7f4a; color: #fff; }
+    .ai-modal button.apply:hover { background: #5a9f5a; }
+    .ai-modal button.close { background: #555; color: #fff; }
+    .ai-modal button.close:hover { background: #777; }
   </style>
 </head>
 <body>
@@ -125,6 +154,8 @@
   </div>
 
   <script src="admin-shared.js"></script>
+  <script src="admin-ai-tasks/geminiDirectClient.js"></script>
+  <script src="admin-card-ai-tools.js"></script>
   <script>
   (() => {
     'use strict';
@@ -255,6 +286,9 @@
               '<span class="meta">F=' + (c.faction || '?') + (c.card_type ? ' · ' + c.card_type : '') + (c.level != null ? ' · LV' + c.level : '') + '</span>' +
               '<div class="actions">' +
                 (fixableCount > 0 ? '<button class="fix" data-id="' + c.id + '">⚡ 一鍵修 ' + fixableCount + ' 項</button>' : '') +
+                '<button class="ai" data-ai-restructure="' + c.id + '">🤖 結構化 desc</button>' +
+                '<button class="ai" data-ai-value="' + c.id + '">🤖 估 V 值</button>' +
+                '<button class="ai" data-ai-combo="' + c.id + '">🤖 評 COMBO</button>' +
                 '<button data-jump="' + c.id + '">→ MOD-01</button>' +
               '</div>' +
             '</div>' +
@@ -270,6 +304,116 @@
       listEl.querySelectorAll('button.fix').forEach(btn => {
         btn.addEventListener('click', () => fixOneCard(btn.dataset.id));
       });
+      listEl.querySelectorAll('button[data-ai-restructure]').forEach(btn => {
+        btn.addEventListener('click', () => aiRestructure(btn.dataset.aiRestructure));
+      });
+      listEl.querySelectorAll('button[data-ai-value]').forEach(btn => {
+        btn.addEventListener('click', () => aiEstimateValue(btn.dataset.aiValue));
+      });
+      listEl.querySelectorAll('button[data-ai-combo]').forEach(btn => {
+        btn.addEventListener('click', () => aiScoreCombo(btn.dataset.aiCombo));
+      });
+    }
+
+    // ─── AI 動作 ──────────────────
+    function showModal(title, bodyHtml, actions) {
+      const bg = document.createElement('div');
+      bg.className = 'ai-modal-bg';
+      bg.innerHTML = '<div class="ai-modal"><h2>' + title + '</h2>' + bodyHtml + '<div class="actions" id="aiModalActions"></div></div>';
+      document.body.appendChild(bg);
+      const actsEl = bg.querySelector('#aiModalActions');
+      (actions || []).forEach(a => {
+        const b = document.createElement('button');
+        b.className = a.cls || 'close';
+        b.textContent = a.label;
+        b.onclick = async () => {
+          const keep = a.handler ? await a.handler() : false;
+          if (!keep) document.body.removeChild(bg);
+        };
+        actsEl.appendChild(b);
+      });
+      // Always have a close button
+      if (!(actions || []).find(a => a.cls === 'close')) {
+        const b = document.createElement('button');
+        b.className = 'close';
+        b.textContent = '關閉';
+        b.onclick = () => document.body.removeChild(bg);
+        actsEl.appendChild(b);
+      }
+      bg.addEventListener('click', e => { if (e.target === bg) document.body.removeChild(bg); });
+    }
+
+    async function aiRestructure(id) {
+      const r = state.results.find(x => x.card.id === id);
+      if (!r) return;
+      if (!confirm('將送 desc_zh + 現有 effects[] 給 Gemini,讓 AI 反向結構化。可能需要幾秒。確定?')) return;
+      try {
+        const result = await window.aiRestructureEffects(r.card);
+        const newEffects = result.effects;
+        showModal('🤖 AI 結構化結果',
+          '<p style="color:var(--text-secondary);font-size:0.8rem;">' + escapeHtml(result.changed_summary || '') + '</p>' +
+          '<p style="font-size:0.75rem;">建議的新 effects[] 陣列(共 ' + newEffects.length + ' 條):</p>' +
+          '<pre>' + escapeHtml(JSON.stringify(newEffects, null, 2)) + '</pre>',
+          [
+            { label: '✓ 套用並 PUT', cls: 'apply', handler: async () => {
+              const updated = { ...r.card, effects: newEffects };
+              try {
+                const res = await window.adminFetch('/api/cards/' + id, { method: 'PUT', body: JSON.stringify(updated) });
+                const p = await res.json();
+                if (!res.ok || !p.success) { alert('PUT 失敗:' + (p.error || res.status)); return false; }
+                await loadCards();
+                return false; // close modal
+              } catch (e) { alert('PUT 例外:' + (e.message || e)); return true; }
+            } },
+          ]);
+      } catch (e) {
+        alert('AI 結構化失敗:' + (e.message || String(e)));
+      }
+    }
+
+    async function aiEstimateValue(id) {
+      const r = state.results.find(x => x.card.id === id);
+      if (!r) return;
+      try {
+        const result = await window.aiEstimateCardValue(r.card);
+        const breakdownHtml = (result.breakdown || []).map(b => '<li>' + escapeHtml(b.effect_summary) + ' → <strong>' + b.v + 'V</strong> · <span style="color:var(--text-secondary);">' + escapeHtml(b.reason || '') + '</span></li>').join('');
+        showModal('🤖 AI V 值重估 ' + escapeHtml(r.card.name_zh || ''),
+          '<p>真實總 V 值: <strong style="font-size:1.2rem;color:#6aff8a;">' + result.estimated_total_v + 'V</strong></p>' +
+          '<p>建議費用: <strong>' + result.suggested_cost + '</strong>(目前 cost=' + (r.card.cost ?? '?') + ')</p>' +
+          '<p>稀有度: ' + escapeHtml(result.calculated_rarity || '') + '</p>' +
+          '<p style="color:#ffd666;">📊 ' + escapeHtml(result.balance_diagnosis || '') + '</p>' +
+          '<p style="font-size:0.8rem;font-weight:600;margin-top:0.75rem;">效果價值拆解:</p>' +
+          '<ul style="font-size:0.8rem;">' + breakdownHtml + '</ul>' +
+          (result.notes ? '<p style="font-size:0.75rem;color:var(--text-tertiary);margin-top:0.5rem;">📝 ' + escapeHtml(result.notes) + '</p>' : '')
+        );
+      } catch (e) {
+        alert('AI 估 V 值失敗:' + (e.message || String(e)));
+      }
+    }
+
+    async function aiScoreCombo(id) {
+      const r = state.results.find(x => x.card.id === id);
+      if (!r) return;
+      // 抓同軸 context
+      const same = state.cards.filter(c =>
+        c.id !== id &&
+        c.primary_axis_layer === r.card.primary_axis_layer &&
+        String(c.primary_axis_value || '').replace(/[『』「」"'“”‘’]/g, '').trim() === String(r.card.primary_axis_value || '').replace(/[『』「」"'“”‘’]/g, '').trim()
+      );
+      try {
+        const result = await window.aiScoreCardCombo(r.card, same);
+        const color = result.combo_score >= 7 ? '#6aff8a' : result.combo_score >= 4 ? '#ffd666' : '#ff8a8a';
+        showModal('🤖 COMBO 評分 ' + escapeHtml(r.card.name_zh || ''),
+          '<p style="font-size:1.5rem;color:' + color + ';"><strong>' + result.combo_score + ' / 10</strong>' + (result.pattern ? ' · Pattern ' + result.pattern : '') + '</p>' +
+          '<p>同軸對照組:' + same.length + ' 張</p>' +
+          '<p style="font-size:0.85rem;font-weight:600;">為何給這個分:</p>' +
+          '<p style="font-size:0.8rem;">' + escapeHtml(result.why) + '</p>' +
+          '<p style="font-size:0.85rem;font-weight:600;margin-top:0.75rem;">改寫建議:</p>' +
+          '<p style="font-size:0.8rem;color:#ffd666;">' + escapeHtml(result.suggestion) + '</p>'
+        );
+      } catch (e) {
+        alert('AI 評 COMBO 失敗:' + (e.message || String(e)));
+      }
     }
 
     async function fixOneCard(id) {

@@ -160,6 +160,8 @@
   </div>
 
   <script src="admin-shared.js"></script>
+  <script src="admin-ai-tasks/geminiDirectClient.js"></script>
+  <script src="admin-card-ai-tools.js"></script>
   <script>
   (() => {
     'use strict';
@@ -374,6 +376,7 @@
                 '<span class="axis-count">共 ' + g.cards.length + ' 張</span>' +
               '</div>' +
               '<button class="btn-to-mod12" data-hint="' + encodeURIComponent(mod12Hint) + '">→ MOD-12 批次補寫</button>' +
+              '<button class="btn-to-mod12" style="background:#6f4a8a;margin-left:4px;" data-ai-gaps="' + encodeURIComponent(JSON.stringify({ layer: g.layer, value: g.value, cards: g.cards.map(c => ({ code: c.code, name_zh: c.name_zh, card_type: c.card_type, level: c.level, cost: c.cost })) })) + '">🤖 看缺什麼</button>' +
             '</div>' +
             '<ol class="axis-cards">' + cardList + '</ol>' +
             moreNote +
@@ -383,10 +386,52 @@
 
       const listEl = document.getElementById('axisList');
       listEl.innerHTML = out.join('');
-      listEl.querySelectorAll('.btn-to-mod12').forEach(btn => {
+      listEl.querySelectorAll('.btn-to-mod12[data-hint]').forEach(btn => {
         btn.addEventListener('click', (ev) => {
           const hint = decodeURIComponent(ev.currentTarget.dataset.hint || '');
           window.location.href = 'admin-ai-console.html#prefill=' + encodeURIComponent(hint);
+        });
+      });
+      listEl.querySelectorAll('button[data-ai-gaps]').forEach(btn => {
+        btn.addEventListener('click', async (ev) => {
+          const payload = JSON.parse(decodeURIComponent(ev.currentTarget.dataset.aiGaps));
+          if (typeof window.aiSuggestAxisGaps !== 'function') {
+            alert('AI 工具未載入(請刷新)');
+            return;
+          }
+          ev.currentTarget.disabled = true;
+          ev.currentTarget.textContent = '🤖 思考中…';
+          try {
+            const result = await window.aiSuggestAxisGaps(payload.layer, payload.value, payload.cards);
+            const dist = result.current_distribution || {};
+            const lvDist = result.level_distribution || {};
+            const missing = (result.missing_categories || []).join('、') || '(無)';
+            const next3 = (result.next_three_suggestions || []).map(s =>
+              '<li><strong>' + escapeHtml(s.name_zh || '?') + '</strong> · ' + escapeHtml(s.card_type || '?') + ' LV' + (s.level ?? '?') + ' cost=' + (s.cost ?? '?') +
+              '<br><span style="color:var(--text-secondary);font-size:0.75rem;">' + escapeHtml(s.why || '') + '</span>' +
+              (s.sketch ? '<br><span style="color:var(--text-tertiary);font-size:0.75rem;">效果草圖:' + escapeHtml(s.sketch) + '</span>' : '') +
+              '</li>'
+            ).join('');
+            const html =
+              '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:flex;align-items:center;justify-content:center;" id="aiGapsBg">' +
+              '<div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:1.25rem;max-width:700px;width:90vw;max-height:85vh;overflow-y:auto;">' +
+              '<h2 style="margin:0 0 0.5rem 0;font-size:1.1rem;">🤖 系列補位建議:' + escapeHtml(payload.value || '') + '</h2>' +
+              '<p style="font-size:0.85rem;">類型分佈: asset=' + (dist.asset || 0) + ' / event=' + (dist.event || 0) + ' / skill=' + (dist.skill || 0) + ' / ally=' + (dist.ally || 0) + '</p>' +
+              '<p style="font-size:0.85rem;">等級分佈: LV0=' + (lvDist.LV0 || 0) + ' LV1=' + (lvDist.LV1 || 0) + ' LV2=' + (lvDist.LV2 || 0) + ' LV3=' + (lvDist.LV3 || 0) + ' LV4=' + (lvDist.LV4 || 0) + ' LV5=' + (lvDist.LV5 || 0) + '</p>' +
+              '<p style="color:#ffd666;font-size:0.85rem;">📌 缺位類別:' + escapeHtml(missing) + '</p>' +
+              '<p style="font-weight:600;margin-top:0.75rem;">建議下三張:</p>' +
+              '<ol style="font-size:0.8rem;padding-left:1.2rem;">' + next3 + '</ol>' +
+              (result.summary ? '<p style="font-size:0.75rem;color:var(--text-tertiary);">' + escapeHtml(result.summary) + '</p>' : '') +
+              '<button style="margin-top:0.75rem;padding:6px 12px;background:#555;color:#fff;border:none;border-radius:3px;cursor:pointer;" onclick="document.getElementById(\'aiGapsBg\').remove();">關閉</button>' +
+              '</div></div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+            document.getElementById('aiGapsBg').addEventListener('click', e => { if (e.target.id === 'aiGapsBg') document.getElementById('aiGapsBg').remove(); });
+          } catch (err) {
+            alert('AI 補位建議失敗:' + (err.message || String(err)));
+          } finally {
+            ev.currentTarget.disabled = false;
+            ev.currentTarget.textContent = '🤖 看缺什麼';
+          }
         });
       });
     }

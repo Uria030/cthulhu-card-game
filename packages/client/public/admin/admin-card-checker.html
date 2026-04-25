@@ -112,7 +112,16 @@
     .ai-modal button.apply:hover { background: #5a9f5a; }
     .ai-modal button.close { background: #555; color: #fff; }
     .ai-modal button.close:hover { background: #777; }
-  </style>
+
+    .restructure-badge {
+      display: inline-block; padding: 1px 6px; border-radius: 8px;
+      font-size: 0.65rem; margin-left: 4px; line-height: 1.4;
+    }
+    .restructure-badge.done { background: #2a4f2a; color: #9aff9a; border: 1px solid #4a7f4a; }
+    .restructure-badge.pending { background: #3f3f1a; color: #d8c87a; border: 1px solid #6a6a3a; }
+    .toolbar button.ai-batch { background: #6f4a8a; }
+    .toolbar button.ai-batch:hover { background: #8a5fa8; }
+</style>
 </head>
 <body>
   <nav class="admin-nav">
@@ -144,9 +153,19 @@
         </select>
       </label>
       <label>陣營:<select id="filterFaction"><option value="">全部</option></select></label>
+      <label>結構化:
+        <select id="filterRestructure">
+          <option value="">全部</option>
+          <option value="pending">⚪ 未結構化</option>
+          <option value="done">✓ 已結構化</option>
+        </select>
+      </label>
       <label>搜尋:<input type="text" id="filterText" placeholder="卡名或代碼" /></label>
       <button id="btnRescan">🔄 重新掃描</button>
       <span style="flex:1;"></span>
+      <button class="ai-batch" id="btnBatchRestructurePending">🤖 批次結構化 desc(僅未處理)</button>
+      <button class="ai-batch" id="btnBatchRestructureAll">🤖 批次結構化 desc(全部重做)</button>
+      <button id="btnClearRestructureLog" style="background:#555;">🗑 清除結構化記錄</button>
       <button class="danger" id="btnFixAllQuotes">⚡ 批次去除書名號(name_zh + axis_value)</button>
       <button class="danger" id="btnFixAllPollution">⚡ 批次修 ő 亂碼</button>
       <button class="danger" id="btnFixAllOrphan">⚡ 批次修 orphan 軸 → faction</button>
@@ -178,7 +197,32 @@
       filterSeverity: '',
       filterFaction: '',
       filterText: '',
+      filterRestructure: '',
+      restructureLog: loadRestructureLog(),
     };
+
+    const RESTRUCTURE_LOG_KEY = 'mod14_restructured_log';
+    function loadRestructureLog() {
+      try {
+        const raw = localStorage.getItem(RESTRUCTURE_LOG_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch { return {}; }
+    }
+    function saveRestructureLog() {
+      try { localStorage.setItem(RESTRUCTURE_LOG_KEY, JSON.stringify(state.restructureLog)); }
+      catch (e) { console.warn('saveRestructureLog 失敗', e); }
+    }
+    function markRestructured(id, mode) {
+      state.restructureLog[id] = { at: new Date().toISOString(), mode: mode || 'single' };
+      saveRestructureLog();
+    }
+    function isRestructured(id) {
+      return !!state.restructureLog[id];
+    }
+    function clearRestructureLog() {
+      state.restructureLog = {};
+      saveRestructureLog();
+    }
 
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -231,12 +275,16 @@
       const warn = state.results.filter(r => r.topSeverity === 'warn').length;
       const info = state.results.filter(r => r.topSeverity === 'info').length;
       const healthy = state.results.filter(r => !r.topSeverity).length;
+      const done = state.results.filter(r => isRestructured(r.card.id)).length;
+      const pending = total - done;
       document.getElementById('summaryRow').innerHTML =
         '<div class="stat">卡總數 <strong>' + total + '</strong></div>' +
         '<div class="stat severity-error">🔴 嚴重 <strong>' + err + '</strong></div>' +
         '<div class="stat severity-warn">🟡 警告 <strong>' + warn + '</strong></div>' +
         '<div class="stat severity-info">🔵 提示 <strong>' + info + '</strong></div>' +
-        '<div class="stat healthy">✅ 健康 <strong>' + healthy + '</strong></div>';
+        '<div class="stat healthy">✅ 健康 <strong>' + healthy + '</strong></div>' +
+        '<div class="stat" style="color:#9aff9a;">✓ 已結構化 <strong>' + done + '</strong></div>' +
+        '<div class="stat" style="color:#d8c87a;">⚪ 未結構化 <strong>' + pending + '</strong></div>';
     }
 
     function renderFactions() {
@@ -252,6 +300,8 @@
       if (state.filterSeverity === 'healthy' && r.topSeverity) return false;
       if (state.filterSeverity && state.filterSeverity !== 'healthy' && r.topSeverity !== state.filterSeverity) return false;
       if (state.filterFaction && r.card.faction !== state.filterFaction) return false;
+      if (state.filterRestructure === 'done' && !isRestructured(r.card.id)) return false;
+      if (state.filterRestructure === 'pending' && isRestructured(r.card.id)) return false;
       if (state.filterText) {
         const q = state.filterText.toLowerCase();
         const text = ((r.card.code || '') + ' ' + (r.card.name_zh || '') + ' ' + (r.card.name_en || '')).toLowerCase();
@@ -286,6 +336,9 @@
               '<span class="code">' + escapeHtml(c.code || '?') + '</span>' +
               '<span class="name">' + escapeHtml(c.name_zh || '(無名)') + '</span>' +
               '<span class="meta">F=' + (c.faction || '?') + (c.card_type ? ' · ' + c.card_type : '') + (((c.starting_xp ?? c.level) != null) ? ' · ★' + (c.starting_xp ?? c.level) : '') + '</span>' +
+              (isRestructured(c.id)
+                ? '<span class="restructure-badge done" title="已結構化於 ' + escapeHtml(state.restructureLog[c.id].at) + '">✓ 已結構化</span>'
+                : '<span class="restructure-badge pending">⚪ 未結構化</span>') +
               '<div class="actions">' +
                 (fixableCount > 0 ? '<button class="fix" data-id="' + c.id + '">⚡ 一鍵修 ' + fixableCount + ' 項</button>' : '') +
                 '<button class="ai" data-ai-restructure="' + c.id + '">🤖 結構化 desc</button>' +
@@ -364,6 +417,7 @@
                 const res = await window.adminFetch('/api/cards/' + id, { method: 'PUT', body: JSON.stringify(updated) });
                 const p = await res.json();
                 if (!res.ok || !p.success) { alert('PUT 失敗:' + (p.error || res.status)); return false; }
+                markRestructured(id, 'single');
                 await loadCards();
                 return false; // close modal
               } catch (e) { alert('PUT 例外:' + (e.message || e)); return true; }
@@ -451,6 +505,55 @@
       }
     }
 
+    async function batchAiRestructure(includeProcessed, setProgress) {
+      if (typeof window.ensureGeminiApiKey === 'function' && !window.ensureGeminiApiKey()) return;
+      const targets = state.cards.filter(c => includeProcessed || !isRestructured(c.id));
+      if (targets.length === 0) {
+        alert(includeProcessed ? '目前沒有任何卡片' : '所有卡片都已結構化過。如要全部重做請按「批次結構化 desc(全部重做)」。');
+        return;
+      }
+      const skippedCount = state.cards.length - targets.length;
+      const msg = '將對 ' + targets.length + ' 張卡呼叫 Gemini 結構化 desc 並 PUT 回 DB' +
+        (skippedCount > 0 ? '(已跳過 ' + skippedCount + ' 張已結構化的)' : '') + '。\n\n' +
+        '⚠ 注意:\n' +
+        '· 每張卡需呼叫一次 Gemini,預估每張 3-6 秒,總計約 ' + Math.ceil(targets.length * 5 / 60) + ' 分鐘\n' +
+        '· 中途請保持頁面開啟,不要切走\n' +
+        '· 失敗的卡會記錄但不阻擋其他卡片\n\n確定?';
+      if (!confirm(msg)) return;
+      let ok = 0, fail = 0;
+      const failedCards = [];
+      for (let i = 0; i < targets.length; i++) {
+        const card = targets[i];
+        if (setProgress) setProgress(i + 1, targets.length);
+        try {
+          const result = await window.aiRestructureEffects(card);
+          if (!result || !Array.isArray(result.effects)) {
+            fail++;
+            failedCards.push((card.code || card.id) + '(AI 回傳非陣列)');
+            continue;
+          }
+          const updated = { ...card, effects: result.effects };
+          const res = await window.adminFetch('/api/cards/' + card.id, { method: 'PUT', body: JSON.stringify(updated) });
+          const p = await res.json();
+          if (res.ok && p.success) {
+            markRestructured(card.id, 'batch');
+            ok++;
+          } else {
+            fail++;
+            failedCards.push((card.code || card.id) + '(PUT ' + (p.error || res.status) + ')');
+          }
+        } catch (e) {
+          fail++;
+          failedCards.push((card.code || card.id) + '(' + (e.message || e) + ')');
+        }
+        // 簡單節流避免 Gemini rate limit(免費層 15 RPM 約等於每 4 秒一次,但 2.5-flash quota 較高,這裡用 600ms 緩衝)
+        await new Promise(r => setTimeout(r, 600));
+      }
+      const failMsg = failedCards.length > 0 ? '\n\n失敗清單(前 10 個):\n' + failedCards.slice(0, 10).join('\n') : '';
+      alert('批次結構化完成\n· 成功:' + ok + '\n· 失敗:' + fail + failMsg);
+      await loadCards();
+    }
+
     async function fixAllByCode(targetCodes, label, setProgress) {
       // targetCodes 可為 string 或 string[];以「任一 code 命中且 fixable」為篩選條件
       const codes = Array.isArray(targetCodes) ? targetCodes : [targetCodes];
@@ -487,8 +590,19 @@
 
     document.getElementById('filterSeverity').addEventListener('change', e => { state.filterSeverity = e.target.value; renderList(); });
     document.getElementById('filterFaction').addEventListener('change', e => { state.filterFaction = e.target.value; renderList(); });
+    document.getElementById('filterRestructure').addEventListener('change', e => { state.filterRestructure = e.target.value; renderList(); });
     document.getElementById('filterText').addEventListener('input', e => { state.filterText = e.target.value.trim(); renderList(); });
     document.getElementById('btnRescan').addEventListener('click', (ev) => window.withButtonLoading(ev.currentTarget, loadCards, { loadingText: '掃描中' }));
+    document.getElementById('btnBatchRestructurePending').addEventListener('click', (ev) => window.withButtonLoading(ev.currentTarget, (sp) => batchAiRestructure(false, sp), { loadingText: 'AI 批次結構化', showProgress: true }));
+    document.getElementById('btnBatchRestructureAll').addEventListener('click', (ev) => window.withButtonLoading(ev.currentTarget, (sp) => batchAiRestructure(true, sp), { loadingText: 'AI 批次結構化', showProgress: true }));
+    document.getElementById('btnClearRestructureLog').addEventListener('click', () => {
+      const total = Object.keys(state.restructureLog).length;
+      if (total === 0) { alert('目前沒有結構化記錄'); return; }
+      if (!confirm('將清除 ' + total + ' 張卡片的結構化記錄(只清本地紀錄,不影響 DB 資料)。確定?')) return;
+      clearRestructureLog();
+      renderList();
+      alert('已清除');
+    });
     document.getElementById('btnFixAllQuotes').addEventListener('click', (ev) => window.withButtonLoading(ev.currentTarget, (sp) => fixAllByCode(['axis_value_has_quotes', 'name_zh_has_quotes'], '去除 name_zh + axis_value 書名號', sp), { loadingText: '批次修復', showProgress: true }));
     document.getElementById('btnFixAllPollution').addEventListener('click', (ev) => window.withButtonLoading(ev.currentTarget, (sp) => fixAllByCode('o_pollution', '修 ő 亂碼還原為阿拉伯數字', sp), { loadingText: '批次修復', showProgress: true }));
     document.getElementById('btnFixAllOrphan').addEventListener('click', (ev) => window.withButtonLoading(ev.currentTarget, (sp) => fixAllByCode('card_name_axis_orphan', 'orphan card_name 軸降為 faction(陣營字母)', sp), { loadingText: '批次修復', showProgress: true }));

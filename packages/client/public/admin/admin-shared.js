@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.18.4+b49';
+const ADMIN_VERSION = '0.19.0+b50';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -1129,3 +1129,183 @@ async function fetchExistingCardsForPromptContext(userDescription) {
 }
 
 window.fetchExistingCardsForPromptContext = fetchExistingCardsForPromptContext;
+
+/* ========================================
+   MOD-14 卡片檢查器:Layer 1 同步驗證器
+   每個驗證器都回傳 [{ severity, code, message, fixable }] 警告陣列
+   severity: 'error' | 'warn' | 'info'
+   fixable: 是否可被自動 fix() 修復
+   ======================================== */
+
+// V1 軸值含書名號(prompt 規則 #30 後須為純名)
+function validateAxisValueQuotes(card) {
+  if (!card || card.primary_axis_layer === 'none' || !card.primary_axis_value) return [];
+  const v = String(card.primary_axis_value);
+  if (/[『』「」"'“”‘’]/.test(v)) {
+    return [{ severity: 'warn', code: 'axis_value_has_quotes', message: 'primary_axis_value 含書名號或引號(' + v + '),應為純名', fixable: true }];
+  }
+  return [];
+}
+
+// V2 desc_zh / flavor_text 含 ő/Ő~ř/Ř 亂碼(v0.15.3 修的 normalize bug 受害者)
+function validateOPollution(card) {
+  const warnings = [];
+  const fields = [];
+  if (Array.isArray(card.effects)) card.effects.forEach((e, i) => { if (e && e.desc_zh) fields.push({ name: 'effects[' + i + '].desc_zh', text: e.desc_zh }); });
+  if (card.flavor_text) fields.push({ name: 'flavor_text', text: card.flavor_text });
+  for (const f of fields) {
+    if (/[\u0150-\u0159]/.test(f.text)) {
+      warnings.push({ severity: 'error', code: 'o_pollution', message: f.name + ' 含 normalize bug 亂碼字元(0x150-0x159),應為阿拉伯數字 0-9', fixable: true });
+    }
+  }
+  return warnings;
+}
+
+// V3 slot / card_type 一致性
+function validateSlotTypeConsistency(card) {
+  const warnings = [];
+  const t = card.card_type;
+  const s = card.slot || 'none';
+  if (t === 'skill' && s !== 'none') warnings.push({ severity: 'warn', code: 'slot_type_mismatch', message: 'skill 卡 slot 應為 none(目前 ' + s + ')', fixable: true });
+  if (t === 'event' && s !== 'none') warnings.push({ severity: 'warn', code: 'slot_type_mismatch', message: 'event 卡 slot 應為 none(目前 ' + s + ')', fixable: true });
+  if (t === 'ally' && s !== 'none') warnings.push({ severity: 'warn', code: 'slot_type_mismatch', message: 'ally 卡 slot 應為 none(目前 ' + s + ')', fixable: true });
+  if (card.combat_style === 'arcane' && s !== 'arcane') warnings.push({ severity: 'warn', code: 'arcane_slot_required', message: '法術卡 slot 應為 arcane(目前 ' + s + ')', fixable: true });
+  return warnings;
+}
+
+// V4 武器風格 vs 卡名物理性質(s07 §2.4)
+function validateWeaponStyleConsistency(card) {
+  const name = (card.name_zh || '') + ' ' + (card.name_en || '');
+  const cs = card.combat_style;
+  if (!cs) return [];
+  // 卡名含「手槍/左輪/霰彈/步槍/衝鋒槍」但 combat_style != shooting
+  if (/手槍|左輪|霰彈|步槍|衝鋒槍|卡賓|狙擊|revolver|pistol|shotgun|rifle/i.test(name) && cs !== 'shooting') {
+    return [{ severity: 'error', code: 'weapon_style_firearm_not_shooting', message: '卡名疑似槍械但 combat_style=' + cs + '(應為 shooting)', fixable: false }];
+  }
+  // sidearm 不應含槍械字樣
+  if (cs === 'sidearm' && /手槍|左輪|霰彈|步槍|衝鋒槍|revolver|pistol|shotgun|rifle/i.test(name)) {
+    return [{ severity: 'error', code: 'sidearm_with_firearm', message: 'sidearm 不含任何槍械,但卡名含槍械字樣(s07 §2.4)', fixable: false }];
+  }
+  return [];
+}
+
+// V5 card_name 軸群組健康度(系列卡 < 2 張)
+// 此 validator 需要外部提供 axisGroupSizes Map(從全 DB 預先計算)
+function validateCardNameAxisGroupSize(card, axisGroupSizes) {
+  if (card.primary_axis_layer !== 'card_name' || !card.primary_axis_value) return [];
+  const stripped = String(card.primary_axis_value).replace(/[『』「」"'“”‘’]/g, '').trim();
+  const size = (axisGroupSizes && axisGroupSizes.get(stripped)) || 0;
+  if (size < 2) return [{ severity: 'warn', code: 'card_name_axis_orphan', message: '此卡掛 card_name 軸「' + stripped + '」但 DB 內僅 ' + size + ' 張同軸卡(< 2 張不該用 card_name 軸,應降為 faction)', fixable: false }];
+  if (size < 3) return [{ severity: 'info', code: 'card_name_axis_thin', message: 'card_name 軸「' + stripped + '」僅 ' + size + ' 張,系列尚未成形(建議 ≥ 3 張完整 RPG 配置)', fixable: false }];
+  return [];
+}
+
+// ─── Layer 2:結構推理驗證器 ─────────────────
+
+// V6 effects[] ↔ desc_zh 雙向同步:抓 desc_zh 數值 vs effects.params 數值
+function validateEffectsDescSync(card) {
+  if (!Array.isArray(card.effects)) return [];
+  const warnings = [];
+  for (let i = 0; i < card.effects.length; i++) {
+    const e = card.effects[i];
+    if (!e || !e.desc_zh) continue;
+    const desc = e.desc_zh;
+    const code = e.effect_code;
+    const params = e.params || {};
+
+    // 抓 desc_zh 內「N 點傷害 / N 點恐懼 / N 張牌」等數值
+    const damageMatch = desc.match(/造成\s*(\d+)\s*點\s*(?:物理|火|冰|電|神秘)?\s*傷害/);
+    const horrorMatch = desc.match(/造成\s*(\d+)\s*點\s*恐懼/);
+    const drawMatch = desc.match(/抽\s*(\d+)\s*張/);
+    const healMatch = desc.match(/回復\s*(\d+)\s*點\s*(?:HP|SAN|血量|理智)/);
+
+    if (damageMatch && code === 'deal_damage' && params.amount != null && Number(damageMatch[1]) !== params.amount) {
+      warnings.push({ severity: 'warn', code: 'desc_effect_value_mismatch', message: 'effects[' + i + '] desc 寫「' + damageMatch[1] + ' 點傷害」但 params.amount=' + params.amount, fixable: false });
+    }
+    if (drawMatch && code === 'draw_card' && params.amount != null && Number(drawMatch[1]) !== params.amount) {
+      warnings.push({ severity: 'warn', code: 'desc_effect_value_mismatch', message: 'effects[' + i + '] desc 寫「抽 ' + drawMatch[1] + ' 張」但 params.amount=' + params.amount, fixable: false });
+    }
+
+    // desc 提數值動作但 effects 該動詞欠缺對應 params
+    if (damageMatch && code !== 'deal_damage' && code !== 'attack') {
+      warnings.push({ severity: 'info', code: 'desc_mentions_damage_but_no_effect', message: 'effects[' + i + '] desc 提到傷害,但 effect_code=' + code + ' 不是 deal_damage/attack', fixable: false });
+    }
+    if (drawMatch && code !== 'draw_card' && code !== 'search_deck' && code !== 'retrieve_card') {
+      warnings.push({ severity: 'info', code: 'desc_mentions_draw_but_no_effect', message: 'effects[' + i + '] desc 提到抽牌,但 effect_code=' + code, fixable: false });
+    }
+  }
+  return warnings;
+}
+
+// V7 平衡計算合規(V vs cost):effects 總 V 值 vs cost 應大致相符
+function validateBalanceFormula(card) {
+  if (!Array.isArray(card.effects) || card.effects.length === 0) return [];
+  // 簡化:只檢查 cost 是否在 0-6 範圍
+  const cost = Number(card.cost);
+  if (isNaN(cost) || cost < 0 || cost > 6) {
+    return [{ severity: 'error', code: 'cost_out_of_range', message: 'cost ' + cost + ' 超出合法範圍 0-6', fixable: false }];
+  }
+  return [];
+}
+
+// ─── 主驗證 entry:組合所有驗證器 ─────────────
+function runAllCardValidators(card, ctx) {
+  ctx = ctx || {};
+  const all = [
+    ...validateAxisValueQuotes(card),
+    ...validateOPollution(card),
+    ...validateSlotTypeConsistency(card),
+    ...validateWeaponStyleConsistency(card),
+    ...validateCardNameAxisGroupSize(card, ctx.axisGroupSizes),
+    ...validateEffectsDescSync(card),
+    ...validateBalanceFormula(card),
+  ];
+  // hallucination scanner 也加進來(已有)
+  if (typeof window.scanCardDescForHallucinations === 'function') {
+    const halluc = window.scanCardDescForHallucinations(card);
+    for (const h of halluc) {
+      all.push({ severity: 'error', code: 'hallucination_term', message: h.field + ' 含發明術語「' + h.term + '」(' + h.hint + ')', fixable: false });
+    }
+  }
+  return all;
+}
+
+// ─── 自動修復函式:回傳修改過的 card 物件(交給呼叫端 PUT 回 DB) ───
+function fixAxisValueQuotes(card) {
+  if (!card.primary_axis_value) return card;
+  const cleaned = String(card.primary_axis_value).replace(/[『』「」"'“”‘’]/g, '').trim();
+  return { ...card, primary_axis_value: cleaned };
+}
+
+function fixOPollution(card) {
+  // U+0150-U+0159 → 對應 ASCII 0-9
+  const restoreDigit = (text) => {
+    if (typeof text !== 'string') return text;
+    return text.replace(/[\u0150-\u0159]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x120));
+  };
+  const next = { ...card };
+  if (Array.isArray(card.effects)) {
+    next.effects = card.effects.map(e => e && typeof e === 'object' ? { ...e, desc_zh: restoreDigit(e.desc_zh) } : e);
+  }
+  if (card.flavor_text) next.flavor_text = restoreDigit(card.flavor_text);
+  return next;
+}
+
+function fixSlotByType(card) {
+  const t = card.card_type;
+  if (t === 'skill' || t === 'event' || t === 'ally') return { ...card, slot: 'none' };
+  if (card.combat_style === 'arcane') return { ...card, slot: 'arcane' };
+  return card;
+}
+
+window.validateAxisValueQuotes = validateAxisValueQuotes;
+window.validateOPollution = validateOPollution;
+window.validateSlotTypeConsistency = validateSlotTypeConsistency;
+window.validateWeaponStyleConsistency = validateWeaponStyleConsistency;
+window.validateCardNameAxisGroupSize = validateCardNameAxisGroupSize;
+window.validateEffectsDescSync = validateEffectsDescSync;
+window.validateBalanceFormula = validateBalanceFormula;
+window.runAllCardValidators = runAllCardValidators;
+window.fixAxisValueQuotes = fixAxisValueQuotes;
+window.fixOPollution = fixOPollution;
+window.fixSlotByType = fixSlotByType;

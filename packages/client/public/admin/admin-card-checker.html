@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>卡片檢查器 — MOD-14</title>
+  <link rel="stylesheet" href="admin-shared.css" />
+  <style>
+    .checker-container { padding: 1rem; max-width: 1400px; margin: 0 auto; }
+    .checker-header h1 { margin: 0 0 0.25rem 0; font-size: 1.3rem; }
+    .checker-header p { margin: 0; font-size: 0.8rem; color: var(--text-secondary); }
+
+    .summary-row {
+      display: flex; gap: 1rem; flex-wrap: wrap;
+      padding: 0.75rem; background: var(--bg-secondary);
+      border: 1px solid var(--border); border-radius: 4px;
+      margin: 0.75rem 0; font-size: 0.85rem;
+    }
+    .summary-row .stat { display: flex; gap: 0.4rem; align-items: center; }
+    .summary-row .stat strong { font-size: 1.1rem; }
+    .stat.severity-error strong { color: #ff6a6a; }
+    .stat.severity-warn strong { color: #ffd666; }
+    .stat.severity-info strong { color: #6ab0ff; }
+    .stat.healthy strong { color: #6aff8a; }
+
+    .toolbar {
+      display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
+      padding: 0.5rem 0; margin-bottom: 0.5rem; font-size: 0.8rem;
+    }
+    .toolbar select, .toolbar input {
+      padding: 4px 6px; font-size: 0.8rem;
+      background: #1a1a1a; color: var(--text-primary);
+      border: 1px solid #333; border-radius: 3px;
+    }
+    .toolbar button {
+      padding: 5px 10px; background: #3a5f7f; color: #fff;
+      border: none; border-radius: 3px; cursor: pointer; font-size: 0.8rem;
+    }
+    .toolbar button:hover { background: #4a7598; }
+    .toolbar button.danger { background: #6f3a3a; }
+    .toolbar button.danger:hover { background: #8f4a4a; }
+
+    .card-row {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-left-width: 4px;
+      border-radius: 4px;
+      padding: 0.6rem 0.75rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.8rem;
+    }
+    .card-row.has-error { border-left-color: #ff6a6a; }
+    .card-row.has-warn { border-left-color: #ffd666; }
+    .card-row.has-info { border-left-color: #6ab0ff; }
+    .card-row.healthy { border-left-color: #6aff8a; opacity: 0.6; }
+
+    .card-row .head {
+      display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.3rem;
+    }
+    .card-row .code {
+      font-family: monospace; color: var(--text-tertiary);
+      font-size: 0.7rem; min-width: 75px;
+    }
+    .card-row .name { flex: 1; font-weight: 600; font-size: 0.85rem; }
+    .card-row .meta { color: var(--text-tertiary); font-size: 0.7rem; }
+    .card-row .actions { display: flex; gap: 4px; }
+    .card-row .actions button {
+      padding: 2px 8px; font-size: 0.7rem;
+      background: #3a5f7f; color: #fff;
+      border: none; border-radius: 3px; cursor: pointer;
+    }
+    .card-row .actions button:hover { background: #4a7598; }
+    .card-row .actions button.fix { background: #4a7f4a; }
+    .card-row .actions button.fix:hover { background: #5a9f5a; }
+
+    .issue-list { margin: 0; padding: 0 0 0 1.2rem; font-size: 0.75rem; }
+    .issue-list li { margin: 2px 0; }
+    .issue-list .sev-error { color: #ff8a8a; }
+    .issue-list .sev-warn { color: #ffd666; }
+    .issue-list .sev-info { color: #6ab0ff; }
+
+    .empty-msg {
+      padding: 2rem; text-align: center; color: var(--text-tertiary);
+      background: var(--bg-secondary); border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <nav class="admin-nav">
+    <a href="index.html" class="nav-back">← 返回首頁</a>
+    <span class="nav-title">卡片檢查器</span>
+    <span class="nav-code">MOD-14</span>
+  </nav>
+
+  <div class="checker-container">
+    <div class="checker-header">
+      <h1>卡片檢查器</h1>
+      <p>對全 DB 卡片做 L1+L2 健檢:術語白名單 / s06 文法 / 軸向一致性 / 武器風格 / 數值同步 / ő 亂碼 / slot-type 一致 / 主軸群組規模 / 平衡公式。</p>
+    </div>
+
+    <div class="summary-row" id="summaryRow">
+      <div class="stat">載入中…</div>
+    </div>
+
+    <div class="toolbar">
+      <label>嚴重度:
+        <select id="filterSeverity">
+          <option value="">全部</option>
+          <option value="error">🔴 嚴重</option>
+          <option value="warn">🟡 警告</option>
+          <option value="info">🔵 提示</option>
+          <option value="healthy">✅ 健康</option>
+        </select>
+      </label>
+      <label>陣營:<select id="filterFaction"><option value="">全部</option></select></label>
+      <label>搜尋:<input type="text" id="filterText" placeholder="卡名或代碼" /></label>
+      <button id="btnRescan">🔄 重新掃描</button>
+      <span style="flex:1;"></span>
+      <button class="danger" id="btnFixAllQuotes">⚡ 批次去除書名號</button>
+      <button class="danger" id="btnFixAllPollution">⚡ 批次修 ő 亂碼</button>
+    </div>
+
+    <div id="cardList"></div>
+  </div>
+
+  <script src="admin-shared.js"></script>
+  <script>
+  (() => {
+    'use strict';
+
+    const userRaw = localStorage.getItem('admin_user');
+    let user = null;
+    try { user = userRaw ? JSON.parse(userRaw) : null; } catch { user = null; }
+    if (!user || (user.role !== 'admin' && user.role !== 'owner')) {
+      document.querySelector('.checker-container').innerHTML =
+        '<div style="padding:2rem;text-align:center;"><h1>權限不足</h1><p>本模組僅限管理員。</p><p><a href="index.html">← 返回首頁</a></p></div>';
+      return;
+    }
+
+    const state = {
+      cards: [],
+      results: [],
+      axisGroupSizes: new Map(),
+      filterSeverity: '',
+      filterFaction: '',
+      filterText: '',
+    };
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function loadCards() {
+      try {
+        const res = await window.adminFetch('/api/cards');
+        const payload = await res.json();
+        if (!payload || !payload.success) {
+          document.getElementById('summaryRow').innerHTML = '<div style="color:#ff6a6a;">載入失敗</div>';
+          return;
+        }
+        state.cards = payload.data || [];
+        buildAxisGroupSizes();
+        runAllValidations();
+        renderAll();
+      } catch (e) {
+        document.getElementById('summaryRow').innerHTML = '<div style="color:#ff6a6a;">載入例外:' + escapeHtml(e.message || String(e)) + '</div>';
+      }
+    }
+
+    function buildAxisGroupSizes() {
+      const m = new Map();
+      for (const c of state.cards) {
+        if (c.primary_axis_layer !== 'card_name') continue;
+        const v = String(c.primary_axis_value || '').replace(/[『』「」"'“”‘’]/g, '').trim();
+        if (!v) continue;
+        m.set(v, (m.get(v) || 0) + 1);
+      }
+      state.axisGroupSizes = m;
+    }
+
+    function runAllValidations() {
+      state.results = state.cards.map(c => {
+        const issues = window.runAllCardValidators(c, { axisGroupSizes: state.axisGroupSizes });
+        let topSeverity = null;
+        for (const it of issues) {
+          if (it.severity === 'error') { topSeverity = 'error'; break; }
+          if (it.severity === 'warn' && topSeverity !== 'error') topSeverity = 'warn';
+          if (it.severity === 'info' && !topSeverity) topSeverity = 'info';
+        }
+        return { card: c, issues, topSeverity };
+      });
+    }
+
+    function renderSummary() {
+      const total = state.results.length;
+      const err = state.results.filter(r => r.topSeverity === 'error').length;
+      const warn = state.results.filter(r => r.topSeverity === 'warn').length;
+      const info = state.results.filter(r => r.topSeverity === 'info').length;
+      const healthy = state.results.filter(r => !r.topSeverity).length;
+      document.getElementById('summaryRow').innerHTML =
+        '<div class="stat">卡總數 <strong>' + total + '</strong></div>' +
+        '<div class="stat severity-error">🔴 嚴重 <strong>' + err + '</strong></div>' +
+        '<div class="stat severity-warn">🟡 警告 <strong>' + warn + '</strong></div>' +
+        '<div class="stat severity-info">🔵 提示 <strong>' + info + '</strong></div>' +
+        '<div class="stat healthy">✅ 健康 <strong>' + healthy + '</strong></div>';
+    }
+
+    function renderFactions() {
+      const set = new Set();
+      for (const c of state.cards) if (c.faction) set.add(c.faction);
+      const sel = document.getElementById('filterFaction');
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">全部</option>' + [...set].sort().map(f => '<option value="' + f + '">' + f + '</option>').join('');
+      sel.value = cur;
+    }
+
+    function matches(r) {
+      if (state.filterSeverity === 'healthy' && r.topSeverity) return false;
+      if (state.filterSeverity && state.filterSeverity !== 'healthy' && r.topSeverity !== state.filterSeverity) return false;
+      if (state.filterFaction && r.card.faction !== state.filterFaction) return false;
+      if (state.filterText) {
+        const q = state.filterText.toLowerCase();
+        const text = ((r.card.code || '') + ' ' + (r.card.name_zh || '') + ' ' + (r.card.name_en || '')).toLowerCase();
+        if (!text.includes(q)) return false;
+      }
+      return true;
+    }
+
+    function renderList() {
+      // 排序:error → warn → info → healthy
+      const order = { error: 0, warn: 1, info: 2 };
+      const sorted = [...state.results].sort((a, b) => {
+        const oa = a.topSeverity ? order[a.topSeverity] : 9;
+        const ob = b.topSeverity ? order[b.topSeverity] : 9;
+        return oa - ob;
+      });
+      const filtered = sorted.filter(matches);
+      const out = [];
+      if (filtered.length === 0) {
+        out.push('<div class="empty-msg">沒有符合條件的卡片</div>');
+      }
+      for (const r of filtered) {
+        const c = r.card;
+        const sevClass = r.topSeverity ? 'has-' + r.topSeverity : 'healthy';
+        const fixableCount = r.issues.filter(i => i.fixable).length;
+        const issueListHtml = r.issues.length === 0
+          ? '<li style="color:var(--text-tertiary);">無問題</li>'
+          : r.issues.map(i => '<li class="sev-' + i.severity + '">[' + i.code + '] ' + escapeHtml(i.message) + (i.fixable ? ' <span style="color:#6aff8a;">●可修</span>' : '') + '</li>').join('');
+        out.push(
+          '<div class="card-row ' + sevClass + '">' +
+            '<div class="head">' +
+              '<span class="code">' + escapeHtml(c.code || '?') + '</span>' +
+              '<span class="name">' + escapeHtml(c.name_zh || '(無名)') + '</span>' +
+              '<span class="meta">F=' + (c.faction || '?') + (c.card_type ? ' · ' + c.card_type : '') + (c.level != null ? ' · LV' + c.level : '') + '</span>' +
+              '<div class="actions">' +
+                (fixableCount > 0 ? '<button class="fix" data-id="' + c.id + '">⚡ 一鍵修 ' + fixableCount + ' 項</button>' : '') +
+                '<button data-jump="' + c.id + '">→ MOD-01</button>' +
+              '</div>' +
+            '</div>' +
+            (r.issues.length > 0 ? '<ul class="issue-list">' + issueListHtml + '</ul>' : '') +
+          '</div>'
+        );
+      }
+      const listEl = document.getElementById('cardList');
+      listEl.innerHTML = out.join('');
+      listEl.querySelectorAll('button[data-jump]').forEach(btn => {
+        btn.addEventListener('click', () => { window.location.href = 'admin-card-designer.html#card=' + btn.dataset.jump; });
+      });
+      listEl.querySelectorAll('button.fix').forEach(btn => {
+        btn.addEventListener('click', () => fixOneCard(btn.dataset.id));
+      });
+    }
+
+    async function fixOneCard(id) {
+      const r = state.results.find(x => x.card.id === id);
+      if (!r) return;
+      let card = r.card;
+      const fixed = [];
+      // 套用所有 fixable 修復
+      for (const issue of r.issues) {
+        if (!issue.fixable) continue;
+        if (issue.code === 'axis_value_has_quotes') { card = window.fixAxisValueQuotes(card); fixed.push('去書名號'); }
+        else if (issue.code === 'o_pollution') { card = window.fixOPollution(card); fixed.push('修 ő 亂碼'); }
+        else if (issue.code === 'slot_type_mismatch' || issue.code === 'arcane_slot_required') { card = window.fixSlotByType(card); fixed.push('修 slot'); }
+      }
+      if (fixed.length === 0) { alert('無可自動修復項'); return; }
+      if (!confirm('將套用以下修復到此卡並 PUT 回 DB:\n· ' + fixed.join('\n· ') + '\n\n確定?')) return;
+      try {
+        const res = await window.adminFetch('/api/cards/' + id, { method: 'PUT', body: JSON.stringify(card) });
+        const payload = await res.json();
+        if (!res.ok || !payload.success) {
+          alert('修復失敗:' + (payload.error || res.status));
+          return;
+        }
+        await loadCards();
+        alert('✓ 修復完成');
+      } catch (e) {
+        alert('修復例外:' + (e.message || String(e)));
+      }
+    }
+
+    async function fixAllByCode(targetCode, label) {
+      const targets = state.results.filter(r => r.issues.some(i => i.code === targetCode && i.fixable));
+      if (targets.length === 0) { alert('沒有需要修的卡片'); return; }
+      if (!confirm('將對 ' + targets.length + ' 張卡套用「' + label + '」並逐張 PUT 回 DB(可能需要幾秒)。\n\n確定?')) return;
+      let ok = 0, fail = 0;
+      for (const r of targets) {
+        let card = r.card;
+        if (targetCode === 'axis_value_has_quotes') card = window.fixAxisValueQuotes(card);
+        else if (targetCode === 'o_pollution') card = window.fixOPollution(card);
+        try {
+          const res = await window.adminFetch('/api/cards/' + r.card.id, { method: 'PUT', body: JSON.stringify(card) });
+          const payload = await res.json();
+          if (res.ok && payload.success) ok++; else fail++;
+        } catch { fail++; }
+      }
+      alert('完成:成功 ' + ok + '、失敗 ' + fail);
+      await loadCards();
+    }
+
+    function renderAll() {
+      renderSummary();
+      renderFactions();
+      renderList();
+    }
+
+    document.getElementById('filterSeverity').addEventListener('change', e => { state.filterSeverity = e.target.value; renderList(); });
+    document.getElementById('filterFaction').addEventListener('change', e => { state.filterFaction = e.target.value; renderList(); });
+    document.getElementById('filterText').addEventListener('input', e => { state.filterText = e.target.value.trim(); renderList(); });
+    document.getElementById('btnRescan').addEventListener('click', loadCards);
+    document.getElementById('btnFixAllQuotes').addEventListener('click', () => fixAllByCode('axis_value_has_quotes', '去除書名號/引號'));
+    document.getElementById('btnFixAllPollution').addEventListener('click', () => fixAllByCode('o_pollution', '修 ő 亂碼還原為阿拉伯數字'));
+
+    loadCards();
+  })();
+  </script>
+</body>
+</html>

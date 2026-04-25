@@ -264,6 +264,18 @@
           <div class="card-desc">以主軸為單位檢視卡池分佈 + 3×3 法器矩陣覆蓋率 + 一鍵到 MOD-12 批次補寫（僅 admin 可見）</div>
         `;
         designGrid.appendChild(axis);
+
+        // MOD-14 卡片檢查器:全 DB 健檢 + 一鍵修復
+        const checker = document.createElement('a');
+        checker.href = 'admin-card-checker.html';
+        checker.className = 'module-card';
+        checker.innerHTML = `
+          <div class="card-code"><span>MOD-14</span><span class="badge-ready">READY</span></div>
+          <div class="card-title">卡片檢查器</div>
+          <div class="card-en">Card Checker</div>
+          <div class="card-desc">L1+L2 全 DB 健檢:術語白名單 / 軸向一致 / 武器風格 / ő 亂碼 / effects↔desc 同步 + 一鍵修復(僅 admin 可見)</div>
+        `;
+        designGrid.appendChild(checker);
       }
 
       // 系統診斷面板：僅 admin / owner 可見，掛在 SIM 工具區

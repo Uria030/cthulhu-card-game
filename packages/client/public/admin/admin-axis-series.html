@@ -347,14 +347,14 @@
           if (c.is_talisman) meta.push('[法器]');
           if (c.is_permanent) meta.push('[永久]');
           if (c.is_extra) meta.push('[額外]');
-          // hallucination 掃描(需 admin-shared.js 提供)
+          // hallucination 掃描(需 admin-shared.js 提供);點擊跳 MOD-14 該卡詳情
           let hallucTag = '';
           if (typeof window.scanCardDescForHallucinations === 'function') {
             const h = window.scanCardDescForHallucinations(c);
             if (h && h.length > 0) {
               const terms = h.slice(0, 3).map(x => '「' + x.term + '」').join('、');
-              const tip = h.map(x => x.field + ' → ' + x.hint).join('\n');
-              hallucTag = ' <span style="color:#ffd666;font-size:0.7rem;" title="' + escapeHtml(tip) + '">🚨 ' + terms + (h.length > 3 ? '+' + (h.length - 3) : '') + '</span>';
+              const tip = h.map(x => x.field + ' → ' + x.hint).join('\n') + '\n(點此到 MOD-14 卡片檢查器查看完整健檢)';
+              hallucTag = ' <a href="admin-card-checker.html#card=' + escapeHtml(c.id || '') + '" style="color:#ffd666;font-size:0.7rem;text-decoration:none;cursor:pointer;" title="' + escapeHtml(tip) + '">🚨 ' + terms + (h.length > 3 ? '+' + (h.length - 3) : '') + '</a>';
             }
           }
           parts.push('<span class="card-meta-mini">' + meta.join(' · ') + '</span>' + hallucTag);

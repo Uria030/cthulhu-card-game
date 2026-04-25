@@ -129,7 +129,7 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
         INSERT INTO card_definitions (
           code, series, name_zh, name_en, faction, style, card_type, slot,
           is_unique, is_signature, is_weakness, is_revelation, is_exceptional,
-          level, cost, cost_currency, skill_value, damage, horror,
+          starting_xp, cost, cost_currency, skill_value, damage, horror,
           health_boost, sanity_boost, weapon_tier, ammo, uses, consume_type,
           combat_style, attribute_modifiers, spell_type, spell_casting, hand_limit_mod,
           ally_hp, ally_san, xp_cost, subtypes,
@@ -153,7 +153,7 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
       const vals = [
         code, seriesCode, b.name_zh, b.name_en, b.faction, b.style, b.card_type || b.type, b.slot || 'none',
         b.is_unique || false, b.is_signature || false, b.is_weakness || false, b.is_revelation || false, b.is_exceptional || false,
-        b.level || 0, b.cost || 0, b.cost_currency || 'resource', b.skill_value || 0, b.damage || 0, b.horror || 0,
+        (b.starting_xp ?? b.level ?? 0), b.cost || 0, b.cost_currency || 'resource', b.skill_value || 0, b.damage || 0, b.horror || 0,
         b.health_boost || 0, b.sanity_boost || 0, b.weapon_tier || null, b.ammo || null, b.uses || null, b.consume_type || 'discard',
         b.combat_style || null, JSON.stringify(b.attribute_modifiers || {}), b.spell_type || null, b.spell_casting || null, b.hand_limit_mod || 0,
         b.ally_hp || null, b.ally_san || null, b.xp_cost || 0, b.subtypes || [],
@@ -210,7 +210,7 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
         UPDATE card_definitions SET
           name_zh=$1, name_en=$2, slot=$3,
           is_unique=$4, is_signature=$5, is_weakness=$6, is_revelation=$7, is_exceptional=$8,
-          level=$9, cost=$10, cost_currency=$11, skill_value=$12,
+          starting_xp = $9, cost=$10, cost_currency=$11, skill_value=$12,
           damage=$13, horror=$14, health_boost=$15, sanity_boost=$16,
           weapon_tier=$17, ammo=$18, uses=$19, consume_type=$20,
           combat_style=$21, attribute_modifiers=$22, spell_type=$23, spell_casting=$24, hand_limit_mod=$25,
@@ -231,7 +231,7 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
       const vals = [
         b.name_zh, b.name_en, b.slot || 'none',
         b.is_unique || false, b.is_signature || false, b.is_weakness || false, b.is_revelation || false, b.is_exceptional || false,
-        b.level || 0, b.cost || 0, b.cost_currency || 'resource', b.skill_value || 0,
+        (b.starting_xp ?? b.level ?? 0), b.cost || 0, b.cost_currency || 'resource', b.skill_value || 0,
         b.damage || 0, b.horror || 0, b.health_boost || 0, b.sanity_boost || 0,
         b.weapon_tier || null, b.ammo || null, b.uses || null, b.consume_type || 'discard',
         b.combat_style || null, JSON.stringify(b.attribute_modifiers || {}), b.spell_type || null, b.spell_casting || null, b.hand_limit_mod || 0,
@@ -313,7 +313,7 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
           INSERT INTO card_definitions (
             code,series,name_zh,name_en,faction,style,card_type,slot,
             is_unique,is_signature,is_weakness,is_revelation,is_exceptional,
-            level,cost,cost_currency,skill_value,damage,horror,
+            starting_xp,cost,cost_currency,skill_value,damage,horror,
             health_boost,sanity_boost,weapon_tier,ammo,uses,consume_type,
             combat_style,attribute_modifiers,spell_type,spell_casting,hand_limit_mod,
             ally_hp,ally_san,xp_cost,subtypes,flavor_text,removable,committable,lethal_count,owner_investigator,
@@ -328,7 +328,7 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56,$57,$58,$59,$60,$61,$62,$63,$64,$65,$66,$67,$68,$69,$70) RETURNING id`,
           [code,seriesCode,card.name_zh,card.name_en,card.faction,card.style,card.card_type||card.type,card.slot||'none',
            card.is_unique||false,card.is_signature||false,card.is_weakness||false,card.is_revelation||false,card.is_exceptional||false,
-           card.level||0,card.cost||0,card.cost_currency||'resource',card.skill_value||0,card.damage||0,card.horror||0,
+           (card.starting_xp ?? card.level ?? 0),card.cost||0,card.cost_currency||'resource',card.skill_value||0,card.damage||0,card.horror||0,
            card.health_boost||0,card.sanity_boost||0,card.weapon_tier||null,card.ammo||null,card.uses||null,card.consume_type||'discard',
            card.combat_style||null,JSON.stringify(attrMods),card.spell_type||null,card.spell_casting||null,card.hand_limit_mod||0,
            card.ally_hp||null,card.ally_san||null,card.xp_cost||0,card.subtypes||[],card.flavor_text||null,

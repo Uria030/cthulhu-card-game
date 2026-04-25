@@ -8,6 +8,7 @@ import {
   MIGRATION_023_SQL,
   MIGRATION_024_SQL,
   MIGRATION_025_SQL,
+  MIGRATION_026_SQL,
 } from '../db/migrate.js';
 
 /**
@@ -42,6 +43,7 @@ export const dbDiagRoutes: FastifyPluginAsync = async (app) => {
       { name: 'MIGRATION_023', sql: MIGRATION_023_SQL },
       { name: 'MIGRATION_024', sql: MIGRATION_024_SQL },
       { name: 'MIGRATION_025', sql: MIGRATION_025_SQL },
+      { name: 'MIGRATION_026', sql: MIGRATION_026_SQL },
     ];
     const results: { name: string; ok: boolean; error?: string; detail?: string }[] = [];
     const client = await pool.connect();
@@ -75,6 +77,9 @@ export const dbDiagRoutes: FastifyPluginAsync = async (app) => {
       has_is_talisman: cols.rows.some((r: any) => r.column_name === 'is_talisman'),
       has_primary_axis: cols.rows.some((r: any) => r.column_name === 'primary_axis_layer'),
       has_is_permanent: cols.rows.some((r: any) => r.column_name === 'is_permanent'),
+      has_starting_xp: cols.rows.some((r: any) => r.column_name === 'starting_xp'),
+      has_enhancement_slots: cols.rows.some((r: any) => r.column_name === 'enhancement_slots'),
+      has_card_source: cols.rows.some((r: any) => r.column_name === 'card_source'),
     });
   });
 

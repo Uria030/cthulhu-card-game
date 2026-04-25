@@ -247,7 +247,13 @@
           <div class="section-label">身份資訊</div>
           <div class="form-grid">
             <div class="form-group"><label>系列</label><select id="f_series"></select></div>
-            <div class="form-group"><label>等級 (level)</label><input type="number" id="f_level" value="0" min="0"></div>
+            <div class="form-group"><label>起始投入點數 ★ <span style="color:var(--text-tertiary);font-size:0.7rem;">(0-5)</span></label><input type="number" id="f_level" value="0" min="0" max="5" title="設計師預先投入的成長空間點數,每點對應 1V 效果預算。玩家可在剩餘配額(5 - 起始投入)內以 XP 自行強化。"></div>
+            <div class="form-group"><label>卡片來源 (card_source)</label><select id="f_card_source">
+              <option value="standard">標準卡(可探索獲得 / 整備購買)</option>
+              <option value="story_fixed">劇情固定卡(不受天賦鎖、不可購買)</option>
+              <option value="book_upgrade">書籍升級版(僅 transform 取得)</option>
+              <option value="relic_upgrade">遺跡升級版(僅 transform 取得)</option>
+            </select></div>
             <div class="form-group"><label>中文名稱</label><input type="text" id="f_name_zh" placeholder=".45 自動手槍"></div>
             <div class="form-group"><label>英文名稱</label><div style="display:flex;gap:0.25rem;"><input type="text" id="f_name_en" placeholder=".45 Automatic" style="flex:1;"><button class="btn" type="button" onclick="aiTranslateName()" style="font-size:0.6875rem;white-space:nowrap;">生成英文</button></div></div>
             <div class="form-group"><label>陣營極</label><select id="f_faction"></select></div>
@@ -548,35 +554,14 @@
           <div class="effects-total-value" id="effectsTotalValue"></div>
           <button class="btn" onclick="addEffect()" style="margin-top:0.5rem;">+ 新增效果</button>
 
-          <!-- Upgrade Path -->
-          <div class="section-label collapsible" id="secUpgradesHead" onclick="toggleSection('secUpgrades')">升級路徑（LV1~5 差異參數）</div>
-          <div class="section-content collapsed" id="secUpgrades">
-            <div style="display:flex;gap:0.25rem;margin-bottom:0.5rem;" id="upgradeTabs">
-              <button class="btn" onclick="switchUpgradeTab(1)" id="upgradeTab1">LV1</button>
-              <button class="btn" onclick="switchUpgradeTab(2)" id="upgradeTab2">LV2</button>
-              <button class="btn" onclick="switchUpgradeTab(3)" id="upgradeTab3">LV3</button>
-              <button class="btn" onclick="switchUpgradeTab(4)" id="upgradeTab4">LV4</button>
-              <button class="btn" onclick="switchUpgradeTab(5)" id="upgradeTab5">LV5</button>
+          <!-- 強化菜單(玩家可購買的強化選項)— 取代舊 LV0-5 六頁籤 -->
+          <div class="section-label collapsible" id="secEnhSlotsHead" onclick="toggleSection('secEnhSlots')">強化菜單(玩家可購買的強化選項)</div>
+          <div class="section-content collapsed" id="secEnhSlots">
+            <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.5rem;">
+              勾選哪些卡面欄位開放玩家用 XP 強化。每張卡共 5 點配額,設計師起始投入(★N)+ 玩家後續投入 ≤ 5。售價 xp_cost 暫留待規格訂定後填入。
             </div>
-            <div id="upgradeEditor" class="form-grid" style="display:none;">
-              <div class="form-group full" style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.25rem;">
-                只填與 LV0 不同的欄位，留空表示沿用基礎值。
-              </div>
-              <div class="form-group"><label>費用</label><input type="number" id="upg_cost" min="0" max="6" placeholder="沿用"></div>
-              <div class="form-group"><label>傷害</label><input type="number" id="upg_damage" min="0" max="10" placeholder="沿用"></div>
-              <div class="form-group"><label>恐懼傷害</label><input type="number" id="upg_horror" min="0" max="10" placeholder="沿用"></div>
-              <div class="form-group"><label>使用次數</label><input type="number" id="upg_uses" min="0" max="20" placeholder="沿用"></div>
-              <div class="form-group"><label>彈藥</label><input type="number" id="upg_ammo" min="0" max="20" placeholder="沿用"></div>
-              <div class="form-group"><label>盟友 HP</label><input type="number" id="upg_ally_hp" min="0" max="10" placeholder="沿用"></div>
-              <div class="form-group"><label>盟友 SAN</label><input type="number" id="upg_ally_san" min="0" max="10" placeholder="沿用"></div>
-              <div class="form-group"><label>經驗值花費</label><input type="number" id="upg_xp_cost" min="0" max="30" placeholder="沿用"></div>
-              <div class="form-group full"><label>升級描述（中文）</label><input type="text" id="upg_desc_zh" placeholder="此等級新增或變動的描述"></div>
-              <div class="form-group full"><label>升級描述（英文）</label><input type="text" id="upg_desc_en" placeholder="Upgrade description"></div>
-              <div class="form-group full" style="margin-top:0.25rem;">
-                <button class="btn btn-primary" onclick="saveUpgradeLevel()" style="font-size:0.75rem;">儲存此等級差異</button>
-                <button class="btn" onclick="clearUpgradeLevel()" style="font-size:0.75rem;margin-left:0.25rem;">清除此等級</button>
-              </div>
-            </div>
+            <div id="enhancement-slots-list" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+            <button class="btn" type="button" onclick="addEnhancementSlot()" style="font-size:0.75rem;margin-top:0.5rem;">＋ 新增強化標記</button>
           </div>
 
           <!-- Narrative -->
@@ -602,7 +587,7 @@
       <div id="balanceContent">
         <div class="balance-row"><span class="bal-label">效果總價值</span><span class="bal-val" id="balTotalVal">0V</span></div>
         <hr class="balance-divider">
-        <div class="balance-row"><span class="bal-label">等級抵扣</span><span class="bal-val" id="balLevelDisc">0</span></div>
+        <div class="balance-row"><span class="bal-label">起始投入抵扣</span><span class="bal-val" id="balLevelDisc" title="起始投入點數 × 1V">0</span></div>
         <div class="balance-row"><span class="bal-label">消耗類型修正</span><span class="bal-val" id="balConsumeMod">0</span></div>
         <div class="balance-row"><span class="bal-label">留場修正</span><span class="bal-val" id="balStayMod">0</span></div>
         <div class="balance-row" id="balSpecialRow" style="display:none;"><span class="bal-label">特殊修正</span><span class="bal-val" id="balSpecialMod">0</span></div>
@@ -1053,11 +1038,11 @@
       rarityDisc = 0;
       rarity = '—';
       if (totalValue >= range[0] && totalValue <= range[1]) {
-        status = 'ok'; msg = `LV${level} 區間 ${range[0]}-${range[1]}V 內`;
+        status = 'ok'; msg = `★${level} 區間 ${range[0]}-${range[1]}V 內`;
       } else if (totalValue < range[0]) {
-        status = 'warn'; msg = `${totalValue}V 低於 LV${level} 下限 ${range[0]}V`;
+        status = 'warn'; msg = `${totalValue}V 低於 ★${level} 下限 ${range[0]}V`;
       } else {
-        status = 'warn'; msg = `${totalValue}V 高於 LV${level} 上限 ${range[1]}V`;
+        status = 'warn'; msg = `${totalValue}V 高於 ★${level} 上限 ${range[1]}V`;
       }
     } else if (isAlly) {
       totalValue = calcAllyBaseValue() + effectsValue;
@@ -1595,7 +1580,9 @@
     el('f_type').value = c.type || 'asset';
     el('f_slot').value = c.slot || 'one_hand';
     el('f_is_unique').checked = !!c.is_unique;
-    el('f_level').value = c.level || 0;
+    el('f_level').value = (c.starting_xp ?? c.level ?? 0);
+    if (el('f_card_source')) el('f_card_source').value = c.card_source || 'standard';
+    loadEnhancementSlots(c.enhancement_slots || []);
     el('f_is_signature').checked = !!c.is_signature;
     el('f_is_weakness').checked = !!c.is_weakness;
     el('f_is_exceptional').checked = !!c.is_exceptional;
@@ -1670,7 +1657,10 @@
       card_type: el('f_type').value,
       slot: el('f_slot').value,
       is_unique: el('f_is_unique').checked,
-      level: intVal('f_level'),
+      level: intVal('f_level'),               // 後端相容:同 starting_xp(舊名)
+      starting_xp: intVal('f_level'),         // 新名:起始投入點數
+      card_source: el('f_card_source')?.value || 'standard',
+      enhancement_slots: collectEnhancementSlots(),
       is_signature: el('f_is_signature').checked,
       is_weakness: el('f_is_weakness').checked,
       is_exceptional: el('f_is_exceptional').checked,
@@ -1717,7 +1707,7 @@
       transform_condition: el('f_transform_condition')?.value || null,
       transform_reversible: el('f_transform_reversible')?.checked || false,
       effects: collectEffects(),
-      upgrades: (() => { saveUpgradeLevelSilent(); return Object.keys(currentUpgrades).length > 0 ? currentUpgrades : {}; })(),
+      upgrades: {},  // DEPRECATED v1 重構:舊 LV0-5 系統已廢除,統一寫空物件
       flavor_text: el('f_flavor_text').value.trim(),
       version: 1,
       created_at: editingId ? (cards.find(c => c.id === editingId)?.created_at || new Date().toISOString()) : new Date().toISOString(),
@@ -1803,76 +1793,75 @@
 
   function newCard() { clearForm(); el('f_name_zh').focus(); }
 
-  /* ── Upgrade System (LV1~5 差異參數) ── */
-  let currentUpgrades = {};  // { "1": { cost: 3, damage: 4, ... }, "2": { ... } }
-  let currentUpgradeLevel = null;
-  const UPGRADE_FIELDS = ['cost','damage','horror','uses','ammo','ally_hp','ally_san','xp_cost','desc_zh','desc_en'];
+  /* ── DEPRECATED v1 重構(2026-04-25):LV0-5 升級系統廢除 ──
+       saveUpgradeLevel / saveUpgradeLevelSilent / switchUpgradeTab /
+       clearUpgradeLevel / updateUpgradeTabIndicators / loadUpgrades
+       已全部移除,新系統使用 enhancement_slots(玩家可購買的強化菜單)。
+       60 天後移除 currentUpgrades 變數的所有殘留引用。
+  */
+  // 保留空函式以避免外部呼叫炸掉(若有歷史 bookmark / inline onclick 殘留)
+  function saveUpgradeLevelSilent() {}
 
-  function switchUpgradeTab(lv) {
-    // Save current tab before switching
-    if (currentUpgradeLevel) saveUpgradeLevelSilent();
-    currentUpgradeLevel = lv;
-    // Highlight active tab
-    document.querySelectorAll('#upgradeTabs .btn').forEach(b => b.classList.remove('btn-primary'));
-    el('upgradeTab' + lv).classList.add('btn-primary');
-    // Show editor
-    el('upgradeEditor').style.display = '';
-    // Load data for this level
-    const data = currentUpgrades[String(lv)] || {};
-    for (const f of UPGRADE_FIELDS) {
-      const input = el('upg_' + f);
-      if (input) input.value = data[f] ?? '';
+  /* ── 強化菜單(enhancement_slots)新版實作 ── */
+  // 設計師標記哪些卡面欄位開放玩家用 XP 強化,結構:[{field, max_increment, xp_cost}, ...]
+  const ENHANCEMENT_FIELD_OPTIONS = [
+    { value: 'damage', label: '傷害' },
+    { value: 'horror', label: '恐懼傷害' },
+    { value: 'uses', label: '使用次數' },
+    { value: 'ammo', label: '彈藥' },
+    { value: 'ally_hp', label: '盟友 HP' },
+    { value: 'ally_san', label: '盟友 SAN' },
+    { value: 'attribute_modifiers.strength', label: '屬性:力量' },
+    { value: 'attribute_modifiers.agility', label: '屬性:敏捷' },
+    { value: 'attribute_modifiers.intellect', label: '屬性:智力' },
+    { value: 'attribute_modifiers.willpower', label: '屬性:意志' },
+    { value: 'skill_value', label: '技能加值' },
+  ];
+
+  let currentEnhancementSlots = [];
+
+  function renderEnhancementSlots() {
+    const list = document.getElementById('enhancement-slots-list');
+    if (!list) return;
+    if (currentEnhancementSlots.length === 0) {
+      list.innerHTML = '<div style="font-size:0.75rem;color:var(--text-tertiary);font-style:italic;">尚未開放任何強化欄位</div>';
+      return;
     }
+    list.innerHTML = currentEnhancementSlots.map((slot, idx) => {
+      const fieldOpts = ENHANCEMENT_FIELD_OPTIONS.map(o =>
+        '<option value="' + o.value + '"' + (o.value === slot.field ? ' selected' : '') + '>' + o.label + '</option>'
+      ).join('');
+      return '<div class="form-grid" style="grid-template-columns:2fr 1fr 1fr auto;gap:0.4rem;align-items:end;">' +
+        '<div class="form-group" style="margin:0;"><label style="font-size:0.7rem;">欄位</label><select onchange="updateEnhancementSlot(' + idx + ', \'field\', this.value)">' + fieldOpts + '</select></div>' +
+        '<div class="form-group" style="margin:0;"><label style="font-size:0.7rem;">最大強化幅度</label><input type="number" min="1" max="5" value="' + (slot.max_increment ?? 1) + '" onchange="updateEnhancementSlot(' + idx + ', \'max_increment\', parseInt(this.value)||1)"></div>' +
+        '<div class="form-group" style="margin:0;"><label style="font-size:0.7rem;" title="售價公式待後續訂定">XP 售價</label><input type="number" min="0" placeholder="待訂" value="' + (slot.xp_cost ?? '') + '" onchange="updateEnhancementSlot(' + idx + ', \'xp_cost\', this.value === \'\' ? null : parseInt(this.value))"></div>' +
+        '<button class="btn btn-sm" type="button" onclick="removeEnhancementSlot(' + idx + ')" style="font-size:0.7rem;">移除</button>' +
+        '</div>';
+    }).join('');
   }
 
-  function saveUpgradeLevelSilent() {
-    if (!currentUpgradeLevel) return;
-    const data = {};
-    for (const f of UPGRADE_FIELDS) {
-      const input = el('upg_' + f);
-      if (!input) continue;
-      const v = input.value.trim();
-      if (v !== '') {
-        data[f] = input.type === 'number' ? Number(v) : v;
-      }
-    }
-    if (Object.keys(data).length > 0) {
-      currentUpgrades[String(currentUpgradeLevel)] = data;
-    } else {
-      delete currentUpgrades[String(currentUpgradeLevel)];
-    }
-    updateUpgradeTabIndicators();
+  function addEnhancementSlot() {
+    currentEnhancementSlots.push({ field: 'damage', max_increment: 1, xp_cost: null });
+    renderEnhancementSlots();
   }
 
-  function saveUpgradeLevel() {
-    saveUpgradeLevelSilent();
-    alert(`LV${currentUpgradeLevel} 差異已儲存`);
+  function removeEnhancementSlot(idx) {
+    currentEnhancementSlots.splice(idx, 1);
+    renderEnhancementSlots();
   }
 
-  function clearUpgradeLevel() {
-    if (!currentUpgradeLevel) return;
-    delete currentUpgrades[String(currentUpgradeLevel)];
-    for (const f of UPGRADE_FIELDS) {
-      const input = el('upg_' + f);
-      if (input) input.value = '';
-    }
-    updateUpgradeTabIndicators();
+  function updateEnhancementSlot(idx, key, value) {
+    if (!currentEnhancementSlots[idx]) return;
+    currentEnhancementSlots[idx][key] = value;
   }
 
-  function updateUpgradeTabIndicators() {
-    for (let lv = 1; lv <= 5; lv++) {
-      const tab = el('upgradeTab' + lv);
-      const has = currentUpgrades[String(lv)] && Object.keys(currentUpgrades[String(lv)]).length > 0;
-      tab.textContent = has ? `LV${lv} ●` : `LV${lv}`;
-    }
+  function collectEnhancementSlots() {
+    return currentEnhancementSlots.filter(s => s && s.field);
   }
 
-  function loadUpgrades(upgrades) {
-    currentUpgrades = upgrades && typeof upgrades === 'object' ? { ...upgrades } : {};
-    currentUpgradeLevel = null;
-    el('upgradeEditor').style.display = 'none';
-    document.querySelectorAll('#upgradeTabs .btn').forEach(b => b.classList.remove('btn-primary'));
-    updateUpgradeTabIndicators();
+  function loadEnhancementSlots(slots) {
+    currentEnhancementSlots = Array.isArray(slots) ? slots.slice() : [];
+    renderEnhancementSlots();
   }
 
   function clearForm() {
@@ -1899,10 +1888,9 @@
     el('f_commit_bonus').value = '';
     loadConsumeEffect(false, null);
     renderEffects([]);
-    currentUpgrades = {};
-    currentUpgradeLevel = null;
-    el('upgradeEditor').style.display = 'none';
-    document.querySelectorAll('#upgradeTabs .btn').forEach(b => b.classList.remove('btn-primary'));
+    currentEnhancementSlots = [];
+    renderEnhancementSlots();
+    if (el('f_card_source')) el('f_card_source').value = 'standard';
     toggleConditionalFields();
     updateCodePreview();
     updatePreview();
@@ -3193,7 +3181,7 @@
     const basicBody = `
       卡名：<b>${esc(d.name_zh)}</b> / ${esc(d.name_en)}<br>
       陣營：${esc(d.faction)} · 風格：${esc(d.style)} · 類型：${esc(d.type || d.card_type)}<br>
-      等級 ${d.level ?? 0} · 費用 ${d.cost ?? 0} · 配件欄 ${esc(d.slot)}
+      ★${(d.starting_xp ?? d.level ?? 0)} · 費用 ${d.cost ?? 0} · 配件欄 ${esc(d.slot)}
     `;
 
     const axisBody = d.primary_axis_layer === 'none'
@@ -3277,7 +3265,9 @@
     el('f_type').value = d.type || 'asset';
     el('f_slot').value = d.slot || 'one_hand';
     el('f_is_unique').checked = !!d.is_unique;
-    el('f_level').value = d.level ?? 0;
+    el('f_level').value = (d.starting_xp ?? d.level ?? 0);
+    if (el('f_card_source')) el('f_card_source').value = d.card_source || 'standard';
+    loadEnhancementSlots(d.enhancement_slots || []);
     el('f_is_signature').checked = !!d.is_signature;
     el('f_is_weakness').checked = !!d.is_weakness;
     el('f_is_exceptional').checked = !!d.is_exceptional;
@@ -3322,7 +3312,7 @@
     el('f_transform_to').value = d.transform_to || '';
     el('f_transform_condition').value = d.transform_condition || '';
     el('f_transform_reversible').checked = !!d.transform_reversible;
-    loadUpgrades(d.upgrades);
+    // loadUpgrades 已廢除(v1 重構);保留註解避免外部呼叫
     el('f_flavor_text').value = d.flavor_text || '';
     // Migrate old effect format if needed
     const effects = (d.effects || []).map(e => {

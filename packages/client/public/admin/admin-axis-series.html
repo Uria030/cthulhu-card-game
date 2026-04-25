@@ -346,7 +346,7 @@
           if (c.faction) meta.push('F=' + c.faction);
           if (c.style) meta.push(c.style);
           if (c.card_type) meta.push(c.card_type);
-          if (c.level != null) meta.push('LV' + c.level);
+          if (c.level != null) meta.push('★' + (c.starting_xp ?? c.level));
           if (c.cost != null) meta.push('cost=' + c.cost);
           if (c.is_talisman) meta.push('[法器]');
           if (c.is_permanent) meta.push('[永久]');
@@ -378,7 +378,7 @@
                 '<span class="axis-count">共 ' + g.cards.length + ' 張</span>' +
               '</div>' +
               '<button class="btn-to-mod12" data-hint="' + encodeURIComponent(mod12Hint) + '">→ MOD-12 批次補寫</button>' +
-              '<button class="btn-to-mod12" style="background:#6f4a8a;margin-left:4px;" data-ai-gaps="' + encodeURIComponent(JSON.stringify({ layer: g.layer, value: g.value, cards: g.cards.map(c => ({ code: c.code, name_zh: c.name_zh, card_type: c.card_type, level: c.level, cost: c.cost })) })) + '">🤖 看缺什麼</button>' +
+              '<button class="btn-to-mod12" style="background:#6f4a8a;margin-left:4px;" data-ai-gaps="' + encodeURIComponent(JSON.stringify({ layer: g.layer, value: g.value, cards: g.cards.map(c => ({ code: c.code, name_zh: c.name_zh, card_type: c.card_type, level: (c.starting_xp ?? c.level), starting_xp: (c.starting_xp ?? c.level), cost: c.cost })) })) + '">🤖 看缺什麼</button>' +
             '</div>' +
             '<ol class="axis-cards">' + cardList + '</ol>' +
             moreNote +

@@ -285,7 +285,7 @@
             '<div class="head">' +
               '<span class="code">' + escapeHtml(c.code || '?') + '</span>' +
               '<span class="name">' + escapeHtml(c.name_zh || '(無名)') + '</span>' +
-              '<span class="meta">F=' + (c.faction || '?') + (c.card_type ? ' · ' + c.card_type : '') + (c.level != null ? ' · LV' + c.level : '') + '</span>' +
+              '<span class="meta">F=' + (c.faction || '?') + (c.card_type ? ' · ' + c.card_type : '') + (((c.starting_xp ?? c.level) != null) ? ' · ★' + (c.starting_xp ?? c.level) : '') + '</span>' +
               '<div class="actions">' +
                 (fixableCount > 0 ? '<button class="fix" data-id="' + c.id + '">⚡ 一鍵修 ' + fixableCount + ' 項</button>' : '') +
                 '<button class="ai" data-ai-restructure="' + c.id + '">🤖 結構化 desc</button>' +

@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.20.7+b59';
+const ADMIN_VERSION = '0.21.0+b60';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -1109,7 +1109,7 @@ async function fetchExistingCardsForPromptContext(userDescription) {
         '｜faction=' + (c.faction || '?'),
         c.style ? 'style=' + c.style : '',
         c.card_type ? 'type=' + c.card_type : '',
-        c.level != null ? 'LV' + c.level : '',
+        ((c.starting_xp ?? c.level) != null) ? '★' + (c.starting_xp ?? c.level) : '',
         c.cost != null ? 'cost=' + c.cost : '',
         c.primary_axis_layer && c.primary_axis_layer !== 'none'
           ? '軸=' + c.primary_axis_layer + '/' + (c.primary_axis_value || '')

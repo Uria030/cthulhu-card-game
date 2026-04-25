@@ -42,7 +42,7 @@
       style: c.style,
       card_type: c.card_type,
       slot: c.slot,
-      level: c.level,
+      level: (c.starting_xp ?? c.level), starting_xp: (c.starting_xp ?? c.level),
       cost: c.cost,
       damage: c.damage,
       horror: c.horror,
@@ -119,8 +119,9 @@
       '- 正面狀態 3-6V/層;負面狀態 3-6V/層;快速 +1V;指定他人 +2V\n' +
       '- 條件式 -1~-2V(機率打折,但若條件易達成不打折);費用減免 1.5V/資源\n' +
       '- 跳過動作點(不佔行動)+1V;不佔欄位(如盟友格)+2V\n' +
-      '- 等級抵扣:LV0=0, LV1=-0.5V, LV2=-1V, LV3=-2V, LV4=-3V, LV5=-4V\n' +
-      '- 所有卡型 1:1:稀有度抵扣 = 總 V - 等級抵扣 - 費用\n' +
+      '- **起始投入抵扣**(取代舊版等級抵扣):starting_xp 點數 × 1V 線性。即 ★0=0, ★1=-1V, ★2=-2V, ★3=-3V, ★4=-4V, ★5=-5V\n' +
+      '- Exceptional 標記額外 -2V(沿用)\n' +
+      '- 所有卡型 1:1:稀有度抵扣 = 總 V - 起始投入抵扣 - 費用 - Exceptional 抵扣\n' +
       '- 永久效果(while_in_play 持續整局)估值: 假設遊戲平均 4 回合,每回合提供 X 價值 → 4X V 值\n' +
       '- **同一張卡每次估算應該得到相同 V 值**——你的推算過程必須穩定可重現\n' +
       '\n卡片資料:\n```json\n' + JSON.stringify(summary, null, 2) + '\n```\n' +
@@ -143,7 +144,7 @@
   async function aiScoreCardCombo(card, contextCards) {
     if (typeof window.callGeminiDirect !== 'function') throw new Error('callGeminiDirect 未載入');
     var ctxLines = (contextCards || []).slice(0, 12).map(function (c) {
-      return '- [' + (c.code || '?') + '] ' + (c.name_zh || '(無名)') + ' | ' + (c.card_type || '?') + ' LV' + (c.level != null ? c.level : '?') + ' cost=' + (c.cost != null ? c.cost : '?');
+      return '- [' + (c.code || '?') + '] ' + (c.name_zh || '(無名)') + ' | ' + (c.card_type || '?') + ' ★' + (((c.starting_xp ?? c.level) != null) ? (c.starting_xp ?? c.level) : '?') + ' cost=' + (c.cost != null ? c.cost : '?');
     }).join('\n');
 
     var prompt = '你是卡牌遊戲設計品質評估器。評估這張卡的軸內互動有趣程度(0-10)。\n' +
@@ -179,7 +180,7 @@
   async function aiSuggestAxisGaps(axisLayer, axisValue, axisCards) {
     if (typeof window.callGeminiDirect !== 'function') throw new Error('callGeminiDirect 未載入');
     var summary = (axisCards || []).map(function (c) {
-      return '- [' + (c.code || '?') + '] ' + (c.name_zh || '(無名)') + ' | ' + (c.card_type || '?') + ' LV' + (c.level != null ? c.level : '?') + ' cost=' + (c.cost != null ? c.cost : '?');
+      return '- [' + (c.code || '?') + '] ' + (c.name_zh || '(無名)') + ' | ' + (c.card_type || '?') + ' ★' + (((c.starting_xp ?? c.level) != null) ? (c.starting_xp ?? c.level) : '?') + ' cost=' + (c.cost != null ? c.cost : '?');
     }).join('\n');
 
     var prompt = '你是卡牌遊戲系列設計顧問。分析這個主軸的卡片分佈,建議該補什麼讓系列完整。\n' +

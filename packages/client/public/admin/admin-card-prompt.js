@@ -34,15 +34,18 @@ window.buildCardGeminiPrompt = function(userDescription, options) {
 
 ### 稀有度反推公式
 稀有度由效果價值、等級、費用反推：
-- 事件卡(1:1)：稀有度抵扣 = 效果總價值 - 等級抵扣 - 費用
-- 資產卡(2:1)：稀有度抵扣 = 總輸出價值 - 1V(留場) - 消耗修正 - 等級抵扣 - (費用×2)
-- 盟友卡(1:1)：稀有度抵扣 = HP×0.5V + SAN×0.5V + 2V + 能力價值 - 等級抵扣 - 費用
-- 技能卡：費用=0，不計稀有度，檢驗價值區間(LV0:2.5-3V, LV2:5-6V, LV3:7-8V, LV5:9-10V)
+- 事件卡(1:1)：稀有度抵扣 = 效果總價值 - 起始投入抵扣 - 費用 - Exceptional 抵扣
+- 資產卡(1:1)：稀有度抵扣 = 總輸出價值 - 1V(留場) - 起始投入抵扣 - 費用 - Exceptional 抵扣
+- 盟友卡(1:1)：稀有度抵扣 = HP×0.5V + SAN×0.5V + 2V + 能力價值 - 起始投入抵扣 - 費用 - Exceptional 抵扣
+- 技能卡：費用=0，不計稀有度，檢驗價值區間(★0:2.5-3V, ★2:5-6V, ★3:7-8V, ★5:9-10V)
 
 ### 抵扣值對照表（向上進位）
 ≤0：隨身, 0.1~1：基礎, 1.1~2：標準, 2.1~3：進階, 3.1~4：稀有, 4.1~5：傳奇, >5：超出範圍
 
-### 等級抵扣：0級=0, 1級=-1V, 2級=-2V, 3級=-3V, 4級=-4V, 5級=-5V
+### 起始投入抵扣(取代舊版等級抵扣,卡片升級系統重構 v1):starting_xp 點數 × 1V 線性
+### ★0=0, ★1=-1V, ★2=-2V, ★3=-3V, ★4=-4V, ★5=-5V
+### Exceptional(卓越)標記:額外 -2V(沿用 v1.1)+ 玩家購買 XP ×2 倍率
+### 5 點配額硬上限:設計師起始投入 + 玩家後續投入 ≤ 5
 ### 消耗類型修正：留場=-1V, 棄牌=0, 短休息=-1V, 長休息=-2V, 移除=-3V
 
 ## 一、遊戲基礎規則
@@ -495,7 +498,7 @@ ${userDescription}
 12. 盟友卡需填 ally_hp 和 ally_san，HP+SAN 預算不超過 5（低費）或 7（高費）
 13. 技能卡費用固定為 0，skill_value 為 +1~+3
 14. subtypes 要正確標記（weapon/weapon_melee/weapon_ranged/weapon_arcane/item/arcane_item/consumable/ammo/arrow/spell/light_source）
-15. **等級 0 的卡片預設不能有消費能力**：level=0 時 consume_enabled 必須為 false、consume_effect 必須為 null。消費能力屬於進階設計元素，應由使用者升級卡片時（level ≥ 1）自行添加，AI 不可自動填入。
+15. **★0 (起始投入 0 點) 的卡片預設不能有消費能力**：starting_xp=0 時 consume_enabled 必須為 false、consume_effect 必須為 null。消費能力屬於進階設計元素,應由玩家後續投入強化(starting_xp ≥ 1)後再添加,AI 不可自動填入。
 16. **法器卡判定**：若使用者描述符合 §七.5 的法器敘事關鍵字，is_talisman=true 並完整填入 12 個法器欄位；否則 is_talisman=false 並把 12 欄位全部設為 null / 空陣列（[] 與 false）。
 17. **target_threat_types 必為陣列**：使用 ["mental"] / ["physical"] / ["ritual"] 的陣列格式，即使只有一個類型也要包陣列；雙類型與通用法器對應進階以上稀有度。
 18. **break_timing='test' 時 break_test_attribute 必填**：優先使用該陣營主屬性（E=charisma、I=intellect、S=perception、N=willpower、T=agility、F=strength、J=constitution、P=reflex）。
@@ -558,7 +561,7 @@ window.buildMiniCardGeminiPrompt = function(parsed) {
     p.faction && ('陣營:' + p.faction),
     p.style && ('風格:' + p.style),
     p.card_type && ('類型:' + p.card_type),
-    p.level != null && ('等級:' + p.level),
+    p.level != null && ('起始投入:★' + p.level),
     p.cost != null && ('費用:' + p.cost),
     p.slot && ('配件欄:' + p.slot),
     p.combat_style && ('戰鬥風格:' + p.combat_style),
@@ -595,8 +598,10 @@ ${needAxis ? '- **primary_axis_layer** + **primary_axis_value**: 使用者未指
 - 1V = 1 行動點 = 1 資源 = 抽 1 張牌 = 造成 1 點傷害
 - 恐懼傷害 3V/點；恢復 HP/SAN 1.5V/點；抽牌 1V/張；搜尋 6V；移動 1V/格
 - 施加正面狀態 3-6V/層；快速 +1V；可指定他人 +2V
-- **等級抵扣**（支柱五 v0.2）：LV0=0, LV1=-0.5V, LV2=-1V, LV3=-2V, LV4=-3V, LV5=-4V
-- **所有卡型 1:1**（含資產卡；原 2:1 已廢）：稀有度抵扣 = 總效果 V - 等級抵扣 - 費用
+- **起始投入抵扣**(卡片升級系統重構 v1):starting_xp × 1V 線性。★0=0, ★1=-1V, ★2=-2V, ★3=-3V, ★4=-4V, ★5=-5V
+- **Exceptional(卓越)**:額外 -2V + 玩家購買 XP ×2 倍率(雙重特性)
+- **5 點配額硬上限**:設計師起始投入 + 玩家後續投入 ≤ 5
+- **所有卡型 1:1**(含資產卡;原 2:1 已廢):稀有度抵扣 = 總效果 V - 起始投入抵扣 - 費用 - Exceptional 抵扣
 - 稀有度：≤0 隨身 / 0.1~1 基礎 / 1.1~2 標準 / 2.1~3 進階 / 3.1~4 稀有 / 4.1~5 傳奇
 - 雙用途卡合約：破事 V + 殺敵 V ≤ 9，單軸不得 > 6
 

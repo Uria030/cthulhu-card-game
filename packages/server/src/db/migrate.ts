@@ -2759,6 +2759,77 @@ ALTER TABLE card_definitions DROP CONSTRAINT IF EXISTS chk_extra_cost;
 `;
 
 // ============================================
+// Migration 026: 卡片升級系統重構 v1
+// 依據:Claude_Code_卡片升級系統重構_v1 Part 1+2+3
+// - card_definitions.level → starting_xp(語意改寫:設計師起始投入點數,範圍 0-5,
+//   每點 = 1V 效果預算)
+// - 新增 enhancement_slots JSONB(設計師標記哪些欄位開放玩家強化)
+// - 新增 card_source VARCHAR(卡片來源:standard / story_fixed / book_upgrade /
+//   relic_upgrade)
+// - 廢棄 upgrades 欄位(舊系統的 LV0-5 各等級獨立效果定義),60 天後移除
+// ============================================
+export const MIGRATION_026_SQL = `
+-- 1. 重命名 level → starting_xp(語意改寫為起始投入點數)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'card_definitions' AND column_name = 'level'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'card_definitions' AND column_name = 'starting_xp'
+  ) THEN
+    ALTER TABLE card_definitions RENAME COLUMN level TO starting_xp;
+  END IF;
+END $$;
+
+-- 2. 確認範圍 CHECK(0-5);若無則補上
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'chk_starting_xp_range'
+  ) THEN
+    ALTER TABLE card_definitions
+      ADD CONSTRAINT chk_starting_xp_range CHECK (starting_xp BETWEEN 0 AND 5) NOT VALID;
+  END IF;
+END $$;
+
+-- 3. 新增 enhancement_slots(設計師標記強化菜單)
+ALTER TABLE card_definitions
+  ADD COLUMN IF NOT EXISTS enhancement_slots JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+COMMENT ON COLUMN card_definitions.enhancement_slots IS
+  '強化菜單:設計師標記哪些欄位開放玩家用 XP 強化。結構 [{field, max_increment, xp_cost}, ...]。xp_cost 預設 null 待後續訂定。';
+
+-- 4. 新增 card_source(卡片來源類型)
+ALTER TABLE card_definitions
+  ADD COLUMN IF NOT EXISTS card_source VARCHAR(32) NOT NULL DEFAULT 'standard';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'chk_card_source'
+  ) THEN
+    ALTER TABLE card_definitions
+      ADD CONSTRAINT chk_card_source CHECK (
+        card_source IN ('standard', 'story_fixed', 'book_upgrade', 'relic_upgrade')
+      ) NOT VALID;
+  END IF;
+END $$;
+
+COMMENT ON COLUMN card_definitions.card_source IS
+  '卡片來源:standard(標準卡)、story_fixed(劇情固定發放)、book_upgrade(書籍升級版)、relic_upgrade(遺跡升級版)。後三者由 transform 取得,不可整備期購買。';
+
+-- 5. 廢棄 upgrades 欄位標記(60 天後移除)
+COMMENT ON COLUMN card_definitions.upgrades IS
+  '【已廢棄 v1 重構 2026-04-25】舊系統下存放 LV0-5 各等級獨立效果定義。新系統使用 enhancement_slots 取代。本欄位保留 60 天後移除,期間僅讀不寫。';
+
+-- 6. starting_xp 欄位語意註記
+COMMENT ON COLUMN card_definitions.starting_xp IS
+  '起始投入點數:設計師預先投入的成長空間點數,範圍 0-5。每點對應 1V 效果預算。玩家可在剩餘配額(5 - starting_xp)內以 XP 自行強化。';
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -2934,6 +3005,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_023_SQL);
     await client.query(MIGRATION_024_SQL);
     await client.query(MIGRATION_025_SQL);
+    await client.query(MIGRATION_026_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

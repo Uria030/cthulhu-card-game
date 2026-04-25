@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.20.1+b53';
+const ADMIN_VERSION = '0.20.2+b54';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -1343,3 +1343,39 @@ window.fixOPollution = fixOPollution;
 window.fixSlotByType = fixSlotByType;
 window.fixNameZhQuotes = fixNameZhQuotes;
 window.fixOrphanCardNameAxis = fixOrphanCardNameAxis;
+
+/* ========================================
+   共用 Gemini API Key UI helpers
+   給沒有自帶 API Key 按鈕的頁面用(MOD-14 / AXIS / DIAG 等)
+   ======================================== */
+const LS_GEMINI_KEY = 'gemini_api_key';
+
+function getCurrentGeminiKey() {
+  return (localStorage.getItem(LS_GEMINI_KEY) || '').trim();
+}
+
+// 開設定對話框,使用者按取消保留原值
+function promptGeminiApiKeyDialog() {
+  const cur = getCurrentGeminiKey();
+  const k = prompt('請輸入 Gemini API Key(儲存於本機 localStorage,所有 MOD 共用):', cur);
+  if (k === null) return getCurrentGeminiKey();
+  const trimmed = String(k).trim();
+  if (trimmed === '') localStorage.removeItem(LS_GEMINI_KEY);
+  else localStorage.setItem(LS_GEMINI_KEY, trimmed);
+  // 同步通知 geminiDirectClient(若已載入)
+  if (typeof window.setGeminiApiKey === 'function' && trimmed) {
+    try { window.setGeminiApiKey(trimmed); } catch (e) { /* ignore */ }
+  }
+  return getCurrentGeminiKey();
+}
+
+// 「確保已有 API Key」:有就回傳,沒有就 prompt;返 key 或空字串
+function ensureGeminiApiKey() {
+  const cur = getCurrentGeminiKey();
+  if (cur) return cur;
+  return promptGeminiApiKeyDialog();
+}
+
+window.getCurrentGeminiKey = getCurrentGeminiKey;
+window.promptGeminiApiKeyDialog = promptGeminiApiKeyDialog;
+window.ensureGeminiApiKey = ensureGeminiApiKey;

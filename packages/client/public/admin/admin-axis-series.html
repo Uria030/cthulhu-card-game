@@ -116,6 +116,8 @@
     <a href="index.html" class="nav-back">← 返回首頁</a>
     <span class="nav-title">主軸系列編輯器</span>
     <span class="nav-code">AXIS</span>
+    <span style="flex:1;"></span>
+    <button onclick="window.promptGeminiApiKeyDialog && window.promptGeminiApiKeyDialog();" style="padding:4px 10px;background:#3a5f7f;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:0.78rem;">🔑 API Key</button>
   </nav>
 
   <div class="axis-container">
@@ -399,6 +401,7 @@
             alert('AI 工具未載入(請刷新)');
             return;
           }
+          if (typeof window.ensureGeminiApiKey === 'function' && !window.ensureGeminiApiKey()) return;
           ev.currentTarget.disabled = true;
           ev.currentTarget.textContent = '🤖 思考中…';
           try {

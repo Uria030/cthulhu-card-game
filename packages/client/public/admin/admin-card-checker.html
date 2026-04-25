@@ -119,6 +119,8 @@
     <a href="index.html" class="nav-back">← 返回首頁</a>
     <span class="nav-title">卡片檢查器</span>
     <span class="nav-code">MOD-14</span>
+    <span style="flex:1;"></span>
+    <button id="apiKeyBtn" onclick="window.promptGeminiApiKeyDialog && window.promptGeminiApiKeyDialog();" style="padding:4px 10px;background:#3a5f7f;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:0.78rem;">🔑 API Key</button>
   </nav>
 
   <div class="checker-container">
@@ -346,6 +348,7 @@
     async function aiRestructure(id) {
       const r = state.results.find(x => x.card.id === id);
       if (!r) return;
+      if (typeof window.ensureGeminiApiKey === 'function' && !window.ensureGeminiApiKey()) return;
       if (!confirm('將送 desc_zh + 現有 effects[] 給 Gemini,讓 AI 反向結構化。可能需要幾秒。確定?')) return;
       try {
         const result = await window.aiRestructureEffects(r.card);
@@ -374,6 +377,7 @@
     async function aiEstimateValue(id) {
       const r = state.results.find(x => x.card.id === id);
       if (!r) return;
+      if (typeof window.ensureGeminiApiKey === 'function' && !window.ensureGeminiApiKey()) return;
       try {
         const result = await window.aiEstimateCardValue(r.card);
         const breakdownHtml = (result.breakdown || []).map(b => '<li>' + escapeHtml(b.effect_summary) + ' → <strong>' + b.v + 'V</strong> · <span style="color:var(--text-secondary);">' + escapeHtml(b.reason || '') + '</span></li>').join('');
@@ -394,6 +398,7 @@
     async function aiScoreCombo(id) {
       const r = state.results.find(x => x.card.id === id);
       if (!r) return;
+      if (typeof window.ensureGeminiApiKey === 'function' && !window.ensureGeminiApiKey()) return;
       // 抓同軸 context
       const same = state.cards.filter(c =>
         c.id !== id &&

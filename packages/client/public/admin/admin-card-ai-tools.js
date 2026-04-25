@@ -15,9 +15,27 @@
     return String(text).replace(/```json\n?|```/g, '').trim();
   }
 
+  // 把 effects[].desc_zh 串成單一字串,讓 AI 一眼看到所有敘述(避免 AI 漏看 nested struct 裡的 desc_zh)
+  function renderCardBodyText(c) {
+    var lines = [];
+    if (Array.isArray(c.effects)) {
+      c.effects.forEach(function (e, i) {
+        if (e && e.desc_zh && String(e.desc_zh).trim()) {
+          lines.push('【效果' + (i + 1) + '】' + e.desc_zh);
+        }
+      });
+    }
+    if (c.flavor_text && String(c.flavor_text).trim()) {
+      lines.push('【風味文字】' + c.flavor_text);
+    }
+    return lines.length > 0 ? lines.join('\n') : '(此卡 effects.desc_zh 與 flavor_text 都為空,只能依 effects[].effect_code + params 結構化資料推算)';
+  }
+
   // 簡化卡片資料(送 AI 前裁掉冗餘欄位節省 token)
   function summarizeCardForAi(c) {
     return {
+      // 把使用者實際看到的卡面文字優先放在最上方,逼 AI 必讀
+      card_preview_text: renderCardBodyText(c),
       code: c.code,
       name_zh: c.name_zh,
       faction: c.faction,
@@ -66,18 +84,19 @@
     var summary = summarizeCardForAi(card);
     var validCodes = 'deal_damage, deal_horror, heal_hp, heal_san, draw_card, search_deck, retrieve_card, return_to_deck, discard_card, gain_resource, spend_resource, modify_cost, move_investigator, swap_position, engage_enemy, disengage_enemy, exhaust_card, ready_card, stun_enemy, add_status, remove_status, make_test, modify_test, reroll, auto_success, attack, evade, taunt, counterattack, place_clue, discover_clue, place_doom, remove_doom, spawn_enemy, remove_enemy, look_chaos_bag, manipulate_chaos_bag, fast_play, target_other, add_bless, add_curse, remove_bless, remove_curse';
 
-    var prompt = '你是克蘇魯神話卡牌遊戲的卡片資料分析引擎。下面這張卡的 desc_zh 可能被人類手改過,加了新效果但 effects[] 結構未跟上。\n' +
-      '\n你的工作:讀 desc_zh + 現有 effects[],回傳補齊後的完整 effects[] 陣列(JSON 形式),要求:\n' +
-      '1. 保留原 effects[] 中正確且仍對應 desc_zh 的項\n' +
-      '2. 補上 desc_zh 提到但 effects[] 缺漏的項(每個敘述句配一個對應 effect_code)\n' +
-      '3. 修正 desc_zh 與 params 數值不一致的(例 desc 寫「3 點」但 params.amount=2,以 desc 為主)\n' +
+    var prompt = '你是克蘇魯神話卡牌遊戲的卡片資料分析引擎。下面這張卡可能被人類手改過 desc_zh 加了新效果但 effects[] 結構未跟上。\n' +
+      '\n**全程必須使用繁體中文回覆**(包括 changed_summary 與 desc_zh)。\n' +
+      '\n你的工作:讀 card_preview_text(這是使用者看到的卡面文字,優先依此判斷)+ 現有 effects[],回傳補齊後的完整 effects[] 陣列(JSON),要求:\n' +
+      '1. 保留原 effects[] 中正確且仍對應卡面敘述的項\n' +
+      '2. 補上敘述提到但 effects[] 缺漏的項(每個敘述句配一個對應 effect_code)\n' +
+      '3. 修正 desc_zh 與 params 數值不一致的(例敘述寫「3 點」但 params.amount=2,以敘述為主)\n' +
       '4. 條件式效果(如「如果 X 否則 Y」)拆成兩條 effects,各自帶 condition\n' +
       '5. 「打出費用 -2」等費用修正用 effect_code=modify_cost,params={amount:-2}\n' +
       '6. effect_code 必從以下白名單選:\n' + validCodes + '\n' +
       '\n卡片資料:\n```json\n' + JSON.stringify(summary, null, 2) + '\n```\n' +
-      '\n只回 JSON,格式如下:\n{\n  "effects": [\n    {"trigger":"...", "condition":null, "cost":{...}, "target":"...", "effect_code":"...", "params":{...}, "duration":"...", "desc_zh":"...", "desc_en":"..."}\n  ],\n  "changed_summary": "簡述改了什麼"\n}\n';
+      '\n只回 JSON,格式:\n{\n  "effects": [\n    {"trigger":"...", "condition":null, "cost":{...}, "target":"...", "effect_code":"...", "params":{...}, "duration":"...", "desc_zh":"...", "desc_en":"..."}\n  ],\n  "changed_summary": "用繁體中文簡述改了什麼"\n}\n';
 
-    var resp = await window.callGeminiDirect({ prompt: prompt, model: 'gemini-2.5-flash', responseMimeType: 'application/json' });
+    var resp = await window.callGeminiDirect({ prompt: prompt, model: 'gemini-2.5-flash', responseMimeType: 'application/json', temperature: 0.4 });
     var data = JSON.parse(stripJsonFence(resp.text));
     if (!Array.isArray(data.effects)) throw new Error('AI 回傳 effects 非陣列');
     return data;
@@ -87,26 +106,34 @@
   async function aiEstimateCardValue(card) {
     if (typeof window.callGeminiDirect !== 'function') throw new Error('callGeminiDirect 未載入');
     var summary = summarizeCardForAi(card);
-    var prompt = '你是卡片價值平衡分析師。讀此卡的所有資訊(包含 desc_zh 內可能藏的隱含效果),推算它的**真實 V 值**並給出推算理由。\n' +
-      '\nV 值參考:\n' +
+    var prompt = '你是卡片價值平衡分析師。推算此卡的**真實 V 值**。\n' +
+      '\n**全程必須使用繁體中文回覆**。所有 effect_summary / reason / balance_diagnosis / notes 都用繁體中文,不要混雜英文。\n' +
+      '\n**閱讀順序(必遵)**:\n' +
+      '1. 優先讀 `card_preview_text` —— 這是玩家實際看到的卡面文字,以此為判斷主軸\n' +
+      '2. 對照 effects[] 結構化資料補強細節\n' +
+      '3. 若 card_preview_text 與 effects[].params 衝突,以 card_preview_text 為準\n' +
+      '4. 若 card_preview_text 含「不佔盟友格 / 不佔欄位 / 永久 / 每回合」等強力字眼,務必反映在 V 值\n' +
+      '\nV 值規則:\n' +
       '- 1V = 1 行動點 = 1 資源 = 抽 1 牌 = 造成 1 傷害\n' +
       '- 恐懼傷害 3V/點;恢復 HP/SAN 1.5V/點;搜牌 6V;移動 1V/格\n' +
       '- 正面狀態 3-6V/層;負面狀態 3-6V/層;快速 +1V;指定他人 +2V\n' +
-      '- 條件式 -1~-2V(機率打折);費用減免 1.5V/資源\n' +
+      '- 條件式 -1~-2V(機率打折,但若條件易達成不打折);費用減免 1.5V/資源\n' +
       '- 跳過動作點(不佔行動)+1V;不佔欄位(如盟友格)+2V\n' +
       '- 等級抵扣:LV0=0, LV1=-0.5V, LV2=-1V, LV3=-2V, LV4=-3V, LV5=-4V\n' +
       '- 所有卡型 1:1:稀有度抵扣 = 總 V - 等級抵扣 - 費用\n' +
+      '- 永久效果(while_in_play 持續整局)估值: 假設遊戲平均 4 回合,每回合提供 X 價值 → 4X V 值\n' +
+      '- **同一張卡每次估算應該得到相同 V 值**——你的推算過程必須穩定可重現\n' +
       '\n卡片資料:\n```json\n' + JSON.stringify(summary, null, 2) + '\n```\n' +
-      '\n只回 JSON:\n{\n' +
+      '\n只回 JSON,**所有字串欄位用繁體中文**:\n{\n' +
       '  "estimated_total_v": <number>,\n' +
-      '  "breakdown": [{"effect_summary":"...", "v":<number>, "reason":"..."}],\n' +
+      '  "breakdown": [{"effect_summary":"<繁中>", "v":<number>, "reason":"<繁中>"}],\n' +
       '  "suggested_cost": <number 0-6>,\n' +
       '  "calculated_rarity": "隨身/基礎/標準/進階/稀有/傳奇/超出範圍",\n' +
-      '  "balance_diagnosis": "<對比目前 cost,卡片是 over/under/balanced 的簡述>",\n' +
-      '  "notes": "<其他平衡觀察,例如『這張的條件式效果讓實際 V 偏低』>"\n' +
+      '  "balance_diagnosis": "<繁中:對比目前 cost,卡片是超值 / 略超值 / 平衡 / 略過弱 / 過弱>",\n' +
+      '  "notes": "<繁中:其他平衡觀察>"\n' +
       '}\n';
 
-    var resp = await window.callGeminiDirect({ prompt: prompt, model: 'gemini-2.5-flash', responseMimeType: 'application/json' });
+    var resp = await window.callGeminiDirect({ prompt: prompt, model: 'gemini-2.5-flash', responseMimeType: 'application/json', temperature: 0.2 });
     var data = JSON.parse(stripJsonFence(resp.text));
     if (typeof data.estimated_total_v !== 'number') throw new Error('AI 未回傳合法 estimated_total_v');
     return data;
@@ -119,7 +146,9 @@
       return '- [' + (c.code || '?') + '] ' + (c.name_zh || '(無名)') + ' | ' + (c.card_type || '?') + ' LV' + (c.level != null ? c.level : '?') + ' cost=' + (c.cost != null ? c.cost : '?');
     }).join('\n');
 
-    var prompt = '你是卡牌遊戲設計品質評估器。評估這張卡的軸內互動有趣程度(0-10):\n' +
+    var prompt = '你是卡牌遊戲設計品質評估器。評估這張卡的軸內互動有趣程度(0-10)。\n' +
+      '\n**全程必須使用繁體中文回覆**(why / suggestion 等所有字串欄位)。\n' +
+      '\n**閱讀重點**:讀 card_preview_text 看實際卡面敘述,不要只看 effects[] 結構。\n' +
       '\n## 軸內互動 6 種 Pattern (本專案標準):\n' +
       'A 資源回收 — 從棄牌堆/移除區撈同軸卡\n' +
       'B 質變閾值 — 場上 N 張同軸卡解鎖新能力\n' +
@@ -133,14 +162,14 @@
       '- 7-10 分:明確套用 6 種 Pattern 之一,創造玩家抉擇\n' +
       '\n## 待評卡:\n' + JSON.stringify(summarizeCardForAi(card), null, 2) + '\n' +
       '\n## 同軸其他卡(對比):\n' + (ctxLines || '(無)') + '\n' +
-      '\n只回 JSON:\n{\n' +
+      '\n只回 JSON,**所有字串用繁體中文**:\n{\n' +
       '  "combo_score": <0-10>,\n' +
       '  "pattern": "A"|"B"|"C"|"D"|"E"|"F"|null,\n' +
-      '  "why": "<為何給這個分數>",\n' +
-      '  "suggestion": "<若 < 6 分,建議怎麼改寫成更有趣的;若 ≥ 7 分,寫『已達標』>"\n' +
+      '  "why": "<繁中:為何給這個分數>",\n' +
+      '  "suggestion": "<繁中:若 < 6 分建議怎麼改寫成更有趣的;若 ≥ 7 分寫『已達標』>"\n' +
       '}\n';
 
-    var resp = await window.callGeminiDirect({ prompt: prompt, model: 'gemini-2.5-flash', responseMimeType: 'application/json' });
+    var resp = await window.callGeminiDirect({ prompt: prompt, model: 'gemini-2.5-flash', responseMimeType: 'application/json', temperature: 0.2 });
     var data = JSON.parse(stripJsonFence(resp.text));
     if (typeof data.combo_score !== 'number') throw new Error('AI 未回傳合法 combo_score');
     return data;
@@ -154,6 +183,7 @@
     }).join('\n');
 
     var prompt = '你是卡牌遊戲系列設計顧問。分析這個主軸的卡片分佈,建議該補什麼讓系列完整。\n' +
+      '\n**全程必須使用繁體中文回覆**(name_zh / why / sketch / summary 等所有字串)。\n' +
       '\n軸: ' + axisLayer + ' / ' + axisValue + '\n' +
       '已有 ' + (axisCards.length) + ' 張:\n' + summary + '\n' +
       '\n## 完整 RPG 角色配置應有:\n' +
@@ -163,18 +193,18 @@
       '- 1-2 張技能(檢定加值)\n' +
       '- 等級分佈 LV0-3 各 1-2 張\n' +
       '- 至少一個明確的軸內 COMBO Pattern (A-F)\n' +
-      '\n只回 JSON:\n{\n' +
+      '\n只回 JSON,**所有字串用繁體中文**:\n{\n' +
       '  "current_distribution": {"asset": <n>, "event": <n>, "skill": <n>, "ally": <n>},\n' +
       '  "level_distribution": {"LV0": <n>, "LV1": <n>, "LV2": <n>, "LV3": <n>, "LV4": <n>, "LV5": <n>},\n' +
-      '  "missing_categories": ["<例:LV2 事件>", "<例:LV3 技能>"],\n' +
+      '  "missing_categories": ["<繁中,例:LV2 事件>", "<繁中,例:LV3 技能>"],\n' +
       '  "next_three_suggestions": [\n' +
-      '    {"name_zh":"...","card_type":"...","level":<n>,"cost":<n>,"why":"<為何補這張>","sketch":"<效果草圖>"},\n' +
+      '    {"name_zh":"<繁中卡名>","card_type":"...","level":<n>,"cost":<n>,"why":"<繁中:為何補這張>","sketch":"<繁中:效果草圖>"},\n' +
       '    {...}, {...}\n' +
       '  ],\n' +
-      '  "summary": "<整體建議>"\n' +
+      '  "summary": "<繁中:整體建議>"\n' +
       '}\n';
 
-    var resp = await window.callGeminiDirect({ prompt: prompt, model: 'gemini-2.5-flash', responseMimeType: 'application/json' });
+    var resp = await window.callGeminiDirect({ prompt: prompt, model: 'gemini-2.5-flash', responseMimeType: 'application/json', temperature: 0.3 });
     var data = JSON.parse(stripJsonFence(resp.text));
     return data;
   }

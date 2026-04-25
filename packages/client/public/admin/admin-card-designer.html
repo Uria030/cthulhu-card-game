@@ -750,7 +750,7 @@
     extra_attack: () => 1.5,
     // Tests
     make_test: () => 0,
-    modify_test: () => 0,
+    modify_test: (p) => (p.modifier || 0) * 0.5,
     reroll: () => 1,
     auto_success: () => 4,
     auto_fail: () => 0,
@@ -1027,10 +1027,34 @@
     }
   }
 
+  // §4.4b 持續性權重(s04 規範):永久 / 在場期間 → 套倍率
+  // 影響每次檢定的 effect_code(每回合 2 次檢定 → ×8 倍)
+  const PER_CHECK_EFFECT_CODES = new Set(['modify_test']);
+  // V 表已內建持續性概念,不重複套倍率(避免 add_status:empowered 等爆表)
+  const PERSISTENCE_BUILTIN_EFFECT_CODES = new Set([
+    'add_status', 'remove_status', 'fast_play', 'target_other',
+    'attack', 'evade', 'taunt', 'counterattack', 'extra_attack', 'auto_success'
+  ]);
+  const PERSISTENT_DURATIONS = new Set(['permanent', 'while_in_play']);
+
+  function getPersistenceWeight(effectCode, duration) {
+    if (!PERSISTENT_DURATIONS.has(duration)) return 1;
+    if (PER_CHECK_EFFECT_CODES.has(effectCode)) return 8;     // 影響每次檢定
+    if (PERSISTENCE_BUILTIN_EFFECT_CODES.has(effectCode)) return 1; // 已內建
+    return 4; // 預設:每回合自動觸發一次
+  }
+
   function calcEffectValue(eff) {
+    // 手動覆寫(設計者標 params._v_override 直接用該值,跳過引擎查表)
+    if (eff && eff.params && typeof eff.params._v_override === 'number') {
+      return eff.params._v_override;
+    }
     const fn = VALUE_TABLE[eff.effect_code];
     if (!fn) return 0;
-    return fn(eff.params || {});
+    let v = fn(eff.params || {});
+    const weight = getPersistenceWeight(eff.effect_code, eff.duration);
+    if (weight !== 1) v *= weight;
+    return v;
   }
 
   function calcAllEffectsValue() {
@@ -2048,11 +2072,13 @@
     const showScope = durationDef?.has_scope;
     const showDurationParam = durationDef?.has_param;
 
-    // Pre-calculate value for this effect
-    const effVal = calcEffectValue({ effect_code: effectCode, params });
+    // Pre-calculate value for this effect(含 duration 倍率;§4.4b 持續性權重)
+    const effVal = calcEffectValue({ effect_code: effectCode, params, duration });
+    const persistWeight = getPersistenceWeight(effectCode, duration);
+    const weightLabel = persistWeight !== 1 ? ` <span style="font-size:0.625rem;color:var(--text-tertiary);">(永久 ×${persistWeight})</span>` : '';
 
     return `<div class="effect-item" data-idx="${i}">
-      <div class="effect-header"><span style="font-size:0.75rem;color:var(--text-tertiary)">效果 #${i+1}</span><span class="eff-value-tag">${effVal.toFixed(1)}V</span><button class="btn-remove" onclick="removeEffect(${i})">&#10005;</button></div>
+      <div class="effect-header"><span style="font-size:0.75rem;color:var(--text-tertiary)">效果 #${i+1}</span><span class="eff-value-tag">${effVal.toFixed(1)}V${weightLabel}</span><button class="btn-remove" onclick="removeEffect(${i})">&#10005;</button></div>
 
       <div class="eff-section"><div class="eff-section-label"><span class="eff-num">1</span> 觸發時機</div>
         <select class="eff-trigger" style="width:100%;">${triggerSelect}</select></div>

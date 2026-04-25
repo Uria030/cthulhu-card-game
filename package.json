@@ -1,13 +1,14 @@
 {
   "name": "cthulhu-card-game",
-  "version": "0.18.16",
+  "version": "0.18.17",
   "private": true,
   "scripts": {
     "dev": "pnpm --parallel -r dev",
     "dev:client": "pnpm --filter client dev",
     "dev:server": "pnpm --filter server dev",
     "build": "pnpm -r build",
-    "clean": "pnpm -r clean"
+    "clean": "pnpm -r clean",
+    "preflight": "node scripts/preflight.js"
   },
   "engines": {
     "node": ">=18.0.0"

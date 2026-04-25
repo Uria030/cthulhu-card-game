@@ -132,7 +132,48 @@
     .panel-right-toggle:hover { color: var(--gold); background: var(--bg-card); }
     .panel-right-drawer .preview-card { width: 100%; transform: scale(0.7); transform-origin: top center; margin-bottom: -30%; }
     .panel-right-drawer .balance-panel { width: 100%; }
-    @media (max-width: 768px) { .main-layout { flex-direction: column; } .panel-left { width: 260px; } .panel-right-drawer { width: 300px; } }
+    /* Mobile 浮動按鈕(只在手機顯示) */
+    .m1-mobile-btn { display: none; background: transparent; border: 1px solid var(--border); color: var(--gold-dim); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.78rem; }
+    .m1-mobile-btn:hover { color: var(--gold); border-color: var(--gold-dim); }
+
+    /* Mobile responsive (≤ 768px):堆疊模式 */
+    @media (max-width: 768px) {
+      .m1-mobile-btn { display: inline-flex; align-items: center; }
+      .help-btn { display: none; }
+      .nav-title, .nav-code { display: none; }
+
+      .main-layout { flex-direction: column; }
+      .panel-left {
+        position: fixed; top: 50px; left: 0; right: 0;
+        width: 100%; height: calc(100vh - 50px);
+        z-index: 200;
+      }
+      .panel-right {
+        width: 100%; padding: 0.75rem;
+      }
+      /* 預設手機顯示「列表」(panel-left);選了卡片或新增加 m1-form-mode 切到表單 */
+      body:not(.m1-form-mode) .panel-right { display: none; }
+      body.m1-form-mode .panel-left { display: none; }
+
+      /* 預覽抽屜在手機改為全螢幕 modal,以 m1-preview-mode 控制 */
+      .panel-right-drawer {
+        position: fixed; top: 50px; left: 0; right: 0; bottom: 0;
+        width: 100%; height: calc(100vh - 50px);
+        z-index: 250; padding: 1rem; opacity: 0;
+        transform: translateY(100%); transition: transform 0.25s, opacity 0.2s;
+      }
+      body.m1-preview-mode .panel-right-drawer {
+        transform: translateY(0); opacity: 1;
+      }
+      .panel-right-toggle { display: none; }
+
+      /* 表單兩欄改一欄 */
+      .form-grid { grid-template-columns: 1fr; }
+
+      /* 動作列按鈕排列調整 */
+      .action-bar { flex-wrap: wrap; gap: 0.4rem; }
+      .action-bar .btn { font-size: 0.8rem; padding: 0.45rem 0.75rem; }
+    }
 
     /* 數字 input 的 +/− stepper（iPad Safari 沒有原生箭頭） */
     .num-stepper { display: flex; gap: 0; }
@@ -155,9 +196,11 @@
 </head>
 <body>
   <nav class="admin-nav">
-    <a href="index.html" class="nav-back">&larr; 返回首頁</a>
+    <a href="index.html" class="nav-back">&larr; 首頁</a>
+    <button type="button" class="m1-mobile-btn" id="m1BtnList" title="卡片列表" onclick="document.body.classList.remove('m1-form-mode','m1-preview-mode');">📋 列表</button>
     <span class="nav-title">卡片設計器</span>
     <span class="nav-code">MOD-01</span>
+    <button type="button" class="m1-mobile-btn" id="m1BtnPreview" title="預覽" onclick="document.body.classList.toggle('m1-preview-mode');">👁️ 預覽</button>
     <button class="help-btn" onclick="openModuleHelp('MOD-01')" title="開啟使用說明">❓ 使用說明</button>
   </nav>
 
@@ -1569,6 +1612,7 @@
 
   /* ── Load / Collect / Save ── */
   function loadCard(id) {
+    document.body.classList.add('m1-form-mode');  // 手機:點卡片自動切到表單模式
     const c = cards.find(x => x.id === id);
     if (!c) return;
     editingId = id;
@@ -1782,6 +1826,7 @@
         await loadCards();
         clearForm();
         renderList();
+        document.body.classList.remove('m1-form-mode');  // 刪除後回列表
         alert('已刪除');
       } else {
         alert('刪除失敗：' + result.error);
@@ -1791,7 +1836,11 @@
     }
   }
 
-  function newCard() { clearForm(); el('f_name_zh').focus(); }
+  function newCard() {
+    document.body.classList.add('m1-form-mode');  // 手機:新增卡片自動切到表單模式
+    clearForm();
+    el('f_name_zh').focus();
+  }
 
   /* ── DEPRECATED v1 重構(2026-04-25):LV0-5 升級系統廢除 ──
        saveUpgradeLevel / saveUpgradeLevelSilent / switchUpgradeTab /

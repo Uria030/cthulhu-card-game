@@ -231,8 +231,17 @@ function onProviderChoiceClick(provider) {
 window.onProviderChoiceClick = onProviderChoiceClick;
 
 function onApiKeyClick() {
-  if (!window.promptForGeminiApiKey) return;
-  window.promptForGeminiApiKey('請輸入 Gemini API Key（與 MOD-01 共用 localStorage.gemini_api_key）：');
+  // 自包含實作:不再依賴 window.promptForGeminiApiKey(geminiDirectClient.js 若載入失敗會讓按鈕靜默無效)
+  // 與 MOD-01 admin-card-designer 共用同一 localStorage key 'gemini_api_key'
+  const LS_KEY = 'gemini_api_key';
+  const current = localStorage.getItem(LS_KEY) || '';
+  const key = prompt('請輸入 Gemini API Key(與 MOD-01 共用 localStorage.gemini_api_key):', current);
+  if (key === null) return; // 使用者按取消
+  localStorage.setItem(LS_KEY, String(key).trim());
+  // 若 geminiDirectClient.js 已載入,同步通知它(雖然它直接讀 localStorage 也會正確)
+  if (typeof window.setGeminiApiKey === 'function') {
+    try { window.setGeminiApiKey(String(key).trim()); } catch (e) { /* ignore */ }
+  }
   updateProviderButtons();
 }
 window.onApiKeyClick = onApiKeyClick;
@@ -268,7 +277,11 @@ function updateProviderButtons() {
   }
 
   // 判斷目前提供者的**可送出狀態**：gemini 需 key、gemma 需 ollama up
-  const hasKey = !!(window.hasGeminiApiKey && window.hasGeminiApiKey());
+  // hasKey 優先用 geminiDirectClient.js 的 hasGeminiApiKey,fallback 直接讀 localStorage(讓 MOD-12 不依賴 geminiDirectClient.js 載入成功)
+  const hasKey = !!(
+    (window.hasGeminiApiKey && window.hasGeminiApiKey()) ||
+    (localStorage.getItem('gemini_api_key') || '').trim()
+  );
   const geminiReady = state.userProviderChoice === 'gemini' && hasKey;
   const gemmaReady = state.userProviderChoice === 'gemma' && ollamaUp;
   const ready = geminiReady || gemmaReady;
@@ -434,7 +447,11 @@ async function onSendMessage() {
     return;
   }
   // 提供者就緒檢查：gemini 需 API Key、gemma 需 ollama up
-  const hasKey = !!(window.hasGeminiApiKey && window.hasGeminiApiKey());
+  // hasKey 優先用 geminiDirectClient.js 的 hasGeminiApiKey,fallback 直接讀 localStorage(讓 MOD-12 不依賴 geminiDirectClient.js 載入成功)
+  const hasKey = !!(
+    (window.hasGeminiApiKey && window.hasGeminiApiKey()) ||
+    (localStorage.getItem('gemini_api_key') || '').trim()
+  );
   const geminiReady = state.userProviderChoice === 'gemini' && hasKey;
   const gemmaReady = state.userProviderChoice === 'gemma' && state.bridgeStatus?.ollama === 'up';
   if (!geminiReady && !gemmaReady) {

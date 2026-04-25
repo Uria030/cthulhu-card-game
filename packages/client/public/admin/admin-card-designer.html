@@ -803,8 +803,11 @@
     advance_agenda: () => -4,
     connect_tiles: () => 0,
     disconnect_tiles: () => 0,
-    transfer_damage: () => 0,
-    transfer_horror: () => 0,
+    // 轉移類:把傷害/恐懼從 A 轉到 B(本質是「對 A 取消 1 點」+ 「對 B 加 1 點」)
+    // 對玩家而言,轉開的部分是收益(取消 = 0.5V/點 per s04 §2.1)
+    // amount 由設計者填「總可發生次數」(成長型卡的最終狀態約定,如 Key of Ys 卡上限 3 點 → amount=3)
+    transfer_damage: (p) => (p.amount || 0) * 0.5,
+    transfer_horror: (p) => (p.amount || 0) * 0.5,
   };
 
   const RARITY_LEVELS = [

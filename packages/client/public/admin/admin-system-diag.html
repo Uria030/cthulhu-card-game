@@ -627,6 +627,8 @@
       advance_act: () => 2,
       advance_agenda: () => -4,
       remove_haunting: () => 1,
+      transfer_damage: (p) => (p.amount || 0) * 0.5,
+      transfer_horror: (p) => (p.amount || 0) * 0.5,
     };
     const INSPECT_PER_CHECK = new Set(['modify_test', 'wild_attr_boost']);
     const INSPECT_BUILTIN_PERSIST = new Set(['add_status','remove_status','fast_play','target_other','attack','evade','taunt','counterattack','extra_attack','auto_success']);

@@ -474,11 +474,17 @@
           return;
         }
         log('ok', `card_definitions 共 ${data.count} 欄`);
-        const keyCols = ['is_talisman','talisman_type','target_threat_types','break_timing','primary_axis_layer','primary_axis_value','is_permanent','is_extra'];
+        const keyCols = [
+          // MIGRATION_022/023/024 雙軸/主軸/永久額外
+          'is_talisman','talisman_type','target_threat_types','break_timing',
+          'primary_axis_layer','primary_axis_value','is_permanent','is_extra',
+          // MIGRATION_026 卡片升級系統重構 v1
+          'starting_xp','enhancement_slots','card_source',
+        ];
         const names = data.columns.map(c => c.column_name);
         const missing = keyCols.filter(k => !names.includes(k));
         if (missing.length === 0) {
-          log('ok', '✓ 本次檢查的 8 個關鍵欄位全部存在（雙軸/主軸/永久額外）');
+          log('ok', '✓ 本次檢查的 ' + keyCols.length + ' 個關鍵欄位全部存在(雙軸/主軸/永久額外/v1 升級系統)');
         } else {
           log('warn', '缺少 ' + missing.length + ' 個關鍵欄位，需按「補跑」修復', missing);
         }

@@ -262,7 +262,7 @@
               <button class="btn primary" onclick="aiGenerateBackground()">✨ AI 生成敘事</button>
               <button class="btn" onclick="cloneTemplate()">複製為自建模板</button>
               <button class="btn" onclick="clearTemplate()">清空回骨架</button>
-              <button class="btn danger" onclick="deleteTemplate()">刪除（僅自建）</button>
+              <button class="btn danger" data-min-role="admin" onclick="deleteTemplate()">刪除（僅自建）</button>
             </div>
           </div>
 
@@ -415,7 +415,7 @@
             </div>
             <div class="btn-row">
               <button class="btn primary" onclick="saveSignatureCard()">💾 儲存</button>
-              <button class="btn danger" onclick="deleteSignatureCard()">🗑 刪除</button>
+              <button class="btn danger" data-min-role="admin" onclick="deleteSignatureCard()">🗑 刪除</button>
               <button class="btn" onclick="closeRightEditor()">取消</button>
             </div>
           </div>
@@ -460,7 +460,7 @@
             </div>
             <div class="btn-row">
               <button class="btn primary" onclick="saveWeakness()">💾 儲存</button>
-              <button class="btn danger" onclick="deleteWeakness()">🗑 刪除</button>
+              <button class="btn danger" data-min-role="admin" onclick="deleteWeakness()">🗑 刪除</button>
               <button class="btn" onclick="closeRightEditor()">取消</button>
             </div>
           </div>

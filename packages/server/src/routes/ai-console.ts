@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { requireAdminRole } from '../middleware/auth.js';
 import { pool } from '../db/pool.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 
@@ -195,7 +196,7 @@ export const aiConsoleRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/ai-console/tasks/:id ──
-  app.delete<{ Params: { id: string } }>('/api/ai-console/tasks/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/ai-console/tasks/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const user = (request as any).user as AuthUser;
     try {
       const res = await pool.query(
@@ -328,7 +329,7 @@ export const aiConsoleRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/ai-console/tasks/clear-history ── keep running/queued
-  app.delete('/api/ai-console/tasks/clear-history', async (request, reply) => {
+  app.delete('/api/ai-console/tasks/clear-history', { preHandler: requireAdminRole }, async (request, reply) => {
     const user = (request as any).user as AuthUser;
     try {
       const res = await pool.query(

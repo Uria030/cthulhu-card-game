@@ -460,7 +460,7 @@
           <!-- Bottom action bar -->
           <div style="margin-top:1rem;display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;">
             <button class="btn" onclick="duplicateLocation()">📋 複製 (Ctrl+D)</button>
-            <button class="btn btn-danger" onclick="deleteLocation()">🗑 刪除地點</button>
+            <button class="btn btn-danger" data-min-role="admin" onclick="deleteLocation()">🗑 刪除地點</button>
           </div>
         </div>
       </div>
@@ -1262,7 +1262,7 @@
             <div class="hc-desc">${escapeHtml(h.description_zh || '')}</div>
             <div class="hc-actions">
               <button class="btn" onclick="editHiddenInfo('${h.id}')" style="padding:0.25rem 0.625rem;font-size:0.75rem;">編輯</button>
-              <button class="btn btn-danger" onclick="deleteHiddenInfo('${h.id}', '${escapeHtml(h.title_zh || '此筆')}')" style="padding:0.25rem 0.625rem;font-size:0.75rem;">🗑 刪除</button>
+              <button class="btn btn-danger" data-min-role="admin" onclick="deleteHiddenInfo('${h.id}', '${escapeHtml(h.title_zh || '此筆')}')" style="padding:0.25rem 0.625rem;font-size:0.75rem;">🗑 刪除</button>
             </div>
           </div>
         `;
@@ -1722,7 +1722,7 @@
                 <span class="tag-manage-code">${escapeHtml(t.code)}</span>
                 <span class="tag-manage-usage">被 ${t.usage_count || 0} 個地點使用</span>
                 <button class="btn" onclick="openTagDialog('${t.id}')" style="padding:0.2rem 0.5rem;font-size:0.75rem;">✏</button>
-                <button class="btn btn-danger" onclick="deleteTag('${t.id}', '${escapeHtml(t.name_zh)}')" style="padding:0.2rem 0.5rem;font-size:0.75rem;">🗑</button>
+                <button class="btn btn-danger" data-min-role="admin" onclick="deleteTag('${t.id}', '${escapeHtml(t.name_zh)}')" style="padding:0.2rem 0.5rem;font-size:0.75rem;">🗑</button>
               </div>
             `;
           }

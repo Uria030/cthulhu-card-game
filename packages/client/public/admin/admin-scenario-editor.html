@@ -1212,7 +1212,7 @@ function renderOverviewTab() {
 
     <div class="editor-footer">
       <div>
-        <button class="btn btn-danger" onclick="deleteStage()">刪除關卡</button>
+        <button class="btn btn-danger" data-min-role="admin" onclick="deleteStage()">刪除關卡</button>
       </div>
       <div>
         <button class="btn" onclick="exportStageJSON()">匯出 JSON</button>
@@ -1398,7 +1398,7 @@ function renderScenariosList() {
       <div class="scenario-actions">
         ${idx > 0 ? `<button class="btn btn-sm" onclick="moveScenario('${s.id}', -1); event.stopPropagation()">↑</button>` : ''}
         ${idx < scs.length - 1 ? `<button class="btn btn-sm" onclick="moveScenario('${s.id}', 1); event.stopPropagation()">↓</button>` : ''}
-        ${s.scenario_order !== 1 ? `<button class="btn btn-sm btn-danger" onclick="deleteScenario('${s.id}'); event.stopPropagation()">🗑</button>` : ''}
+        ${s.scenario_order !== 1 ? `<button class="btn btn-sm btn-danger" data-min-role="admin" onclick="deleteScenario('${s.id}'); event.stopPropagation()">🗑</button>` : ''}
       </div>
     </div>
   `).join('');
@@ -2057,7 +2057,7 @@ function renderActCardsList() {
       <div class="scenario-actions">
         ${idx > 0 ? `<button class="btn btn-sm" onclick="moveActCard('${c.id}', -1); event.stopPropagation()">↑</button>` : ''}
         ${idx < cards.length - 1 ? `<button class="btn btn-sm" onclick="moveActCard('${c.id}', 1); event.stopPropagation()">↓</button>` : ''}
-        <button class="btn btn-sm btn-danger" onclick="deleteActCard('${c.id}'); event.stopPropagation()">🗑</button>
+        <button class="btn btn-sm btn-danger" data-min-role="admin" onclick="deleteActCard('${c.id}'); event.stopPropagation()">🗑</button>
       </div>
     </div>
   `).join('');
@@ -2296,7 +2296,7 @@ function renderAgendaCardsList() {
       <div class="scenario-actions">
         ${idx > 0 ? `<button class="btn btn-sm" onclick="moveAgendaCard('${c.id}', -1); event.stopPropagation()">↑</button>` : ''}
         ${idx < cards.length - 1 ? `<button class="btn btn-sm" onclick="moveAgendaCard('${c.id}', 1); event.stopPropagation()">↓</button>` : ''}
-        <button class="btn btn-sm btn-danger" onclick="deleteAgendaCard('${c.id}'); event.stopPropagation()">🗑</button>
+        <button class="btn btn-sm btn-danger" data-min-role="admin" onclick="deleteAgendaCard('${c.id}'); event.stopPropagation()">🗑</button>
       </div>
     </div>
   `).join('');

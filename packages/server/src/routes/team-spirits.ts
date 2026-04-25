@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db/pool.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 
 export const teamSpiritRoutes: FastifyPluginAsync = async (app) => {
   // All team-spirit API routes require authentication
@@ -355,7 +355,7 @@ export const teamSpiritRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/team-spirits/:id ── 刪除（CASCADE 深度效果）
-  app.delete<{ Params: { id: string } }>('/api/team-spirits/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/team-spirits/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params;
     try {
       const result = await pool.query('DELETE FROM spirit_definitions WHERE id = $1 RETURNING id, code', [id]);

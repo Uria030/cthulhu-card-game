@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db/pool.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 
 const ATTR_KEYS = [
   'attr_strength','attr_agility','attr_constitution','attr_reflex',
@@ -410,7 +410,7 @@ export const investigatorRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(fresh.rows[0]);
   });
 
-  app.delete('/api/admin/investigators/:id', async (request, reply) => {
+  app.delete('/api/admin/investigators/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params as any;
     const r = await pool.query('SELECT is_preset FROM investigator_templates WHERE id=$1', [id]);
     if (r.rowCount === 0) return reply.code(404).send({ error: 'not found' });
@@ -580,7 +580,7 @@ export const investigatorRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(r.rows[0]);
   });
 
-  app.delete('/api/admin/investigators/:id/signature-cards/:cid', async (request, reply) => {
+  app.delete('/api/admin/investigators/:id/signature-cards/:cid', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id, cid } = request.params as any;
     await pool.query('DELETE FROM investigator_starting_deck WHERE signature_card_id=$1', [cid]);
     await pool.query('DELETE FROM investigator_signature_cards WHERE id=$1', [cid]);
@@ -644,7 +644,7 @@ export const investigatorRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(r.rows[0]);
   });
 
-  app.delete('/api/admin/investigators/:id/weakness', async (request, reply) => {
+  app.delete('/api/admin/investigators/:id/weakness', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params as any;
     const wk = await pool.query('SELECT id FROM investigator_weaknesses WHERE investigator_id=$1', [id]);
     if (wk.rowCount === 0) return reply.send({ ok: true });
@@ -727,7 +727,7 @@ export const investigatorRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(r.rows[0]);
   });
 
-  app.delete('/api/admin/investigators/:id/starting-deck/cards/:slot', async (request, reply) => {
+  app.delete('/api/admin/investigators/:id/starting-deck/cards/:slot', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id, slot } = request.params as any;
     const r = await pool.query(
       `SELECT signature_card_id, weakness_id FROM investigator_starting_deck WHERE id=$1`,

@@ -619,7 +619,7 @@ function renderAttackCards(v){
         ${shared?'<span class="tag tag-gold">共享</span>':''}
         <span class="ac-name">${c.name_zh||''}</span>
         <span class="ac-detail">防禦: ${attr.zh} | ${elem.name_zh} ${c.damage_physical||0} | 恐懼 ${c.damage_horror||0} | 權重 ${c.weight||10}</span>
-        ${!shared?`<div class="ac-actions"><button class="btn" onclick="editAttackCard('${c.id}')" style="font-size:.7rem;padding:.2rem .4rem">編輯</button><button class="btn btn-danger" onclick="deleteAttackCard('${c.id}')" style="font-size:.7rem;padding:.2rem .4rem">刪除</button></div>`:''}
+        ${!shared?`<div class="ac-actions"><button class="btn" onclick="editAttackCard('${c.id}')" style="font-size:.7rem;padding:.2rem .4rem">編輯</button><button class="btn btn-danger" data-min-role="admin" onclick="deleteAttackCard('${c.id}')" style="font-size:.7rem;padding:.2rem .4rem">刪除</button></div>`:''}
       </div>
       ${c.narrative_attack_zh?`<div class="ac-narrative">${c.narrative_attack_zh}</div>`:''}
     </div>`;

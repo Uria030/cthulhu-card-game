@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db/pool.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 
 export const talentTreeRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', requireAuth);
@@ -539,7 +539,7 @@ export const talentTreeRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/talent-trees/:factionCode/nodes/:nodeId ──
-  app.delete<{ Params: { factionCode: string; nodeId: string } }>('/api/talent-trees/:factionCode/nodes/:nodeId', async (request, reply) => {
+  app.delete<{ Params: { factionCode: string; nodeId: string } }>('/api/talent-trees/:factionCode/nodes/:nodeId', { preHandler: requireAdminRole }, async (request, reply) => {
     try {
       const { nodeId } = request.params;
       const result = await pool.query('DELETE FROM talent_nodes WHERE id = $1 RETURNING id', [nodeId]);

@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db/pool.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 
 // ── Tier defaults for auto-fill on variant creation
 const TIER_DEFAULTS: Record<number, { dc: number; hp_base: number; damage_physical: number; spell_defense: number; attacks_per_round: number }> = {
@@ -183,7 +183,7 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/admin/monsters/attack-cards/:id ── 刪除攻擊卡
-  app.delete<{ Params: { id: string } }>('/api/admin/monsters/attack-cards/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/admin/monsters/attack-cards/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params;
     try {
       const result = await pool.query('DELETE FROM monster_attack_cards WHERE id = $1 RETURNING id, code', [id]);
@@ -438,7 +438,7 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/admin/monsters/species/:id ── 刪除物種（CASCADE）
-  app.delete<{ Params: { id: string } }>('/api/admin/monsters/species/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/admin/monsters/species/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params;
     try {
       const result = await pool.query('DELETE FROM monster_species WHERE id = $1 RETURNING id, code', [id]);
@@ -723,7 +723,7 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/admin/monsters/variants/:id ── 刪除變體（CASCADE）
-  app.delete<{ Params: { id: string } }>('/api/admin/monsters/variants/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/admin/monsters/variants/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params;
     const client = await pool.connect();
     try {

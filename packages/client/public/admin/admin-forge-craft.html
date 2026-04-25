@@ -300,7 +300,7 @@
         <h3 id="matModalTitle">素材編輯</h3>
         <div id="matModalBody"></div>
         <div class="modal-actions">
-          <button class="btn btn-danger" onclick="deleteMaterial()" id="matDeleteBtn" style="margin-right:auto">🗑 刪除</button>
+          <button class="btn btn-danger" data-min-role="admin" onclick="deleteMaterial()" id="matDeleteBtn" style="margin-right:auto">🗑 刪除</button>
           <button class="btn" onclick="closeMatModal()">取消</button>
           <button class="btn btn-primary" onclick="saveMaterial()">💾 儲存</button>
         </div>
@@ -588,7 +588,7 @@
 
       <div class="btn-row">
         <button class="btn btn-primary" onclick="saveAffix()">💾 儲存</button>
-        <button class="btn btn-danger" onclick="deleteAffix()">🗑 刪除</button>
+        <button class="btn btn-danger" data-min-role="admin" onclick="deleteAffix()">🗑 刪除</button>
       </div>
     `;
   }
@@ -1097,7 +1097,7 @@
             <span style="flex:1">${label}</span>
             <span style="font-family:'Cinzel',serif;color:var(--gold)">× ${m.quantity}</span>
             <button class="btn btn-sm" onclick="editRecipeMaterial('${m.id}')">編輯</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteRecipeMaterial('${m.id}')">🗑</button>
+            <button class="btn btn-sm btn-danger" data-min-role="admin" onclick="deleteRecipeMaterial('${m.id}')">🗑</button>
           </div>`;
         }).join('');
 
@@ -1136,7 +1136,7 @@
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" onclick="saveRecipe()">💾 儲存</button>
-        <button class="btn btn-danger" onclick="deleteRecipe()">🗑 刪除</button>
+        <button class="btn btn-danger" data-min-role="admin" onclick="deleteRecipe()">🗑 刪除</button>
       </div>
     `;
   }

@@ -158,7 +158,7 @@
       <div id="arcaneWarn" class="arcane-warning hidden">⚠ 施法類攻擊不擲骰，改走混沌袋流程</div>
       <div style="margin-top:0.75rem;display:flex;gap:0.5rem;">
         <button class="btn btn-gold" onclick="saveStyle()">儲存風格</button>
-        <button class="btn btn-danger" onclick="deleteStyle()" id="btnDeleteStyle" style="display:none;">刪除風格</button>
+        <button class="btn btn-danger" data-min-role="admin" onclick="deleteStyle()" id="btnDeleteStyle" style="display:none;">刪除風格</button>
       </div>
 
       <!-- Block 2: Specializations -->
@@ -214,7 +214,7 @@
           <div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
             <button class="btn btn-gold" onclick="saveCard()">儲存風格卡</button>
             <button class="btn" onclick="saveCardAsNew()">另存新卡</button>
-            <button class="btn btn-danger" onclick="deleteCard()" id="btnDeleteCard" style="display:none;">刪除</button>
+            <button class="btn btn-danger" data-min-role="admin" onclick="deleteCard()" id="btnDeleteCard" style="display:none;">刪除</button>
             <button class="btn" onclick="clearCardForm()">清空表單</button>
           </div>
         </div>
@@ -455,7 +455,7 @@
         <td><input type="number" value="${sp.spec_bonus||2}" min="2" max="5" data-field="spec_bonus" style="width:40px;"></td>
         <td class="spec-actions">
           <button class="btn btn-sm btn-gold" onclick="saveSpec('${sp.id}',this)">存</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteSpec('${sp.id}')">刪</button>
+          <button class="btn btn-sm btn-danger" data-min-role="admin" onclick="deleteSpec('${sp.id}')">刪</button>
         </td>
       </tr>
     `).join('');

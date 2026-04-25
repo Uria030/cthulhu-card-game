@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db/pool.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 
 export const cardRoutes: FastifyPluginAsync = async (app) => {
   // All card API routes require authentication
@@ -271,7 +271,7 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/cards/:id
-  app.delete<{ Params: { id: string } }>('/api/cards/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/cards/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params;
     try {
       const result = await pool.query('DELETE FROM card_definitions WHERE id = $1 RETURNING id, code', [id]);

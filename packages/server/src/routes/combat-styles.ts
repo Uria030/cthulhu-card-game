@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db/pool.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 
 export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
   // All combat-style API routes require authentication
@@ -203,7 +203,7 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/combat-styles/:id ── 刪除（CASCADE）
-  app.delete<{ Params: { id: string } }>('/api/combat-styles/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/combat-styles/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params;
     try {
       const result = await pool.query('DELETE FROM combat_styles WHERE id = $1 RETURNING id, code', [id]);
@@ -283,7 +283,7 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/specs/:id ── 刪除專精，更新 spec_count
-  app.delete<{ Params: { id: string } }>('/api/specs/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/specs/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params;
     const client = await pool.connect();
     try {
@@ -418,7 +418,7 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/style-cards/:id ── 刪除風格卡
-  app.delete<{ Params: { id: string } }>('/api/style-cards/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/style-cards/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params;
     try {
       const result = await pool.query('DELETE FROM combat_style_cards WHERE id = $1 RETURNING id, code', [id]);

@@ -1431,7 +1431,7 @@
           <td>${visibilityLabel(f.visibility)}</td>
           <td>
             <button class="btn-secondary btn-small" onclick="openEditFlagDialog('${f.id}')">編輯</button>
-            <button class="btn-danger btn-small" onclick="deleteFlag('${f.id}')">刪除</button>
+            <button class="btn-danger btn-small" data-min-role="admin" onclick="deleteFlag('${f.id}')">刪除</button>
           </td>
         </tr>
       `).join('') || '<tr><td colspan="6" style="text-align:center; color:var(--text-tertiary); padding:1rem;">（無旗標）</td></tr>';
@@ -1672,7 +1672,7 @@
         </div>
         <div class="editor-footer">
           <button class="btn-primary" onclick="saveInterludeEvent()">儲存事件</button>
-          ${e.id ? `<button class="btn-danger" onclick="deleteInterludeEvent()">刪除</button>` : ''}
+          ${e.id ? `<button class="btn-danger" data-min-role="admin" onclick="deleteInterludeEvent()">刪除</button>` : ''}
         </div>
       `;
       updateEditorHeader();

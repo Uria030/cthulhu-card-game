@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db/pool.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 
 export const locationRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', requireAuth);
@@ -164,7 +164,7 @@ export const locationRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/admin/locations/tags/:tagId ──
-  app.delete<{ Params: { tagId: string } }>('/api/admin/locations/tags/:tagId', async (request, reply) => {
+  app.delete<{ Params: { tagId: string } }>('/api/admin/locations/tags/:tagId', { preHandler: requireAdminRole }, async (request, reply) => {
     try {
       const { tagId } = request.params;
       const usingRes = await pool.query(`
@@ -281,7 +281,7 @@ export const locationRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/admin/locations/hidden-info/:infoId ──
-  app.delete<{ Params: { infoId: string } }>('/api/admin/locations/hidden-info/:infoId', async (request, reply) => {
+  app.delete<{ Params: { infoId: string } }>('/api/admin/locations/hidden-info/:infoId', { preHandler: requireAdminRole }, async (request, reply) => {
     try {
       const { infoId } = request.params;
       const lookupRes = await pool.query('SELECT location_id FROM location_hidden_info WHERE id = $1', [infoId]);
@@ -584,7 +584,7 @@ export const locationRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/admin/locations/:id ──
-  app.delete<{ Params: { id: string }; Querystring: { force?: string } }>('/api/admin/locations/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string }; Querystring: { force?: string } }>('/api/admin/locations/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     try {
       const { id } = request.params;
       const force = request.query.force === 'true';

@@ -489,7 +489,7 @@
 
           <div style="margin-top:1rem;display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;">
             <button class="btn" onclick="duplicateCurrent()">📋 複製 (Ctrl+D)</button>
-            <button class="btn btn-danger" onclick="deleteCurrent()">🗑 刪除卡片</button>
+            <button class="btn btn-danger" data-min-role="admin" onclick="deleteCurrent()">🗑 刪除卡片</button>
           </div>
         </div>
 
@@ -625,7 +625,7 @@
 
           <div style="margin-top:1rem;display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;">
             <button class="btn" onclick="duplicateCurrent()">📋 複製 (Ctrl+D)</button>
-            <button class="btn btn-danger" onclick="deleteCurrent()">🗑 刪除卡片</button>
+            <button class="btn btn-danger" data-min-role="admin" onclick="deleteCurrent()">🗑 刪除卡片</button>
           </div>
         </div>
       </div>
@@ -1361,7 +1361,7 @@
               <span class="action-card-type">${escapeHtml(name)}</span>
               <div class="action-card-actions">
                 <button class="btn" onclick="editAction('${e.id}')">編輯</button>
-                <button class="btn btn-danger" onclick="deleteAction('${e.id}')">🗑</button>
+                <button class="btn btn-danger" data-min-role="admin" onclick="deleteAction('${e.id}')">🗑</button>
               </div>
             </div>
             <div class="action-card-params">${escapeHtml(paramTxt)}</div>
@@ -1737,7 +1737,7 @@
               <input type="text" placeholder="選項文字（動詞開頭）" value="${escapeHtml(o.option_text_zh || '')}" oninput="updateOptionField('${o.id}', 'option_text_zh', this.value)">
             </div>
             <div class="option-card-actions">
-              <button class="btn btn-danger" onclick="deleteEncounterOption('${o.id}')">🗑</button>
+              <button class="btn btn-danger" data-min-role="admin" onclick="deleteEncounterOption('${o.id}')">🗑</button>
             </div>
           </div>
           <div class="check-row" style="display:flex;gap:1rem;align-items:center;font-size:0.8125rem;margin-bottom:0.5rem;">

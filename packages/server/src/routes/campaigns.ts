@@ -3,7 +3,7 @@
 
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db/pool.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 import {
   validateFlagCodes,
   validateMonsterFamilyCodes,
@@ -289,7 +289,7 @@ export const campaignRoutes: FastifyPluginAsync = async (app) => {
   );
 
   // DELETE /api/campaigns/:id
-  app.delete<{ Params: { id: string } }>('/api/campaigns/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/campaigns/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params;
     try {
       const res = await pool.query('DELETE FROM campaigns WHERE id = $1 RETURNING id', [id]);
@@ -563,7 +563,7 @@ export const campaignRoutes: FastifyPluginAsync = async (app) => {
   );
 
   // DELETE /api/outcomes/:id
-  app.delete<{ Params: { id: string } }>('/api/outcomes/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/outcomes/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     try {
       const res = await pool.query(
         `DELETE FROM chapter_outcomes WHERE id = $1 RETURNING id`,
@@ -775,7 +775,7 @@ export const campaignRoutes: FastifyPluginAsync = async (app) => {
   );
 
   // DELETE /api/flags/:id ── 先檢查引用
-  app.delete<{ Params: { id: string } }>('/api/flags/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/flags/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params;
     try {
       const fRes = await pool.query('SELECT * FROM campaign_flags WHERE id = $1', [id]);
@@ -962,7 +962,7 @@ export const campaignRoutes: FastifyPluginAsync = async (app) => {
 
   // DELETE /api/interlude-events/:id
   app.delete<{ Params: { id: string } }>(
-    '/api/interlude-events/:id',
+    '/api/interlude-events/:id', { preHandler: requireAdminRole },
     async (request, reply) => {
       try {
         const res = await pool.query(

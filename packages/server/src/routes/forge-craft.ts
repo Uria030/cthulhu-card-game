@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db/pool.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 
 const TIER_MODES = ['scaling', 'fixed', 'choice'] as const;
 const DESIGN_STATUSES = ['pending', 'partial', 'complete'] as const;
@@ -169,7 +169,7 @@ export const forgeCraftRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.delete<{ Params: { id: string } }>('/api/materials/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/materials/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     try {
       const refCheck = await pool.query(
         'SELECT 1 FROM crafting_recipe_materials WHERE specific_material_id = $1 LIMIT 1',
@@ -298,7 +298,7 @@ export const forgeCraftRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.delete<{ Params: { id: string } }>('/api/affixes/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/affixes/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     try {
       const result = await pool.query('DELETE FROM forging_affixes WHERE id = $1 RETURNING id', [request.params.id]);
       if (result.rows.length === 0) return reply.status(404).send({ success: false, error: 'Affix not found' });
@@ -385,7 +385,7 @@ export const forgeCraftRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  app.delete<{ Params: { id: string; tier_id: string } }>('/api/affixes/:id/tiers/:tier_id', async (request, reply) => {
+  app.delete<{ Params: { id: string; tier_id: string } }>('/api/affixes/:id/tiers/:tier_id', { preHandler: requireAdminRole }, async (request, reply) => {
     try {
       const result = await pool.query('DELETE FROM forging_affix_tiers WHERE id = $1 RETURNING id', [request.params.tier_id]);
       if (result.rows.length === 0) return reply.status(404).send({ success: false, error: 'Tier not found' });
@@ -585,7 +585,7 @@ export const forgeCraftRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.delete<{ Params: { id: string } }>('/api/recipes/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/recipes/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     try {
       const result = await pool.query('DELETE FROM crafting_recipes WHERE id = $1 RETURNING id', [request.params.id]);
       if (result.rows.length === 0) return reply.status(404).send({ success: false, error: 'Recipe not found' });
@@ -668,7 +668,7 @@ export const forgeCraftRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.delete<{ Params: { id: string; mat_id: string } }>(
-    '/api/recipes/:id/materials/:mat_id',
+    '/api/recipes/:id/materials/:mat_id', { preHandler: requireAdminRole },
     async (request, reply) => {
       try {
         const result = await pool.query(

@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db/pool.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 
 export const keeperRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', requireAuth);
@@ -228,7 +228,7 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/admin/keeper/mythos-effects/:effect_id ──
-  app.delete<{ Params: { effect_id: string } }>('/api/admin/keeper/mythos-effects/:effect_id', async (request, reply) => {
+  app.delete<{ Params: { effect_id: string } }>('/api/admin/keeper/mythos-effects/:effect_id', { preHandler: requireAdminRole }, async (request, reply) => {
     try {
       const { effect_id } = request.params;
       const lookup = await pool.query('SELECT mythos_card_id FROM mythos_card_effects WHERE id = $1', [effect_id]);
@@ -420,7 +420,7 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/admin/keeper/mythos-cards/:id ──
-  app.delete<{ Params: { id: string } }>('/api/admin/keeper/mythos-cards/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/admin/keeper/mythos-cards/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     try {
       const result = await pool.query('DELETE FROM mythos_cards WHERE id = $1 RETURNING id', [request.params.id]);
       if (result.rows.length === 0) return reply.status(404).send({ error: 'mythos_card_not_found' });
@@ -538,7 +538,7 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/admin/keeper/encounter-options/:option_id ──
-  app.delete<{ Params: { option_id: string } }>('/api/admin/keeper/encounter-options/:option_id', async (request, reply) => {
+  app.delete<{ Params: { option_id: string } }>('/api/admin/keeper/encounter-options/:option_id', { preHandler: requireAdminRole }, async (request, reply) => {
     try {
       const { option_id } = request.params;
       const lookup = await pool.query('SELECT encounter_card_id FROM encounter_card_options WHERE id = $1', [option_id]);
@@ -819,7 +819,7 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/admin/keeper/encounter-cards/:id ──
-  app.delete<{ Params: { id: string } }>('/api/admin/keeper/encounter-cards/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/admin/keeper/encounter-cards/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     try {
       const result = await pool.query('DELETE FROM encounter_cards WHERE id = $1 RETURNING id', [request.params.id]);
       if (result.rows.length === 0) return reply.status(404).send({ error: 'encounter_card_not_found' });

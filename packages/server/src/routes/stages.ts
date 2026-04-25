@@ -1,7 +1,7 @@
 // MOD-07 關卡編輯器 — 後端 routes
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db/pool.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 import {
   validateStageReferences,
   resolveReturnStage,
@@ -412,7 +412,7 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.delete<{ Params: { id: string } }>('/api/stages/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/stages/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params;
     try {
       const dep = await pool.query(
@@ -590,7 +590,7 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.delete<{ Params: { id: string } }>('/api/scenarios/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/scenarios/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params;
     try {
       const r = await pool.query(
@@ -833,7 +833,7 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.delete<{ Params: { id: string } }>(
-    '/api/act-cards/:id',
+    '/api/act-cards/:id', { preHandler: requireAdminRole },
     async (request, reply) => {
       try {
         const res = await pool.query(
@@ -1021,7 +1021,7 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.delete<{ Params: { id: string } }>(
-    '/api/agenda-cards/:id',
+    '/api/agenda-cards/:id', { preHandler: requireAdminRole },
     async (request, reply) => {
       try {
         const res = await pool.query(
@@ -1140,7 +1140,7 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.delete<{ Params: { id: string } }>(
-    '/api/encounter-pool/:id',
+    '/api/encounter-pool/:id', { preHandler: requireAdminRole },
     async (request, reply) => {
       try {
         await pool.query(`DELETE FROM stage_encounter_pool WHERE id = $1`, [
@@ -1242,7 +1242,7 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.delete<{ Params: { id: string } }>(
-    '/api/mythos-pool/:id',
+    '/api/mythos-pool/:id', { preHandler: requireAdminRole },
     async (request, reply) => {
       try {
         await pool.query(`DELETE FROM stage_mythos_pool WHERE id = $1`, [
@@ -1468,7 +1468,7 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.delete<{ Params: { id: string } }>(
-    '/api/monster-pool/:id',
+    '/api/monster-pool/:id', { preHandler: requireAdminRole },
     async (request, reply) => {
       try {
         await pool.query(`DELETE FROM stage_monster_pool WHERE id = $1`, [

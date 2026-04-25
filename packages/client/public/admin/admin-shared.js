@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.20.6+b58';
+const ADMIN_VERSION = '0.20.7+b59';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -1466,3 +1466,78 @@ async function withButtonLoading(btn, asyncFn, opts) {
 }
 
 window.withButtonLoading = withButtonLoading;
+
+/* ========================================
+   權限工具:依登入者 role 隱藏 admin-only 元素
+   role 階級:viewer < editor < admin < owner
+   - 一般刪除按鈕標記 data-min-role="admin",editor/viewer 看不到
+   ======================================== */
+function getCurrentUserRole() {
+  try {
+    var u = JSON.parse(localStorage.getItem('admin_user') || '{}');
+    return u.role || 'viewer';
+  } catch { return 'viewer'; }
+}
+
+function hasMinRole(minRole) {
+  var rank = { viewer: 0, editor: 1, admin: 2, owner: 3 };
+  var current = rank[getCurrentUserRole()] || 0;
+  var required = rank[minRole] || 0;
+  return current >= required;
+}
+
+// 在 DOM 上隱藏 data-min-role 不符的元素;每次 render 後呼叫一次
+function applyRoleVisibility(rootEl) {
+  var root = rootEl || document;
+  if (!root || !root.querySelectorAll) return;
+  var elems = root.querySelectorAll('[data-min-role]');
+  elems.forEach(function (el) {
+    var min = el.getAttribute('data-min-role');
+    if (!hasMinRole(min)) {
+      el.style.display = 'none';
+    }
+  });
+}
+
+// 全域 MutationObserver:任何新加入 DOM 的 [data-min-role] 元素自動隱藏
+function startRoleVisibilityObserver() {
+  if (window.__roleObserverStarted) return;
+  window.__roleObserverStarted = true;
+  if (typeof MutationObserver === 'undefined') return;
+  var obs = new MutationObserver(function (mutations) {
+    mutations.forEach(function (m) {
+      m.addedNodes.forEach(function (node) {
+        if (node.nodeType !== 1) return;
+        if (node.hasAttribute && node.hasAttribute('data-min-role')) {
+          if (!hasMinRole(node.getAttribute('data-min-role'))) node.style.display = 'none';
+        }
+        if (node.querySelectorAll) applyRoleVisibility(node);
+      });
+    });
+  });
+  if (document.body) {
+    obs.observe(document.body, { childList: true, subtree: true });
+  } else {
+    document.addEventListener('DOMContentLoaded', function () {
+      obs.observe(document.body, { childList: true, subtree: true });
+      applyRoleVisibility();
+    });
+  }
+}
+
+// 自動啟動(載入時)
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+      applyRoleVisibility();
+      startRoleVisibilityObserver();
+    });
+  } else {
+    applyRoleVisibility();
+    startRoleVisibilityObserver();
+  }
+}
+
+window.getCurrentUserRole = getCurrentUserRole;
+window.hasMinRole = hasMinRole;
+window.applyRoleVisibility = applyRoleVisibility;

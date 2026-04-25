@@ -531,6 +531,7 @@ ${userDescription}
     - 生成前自問:DB 或同批次是否有 ≥ 2 張其他卡會與這張共享同一 primary_axis_value? 若答否,layer 必須降為 'faction' 或 'none'
     - 批次生成時,若使用者要求「為 X 角色寫 N 張」,N < 3 時改用 faction 軸
     - primary_axis_value **禁止**包含書名號『』「」 或任何引號(純字串,DB 端比對)
+    - **name_zh 也禁止包含書名號**:卡名以純文字儲存(例「老警長的徽章」不寫「『老警長的徽章』」);書名號**只在 effect.desc_zh 內文指認其他同軸卡時使用**(例:「在你打出另一張『老警長』系列卡時」)
     - 禁止生成「name_zh = primary_axis_value」的核心實體卡(例不要做一張叫 『老警長』 的盟友卡)
 31. **軸內 COMBO 必須有趣(禁機械加值)**:生成同軸系列卡時,至少一張卡要使用 §七之四 的 COMBO Pattern A~F 其中一種(資源回收/質變閾值/連鎖反應/跨時機配合/成本轉移/鏡像效果)。**禁止**整批 6 張全是「另一張 X 卡時 +1 檢定/+1 傷害」這類機械線性加值。COMBO 的設計本質是**創造玩家抉擇**,不是堆數字。
 32. **🚨 嚴禁發明關鍵字、狀態、術語**：
@@ -581,7 +582,7 @@ window.buildMiniCardGeminiPrompt = function(parsed) {
 ${known || '（無）'}
 
 ## 你要產出的欄位（JSON 形式回傳）
-${needNameZh ? '- **name_zh**: 中文卡名(使用者未提供,你必須根據 userDescription 發想一個符合氛圍的中文名);含書名號樣式不要加,例寫「老警長的警棍」不是「『老警長的警棍』」\n' : ''}- name_en: 英譯卡名
+${needNameZh ? '- **name_zh**: 中文卡名(使用者未提供,你必須根據 userDescription 發想一個符合氛圍的中文名);**禁止加書名號**,例寫「老警長的警棍」不是「『老警長的警棍』」(書名號只在 desc_zh 內文指認其他卡時用)\n' : ''}- name_en: 英譯卡名
 - attribute_modifiers: 物件，例 {"charisma": 1}（武器卡才需要；其他類型留 {}）
 - effects: 陣列，每個元素為 {trigger, condition, cost, target, effect_code, params, duration, desc_zh, desc_en}
 - flavor_text: 風味文字（一句話，不含機制用語，符合克蘇魯氛圍）

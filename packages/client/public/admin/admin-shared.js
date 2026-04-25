@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.19.0+b50';
+const ADMIN_VERSION = '0.19.1+b51';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -1147,6 +1147,16 @@ function validateAxisValueQuotes(card) {
   return [];
 }
 
+// V1b name_zh 含書名號(設計者偏好:卡名不加書名號裝飾,書名號只在 desc_zh 引用其他卡時用)
+function validateNameZhQuotes(card) {
+  if (!card || !card.name_zh) return [];
+  const v = String(card.name_zh);
+  if (/[『』「」"'“”‘’]/.test(v)) {
+    return [{ severity: 'warn', code: 'name_zh_has_quotes', message: 'name_zh 含書名號或引號(' + v + '),應為純名(書名號保留給 desc_zh 內文指認其他同軸卡使用)', fixable: true }];
+  }
+  return [];
+}
+
 // V2 desc_zh / flavor_text 含 ő/Ő~ř/Ř 亂碼(v0.15.3 修的 normalize bug 受害者)
 function validateOPollution(card) {
   const warnings = [];
@@ -1195,7 +1205,7 @@ function validateCardNameAxisGroupSize(card, axisGroupSizes) {
   if (card.primary_axis_layer !== 'card_name' || !card.primary_axis_value) return [];
   const stripped = String(card.primary_axis_value).replace(/[『』「」"'“”‘’]/g, '').trim();
   const size = (axisGroupSizes && axisGroupSizes.get(stripped)) || 0;
-  if (size < 2) return [{ severity: 'warn', code: 'card_name_axis_orphan', message: '此卡掛 card_name 軸「' + stripped + '」但 DB 內僅 ' + size + ' 張同軸卡(< 2 張不該用 card_name 軸,應降為 faction)', fixable: false }];
+  if (size < 2) return [{ severity: 'warn', code: 'card_name_axis_orphan', message: '此卡掛 card_name 軸「' + stripped + '」但 DB 內僅 ' + size + ' 張同軸卡(< 2 張不該用 card_name 軸,應降為 faction)', fixable: true }];
   if (size < 3) return [{ severity: 'info', code: 'card_name_axis_thin', message: 'card_name 軸「' + stripped + '」僅 ' + size + ' 張,系列尚未成形(建議 ≥ 3 張完整 RPG 配置)', fixable: false }];
   return [];
 }
@@ -1253,6 +1263,7 @@ function runAllCardValidators(card, ctx) {
   ctx = ctx || {};
   const all = [
     ...validateAxisValueQuotes(card),
+    ...validateNameZhQuotes(card),
     ...validateOPollution(card),
     ...validateSlotTypeConsistency(card),
     ...validateWeaponStyleConsistency(card),
@@ -1298,7 +1309,28 @@ function fixSlotByType(card) {
   return card;
 }
 
+function fixNameZhQuotes(card) {
+  if (!card.name_zh) return card;
+  const cleaned = String(card.name_zh).replace(/[『』「」"'“”‘’]/g, '').trim();
+  return { ...card, name_zh: cleaned };
+}
+
+// 修復 orphan card_name 軸:降級為 faction 軸(value=陣營字母)
+// 同時 strip primary_axis_value 的書名號(不留殘渣)
+function fixOrphanCardNameAxis(card) {
+  const next = { ...card };
+  if (card.faction && card.faction !== 'neutral') {
+    next.primary_axis_layer = 'faction';
+    next.primary_axis_value = card.faction;
+  } else {
+    next.primary_axis_layer = 'none';
+    next.primary_axis_value = null;
+  }
+  return next;
+}
+
 window.validateAxisValueQuotes = validateAxisValueQuotes;
+window.validateNameZhQuotes = validateNameZhQuotes;
 window.validateOPollution = validateOPollution;
 window.validateSlotTypeConsistency = validateSlotTypeConsistency;
 window.validateWeaponStyleConsistency = validateWeaponStyleConsistency;
@@ -1309,3 +1341,5 @@ window.runAllCardValidators = runAllCardValidators;
 window.fixAxisValueQuotes = fixAxisValueQuotes;
 window.fixOPollution = fixOPollution;
 window.fixSlotByType = fixSlotByType;
+window.fixNameZhQuotes = fixNameZhQuotes;
+window.fixOrphanCardNameAxis = fixOrphanCardNameAxis;

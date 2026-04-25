@@ -82,7 +82,7 @@
   async function aiRestructureEffects(card) {
     if (typeof window.callGeminiDirect !== 'function') throw new Error('callGeminiDirect 未載入');
     var summary = summarizeCardForAi(card);
-    var validCodes = 'deal_damage, deal_horror, heal_hp, heal_san, draw_card, search_deck, retrieve_card, return_to_deck, discard_card, gain_resource, spend_resource, modify_cost, move_investigator, swap_position, engage_enemy, disengage_enemy, exhaust_card, ready_card, stun_enemy, add_status, remove_status, make_test, modify_test, reroll, auto_success, attack, evade, taunt, counterattack, place_clue, discover_clue, place_doom, remove_doom, spawn_enemy, remove_enemy, look_chaos_bag, manipulate_chaos_bag, fast_play, target_other, add_bless, add_curse, remove_bless, remove_curse';
+    var validCodes = 'deal_damage, deal_horror, heal_hp, heal_san, draw_card, search_deck, retrieve_card, return_to_deck, discard_card, gain_resource, spend_resource, modify_cost, move_investigator, swap_position, engage_enemy, disengage_enemy, exhaust_card, ready_card, stun_enemy, add_status, remove_status, make_test, modify_test, wild_attr_boost, reroll, auto_success, attack, evade, taunt, counterattack, place_clue, discover_clue, place_doom, remove_doom, spawn_enemy, remove_enemy, look_chaos_bag, manipulate_chaos_bag, fast_play, target_other, add_bless, add_curse, remove_bless, remove_curse';
 
     var prompt = '你是克蘇魯神話卡牌遊戲的卡片資料分析引擎。下面這張卡可能被人類手改過 desc_zh 加了新效果但 effects[] 結構未跟上。\n' +
       '\n**全程必須使用繁體中文回覆**(包括 changed_summary 與 desc_zh)。\n' +

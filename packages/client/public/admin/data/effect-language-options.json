@@ -175,6 +175,7 @@
     "檢定類": [
       { "code": "make_test", "zh": "進行檢定", "en": "Make Test" },
       { "code": "modify_test", "zh": "修改檢定值", "en": "Modify Test" },
+      { "code": "wild_attr_boost", "zh": "萬能屬性加值（全屬性檢定 +N）", "en": "Wild Attribute Boost" },
       { "code": "reroll", "zh": "重擲", "en": "Reroll" },
       { "code": "auto_success", "zh": "自動成功", "en": "Auto Success" },
       { "code": "auto_fail", "zh": "自動失敗", "en": "Auto Fail" }
@@ -446,6 +447,12 @@
       "optional": [
         { "key": "attribute", "type": "select", "zh": "限定屬性", "en": "Attribute Filter", "options_ref": "attributes" }
       ]
+    },
+    "wild_attr_boost": {
+      "required": [
+        { "key": "amount", "type": "number", "zh": "加值點數", "en": "Boost Amount", "min": 1, "max": 5 }
+      ],
+      "optional": []
     },
     "reroll": {
       "optional": [

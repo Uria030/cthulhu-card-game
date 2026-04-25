@@ -751,6 +751,12 @@
     // Tests
     make_test: () => 0,
     modify_test: (p) => (p.modifier || 0) * 0.5,
+    // 萬能屬性加值(全屬性檢定 +N):查 WILD_ATTR_VALUE 表(平方型增長)
+    // 1=1V, 2=3V, 3=6V, 4=9V, 5=13.5V — 永久時自動 ×8 套持續性權重(§4.4b)
+    wild_attr_boost: (p) => {
+      const a = Math.max(0, Math.min(5, parseInt(p.amount, 10) || 0));
+      return ({0:0, 1:1, 2:3, 3:6, 4:9, 5:13.5})[a] || 0;
+    },
     reroll: () => 1,
     auto_success: () => 4,
     auto_fail: () => 0,
@@ -1029,7 +1035,7 @@
 
   // §4.4b 持續性權重(s04 規範):永久 / 在場期間 → 套倍率
   // 影響每次檢定的 effect_code(每回合 2 次檢定 → ×8 倍)
-  const PER_CHECK_EFFECT_CODES = new Set(['modify_test']);
+  const PER_CHECK_EFFECT_CODES = new Set(['modify_test', 'wild_attr_boost']);
   // V 表已內建持續性概念,不重複套倍率(避免 add_status:empowered 等爆表)
   const PERSISTENCE_BUILTIN_EFFECT_CODES = new Set([
     'add_status', 'remove_status', 'fast_play', 'target_other',
@@ -2378,6 +2384,7 @@
       case 'counterattack': return `反擊造成 ${p.damage || '?'} 點${elemZh[p.element] || ''}傷害`;
       case 'make_test': return `進行${attrZh[p.attribute] || ''}檢定（DC ${p.difficulty || '?'}）`;
       case 'modify_test': return `檢定修正 ${p.modifier > 0 ? '+' : ''}${p.modifier || '?'}`;
+      case 'wild_attr_boost': return `所有屬性檢定 +${p.amount || '?'}`;
       case 'reroll': return `重擲${p.keep_better ? '（取較佳）' : ''}`;
       case 'place_clue': return `放置 ${p.amount || '?'} 線索`;
       case 'discover_clue': return `直接發現 ${p.amount || '?'} 線索`;
@@ -2448,6 +2455,7 @@
       case 'attack': return `Attack${t}${p.check_modifier ? ` (+${p.check_modifier})` : ''}`;
       case 'evade': return `Evade${p.check_modifier ? ` (+${p.check_modifier})` : ''}`;
       case 'add_status': return `Apply ${p.stacks || '?'} stack(s) of ${p.status || '?'}${t}`;
+      case 'wild_attr_boost': return `+${p.amount || '?'} to all skill checks`;
       case 'move_investigator': return `Move up to ${p.distance || '?'} location(s)`;
       case 'jump': return `Jump ${p.distance || '?'} location(s)`;
       default: {
@@ -2810,7 +2818,7 @@
     'gain_resource','spend_resource','steal_resource','transfer_resource',
     'move_investigator','move_enemy','swap_position','place_enemy','jump',
     'engage_enemy','disengage_enemy','exhaust_card','ready_card','stun_enemy','add_status','remove_status',
-    'make_test','modify_test','reroll','auto_success','auto_fail',
+    'make_test','modify_test','wild_attr_boost','reroll','auto_success','auto_fail',
     'attack','evade','taunt','counterattack','extra_attack',
     'place_clue','discover_clue','place_doom','remove_doom','seal_gate','spawn_enemy','remove_enemy','execute_enemy',
     'reveal_tile','place_tile','remove_tile','place_haunting','remove_haunting','advance_act','advance_agenda','connect_tiles','disconnect_tiles',

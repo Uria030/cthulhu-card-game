@@ -63,6 +63,15 @@
     .rb-topbar .rb-search-wrap {
       flex: 1; max-width: 480px; margin-left: auto; position: relative;
     }
+    /* 漢堡按鈕 — 只在 mobile 顯示 */
+    .rb-menu-toggle {
+      display: none;
+      background: transparent; border: 1px solid var(--rb-border);
+      color: var(--rb-gold); font-size: 1rem;
+      padding: 0.35rem 0.6rem; border-radius: 4px;
+      cursor: pointer;
+    }
+    .rb-menu-toggle:hover { border-color: var(--rb-gold); }
     .rb-topbar input.rb-search {
       width: 100%; padding: 0.5rem 0.8rem; padding-right: 2.5rem;
       background: var(--rb-bg-card); color: var(--rb-text);
@@ -80,6 +89,31 @@
       display: grid;
       grid-template-columns: var(--rb-sidebar-w) 1fr;
       height: calc(100vh - 58px);
+    }
+
+    /* ── Mobile responsive (≤ 768px) ── 單欄堆疊模式 */
+    @media (max-width: 768px) {
+      .rb-layout {
+        grid-template-columns: 1fr;
+        position: relative;
+      }
+      .rb-sidebar {
+        position: absolute; inset: 0;
+        z-index: 10;
+        width: 100%;
+      }
+      .rb-content-wrap {
+        width: 100%;
+      }
+      /* 預設 mobile 顯示 sidebar(首頁狀態);選了文件後 body.rb-content-mode 切到 content */
+      body.rb-content-mode .rb-sidebar { display: none; }
+      body:not(.rb-content-mode) .rb-content-wrap { display: none; }
+      .rb-menu-toggle { display: inline-flex; align-items: center; }
+      /* mobile 隱藏「規則書閱覽器」標題與 SIM-04 標籤,讓 topbar 不擁擠 */
+      .rb-topbar .rb-title { display: none; }
+      .rb-topbar .rb-code { display: none; }
+      .rb-topbar .rb-search-wrap { max-width: none; }
+      .rb-topbar a.rb-back { font-size: 0.78rem; }
     }
 
     /* ── Sidebar ── */
@@ -343,11 +377,12 @@
 <body>
 
   <div class="rb-topbar">
-    <a href="index.html" class="rb-back">← 返回首頁</a>
+    <a href="index.html" class="rb-back">← 首頁</a>
+    <button type="button" class="rb-menu-toggle" id="rbMenuToggle" title="返回文件清單">☰ 文件清單</button>
     <span class="rb-title">規則書閱覽器</span>
     <span class="rb-code">SIM-04</span>
     <div class="rb-search-wrap">
-      <input type="text" class="rb-search" id="rbSearch" placeholder="全文搜尋（Enter 搜尋，Esc 清除）…" autocomplete="off">
+      <input type="text" class="rb-search" id="rbSearch" placeholder="全文搜尋(Enter 搜尋,Esc 清除)…" autocomplete="off">
       <span class="rb-search-count" id="rbSearchCount"></span>
     </div>
   </div>
@@ -450,6 +485,8 @@
   async function showItem(ctx) {
     state.current = ctx;
     location.hash = ctx.item.file;
+    // mobile:點檔案後切到內容視圖(隱藏 sidebar)
+    document.body.classList.add('rb-content-mode');
     // mark active in sidebar
     document.querySelectorAll('.rb-item').forEach(el => {
       el.classList.toggle('active', el.dataset.file === ctx.item.file);
@@ -637,6 +674,14 @@
     marked.use({
       gfm: true,
       breaks: false,
+    });
+  }
+
+  // mobile 漢堡按鈕:回 sidebar 文件清單
+  const menuToggle = document.getElementById('rbMenuToggle');
+  if (menuToggle) {
+    menuToggle.addEventListener('click', () => {
+      document.body.classList.remove('rb-content-mode');
     });
   }
 

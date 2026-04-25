@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.20.2+b54';
+const ADMIN_VERSION = '0.20.3+b55';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -1379,3 +1379,42 @@ function ensureGeminiApiKey() {
 window.getCurrentGeminiKey = getCurrentGeminiKey;
 window.promptGeminiApiKeyDialog = promptGeminiApiKeyDialog;
 window.ensureGeminiApiKey = ensureGeminiApiKey;
+
+/* ========================================
+   底層 Gemini API 呼叫
+   原本只在 admin-ai-tasks/geminiDirectClient.js,但該檔在某些頁面/裝置載入
+   不穩定(iPad Safari 偶見 callGeminiDirect 未定義)。搬到 admin-shared.js
+   讓所有頁面只要載 admin-shared.js 就有完整 Gemini 能力。
+   ======================================== */
+async function callGeminiDirect(opts) {
+  opts = opts || {};
+  var apiKey = opts.apiKey || getCurrentGeminiKey();
+  if (!apiKey) throw new Error('Gemini API Key 未設定(請點右上角 🔑 API Key)');
+  var model = opts.model || 'gemini-2.5-pro';
+  var temperature = (opts.temperature != null) ? opts.temperature : 0.7;
+  var responseMimeType = opts.responseMimeType || 'application/json';
+  var prompt = opts.prompt;
+  if (!prompt) throw new Error('callGeminiDirect: prompt 必填');
+
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(apiKey);
+  var body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: responseMimeType, temperature: temperature },
+  };
+  var res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    var errText = '';
+    try { errText = await res.text(); } catch (e) { /* ignore */ }
+    throw new Error('Gemini API ' + res.status + ': ' + String(errText).slice(0, 300));
+  }
+  var data = await res.json();
+  var textOut = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+  if (!textOut) throw new Error('Gemini 回應為空');
+  return { text: textOut, raw: data, modelName: model };
+}
+
+window.callGeminiDirect = callGeminiDirect;

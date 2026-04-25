@@ -83,6 +83,60 @@ export const dbDiagRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  // 卡片資料診斷:給定 code 或 id,回傳該卡完整 raw + effects[] 陣列
+  // 用途:V 值計算對不上時,讓使用者一鍵把 DB 的真實資料攤開,不靠截圖排錯
+  app.get<{ Querystring: { code?: string; id?: string; name_zh?: string } }>(
+    '/api/admin/db-diag/card-inspect',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { code, id, name_zh } = request.query;
+      if (!code && !id && !name_zh) {
+        return reply.status(400).send({ success: false, error: '需提供 code / id / name_zh 至少一個' });
+      }
+
+      let cardRow: any;
+      try {
+        if (id) {
+          const r = await pool.query('SELECT * FROM card_definitions WHERE id = $1 LIMIT 1', [id]);
+          cardRow = r.rows[0];
+        } else if (code) {
+          const r = await pool.query('SELECT * FROM card_definitions WHERE code = $1 LIMIT 1', [code]);
+          cardRow = r.rows[0];
+        } else if (name_zh) {
+          const r = await pool.query('SELECT * FROM card_definitions WHERE name_zh = $1 LIMIT 1', [name_zh]);
+          cardRow = r.rows[0];
+        }
+      } catch (e: any) {
+        return reply.status(500).send({ success: false, error: 'DB 查詢失敗:' + (e.message || e) });
+      }
+
+      if (!cardRow) {
+        return reply.status(404).send({ success: false, error: '查無此卡' });
+      }
+
+      // 撈 effects 子表
+      let effects: any[] = [];
+      try {
+        const er = await pool.query(
+          `SELECT id, sort_order, trigger, condition, cost, target, effect_code, effect_params AS params, duration, scope, desc_zh, desc_en
+             FROM card_effects WHERE card_definition_id = $1 ORDER BY sort_order, id`,
+          [cardRow.id]
+        );
+        effects = er.rows;
+      } catch (e: any) {
+        return reply.status(500).send({ success: false, error: 'effects 查詢失敗:' + (e.message || e) });
+      }
+
+      return reply.send({
+        success: true,
+        card: cardRow,
+        effects,
+        effects_count: effects.length,
+        hint: 'V 值診斷請在前端用 admin-system-diag 的「卡片 V 值診斷」按鈕,前端會跑引擎算逐條結果',
+      });
+    }
+  );
+
   // 建立或重設使用者帳號(只有 owner / admin 可呼叫)
   // role: editor / viewer 看不到 MOD-12/MOD-14/AXIS/DIAG;admin / owner 看得到全部
   app.post<{ Body: { username: string; password: string; role?: string; display_name?: string; reset_password?: boolean } }>(

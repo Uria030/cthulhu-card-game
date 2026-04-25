@@ -183,6 +183,13 @@
       </ul>
     </div>
 
+    <div class="diag-action-row" style="margin-top:0.75rem;">
+      <button class="diag-btn" id="btnInspectCard">🔬 卡片 V 值診斷(輸入 code/name)</button>
+    </div>
+    <div style="padding:0.75rem 0;border-bottom:1px solid var(--border);font-size:0.75rem;color:var(--text-secondary);">
+      <p style="margin:0.25rem 0;"><strong>用途:</strong>當卡片編輯器顯示的 V 值跟預期不符,按此鈕輸入卡片 code 或 name_zh,系統會把 DB 上該卡的完整資料攤開——卡資料 / effects[] 逐條 / 引擎逐條算出的 V 值 / 套用倍率 / 警告(如 effect_code 不在白名單、duration 缺漏、params 不完整),log 區會印出完整診斷,可複製 log 直接給開發者看。<strong>排錯不靠截圖、不靠猜測。</strong></p>
+    </div>
+
     <div class="diag-log-header">
       <strong>Log</strong>
       <span class="spacer"></span>
@@ -562,6 +569,144 @@
       }
     }
     document.getElementById('btnSeedUser').onclick = seedUserPrompt;
+
+    // ─── 卡片 V 值診斷(逐條跑引擎) ───────────────────
+    // 引擎邏輯與 admin-card-designer.html 同步(若該檔更新此處需跟改)
+    const INSPECT_VALUE_TABLE = {
+      deal_damage: (p) => (p.amount || 0) * 1,
+      deal_horror: (p) => (p.amount || 0) * 3,
+      heal_hp: (p) => (p.amount || 0) * 1.5,
+      heal_san: (p) => (p.amount || 0) * 1.5,
+      restore_hp_max: (p) => (p.amount || 0) * 6,
+      restore_san_max: (p) => (p.amount || 0) * 6,
+      draw_card: (p) => (p.amount || 0) * 1,
+      search_deck: () => 6,
+      retrieve_card: () => 1.5,
+      reveal_top: (p) => (p.count || 0) * 0.5,
+      discard_card: (p) => (p.count || 0) * -0.5,
+      gain_resource: (p) => (p.amount || 0) * 1,
+      steal_resource: (p) => (p.amount || 0) * 1,
+      move_investigator: (p) => (p.distance || 0) * 1,
+      jump: (p) => (p.distance || 0) * 2,
+      add_status: (p) => {
+        const sv = { poison:3, bleed:2, burning:3, frozen:3, doom_status:2, madness:6, marked:6, vulnerable:2, weakness_status:2, wet:1, weakened:3, darkness:2, disarm:4, fatigue:4, silence:4, empowered:3, armor:3, ward:6, haste:4, regeneration:6, stealth:6 };
+        return (sv[p.status] || 0) * (p.stacks || p.value || 1);
+      },
+      remove_status: () => 1,
+      modify_test: (p) => (p.modifier || 0) * 0.5,
+      wild_attr_boost: (p) => {
+        const a = Math.max(0, Math.min(5, parseInt(p.amount, 10) || 0));
+        return ({0:0,1:1,2:3,3:6,4:9,5:13.5})[a] || 0;
+      },
+      reroll: () => 1,
+      auto_success: () => 4,
+      stun_enemy: () => 2,
+      counterattack: (p) => (p.damage || 0) * 1,
+      extra_attack: () => 1.5,
+      taunt: () => 0.5,
+      disengage_enemy: () => 1,
+      ready_card: () => 1,
+      discover_clue: (p) => (p.amount || 0) * 2,
+      place_doom: (p) => (p.amount || 0) * -4,
+      remove_doom: (p) => (p.amount || 0) * 4,
+      seal_gate: () => 4,
+      remove_enemy: () => 2,
+      execute_enemy: () => 3,
+      teleport: () => 3,
+      stabilize_ally: () => 0.5,
+      revive_ally: () => 1.5,
+      fast_play: () => 1,
+      target_other: () => 2,
+      direct_deploy: () => 2,
+      gain_use: (p) => (p.amount || 0) * 0.5,
+      transform: () => 2,
+      add_bless: (p) => (p.amount || 0) * 1,
+      add_curse: (p) => (p.amount || 0) * 1,
+      look_chaos_bag: () => 0.5,
+      manipulate_chaos_bag: () => 1,
+      advance_act: () => 2,
+      advance_agenda: () => -4,
+      remove_haunting: () => 1,
+    };
+    const INSPECT_PER_CHECK = new Set(['modify_test', 'wild_attr_boost']);
+    const INSPECT_BUILTIN_PERSIST = new Set(['add_status','remove_status','fast_play','target_other','attack','evade','taunt','counterattack','extra_attack','auto_success']);
+    const INSPECT_PERSIST_DURS = new Set(['permanent', 'while_in_play']);
+    function inspectGetWeight(code, dur) {
+      if (!INSPECT_PERSIST_DURS.has(dur)) return 1;
+      if (INSPECT_PER_CHECK.has(code)) return 8;
+      if (INSPECT_BUILTIN_PERSIST.has(code)) return 1;
+      return 4;
+    }
+    function inspectCalcEffect(eff) {
+      if (eff && eff.params && typeof eff.params._v_override === 'number') {
+        return { v: eff.params._v_override, base: eff.params._v_override, weight: 1, has_override: true, has_fn: true };
+      }
+      const fn = INSPECT_VALUE_TABLE[eff.effect_code];
+      if (!fn) return { v: 0, base: 0, weight: 1, has_override: false, has_fn: false };
+      const base = fn(eff.params || {});
+      const weight = inspectGetWeight(eff.effect_code, eff.duration);
+      return { v: base * weight, base, weight, has_override: false, has_fn: true };
+    }
+
+    async function inspectCard() {
+      const q = prompt('輸入卡片 code(如 CEAH-04)或 name_zh(如 伊斯之鑰):\n\n• code 開頭通常是 C 大寫字母\n• name_zh 要完全相符');
+      if (!q) return;
+      const trimmed = q.trim();
+      const isCode = /^[A-Z][A-Z0-9-]*$/i.test(trimmed);
+      const url = '/api/admin/db-diag/card-inspect?' + (isCode ? 'code=' : 'name_zh=') + encodeURIComponent(trimmed);
+      log('info', '查詢:' + (isCode ? 'code' : 'name_zh') + '=' + trimmed);
+      try {
+        const res = await window.adminFetch(url);
+        const data = await res.json();
+        if (!data.success) { log('error', '✗ 查詢失敗:' + (data.error || res.status)); return; }
+
+        const c = data.card;
+        const effs = data.effects || [];
+        log('ok', '─────────────────────────────────────────');
+        log('ok', '✓ 找到卡片');
+        log('info', 'code: ' + c.code + ' / id: ' + c.id);
+        log('info', 'name_zh: ' + c.name_zh + ' / name_en: ' + (c.name_en || '—'));
+        log('info', 'faction: ' + c.faction + ' / type: ' + c.card_type + ' / starting_xp: ' + (c.starting_xp ?? c.level ?? '—'));
+        log('info', 'cost: ' + c.cost + ' / consume_type: ' + (c.consume_type || '—'));
+        log('info', 'flags: signature=' + !!c.is_signature + ' unique=' + !!c.is_unique + ' exceptional=' + !!c.is_exceptional + ' permanent=' + !!c.is_permanent + ' extra=' + !!c.is_extra + ' talisman=' + !!c.is_talisman);
+        log('info', 'primary_axis: ' + (c.primary_axis_layer || 'none') + (c.primary_axis_value ? ' / ' + c.primary_axis_value : ''));
+        log('info', 'effects[] 共 ' + effs.length + ' 條:');
+
+        let total = 0;
+        for (let i = 0; i < effs.length; i++) {
+          const e = effs[i];
+          const r = inspectCalcEffect(e);
+          total += r.v;
+          const warns = [];
+          if (!r.has_fn) warns.push('⚠ effect_code「' + (e.effect_code || '空') + '」不在引擎 V 表');
+          if (!e.duration) warns.push('⚠ duration 缺漏(預設 instant 不套倍率)');
+          if (!e.trigger) warns.push('⚠ trigger 缺漏');
+          if (e.effect_code === 'modify_test' && (!e.params || typeof e.params.modifier !== 'number')) warns.push('⚠ modify_test 缺 params.modifier');
+          if (e.effect_code === 'wild_attr_boost' && (!e.params || typeof e.params.amount !== 'number')) warns.push('⚠ wild_attr_boost 缺 params.amount');
+
+          log('info', '  ─── 效果 #' + (i+1) + ' ─────────────');
+          log('info', '    desc_zh: ' + (e.desc_zh || '—'));
+          log('info', '    effect_code: ' + (e.effect_code || '—') + ' | trigger: ' + (e.trigger || '—') + ' | duration: ' + (e.duration || 'instant'));
+          log('info', '    params: ' + JSON.stringify(e.params || {}));
+          if (r.has_override) log('ok', '    V 值: ' + r.v + ' (手動覆寫 _v_override)');
+          else log('ok', '    V 值: ' + r.v.toFixed(1) + ' = base ' + r.base.toFixed(1) + ' × 倍率 ' + r.weight + (r.weight !== 1 ? ' (永久權重)' : ''));
+          warns.forEach(w => log('warn', '    ' + w));
+        }
+
+        log('ok', '─── 加總 ───');
+        log('ok', '效果總價值 = ' + total.toFixed(1) + 'V');
+        const consumeMod = ({stay:-1, discard:0, short_rest:-1, long_rest:-2, removed:-3})[c.consume_type] || 0;
+        log('info', '消耗類型修正(' + (c.consume_type || '—') + '): ' + consumeMod + 'V');
+        const startXp = c.starting_xp ?? c.level ?? 0;
+        log('info', '起始投入抵扣: -' + startXp + 'V');
+        const specialMod = (c.is_signature ? -3 : 0) + (c.is_unique ? -1 : 0) + (c.is_exceptional ? -2 : 0);
+        log('info', '特殊修正(sig=' + !!c.is_signature + ' unique=' + !!c.is_unique + ' exc=' + !!c.is_exceptional + '): ' + specialMod + 'V');
+        log('ok', '─────────────────────────────────────────');
+      } catch (e) {
+        log('error', '✗ 查詢例外:' + (e.message || String(e)));
+      }
+    }
+    document.getElementById('btnInspectCard').onclick = inspectCard;
 
     document.getElementById('btnClearLog').onclick = () => { logArea.textContent = ''; };
     document.getElementById('btnCopyLog').onclick = async () => {

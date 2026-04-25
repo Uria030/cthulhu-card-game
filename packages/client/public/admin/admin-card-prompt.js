@@ -240,7 +240,18 @@ stay, discard, long_rest, short_rest, removed
 每個效果必須包含六大要素：
 
 ### 5.1 觸發時機 (trigger)
-on_play, on_commit, on_consume, on_enter_play, on_leave_play, on_draw, on_success, on_failure, on_critical, on_fumble, on_take_damage, on_take_horror, before_take_damage, before_take_horror, before_downed, on_engage, on_disengage, on_move, on_enter_location, on_enemy_spawn, on_enemy_defeat, on_ally_downed, on_turn_start, on_turn_end, on_enemy_phase, reaction, passive, free_action
+on_play, on_commit, on_consume, on_enter, on_leave, on_draw, on_success, on_fail, on_critical, on_fumble, on_take_damage, on_take_horror, before_take_damage, before_take_horror, before_downed, on_engage, on_disengage, on_move, on_enter_location, on_enemy_spawn, on_enemy_defeat, on_ally_downed, round_start, round_end, on_enemy_phase, action, reaction, passive, free_action
+
+**自然語言 → trigger 對應表(避免錯填 trigger)**：
+- 「打出時 / 出牌時」→ on_play
+- 「進場時」→ on_enter
+- **「離場時 / 離去時 / 移除時 / 從場上移除時」→ on_leave**(常被誤填為 on_play)
+- 「被抽到時」→ on_draw
+- 「檢定成功時」→ on_success / 「檢定失敗時」→ on_fail
+- 「將要承受恐懼時」→ before_take_horror / 「承受恐懼時」→ on_take_horror
+- 「將要承受傷害時」→ before_take_damage / 「承受傷害時」→ on_take_damage
+- 「回合開始」→ round_start / 「回合結束」→ round_end
+- 「只要 X 在場 / 持續在場 / 永久 / 被動」→ passive(不是 on_play)
 
 ### 5.2 條件限制 (condition) — 可為 null
 while_engaged, while_not_engaged, ally_engaged, hp_below_half, hp_below_x, san_below_half, san_below_x, in_darkness, in_light, in_fire, daytime, nighttime, hand_empty, hand_full, deck_empty, has_weapon, has_ally, has_item, has_arcane_item, has_weakness, at_location_with_clue, at_location_with_enemy, alone_at_location
@@ -256,6 +267,28 @@ self, ally_one, ally_all, investigator_any, investigator_all, enemy_one, enemy_a
 deal_damage, deal_horror, heal_hp, heal_san, restore_hp_max, restore_san_max, transfer_damage, transfer_horror, draw_card, reveal_top, search_deck, retrieve_card, return_to_deck, discard_card, shuffle_deck, remove_from_game, gain_resource, spend_resource, steal_resource, transfer_resource, move_investigator, move_enemy, swap_position, place_enemy, jump, engage_enemy, disengage_enemy, exhaust_card, ready_card, stun_enemy, add_status, remove_status, make_test, modify_test, wild_attr_boost, reroll, auto_success, auto_fail, attack, evade, taunt, counterattack, extra_attack, place_clue, discover_clue, place_doom, remove_doom, seal_gate, spawn_enemy, remove_enemy, execute_enemy, reveal_tile, place_tile, remove_tile, place_haunting, remove_haunting, advance_act, advance_agenda, connect_tiles, disconnect_tiles, create_light, extinguish_light, create_darkness, remove_darkness, create_fire, extinguish_fire, add_keyword, remove_keyword, add_bless, add_curse, remove_bless, remove_curse, look_chaos_bag, manipulate_chaos_bag
 
 **modify_test vs wild_attr_boost 區分(重要)**:modify_test 用於「指定屬性檢定 +N」(如「智力檢定 +2」),params.modifier 數值 + 可選 params.attribute 限定屬性;wild_attr_boost 用於「所有屬性檢定 +N / 全技能檢定 +N」(如 Key of Ys 的「+1 to each of your skills」),params.amount 1-5。永久 wild_attr_boost 套 §4.4b 持續性權重 ×8,V 值極高,慎用。
+
+**🔴 成長型 effect 的 amount 必填「最終可達狀態」(s04 §4.4b 約定,極重要)**
+
+當效果是「每 X 獲得 Y / 每點 X 加 Y / 隨 X 累積成長」這類 scaling 描述時,**params.amount 不是寫敘述裡的單位增量(1),而是寫卡片可達到的最終最強狀態**。引擎會用最終狀態 × 持續性權重算 V 值(§4.4b)。
+
+判斷上限的依據(依優先序):
+1. 卡片 SAN(神智值):「卡上每 1 點恐懼...」→ amount = SAN-1(因第 N 個 horror 達到 SAN 即觸發離場;SAN 4 → amount=3)
+2. 卡片 HP:「此卡每受 1 點傷害...」→ amount = HP-1
+3. 卡片內顯式上限:「(此卡最多 N 點 X)」→ amount = N
+4. 若無上限敘述但有「每 1 X」scaling,預設 amount = 3(保守估計常見遊戲狀態)
+
+**範例 — Key of Ys**:
+- 卡面:「只要此卡上每有 1 點恐懼,你的所有檢定獲得 +1」+「(此卡最多承受 4 點恐懼)」+ SAN 4
+- 第 4 個 horror 進來就觸發離場 → 最大可達 3 horror
+- effects[]:「effect_code: wild_attr_boost / params: { amount: 3 } / duration: while_in_play / trigger: passive / desc_zh: 只要此卡上每有 1 點恐懼,你的所有檢定獲得 +1」
+- 同步:「將其中 1 點恐懼放置在此卡上」 transfer_horror 的 amount 也填總可發生次數 3(不是 1)
+
+**反例(常見錯誤)**:
+- ❌ amount=1(誤把單位增量當最終值,結果 V 值嚴重低估)
+- ❌ duration=instant(成長型必為 while_in_play 或 permanent)
+
+**transfer_damage / transfer_horror 也同**:amount = 卡片可吸收的總點數(對 Key of Ys 是 3,因 SAN 4 上限),不是敘述的單次 1 點。
 
 ### 5.6 效果參數 (params)
 deal_damage: { amount, element: physical/fire/ice/lightning/arcane, direct?, area? }
@@ -640,10 +673,16 @@ faction（陣營）→ combat_style（風格）→ proficiency（專精）→ ca
 物質類型（talisman_type）：wooden_peach/silver/steel/crystal/salt/scroll
 
 ## 效果動詞（effect_code，必從以下選）
-deal_damage, deal_horror, heal_hp, heal_san, draw_card, search_deck, retrieve_card, return_to_deck, discard_card, gain_resource, spend_resource, move_investigator, swap_position, engage_enemy, disengage_enemy, exhaust_card, ready_card, stun_enemy, add_status, remove_status, make_test, modify_test, reroll, auto_success, attack, evade, taunt, counterattack, place_clue, discover_clue, place_doom, remove_doom, spawn_enemy, remove_enemy, look_chaos_bag, manipulate_chaos_bag, fast_play, target_other, add_bless, add_curse, remove_bless, remove_curse
+deal_damage, deal_horror, heal_hp, heal_san, draw_card, search_deck, retrieve_card, return_to_deck, discard_card, gain_resource, spend_resource, transfer_damage, transfer_horror, move_investigator, swap_position, engage_enemy, disengage_enemy, exhaust_card, ready_card, stun_enemy, add_status, remove_status, make_test, modify_test, wild_attr_boost, reroll, auto_success, attack, evade, taunt, counterattack, place_clue, discover_clue, place_doom, remove_doom, spawn_enemy, remove_enemy, look_chaos_bag, manipulate_chaos_bag, fast_play, target_other, add_bless, add_curse, remove_bless, remove_curse
+
+**modify_test vs wild_attr_boost**:指定屬性 +N → modify_test (params.modifier);全屬性 / 全技能 +N → wild_attr_boost (params.amount)
+
+**🔴 成長型 effect amount 必填最終可達狀態(s04 §4.4b)**:當效果是「每 X 獲得 Y / 隨 X 累積成長」,params.amount **不是**單位增量,而是卡片可達的最終最強狀態(優先依卡片 SAN-1 / HP-1 / 顯式上限推斷)。例 Key of Ys SAN 4 → wild_attr_boost amount=3 + transfer_horror amount=3 + duration=while_in_play。寫成 amount=1 是嚴重錯誤。
 
 ## 觸發時機（trigger，必從以下選）
 on_play, on_commit, on_consume, on_enter, on_leave, on_draw, on_success, on_fail, on_take_damage, on_take_horror, before_take_damage, before_take_horror, before_downed, round_start, round_end, action, reaction, passive, free_action
+
+**自然語言 → trigger 對應(避免錯填)**:「離場時/離去時/移除時」→ on_leave(不是 on_play);「進場時」→ on_enter;「將要承受恐懼」→ before_take_horror;「持續在場/被動/只要 X 在場」→ passive(不是 on_play)。
 
 ## 軸向指認句型（寫入 effect.desc_zh 時使用）
 - 觸發型：在你打出/獲得/消費另一張 [軸向] 卡時，[效果]

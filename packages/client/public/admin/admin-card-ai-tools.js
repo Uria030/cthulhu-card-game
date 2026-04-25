@@ -110,7 +110,15 @@
       '5. 「打出費用 -2」用 effect_code=modify_cost,params={amount:-2}\n' +
       '6. 「全屬性 +N / 全技能 +N」用 effect_code=wild_attr_boost,params.amount\n' +
       '7. 「指定屬性檢定 +N」用 modify_test,params.modifier + 可選 attribute\n' +
-      '8. effect_code 必從以下白名單選:\n' + validCodes + '\n' +
+      '8. **🔴 成長型 effect amount 規則(極重要)**:當 desc_zh 是「每 X 獲得 Y / 隨 X 累積 / 每 1 點 X 你 +Y」這類 scaling 描述時,params.amount **必填最終可達狀態**(不是單位增量 1):\n' +
+      '   · 優先依卡片 SAN(神智值)推:卡上承受恐懼成長 → amount = SAN-1 (因第 N 個 horror 達到 SAN 即觸發離場)\n' +
+      '   · 次依卡片 HP 推:卡上承受傷害成長 → amount = HP-1\n' +
+      '   · 卡內顯式上限「(此卡最多 N 點)」→ amount = N\n' +
+      '   · 沒上限敘述但有 scaling → 預設 amount = 3\n' +
+      '   · 範例:Key of Ys SAN 4 → wild_attr_boost amount=3, transfer_horror amount=3, duration=while_in_play\n' +
+      '   · ❌ 寫 amount=1 是嚴重錯誤(把單位增量當最終值)\n' +
+      '9. **trigger 自然語言對應**:「離場時/離去時/移除時」→ `on_leave`(常被誤填 on_play);「進場時」→ `on_enter`;「持續在場/只要 X 在場/被動」→ `passive`;「將要承受恐懼」→ `before_take_horror`\n' +
+      '10. effect_code 必從以下白名單選:\n' + validCodes + '\n' +
       '\n## 改動最小原則\n' +
       '若原 effects[] 中某項已正確對應 desc 的某句,**完全不要動該項**。只新增缺漏項或補齊 params。\n' +
       '\n## 輸出格式\n' +

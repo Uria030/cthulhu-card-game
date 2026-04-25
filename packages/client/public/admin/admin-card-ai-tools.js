@@ -85,16 +85,45 @@
     var validCodes = 'deal_damage, deal_horror, heal_hp, heal_san, draw_card, search_deck, retrieve_card, return_to_deck, discard_card, gain_resource, spend_resource, modify_cost, move_investigator, swap_position, engage_enemy, disengage_enemy, exhaust_card, ready_card, stun_enemy, add_status, remove_status, make_test, modify_test, wild_attr_boost, reroll, auto_success, attack, evade, taunt, counterattack, place_clue, discover_clue, place_doom, remove_doom, spawn_enemy, remove_enemy, look_chaos_bag, manipulate_chaos_bag, fast_play, target_other, add_bless, add_curse, remove_bless, remove_curse';
 
     var prompt = '你是克蘇魯神話卡牌遊戲的卡片資料分析引擎。下面這張卡可能被人類手改過 desc_zh 加了新效果但 effects[] 結構未跟上。\n' +
-      '\n**全程必須使用繁體中文回覆**(包括 changed_summary 與 desc_zh)。\n' +
-      '\n你的工作:讀 card_preview_text(這是使用者看到的卡面文字,優先依此判斷)+ 現有 effects[],回傳補齊後的完整 effects[] 陣列(JSON),要求:\n' +
-      '1. 保留原 effects[] 中正確且仍對應卡面敘述的項\n' +
-      '2. 補上敘述提到但 effects[] 缺漏的項(每個敘述句配一個對應 effect_code)\n' +
-      '3. 修正 desc_zh 與 params 數值不一致的(例敘述寫「3 點」但 params.amount=2,以敘述為主)\n' +
-      '4. 條件式效果(如「如果 X 否則 Y」)拆成兩條 effects,各自帶 condition\n' +
-      '5. 「打出費用 -2」等費用修正用 effect_code=modify_cost,params={amount:-2}\n' +
-      '6. effect_code 必從以下白名單選:\n' + validCodes + '\n' +
-      '\n卡片資料:\n```json\n' + JSON.stringify(summary, null, 2) + '\n```\n' +
-      '\n只回 JSON,格式:\n{\n  "effects": [\n    {"trigger":"...", "condition":null, "cost":{...}, "target":"...", "effect_code":"...", "params":{...}, "duration":"...", "desc_zh":"...", "desc_en":"..."}\n  ],\n  "changed_summary": "用繁體中文簡述改了什麼"\n}\n';
+      '\n**全程必須使用繁體中文回覆**。\n' +
+      '\n## 你的工作範圍(極重要,違反就是嚴重失誤)\n' +
+      '\n你**只**負責補齊每條 desc_zh 對應的 effects[] 結構(trigger / condition / cost / target / effect_code / params / duration)。你**不負責**改寫敘述文字 / 卡名 / 風味文字。\n' +
+      '\n**禁止行為(絕對不能做)**:\n' +
+      '- ❌ 改寫 desc_zh 文字內容(只能拆句、不能改字眼)\n' +
+      '- ❌ 改寫 name_zh / name_en\n' +
+      '- ❌ 改寫 flavor_text\n' +
+      '- ❌ 重新「翻譯」或「潤飾」原有句子\n' +
+      '- ❌ 用同義詞替換規則術語(例「心智創傷」「精神創傷」「神智創傷」「心靈創傷」「理智損失」全部禁用,本專案標準術語只有「恐懼」「N 點恐懼」「N 點 SAN」)\n' +
+      '- ❌ 自創不存在於 s06 規範的詞彙\n' +
+      '\n## 標準術語白名單(s06 規範)\n' +
+      '- 傷害類:「N 點傷害」「N 點恐懼」(必加「點」)\n' +
+      '- 恢復類:「治癒 N 點傷害」「治癒 N 點恐懼」(不能用「治療」「補」「回復」「恢復」)\n' +
+      '- SAN 上限:「N 點 SAN 上限」(不能用「心智上限」)\n' +
+      '- 屬性禁忌:單獨用「心智」屬於禁止替代詞,八屬性是 力 / 敏 / 體 / 反應 / 智 / 意 / 感 / 魅\n' +
+      '- 資源類:「N 個資源」「抽 N 張卡」「N 點行動點」「N 個線索」「N 點毀滅標記」「N 個祝福」「N 個詛咒」\n' +
+      '- 萬能加值:「所有屬性檢定 +N」「所有技能檢定 +N」(對應 wild_attr_boost effect_code)\n' +
+      '\n## 拆解原則\n' +
+      '1. **desc_zh 必須是原文逐句拆出**:把 card_preview_text 拆成 N 條,每條獨立成一個 effect 物件,該 effect 的 desc_zh = 該條原文(只拆不改字)\n' +
+      '2. 補上 effects[] 缺漏的結構欄位(trigger / condition / cost / target / effect_code / params / duration)\n' +
+      '3. 修正 params 數值與 desc 不一致時,**改 params 對齊 desc**(不是反過來改 desc)\n' +
+      '4. 條件式效果(「如果 X 否則 Y」)拆成兩條 effects,各自帶 condition\n' +
+      '5. 「打出費用 -2」用 effect_code=modify_cost,params={amount:-2}\n' +
+      '6. 「全屬性 +N / 全技能 +N」用 effect_code=wild_attr_boost,params.amount\n' +
+      '7. 「指定屬性檢定 +N」用 modify_test,params.modifier + 可選 attribute\n' +
+      '8. effect_code 必從以下白名單選:\n' + validCodes + '\n' +
+      '\n## 改動最小原則\n' +
+      '若原 effects[] 中某項已正確對應 desc 的某句,**完全不要動該項**。只新增缺漏項或補齊 params。\n' +
+      '\n## 輸出格式\n' +
+      '只回 JSON,**不要 markdown 包裝**:\n' +
+      '```\n' +
+      '{\n' +
+      '  "effects": [\n' +
+      '    {"trigger":"...", "condition":null, "cost":{...}, "target":"...", "effect_code":"...", "params":{...}, "duration":"...", "desc_zh":"<原文拆出的句子,不改字>", "desc_en":"..."}\n' +
+      '  ],\n' +
+      '  "changed_summary": "<繁中:具體列出哪些 effects[] 補了哪些結構,例:effect#2 補上 effect_code=add_status + params.stacks=1。不要含『改寫敘述』『重新撰寫』等字眼,因為你不該做那些事>"\n' +
+      '}\n' +
+      '```\n' +
+      '\n卡片資料:\n```json\n' + JSON.stringify(summary, null, 2) + '\n```\n';
 
     var resp = await window.callGeminiDirect({ prompt: prompt, model: 'gemini-2.5-flash', responseMimeType: 'application/json', temperature: 0.4 });
     var data = JSON.parse(stripJsonFence(resp.text));

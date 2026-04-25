@@ -398,6 +398,48 @@
       bg.addEventListener('click', e => { if (e.target === bg) document.body.removeChild(bg); });
     }
 
+    // 禁用詞清單(s06 規範):AI 結構化時若回傳的 desc_zh 含這些詞,代表 AI 自創或越界改寫
+    const RESTRUCTURE_FORBIDDEN_TERMS = [
+      { term: '心智創傷', suggest: '改用「N 點恐懼」' },
+      { term: '神智創傷', suggest: '改用「N 點恐懼」' },
+      { term: '精神創傷', suggest: '改用「N 點恐懼」' },
+      { term: '心靈創傷', suggest: '改用「N 點恐懼」' },
+      { term: '理智損失', suggest: '改用「N 點恐懼」' },
+      { term: 'SAN 傷害', suggest: '改用「N 點恐懼」' },
+      { term: '精神傷害', suggest: '改用「N 點恐懼」' },
+      { term: '扣理智', suggest: '改用「N 點恐懼」' },
+      { term: '補理智', suggest: '改用「治癒 N 點恐懼」' },
+      { term: '回 SAN', suggest: '改用「治癒 N 點恐懼」' },
+      { term: '恢復心智', suggest: '改用「治癒 N 點恐懼」' },
+    ];
+
+    function validateAiRestructureResult(originalCard, newEffects) {
+      const issues = [];
+      // 1. 掃禁用詞
+      for (let i = 0; i < newEffects.length; i++) {
+        const desc = String(newEffects[i].desc_zh || '');
+        for (const f of RESTRUCTURE_FORBIDDEN_TERMS) {
+          if (desc.includes(f.term)) {
+            issues.push({ severity: 'error', code: 'forbidden_term', message: 'effect#' + (i+1) + ' desc_zh 含禁用詞「' + f.term + '」(' + f.suggest + ')' });
+          }
+        }
+      }
+      // 2. 比對:原 desc_zh 的字應該大致都還在(用 token 包含度)
+      const origText = (Array.isArray(originalCard.effects) ? originalCard.effects.map(e => e && e.desc_zh).filter(Boolean).join(' ') : '');
+      const newText = newEffects.map(e => e && e.desc_zh).filter(Boolean).join(' ');
+      if (origText.length > 10 && newText.length > 0) {
+        // 抓原文的 4-字片段(濾掉空格符號),看新文是否大致包含
+        const origChunks = (origText.match(/[\u4e00-\u9fa5]{4,}/g) || []);
+        let kept = 0;
+        for (const c of origChunks) if (newText.includes(c)) kept++;
+        const keepRate = origChunks.length > 0 ? kept / origChunks.length : 1;
+        if (origChunks.length >= 3 && keepRate < 0.4) {
+          issues.push({ severity: 'warn', code: 'desc_rewritten', message: '新 desc_zh 與原文相似度過低(' + Math.round(keepRate*100) + '%),AI 可能改寫過度' });
+        }
+      }
+      return issues;
+    }
+
     async function aiRestructure(id) {
       const r = state.results.find(x => x.card.id === id);
       if (!r) return;
@@ -406,12 +448,25 @@
       try {
         const result = await window.aiRestructureEffects(r.card);
         const newEffects = result.effects;
+        const validation = validateAiRestructureResult(r.card, newEffects);
+        const errCount = validation.filter(v => v.severity === 'error').length;
+        const warnCount = validation.filter(v => v.severity === 'warn').length;
+        const validationHtml = validation.length > 0
+          ? '<div style="background:#3a1a1a;border:1px solid #ff6a6a;border-radius:4px;padding:0.5rem;margin:0.5rem 0;">' +
+            '<p style="margin:0 0 0.25rem 0;font-weight:600;color:#ff8a8a;">⚠ AI 回傳驗證:' + errCount + ' 嚴重 / ' + warnCount + ' 警告</p>' +
+            '<ul style="margin:0;padding-left:1.2rem;font-size:0.75rem;color:#ffa0a0;">' +
+              validation.map(v => '<li>[' + v.severity + '] ' + escapeHtml(v.message) + '</li>').join('') +
+            '</ul></div>'
+          : '<div style="background:#1a3a1a;border:1px solid #6aff8a;border-radius:4px;padding:0.5rem;margin:0.5rem 0;color:#9aff9a;font-size:0.8rem;">✓ AI 回傳驗證通過</div>';
+        const blockApply = errCount > 0;
         showModal('🤖 AI 結構化結果',
           '<p style="color:var(--text-secondary);font-size:0.8rem;">' + escapeHtml(result.changed_summary || '') + '</p>' +
+          validationHtml +
           '<p style="font-size:0.75rem;">建議的新 effects[] 陣列(共 ' + newEffects.length + ' 條):</p>' +
           '<pre>' + escapeHtml(JSON.stringify(newEffects, null, 2)) + '</pre>',
           [
-            { label: '✓ 套用並 PUT', cls: 'apply', handler: async () => {
+            { label: blockApply ? '⚠ 強制套用(風險:含禁用詞)' : '✓ 套用並 PUT', cls: 'apply', handler: async () => {
+              if (blockApply && !confirm('AI 回傳含 ' + errCount + ' 個禁用詞錯誤。確定強制套用?\n建議改點「關閉」,然後再點一次「結構化 desc」重新跑(第二次 AI 通常會修正)。')) return true;
               const updated = { ...r.card, effects: newEffects };
               try {
                 const res = await window.adminFetch('/api/cards/' + id, { method: 'PUT', body: JSON.stringify(updated) });
@@ -530,6 +585,14 @@
           if (!result || !Array.isArray(result.effects)) {
             fail++;
             failedCards.push((card.code || card.id) + '(AI 回傳非陣列)');
+            continue;
+          }
+          // 套用前禁用詞守門:批次不允許強制套用,直接列為失敗
+          const validation = validateAiRestructureResult(card, result.effects);
+          const errs = validation.filter(v => v.severity === 'error');
+          if (errs.length > 0) {
+            fail++;
+            failedCards.push((card.code || card.id) + '(禁用詞 ' + errs.length + ' 項:' + errs[0].message.slice(0, 30) + '...)');
             continue;
           }
           const updated = { ...card, effects: result.effects };

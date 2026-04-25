@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import bcrypt from 'bcryptjs';
 import { pool } from '../db/pool.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
@@ -76,4 +77,54 @@ export const dbDiagRoutes: FastifyPluginAsync = async (app) => {
       has_is_permanent: cols.rows.some((r: any) => r.column_name === 'is_permanent'),
     });
   });
+
+  // 建立或重設使用者帳號(只有 owner / admin 可呼叫)
+  // role: editor / viewer 看不到 MOD-12/MOD-14/AXIS/DIAG;admin / owner 看得到全部
+  app.post<{ Body: { username: string; password: string; role?: string; display_name?: string; reset_password?: boolean } }>(
+    '/api/admin/db-diag/seed-user',
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const callerUser = (request as any).user;
+      if (!callerUser || (callerUser.role !== 'owner' && callerUser.role !== 'admin')) {
+        return reply.status(403).send({ success: false, error: '只有 owner / admin 能建立帳號' });
+      }
+      const { username, password, role = 'editor', display_name, reset_password } = request.body || ({} as any);
+      if (!username || !password) {
+        return reply.status(400).send({ success: false, error: 'username 與 password 必填' });
+      }
+      if (!/^[a-zA-Z0-9_-]{3,64}$/.test(username)) {
+        return reply.status(400).send({ success: false, error: 'username 限英數底線連字號 3-64 字元' });
+      }
+      if (password.length < 6) {
+        return reply.status(400).send({ success: false, error: '密碼至少 6 字元' });
+      }
+      if (!['owner', 'admin', 'editor', 'viewer'].includes(role)) {
+        return reply.status(400).send({ success: false, error: 'role 必須是 owner/admin/editor/viewer 之一' });
+      }
+      try {
+        const passwordHash = await bcrypt.hash(password, 12);
+        const existing = await pool.query('SELECT id, role FROM admin_users WHERE username = $1 LIMIT 1', [username]);
+        if (existing.rows.length > 0) {
+          if (!reset_password) {
+            return reply.status(409).send({
+              success: false,
+              error: '帳號 ' + username + ' 已存在(目前 role=' + existing.rows[0].role + ')。要覆寫密碼?帶 reset_password=true 重試',
+            });
+          }
+          await pool.query(
+            `UPDATE admin_users SET password_hash=$1, role=$2, display_name=COALESCE($3, display_name), updated_at=NOW() WHERE username=$4`,
+            [passwordHash, role, display_name || null, username]
+          );
+          return reply.send({ success: true, action: 'reset', username, role });
+        }
+        await pool.query(
+          `INSERT INTO admin_users (username, password_hash, display_name, role) VALUES ($1, $2, $3, $4)`,
+          [username, passwordHash, display_name || username, role]
+        );
+        return reply.send({ success: true, action: 'created', username, role });
+      } catch (e: any) {
+        return reply.status(500).send({ success: false, error: e.message || String(e) });
+      }
+    }
+  );
 };

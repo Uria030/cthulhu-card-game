@@ -172,6 +172,17 @@
       <p style="margin:0.25rem 0;"><strong>用途：</strong>當 MOD-12 批次寫卡或 MOD-01 儲存時跳「column X does not exist」這類 DB 42703 錯誤,代表 Railway 遠端資料庫的 schema 落後於程式碼。按<strong>「列出欄位」</strong>先確認缺哪些,再按<strong>「補跑」</strong>強制重跑 MIGRATION_021-025(使用 IF NOT EXISTS / ON CONFLICT,重跑安全)。補跑完成後回到 MOD-12 再試一次即可。</p>
     </div>
 
+    <div class="diag-action-row" style="margin-top:0.75rem;">
+      <button class="diag-btn" id="btnSeedUser">👤 建立/重設使用者帳號</button>
+    </div>
+    <div style="padding:0.75rem 0;border-bottom:1px solid var(--border);font-size:0.75rem;color:var(--text-secondary);">
+      <p style="margin:0.25rem 0;"><strong>用途：</strong>建立新使用者帳號或重設既有密碼。Role 決定可見模組:</p>
+      <ul style="margin:0.25rem 0 0.25rem 1rem;padding:0;">
+        <li><code>viewer</code> / <code>editor</code>:可看 MOD-01~11 + SIM-01~06(一般卡片設計者用)</li>
+        <li><code>admin</code> / <code>owner</code>:全部模組可見(含 MOD-12 / MOD-14 / AXIS / DIAG)</li>
+      </ul>
+    </div>
+
     <div class="diag-log-header">
       <strong>Log</strong>
       <span class="spacer"></span>
@@ -509,6 +520,42 @@
 
     document.getElementById('btnCheckCardColumns').onclick = checkCardColumns;
     document.getElementById('btnRerunAxisMigrations').onclick = rerunAxisMigrations;
+
+    async function seedUserPrompt() {
+      const username = prompt('輸入新使用者的帳號名稱(英數底線連字號 3-64 字元):', 'creator01');
+      if (!username) { log('warn', '取消建立使用者'); return; }
+      const password = prompt('輸入密碼(至少 6 字元):', '');
+      if (!password) { log('warn', '取消建立使用者'); return; }
+      const role = prompt('Role 選擇:owner / admin / editor / viewer\n(editor/viewer 看不到 MOD-12/14/AXIS/DIAG)', 'editor');
+      if (!role) { log('warn', '取消建立使用者'); return; }
+      const display_name = prompt('顯示名稱(可留空,留空用 username):', username);
+
+      log('info', '建立帳號:' + username + ' (role=' + role + ')...');
+      const body = JSON.stringify({ username, password, role, display_name: display_name || undefined });
+      try {
+        const res = await window.adminFetch('/api/admin/db-diag/seed-user', { method: 'POST', body });
+        const data = await res.json();
+        if (data.success) {
+          log('ok', '✓ 帳號' + (data.action === 'created' ? '已建立' : '已重設密碼') + ':' + data.username + ' (role=' + data.role + ')');
+        } else if (res.status === 409) {
+          // 已存在,問是否重設密碼
+          if (confirm(data.error + '\n\n要重設密碼嗎?')) {
+            const body2 = JSON.stringify({ username, password, role, display_name: display_name || undefined, reset_password: true });
+            const res2 = await window.adminFetch('/api/admin/db-diag/seed-user', { method: 'POST', body: body2 });
+            const data2 = await res2.json();
+            if (data2.success) log('ok', '✓ 已重設密碼:' + data2.username + ' (role=' + data2.role + ')');
+            else log('error', '✗ 重設失敗:' + data2.error);
+          } else {
+            log('warn', '取消重設');
+          }
+        } else {
+          log('error', '✗ 建立失敗:' + (data.error || res.status));
+        }
+      } catch (e) {
+        log('error', '✗ 建立例外:' + (e.message || String(e)));
+      }
+    }
+    document.getElementById('btnSeedUser').onclick = seedUserPrompt;
 
     document.getElementById('btnClearLog').onclick = () => { logArea.textContent = ''; };
     document.getElementById('btnCopyLog').onclick = async () => {

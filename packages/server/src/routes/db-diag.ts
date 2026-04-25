@@ -114,12 +114,19 @@ export const dbDiagRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(404).send({ success: false, error: '查無此卡' });
       }
 
-      // 撈 effects 子表
+      // 撈 effects 子表(真實欄位名:trigger_type / description_zh / effect_params / card_def_id)
+      // 統一 alias 為前端期望的命名(trigger / desc_zh / params),與 admin-card-designer 一致
       let effects: any[] = [];
       try {
         const er = await pool.query(
-          `SELECT id, sort_order, trigger, condition, cost, target, effect_code, effect_params AS params, duration, scope, desc_zh, desc_en
-             FROM card_effects WHERE card_definition_id = $1 ORDER BY sort_order, id`,
+          `SELECT id, sort_order,
+                  trigger_type AS trigger,
+                  condition, cost, target, effect_code,
+                  effect_params AS params,
+                  duration, scope,
+                  description_zh AS desc_zh,
+                  description_en AS desc_en
+             FROM card_effects WHERE card_def_id = $1 ORDER BY sort_order, id`,
           [cardRow.id]
         );
         effects = er.rows;

@@ -2734,12 +2734,12 @@
     el('aiPrompt').value = t[type] || '';
   }
 
-  function buildGeminiPrompt(userDescription) {
+  function buildGeminiPrompt(userDescription, options) {
     // 實際 prompt 內容抽到 admin-card-prompt.js，診斷面板亦共用此函式以避免漂移
     if (typeof window.buildCardGeminiPrompt !== 'function') {
       throw new Error('admin-card-prompt.js 未載入，無法建構 Gemini prompt');
     }
-    return window.buildCardGeminiPrompt(userDescription);
+    return window.buildCardGeminiPrompt(userDescription, options);
   }
   const VALID_EFFECT_CODES = new Set([
     'deal_damage','deal_horror','heal_hp','heal_san','restore_hp_max','restore_san_max','transfer_damage','transfer_horror',
@@ -3074,13 +3074,22 @@
     let prompt, parsedStructured = null;
     if (mode === 'quick') {
       parsedStructured = parseQuickInput(rawText);
+    }
+    // 統一上下文注入:不管 MOD-01 自由/快速,先抓同軸/同陣營既有卡做 context(與 MOD-12 一致)
+    const descriptionForContext = mode === 'quick'
+      ? (parsedStructured.userDescription || rawText)
+      : rawText;
+    const existingCardsContext = typeof window.fetchExistingCardsForPromptContext === 'function'
+      ? await window.fetchExistingCardsForPromptContext(descriptionForContext)
+      : '';
+    if (mode === 'quick') {
       if (typeof window.buildMiniCardGeminiPrompt === 'function') {
-        prompt = window.buildMiniCardGeminiPrompt(parsedStructured);
+        prompt = window.buildMiniCardGeminiPrompt({ ...parsedStructured, existingCardsContext });
       } else {
-        prompt = buildGeminiPrompt(parsedStructured.userDescription || rawText);
+        prompt = buildGeminiPrompt(parsedStructured.userDescription || rawText, { existingCardsContext });
       }
     } else {
-      prompt = buildGeminiPrompt(rawText);
+      prompt = buildGeminiPrompt(rawText, { existingCardsContext });
     }
 
     const t0 = Date.now();

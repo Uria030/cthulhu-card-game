@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.18.3+b48';
+const ADMIN_VERSION = '0.18.4+b49';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -1074,3 +1074,58 @@ function scanCardDescForHallucinations(card) {
 window.scanCardDescForHallucinations = scanCardDescForHallucinations;
 window.LEGAL_CARD_KEYWORDS = LEGAL_CARD_KEYWORDS;
 window.LEGAL_CARD_STATUSES = LEGAL_CARD_STATUSES;
+
+/* ========================================
+   生成前抓同陣營/同主軸既有卡做上下文
+   供 MOD-01(自由輸入/快速輸入)與 MOD-12(批次寫卡) 共用
+   避免 AI 盲寫造成重名/重軸/V 值失衡/矩陣空白格補不到
+   ======================================== */
+async function fetchExistingCardsForPromptContext(userDescription) {
+  if (!window.adminFetch || typeof window.adminFetch !== 'function') return '';
+  if (!userDescription || typeof userDescription !== 'string') return '';
+  try {
+    const factionMatch = userDescription.match(/(?:^|[^A-Za-z])([EISNTFJP])(?:\s*陣營|\s*faction)?/i);
+    const cardNameAxisMatch = userDescription.match(/[『「]([^』」]+)[』」]/);
+    const isTalismanHint = /法器|護身符|水晶|桃木劍|符咒|聖物|符卷|鹽圈|印章|封印|破除|精神侵蝕|詛咒|儀式道具/.test(userDescription);
+
+    const params = new URLSearchParams();
+    if (factionMatch && factionMatch[1]) params.set('faction', factionMatch[1].toUpperCase());
+    if (cardNameAxisMatch && cardNameAxisMatch[1]) {
+      params.set('primary_axis_layer', 'card_name');
+      params.set('primary_axis_value', cardNameAxisMatch[1]); // 純名,後端會 REGEXP_REPLACE 正規化比對
+    } else if (isTalismanHint) {
+      params.set('is_talisman', 'true');
+    }
+    if (!params.toString()) return '';
+
+    const res = await window.adminFetch('/api/cards?' + params.toString());
+    const payload = await res.json();
+    if (!payload || !payload.success || !Array.isArray(payload.data) || payload.data.length === 0) return '';
+
+    const lines = payload.data.slice(0, 30).map((c) => {
+      const parts = [
+        '  - [' + (c.code || '?') + ']',
+        c.name_zh || '(無名)',
+        '｜faction=' + (c.faction || '?'),
+        c.style ? 'style=' + c.style : '',
+        c.card_type ? 'type=' + c.card_type : '',
+        c.level != null ? 'LV' + c.level : '',
+        c.cost != null ? 'cost=' + c.cost : '',
+        c.primary_axis_layer && c.primary_axis_layer !== 'none'
+          ? '軸=' + c.primary_axis_layer + '/' + (c.primary_axis_value || '')
+          : '',
+        c.is_talisman ? '[法器]' : '',
+      ].filter(Boolean);
+      return parts.join(' ');
+    });
+
+    const header = '本次篩選條件:' + (params.toString()).replace(/&/g, '、') + '｜符合 ' + payload.data.length + ' 張';
+    const footer = payload.data.length > 30 ? '(只顯示前 30 張;完整共 ' + payload.data.length + ' 張)' : '';
+    return header + '\n' + lines.join('\n') + (footer ? '\n' + footer : '');
+  } catch (e) {
+    console.warn('[context fetch] 查既有卡片失敗,略過上下文注入:', e.message || e);
+    return '';
+  }
+}
+
+window.fetchExistingCardsForPromptContext = fetchExistingCardsForPromptContext;

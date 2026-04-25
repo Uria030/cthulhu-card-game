@@ -549,6 +549,9 @@ ${userDescription}
 window.buildMiniCardGeminiPrompt = function(parsed) {
   const p = parsed || {};
   const ud = p.userDescription || '';
+  const existingCardsBlock = (p.existingCardsContext && String(p.existingCardsContext).trim())
+    ? ('\n\n## 既有卡池上下文(**不得重名/不得重軸效果/補空白/系列呼應**)\n\n' + String(p.existingCardsContext).trim() + '\n')
+    : '';
   const known = [
     p.name_zh && ('卡名:' + p.name_zh),
     p.faction && ('陣營:' + p.faction),
@@ -641,7 +644,7 @@ on_play, on_commit, on_consume, on_enter, on_leave, on_draw, on_success, on_fail
 - 強度與廣度反比：faction 軸要淡、card_name 軸可強
 
 ## 敘事輸入
-${ud || '（使用者未提供額外敘事，請依結構化欄位合理推斷）'}
+${ud || '（使用者未提供額外敘事，請依結構化欄位合理推斷）'}${existingCardsBlock}
 
 ## 輸出格式
 只回傳 JSON，不加 markdown 圍欄、不加任何解釋。範本（請保留所有欄位、值照實際填）：

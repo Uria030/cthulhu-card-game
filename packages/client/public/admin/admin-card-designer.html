@@ -3044,6 +3044,15 @@
       else narrativeLines.push(trimmed);
     }
     parsed.userDescription = narrativeLines.join('\n');
+
+    // 軸向自動推斷:若使用者沒顯式寫「軸:X」但敘述裡含 『XX』或「XX」,推測為 card_name 軸
+    if (!parsed.primary_axis_layer) {
+      const axisMatch = parsed.userDescription.match(/[『「]([^』」]{1,16})[』」]/);
+      if (axisMatch && axisMatch[1]) {
+        parsed.primary_axis_layer = 'card_name';
+        parsed.primary_axis_value = axisMatch[1].trim(); // 純名,不帶書名號
+      }
+    }
     return parsed;
   }
 

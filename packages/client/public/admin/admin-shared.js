@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.18.2+b47';
+const ADMIN_VERSION = '0.18.3+b48';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -964,7 +964,9 @@ function normalizeCardText(text) {
   out = out.replace(/([零一兩二三四五六七八九十])(點|張|次|個|名|位)/g, (_m, n, u) => (CJK_NUM[n] || n) + ' ' + u);
 
   // 3. 全形阿拉伯數字 → 半形阿拉伯數字（規範 Part 3 §2.1）
-  out = out.replace(/[0-9]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+  //    ⚠ regex 必須指定全形範圍 U+FF10~FF19,不能寫 [0-9](那會匹配 ASCII 半形數字
+  //    然後 −0xFEE0 得到負值,被 fromCharCode wrap 成 ő/ű 等拉丁衍生字元 bug)
+  out = out.replace(/[\uFF10-\uFF19]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
 
   return out;
 }

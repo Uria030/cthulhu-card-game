@@ -570,17 +570,19 @@ window.buildMiniCardGeminiPrompt = function(parsed) {
     p.break_test_attribute && ('檢定屬性:' + p.break_test_attribute),
   ].filter(Boolean).join(' | ');
 
+  const needNameZh = !p.name_zh;
+  const needAxis = !p.primary_axis_layer || p.primary_axis_layer === 'none';
   return `你是克蘇魯神話卡牌遊戲的卡片設計師。下面的結構化欄位已由前端決定，你**不要覆蓋這些值**；你只需要產出創意層的 JSON 欄位。
 
 ## 已確定欄位（請照抄回 JSON，勿改）
 ${known || '（無）'}
 
 ## 你要產出的欄位（JSON 形式回傳）
-- name_en: 英譯卡名
+${needNameZh ? '- **name_zh**: 中文卡名(使用者未提供,你必須根據 userDescription 發想一個符合氛圍的中文名);含書名號樣式不要加,例寫「老警長的警棍」不是「『老警長的警棍』」\n' : ''}- name_en: 英譯卡名
 - attribute_modifiers: 物件，例 {"charisma": 1}（武器卡才需要；其他類型留 {}）
 - effects: 陣列，每個元素為 {trigger, condition, cost, target, effect_code, params, duration, desc_zh, desc_en}
 - flavor_text: 風味文字（一句話，不含機制用語，符合克蘇魯氛圍）
-- break_axis_value: 法器的破事軸 V 值估算（僅 is_talisman=true 時填；範圍 0-6）
+${needAxis ? '- **primary_axis_layer** + **primary_axis_value**: 使用者未指定軸向,你必須根據 userDescription 推斷:\n    · 若描述含『X』或「X」的角色名(且情境為系列卡),設 primary_axis_layer=\'card_name\',primary_axis_value=X(**純名,不含書名號**)\n    · 若是法器卡,設 primary_axis_layer=\'talisman_type\',value=六種物質之一\n    · 若有明確陣營歸屬(E/I/S/N/T/F/J/P 其一),設 primary_axis_layer=\'faction\',value=陣營字母\n    · 單張孤立卡無系列呼應時,設 primary_axis_layer=\'none\',value=null(**禁止**單張卡就掛 card_name 軸)\n' : ''}- break_axis_value: 法器的破事軸 V 值估算（僅 is_talisman=true 時填；範圍 0-6）
 - kill_axis_value: 殺敵軸 V 值（純法器為 0；雙用途卡依傷害 × 使用次數估）
 - leverage_modifier: 雙用途卡的槓桿修正（單用途為 0；雙用途 0.5-2.0）
 - value_calculation: {effects: [{name, value}], total_effect_value, level_discount, cost, required_rarity_discount, calculated_rarity}
@@ -616,7 +618,7 @@ faction（陣營）→ combat_style（風格）→ proficiency（專精）→ ca
 第 5 層正交：talisman_type（法器物質）
 **強度廣度反比**：faction 軸只給 +1 以內，card_name 軸才能給 +2 以上強效果。
 **軸向指認 5 句型**（所有軸向通用）：觸發「在你打出**另一張** X 時」/ 持續「只要場上有 N 張 X」/ 強化「你打出的 X [修改]」/ 條件「只有在有 X 時才能…」/ 搜尋「從牌庫搜尋 1 張 X」。
-**卡名軸命名**：value 必含書名號（例 「『老警長』」），字串完全匹配，避開過於通用的名詞。
+**卡名軸命名**:primary_axis_value 必為**純名**(不含書名號『』),例寫「老警長」不寫「『老警長』」;書名號只在 effect.desc_zh 內文指認其他同軸卡時使用(例:「在你打出另一張『老警長』系列卡時」)。單張孤立卡(無其他同名軸卡呼應)**禁止**使用 card_name 軸。
 
 ## 雙軸戰鬥 / 法器（is_talisman=true 時適用）
 威脅類型（target_threat_types）：mental 精神 / physical 物質 / ritual 儀式（陣列，允許多值）

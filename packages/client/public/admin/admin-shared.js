@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.20.3+b55';
+const ADMIN_VERSION = '0.20.4+b56';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -1418,3 +1418,51 @@ async function callGeminiDirect(opts) {
 }
 
 window.callGeminiDirect = callGeminiDirect;
+
+/* ========================================
+   UX:非同步按鈕反饋 helper
+   套在所有「按下去要等」的按鈕,自動 disable + 改文字 + 還原
+   解決「按下去沒反應使用者多按幾次」的 UX 痛點(UX 準則 1+2+4)
+   用法:
+     await withButtonLoading(btn, async () => { await something() });
+     await withButtonLoading(btn, async () => { ... }, { loadingText: '處理中…' });
+     // 進度模式:
+     await withButtonLoading(btn, async (setProgress) => {
+       for (let i = 0; i < n; i++) {
+         setProgress(i+1, n); // 自動更新按鈕文字 "X/N..."
+         await ...
+       }
+     }, { loadingText: '處理中', showProgress: true });
+   ======================================== */
+async function withButtonLoading(btn, asyncFn, opts) {
+  opts = opts || {};
+  if (!btn) return await asyncFn(); // null btn 直接跑
+  var origText = btn.textContent;
+  var origDisabled = btn.disabled;
+  var origHTML = btn.innerHTML;
+  var loadingText = opts.loadingText || '處理中…';
+  var spinnerChar = '⏳ ';
+  btn.disabled = true;
+  btn.textContent = spinnerChar + loadingText;
+  btn.style.opacity = '0.7';
+  btn.style.cursor = 'wait';
+
+  function setProgress(current, total) {
+    if (btn) btn.textContent = spinnerChar + loadingText + ' ' + current + '/' + total;
+  }
+
+  try {
+    var result = await asyncFn(opts.showProgress ? setProgress : null);
+    return result;
+  } finally {
+    if (btn) {
+      btn.disabled = origDisabled;
+      btn.style.opacity = '';
+      btn.style.cursor = '';
+      btn.innerHTML = origHTML; // 還原 HTML(保留圖示等內容)
+      btn.textContent = origText;
+    }
+  }
+}
+
+window.withButtonLoading = withButtonLoading;

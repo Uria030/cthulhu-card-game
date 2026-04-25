@@ -304,16 +304,16 @@
         btn.addEventListener('click', () => { window.location.href = 'admin-card-designer.html#card=' + btn.dataset.jump; });
       });
       listEl.querySelectorAll('button.fix').forEach(btn => {
-        btn.addEventListener('click', () => fixOneCard(btn.dataset.id));
+        btn.addEventListener('click', () => window.withButtonLoading(btn, () => fixOneCard(btn.dataset.id), { loadingText: '修復中' }));
       });
       listEl.querySelectorAll('button[data-ai-restructure]').forEach(btn => {
-        btn.addEventListener('click', () => aiRestructure(btn.dataset.aiRestructure));
+        btn.addEventListener('click', () => window.withButtonLoading(btn, () => aiRestructure(btn.dataset.aiRestructure), { loadingText: 'AI 結構化中' }));
       });
       listEl.querySelectorAll('button[data-ai-value]').forEach(btn => {
-        btn.addEventListener('click', () => aiEstimateValue(btn.dataset.aiValue));
+        btn.addEventListener('click', () => window.withButtonLoading(btn, () => aiEstimateValue(btn.dataset.aiValue), { loadingText: 'AI 估 V 值中' }));
       });
       listEl.querySelectorAll('button[data-ai-combo]').forEach(btn => {
-        btn.addEventListener('click', () => aiScoreCombo(btn.dataset.aiCombo));
+        btn.addEventListener('click', () => window.withButtonLoading(btn, () => aiScoreCombo(btn.dataset.aiCombo), { loadingText: 'AI 評 COMBO 中' }));
       });
     }
 
@@ -451,14 +451,16 @@
       }
     }
 
-    async function fixAllByCode(targetCodes, label) {
+    async function fixAllByCode(targetCodes, label, setProgress) {
       // targetCodes 可為 string 或 string[];以「任一 code 命中且 fixable」為篩選條件
       const codes = Array.isArray(targetCodes) ? targetCodes : [targetCodes];
       const targets = state.results.filter(r => r.issues.some(i => codes.includes(i.code) && i.fixable));
       if (targets.length === 0) { alert('沒有需要修的卡片'); return; }
       if (!confirm('將對 ' + targets.length + ' 張卡套用「' + label + '」並逐張 PUT 回 DB(可能需要幾秒)。\n\n確定?')) return;
       let ok = 0, fail = 0;
-      for (const r of targets) {
+      for (let i = 0; i < targets.length; i++) {
+        const r = targets[i];
+        if (setProgress) setProgress(i + 1, targets.length);
         let card = r.card;
         for (const issue of r.issues) {
           if (!codes.includes(issue.code) || !issue.fixable) continue;
@@ -486,10 +488,10 @@
     document.getElementById('filterSeverity').addEventListener('change', e => { state.filterSeverity = e.target.value; renderList(); });
     document.getElementById('filterFaction').addEventListener('change', e => { state.filterFaction = e.target.value; renderList(); });
     document.getElementById('filterText').addEventListener('input', e => { state.filterText = e.target.value.trim(); renderList(); });
-    document.getElementById('btnRescan').addEventListener('click', loadCards);
-    document.getElementById('btnFixAllQuotes').addEventListener('click', () => fixAllByCode(['axis_value_has_quotes', 'name_zh_has_quotes'], '去除 name_zh + axis_value 書名號'));
-    document.getElementById('btnFixAllPollution').addEventListener('click', () => fixAllByCode('o_pollution', '修 ő 亂碼還原為阿拉伯數字'));
-    document.getElementById('btnFixAllOrphan').addEventListener('click', () => fixAllByCode('card_name_axis_orphan', 'orphan card_name 軸降為 faction(陣營字母)'));
+    document.getElementById('btnRescan').addEventListener('click', (ev) => window.withButtonLoading(ev.currentTarget, loadCards, { loadingText: '掃描中' }));
+    document.getElementById('btnFixAllQuotes').addEventListener('click', (ev) => window.withButtonLoading(ev.currentTarget, (sp) => fixAllByCode(['axis_value_has_quotes', 'name_zh_has_quotes'], '去除 name_zh + axis_value 書名號', sp), { loadingText: '批次修復', showProgress: true }));
+    document.getElementById('btnFixAllPollution').addEventListener('click', (ev) => window.withButtonLoading(ev.currentTarget, (sp) => fixAllByCode('o_pollution', '修 ő 亂碼還原為阿拉伯數字', sp), { loadingText: '批次修復', showProgress: true }));
+    document.getElementById('btnFixAllOrphan').addEventListener('click', (ev) => window.withButtonLoading(ev.currentTarget, (sp) => fixAllByCode('card_name_axis_orphan', 'orphan card_name 軸降為 faction(陣營字母)', sp), { loadingText: '批次修復', showProgress: true }));
 
     loadCards();
   })();

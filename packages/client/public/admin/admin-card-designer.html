@@ -586,9 +586,9 @@
           </div>
 
           <div class="action-bar">
-            <button class="btn btn-primary" onclick="saveCard()">儲存</button>
-            <button class="btn" onclick="saveAsNew()">另存新卡</button>
-            <button class="btn btn-danger" onclick="deleteCard()">刪除</button>
+            <button class="btn btn-primary" onclick="window.withButtonLoading(this, saveCard, { loadingText: '儲存中' })">儲存</button>
+            <button class="btn" onclick="window.withButtonLoading(this, saveAsNew, { loadingText: '另存中' })">另存新卡</button>
+            <button class="btn btn-danger" onclick="window.withButtonLoading(this, deleteCard, { loadingText: '刪除中' })">刪除</button>
             <button class="btn" onclick="clearForm()">清空表單</button>
           </div>
         </div>

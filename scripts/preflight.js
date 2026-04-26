@@ -286,6 +286,57 @@ function checkSqlAgainstSchema() {
 }
 
 // ───────────────────────────────────────────────
+// CHECK 12: GamePlan 文件不殘留 M1-M8 命名
+// 對應修補:c:/Ug/docs/第七章修補_M改G_多人連線後移_v0.1_26042603.md
+// 第七章 v0.3 起,里程碑命名改為 G1-G8;舊 M 命名保留在 v0.1 歷史檔
+// 與「全書交付記事 26042511」中作為歷史對照,其他現行文件不該再出現
+// ───────────────────────────────────────────────
+function checkGamePlanNoMResidual() {
+  const candidates = [
+    path.resolve(ROOT, '../docs/GamePlan'),
+    path.resolve(ROOT, '../../docs/GamePlan'),
+    'C:/Ug/docs/GamePlan',
+  ];
+  let dir;
+  for (const d of candidates) if (fs.existsSync(d)) { dir = d; break; }
+  if (!dir) { info('GamePlan 目錄不在預期路徑(略過)'); return; }
+
+  // 歷史檔白名單(允許 M 殘留)
+  const HISTORICAL = [
+    /v0\.1_26042511/, // 第七章 v0.1 草案
+    /聊天室紀錄.*26042511/, // 全書交付記事
+  ];
+
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.md'));
+  const offenders = [];
+  for (const f of files) {
+    if (HISTORICAL.some((re) => re.test(f))) continue;
+    const src = fs.readFileSync(path.join(dir, f), 'utf8');
+    // 排除「原 M4」「原 M5-M8」這類修補說明保留的歷史對照
+    const lines = src.split('\n');
+    const hits = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const m = line.match(/\bM[1-8]\b/g);
+      if (!m) continue;
+      // 若同行有「原 M」「原本 M」「對應 M」這類修補說明,跳過
+      if (/原(本)? M[1-8]\b|對應 M[1-8]\b|原 M[1-8] /.test(line)) continue;
+      hits.push({ line: i + 1, content: line.trim().slice(0, 80) });
+    }
+    if (hits.length > 0) offenders.push({ file: f, hits });
+  }
+  if (offenders.length > 0) {
+    fail('GamePlan 文件殘留 M1-M8 命名(' + offenders.length + ' 檔):');
+    for (const o of offenders.slice(0, 5)) {
+      console.error('   ' + o.file + ':');
+      o.hits.slice(0, 3).forEach((h) => console.error('     line ' + h.line + ': ' + h.content));
+    }
+  } else {
+    ok('GamePlan 現行文件無 M1-M8 殘留(歷史檔已排除)');
+  }
+}
+
+// ───────────────────────────────────────────────
 // CHECK 9: MEMORY.md 索引指向的檔案都存在
 // 對應坑:更新 MEMORY.md 加新 entry 但忘了建檔
 // ───────────────────────────────────────────────
@@ -489,6 +540,9 @@ checkForbiddenTermsRegistered();
 
 section('DESIGN.md ↔ admin-shared.css 設計 token 對齊');
 checkDesignTokenAlignment();
+
+section('GamePlan 文件 G1-G8 命名一致性');
+checkGamePlanNoMResidual();
 
 section('MEMORY 索引完整性');
 checkMemoryIndex();

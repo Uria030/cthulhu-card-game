@@ -307,6 +307,132 @@ function checkMemoryIndex() {
 }
 
 // ───────────────────────────────────────────────
+// CHECK 11: DESIGN.md ↔ admin-shared.css 設計 token 對齊
+// 對應規格:c:/Ug/docs/GamePlan/前後台視覺token共用規範_v0.1_26042602.md §7.1
+// 四項檢查:
+//   A. 8 陣營色 hex 一致
+//   B. 21 個共用 token 雙邊存在
+//   C. 命名後綴一致
+//   D. admin 禁用 world-* 前綴
+// ───────────────────────────────────────────────
+function parseAdminCssTokens() {
+  const cssPath = 'packages/client/public/admin/admin-shared.css';
+  if (!exists(cssPath)) return null;
+  const src = read(cssPath);
+  // 抓 :root { ... } 內的 --token: value;
+  const rootMatch = src.match(/:root\s*\{([\s\S]*?)\}/);
+  if (!rootMatch) return null;
+  const tokens = {};
+  const tokenRe = /--([a-z][a-z0-9-]*)\s*:\s*([^;]+);/gi;
+  let m;
+  while ((m = tokenRe.exec(rootMatch[1])) !== null) {
+    tokens[m[1]] = m[2].trim();
+  }
+  return tokens;
+}
+
+function parseDesignMdTokens() {
+  // DESIGN.md 在 docs/GamePlan/ (cthulhu-card-game/.. 同級的 c:/Ug/docs)
+  const candidates = [
+    path.resolve(ROOT, '../docs/GamePlan/DESIGN.md'),
+    path.resolve(ROOT, '../../docs/GamePlan/DESIGN.md'),
+    'C:/Ug/docs/GamePlan/DESIGN.md',
+  ];
+  let designPath;
+  for (const p of candidates) if (fs.existsSync(p)) { designPath = p; break; }
+  if (!designPath) return { tokens: null, designPath: null };
+  const src = fs.readFileSync(designPath, 'utf8');
+  // 抓 colors: 區塊到下一個頂層 key (typography:)
+  const colorsMatch = src.match(/^colors:\s*\n([\s\S]*?)(?=^[a-z][a-z-]*:\s*\n)/m);
+  if (!colorsMatch) return { tokens: null, designPath };
+  const tokens = {};
+  // 抓 `  token-name:\n    value: "#XXXXXX"` 樣式
+  const tokenRe = /^\s{2}([a-z][a-z0-9-]*)\s*:\s*\n\s+value:\s*"([^"]+)"/gm;
+  let m;
+  while ((m = tokenRe.exec(colorsMatch[1])) !== null) {
+    tokens[m[1]] = m[2].trim();
+  }
+  return { tokens, designPath };
+}
+
+function checkDesignTokenAlignment() {
+  const adminTokens = parseAdminCssTokens();
+  if (!adminTokens) { fail('無法解析 admin-shared.css token'); return; }
+
+  const { tokens: designTokens, designPath } = parseDesignMdTokens();
+  if (!designTokens) {
+    info('DESIGN.md 不在預期路徑(可能跨 repo,跳過跨檔對齊檢查)');
+    return;
+  }
+  info('解析:admin ' + Object.keys(adminTokens).length + ' token / DESIGN.md ' + Object.keys(designTokens).length + ' colors token');
+
+  // 規格 §3 共用 token 清單(21 個)
+  const SHARED_TOKENS = [
+    // 8 陣營
+    'herald','abyss','witness','oracle','cipher','ember','bastion','flux',
+    // 4 語義
+    'danger','success','warning','info',
+    // 3 文字
+    'text-primary','text-secondary','text-tertiary',
+    // 4 背景
+    'bg-primary','bg-secondary','bg-card','bg-card-hover',
+    // 2 邊界
+    'border','border-hover',
+  ];
+
+  // 檢查 A:8 陣營色 hex 一致
+  const FACTIONS = ['herald','abyss','witness','oracle','cipher','ember','bastion','flux'];
+  const factionMismatch = [];
+  for (const f of FACTIONS) {
+    const a = (adminTokens[f] || '').toLowerCase();
+    const d = (designTokens[f] || '').toLowerCase();
+    if (a && d && a !== d) factionMismatch.push(f + ': admin=' + a + ' / DESIGN.md=' + d);
+  }
+  if (factionMismatch.length > 0) {
+    fail('陣營色 hex 不一致(' + factionMismatch.length + '):');
+    factionMismatch.forEach(s => console.error('   ' + s));
+  } else {
+    ok('陣營色 hex 雙邊一致 (8 個)');
+  }
+
+  // 檢查 B:21 個共用 token 雙邊存在
+  const missingInAdmin = SHARED_TOKENS.filter(t => !(t in adminTokens));
+  const missingInDesign = SHARED_TOKENS.filter(t => !(t in designTokens));
+  if (missingInAdmin.length > 0) {
+    fail('admin-shared.css 缺共用 token: ' + missingInAdmin.join(', '));
+  }
+  if (missingInDesign.length > 0) {
+    fail('DESIGN.md 缺共用 token: ' + missingInDesign.join(', '));
+  }
+  if (missingInAdmin.length === 0 && missingInDesign.length === 0) {
+    ok('21 個共用 token 雙邊存在');
+  }
+
+  // 檢查 C:共用 token 值一致(不只是陣營色,所有共用)
+  const valueMismatch = [];
+  for (const t of SHARED_TOKENS) {
+    if (!(t in adminTokens) || !(t in designTokens)) continue;
+    const a = adminTokens[t].toLowerCase().replace(/[#"]/g, '');
+    const d = designTokens[t].toLowerCase().replace(/[#"]/g, '');
+    if (a !== d) valueMismatch.push(t + ': admin=' + a + ' / DESIGN.md=' + d);
+  }
+  if (valueMismatch.length > 0) {
+    fail('共用 token 值不一致(' + valueMismatch.length + '):');
+    valueMismatch.forEach(s => console.error('   ' + s));
+  } else {
+    ok('共用 token 值雙邊一致');
+  }
+
+  // 檢查 D:admin 禁用 world-* 前綴
+  const adminWorldTokens = Object.keys(adminTokens).filter(t => t.startsWith('world-'));
+  if (adminWorldTokens.length > 0) {
+    fail('admin-shared.css 不應有 world-* 前綴 token (世界觀色僅遊戲本體用): ' + adminWorldTokens.join(', '));
+  } else {
+    ok('admin 無 world-* 前綴(專屬遊戲本體)');
+  }
+}
+
+// ───────────────────────────────────────────────
 // CHECK 10: AI prompt 禁用詞掃描
 // 對應坑:v0.18.12 AI 結構化自創「心智創傷」術語
 // 確保 prompt 與 admin-card-checker.html 的禁用詞清單同步存在
@@ -360,6 +486,9 @@ checkSqlAgainstSchema();
 
 section('禁用詞守門存在');
 checkForbiddenTermsRegistered();
+
+section('DESIGN.md ↔ admin-shared.css 設計 token 對齊');
+checkDesignTokenAlignment();
 
 section('MEMORY 索引完整性');
 checkMemoryIndex();

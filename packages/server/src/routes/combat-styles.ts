@@ -14,8 +14,8 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/combat-styles/export', async (request, reply) => {
     try {
       const styles = await pool.query('SELECT * FROM combat_styles ORDER BY sort_order, code');
-      const specs = await pool.query('SELECT * FROM specializations ORDER BY combat_style_id, code');
-      const cards = await pool.query('SELECT * FROM combat_style_cards ORDER BY combat_style_id, code');
+      const specs = await pool.query('SELECT * FROM combat_specializations ORDER BY style_id, code');
+      const cards = await pool.query('SELECT * FROM combat_style_cards ORDER BY style_id, code');
 
       const data = styles.rows.map((s: any) => ({
         code: s.code,
@@ -24,8 +24,8 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
         description_zh: s.description_zh,
         description_en: s.description_en,
         sort_order: s.sort_order,
-        specializations: specs.rows.filter((sp: any) => sp.combat_style_id === s.id),
-        style_cards: cards.rows.filter((c: any) => c.combat_style_id === s.id),
+        specializations: specs.rows.filter((sp: any) => sp.style_id === s.id),
+        style_cards: cards.rows.filter((c: any) => c.style_id === s.id),
       }));
 
       reply.header('Content-Disposition', `attachment; filename="combat-styles-export-${new Date().toISOString().split('T')[0]}.json"`);
@@ -43,7 +43,7 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
         SELECT
           cs.id, cs.code, cs.name_zh, cs.name_en,
           cs.spec_count,
-          (SELECT COUNT(*) FROM combat_style_cards csc WHERE csc.combat_style_id = cs.id)::int AS card_count
+          (SELECT COUNT(*) FROM combat_style_cards csc WHERE csc.style_id = cs.id)::int AS card_count
         FROM combat_styles cs
         ORDER BY cs.sort_order, cs.code
       `);
@@ -83,7 +83,7 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
         if (Array.isArray(item.specializations)) {
           for (const sp of item.specializations) {
             await client.query(`
-              INSERT INTO specializations (combat_style_id, code, name_zh, name_en, attribute, prof_bonus, spec_bonus, description_zh, description_en)
+              INSERT INTO combat_specializations (style_id, code, name_zh, name_en, attribute, prof_bonus, spec_bonus, description_zh, description_en)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
               ON CONFLICT (code) DO UPDATE SET
                 name_zh = EXCLUDED.name_zh, name_en = EXCLUDED.name_en,
@@ -98,7 +98,7 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
         if (Array.isArray(item.style_cards)) {
           for (const sc of item.style_cards) {
             await client.query(`
-              INSERT INTO combat_style_cards (combat_style_id, code, name_zh, name_en, check_attribute, narrative_attack_zh, narrative_attack_en, narrative_success_zh, narrative_success_en, narrative_fail_zh, narrative_fail_en)
+              INSERT INTO combat_style_cards (style_id, code, name_zh, name_en, check_attribute, narrative_attack_zh, narrative_attack_en, narrative_success_zh, narrative_success_en, narrative_fail_zh, narrative_fail_en)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
               ON CONFLICT (code) DO UPDATE SET
                 name_zh = EXCLUDED.name_zh, name_en = EXCLUDED.name_en,
@@ -135,7 +135,7 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
     try {
       const result = await pool.query(`
         SELECT cs.*,
-          (SELECT COUNT(*) FROM combat_style_cards csc WHERE csc.combat_style_id = cs.id)::int AS card_count
+          (SELECT COUNT(*) FROM combat_style_cards csc WHERE csc.style_id = cs.id)::int AS card_count
         FROM combat_styles cs
         ORDER BY cs.sort_order, cs.code
       `);
@@ -153,8 +153,8 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
       const style = await pool.query('SELECT * FROM combat_styles WHERE id = $1', [id]);
       if (style.rows.length === 0) return reply.status(404).send({ success: false, error: 'Combat style not found' });
 
-      const specs = await pool.query('SELECT * FROM specializations WHERE combat_style_id = $1 ORDER BY code', [id]);
-      const cards = await pool.query('SELECT * FROM combat_style_cards WHERE combat_style_id = $1 ORDER BY code', [id]);
+      const specs = await pool.query('SELECT * FROM combat_specializations WHERE style_id = $1 ORDER BY code', [id]);
+      const cards = await pool.query('SELECT * FROM combat_style_cards WHERE style_id = $1 ORDER BY code', [id]);
 
       return reply.send({
         success: true,
@@ -223,7 +223,7 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { styleId: string } }>('/api/combat-styles/:styleId/specs', async (request, reply) => {
     const { styleId } = request.params;
     try {
-      const result = await pool.query('SELECT * FROM specializations WHERE combat_style_id = $1 ORDER BY code', [styleId]);
+      const result = await pool.query('SELECT * FROM combat_specializations WHERE style_id = $1 ORDER BY code', [styleId]);
       return reply.send({ success: true, data: result.rows, total: result.rows.length });
     } catch (error) {
       request.log.error(error, 'GET specs error');
@@ -240,14 +240,14 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
       await client.query('BEGIN');
 
       const result = await client.query(`
-        INSERT INTO specializations (combat_style_id, code, name_zh, name_en, attribute, prof_bonus, spec_bonus, description_zh, description_en)
+        INSERT INTO combat_specializations (style_id, code, name_zh, name_en, attribute, prof_bonus, spec_bonus, description_zh, description_en)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *
       `, [styleId, b.code, b.name_zh, b.name_en, b.attribute || null, b.prof_bonus || 0, b.spec_bonus || 0, b.description_zh || null, b.description_en || null]);
 
       // 更新 spec_count
       await client.query(`
-        UPDATE combat_styles SET spec_count = (SELECT COUNT(*) FROM specializations WHERE combat_style_id = $1)::int, updated_at = NOW()
+        UPDATE combat_styles SET spec_count = (SELECT COUNT(*) FROM combat_specializations WHERE style_id = $1)::int, updated_at = NOW()
         WHERE id = $1
       `, [styleId]);
 
@@ -269,7 +269,7 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
     const b = request.body;
     try {
       const result = await pool.query(`
-        UPDATE specializations SET
+        UPDATE combat_specializations SET
           name_zh = $1, name_en = $2, attribute = $3, prof_bonus = $4, spec_bonus = $5,
           description_zh = $6, description_en = $7, updated_at = NOW()
         WHERE id = $8 RETURNING *
@@ -289,19 +289,19 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
     try {
       await client.query('BEGIN');
 
-      // 先查出 combat_style_id
-      const spec = await client.query('SELECT combat_style_id FROM specializations WHERE id = $1', [id]);
+      // 先查出 style_id
+      const spec = await client.query('SELECT style_id FROM combat_specializations WHERE id = $1', [id]);
       if (spec.rows.length === 0) {
         await client.query('ROLLBACK');
         return reply.status(404).send({ success: false, error: 'Specialization not found' });
       }
-      const styleId = spec.rows[0].combat_style_id;
+      const styleId = spec.rows[0].style_id;
 
-      await client.query('DELETE FROM specializations WHERE id = $1', [id]);
+      await client.query('DELETE FROM combat_specializations WHERE id = $1', [id]);
 
       // 更新 spec_count
       await client.query(`
-        UPDATE combat_styles SET spec_count = (SELECT COUNT(*) FROM specializations WHERE combat_style_id = $1)::int, updated_at = NOW()
+        UPDATE combat_styles SET spec_count = (SELECT COUNT(*) FROM combat_specializations WHERE style_id = $1)::int, updated_at = NOW()
         WHERE id = $1
       `, [styleId]);
 
@@ -324,7 +324,7 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { styleId: string } }>('/api/combat-styles/:styleId/cards', async (request, reply) => {
     const { styleId } = request.params;
     try {
-      const result = await pool.query('SELECT * FROM combat_style_cards WHERE combat_style_id = $1 ORDER BY code', [styleId]);
+      const result = await pool.query('SELECT * FROM combat_style_cards WHERE style_id = $1 ORDER BY code', [styleId]);
       return reply.send({ success: true, data: result.rows, total: result.rows.length });
     } catch (error) {
       request.log.error(error, 'GET style-cards error');
@@ -351,7 +351,7 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
       // 查最大流水號
       const prefix = `${styleCode}_card_`;
       const maxRes = await client.query(
-        `SELECT code FROM combat_style_cards WHERE combat_style_id = $1 AND code LIKE $2 ORDER BY code DESC LIMIT 1`,
+        `SELECT code FROM combat_style_cards WHERE style_id = $1 AND code LIKE $2 ORDER BY code DESC LIMIT 1`,
         [styleId, `${prefix}%`]
       );
       let nextNum = 1;
@@ -364,7 +364,7 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
 
       const result = await client.query(`
         INSERT INTO combat_style_cards (
-          combat_style_id, code, name_zh, name_en, check_attribute,
+          style_id, code, name_zh, name_en, check_attribute,
           narrative_attack_zh, narrative_attack_en,
           narrative_success_zh, narrative_success_en,
           narrative_fail_zh, narrative_fail_en
@@ -435,7 +435,7 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
 async function updateStyleCounts(client: any, styleId: string) {
   await client.query(`
     UPDATE combat_styles SET
-      spec_count = (SELECT COUNT(*) FROM specializations WHERE combat_style_id = $1)::int,
+      spec_count = (SELECT COUNT(*) FROM combat_specializations WHERE style_id = $1)::int,
       updated_at = NOW()
     WHERE id = $1
   `, [styleId]);

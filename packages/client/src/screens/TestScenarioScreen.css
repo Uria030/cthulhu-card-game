@@ -246,6 +246,32 @@
   margin-top: var(--sp-sm);
 }
 
+/* 訊息協議快捷行動按鈕(走規則引擎) */
+.ts-actions-quick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  margin-top: var(--sp-sm);
+}
+
+.ts-action-btn {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--r-subtle);
+  padding: 6px 8px;
+  font-family: 'Noto Serif TC', serif;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.ts-action-btn:hover {
+  border-color: var(--herald);
+  color: var(--herald);
+  background: var(--bg-card-hover);
+}
+
 .ts-statuses {
   display: flex;
   gap: 4px;

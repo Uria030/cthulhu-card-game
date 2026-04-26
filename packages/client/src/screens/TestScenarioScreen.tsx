@@ -1,33 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  createInMemoryMessageBus,
+  createTurnLoop,
+  resolveIntent,
+  CURRENT_MESSAGE_SCHEMA_VERSION,
+} from '@cthulhu/shared';
+import type {
+  IntentMessage,
+  ResultMessage,
+  NotificationMessage,
+  InvestigatorState,
+  ScenarioState,
+  TurnState,
+  TurnPhase,
+  RuleContext,
+  ResultEffect,
+} from '@cthulhu/shared';
 import './TestScenarioScreen.css';
 
 /**
- * 三地點測試關卡 — 桌面俯瞰五區塊布局
- * 對應第二章 §9 + 第三章 §3 §11 + 第六章 Part 2 §6.3
+ * 三地點測試關卡 — 桌面俯瞰五區塊布局 + 訊息協議接規則引擎
  *
- * 五區塊:
- * - 上方角落:城主能量條(§6.3.6)
- * - 左側:調查員區(§6.3.4)— 頭像 + HP/SAN + 行動點 + 狀態
- * - 中央上半:地點區(§6.3.1)— 三個地點卡 + 手繪墨線連接
- * - 中央下半:遭遇區(§6.3.2)— 剛翻開的神話卡
- * - 下方:手牌區(§6.3.3)— 扇形展開
- * - 右側:回合追蹤器(§6.3.5)— 當前回合 / 階段 / 目標牌堆 / 議程牌堆
+ * 對應第二章 §9 + 第三章 §3 §4.1 §11 + 第六章 Part 2 §6.3
  *
- * 卡片三合一用途(§8.2):點選手牌 → 卡片放大顯示 [打出/加值/消費] 三按鈕
- * 短休息決定(§10):回合開始時頭像旁出現 [不休息/短休息]
- *
- * G1 階段:視覺骨架 + 點卡片彈三合一按鈕,業務邏輯尚未接(d20 / 混沌袋 / 規則引擎下一步)。
+ * v0.20.4 起:
+ * - 三個基本動作(拿資源/抽卡/移動)走真實訊息協議:publish IntentMessage
+ *   → resolveIntent → 收 ResultMessage → 更新 state
+ * - 其他動作仍是視覺占位(會被 ruleEngine stub 駁回)
+ * - turnLoop 控制階段切換,publish phase_changed notification
  */
-
-interface Location {
-  id: string;
-  name: string;
-  desc: string;
-  visibility: 'day' | 'night' | 'darkness' | 'fire';
-  isObstacle: boolean;
-  enemies: string[];
-}
 
 interface HandCard {
   id: string;
@@ -37,13 +39,7 @@ interface HandCard {
   rarity: 'common' | 'uncommon' | 'rare' | 'legendary';
 }
 
-const LOCATIONS: Location[] = [
-  { id: 'alley', name: '昏暗小巷', desc: '潮濕的鵝卵石,遠處模糊燈光', visibility: 'night', isObstacle: false, enemies: [] },
-  { id: 'bookshop', name: '舊書店', desc: '霉味 / 未拆包裹 / 地下室低響', visibility: 'night', isObstacle: false, enemies: ['深潛者(陰影)'] },
-  { id: 'backdoor', name: '霧中後門', desc: '門縫透出冷氣,隱約有東西在另一側', visibility: 'darkness', isObstacle: true, enemies: [] },
-];
-
-const HAND_CARDS: HandCard[] = [
+const HAND_CARD_DEFS: HandCard[] = [
   { id: 'c1', name: '.45 手槍', cost: 2, desc: '武器(槍枝)— 攻擊 +2,3 發子彈', rarity: 'uncommon' },
   { id: 'c2', name: '懷錶', cost: 1, desc: '資產(配件)— 重擲一次當前檢定', rarity: 'common' },
   { id: 'c3', name: '街頭知識', cost: 1, desc: '技能 — 調查時 +2 感知', rarity: 'common' },
@@ -51,111 +47,219 @@ const HAND_CARDS: HandCard[] = [
   { id: 'c5', name: '舊日筆記', cost: 1, desc: '資產(書籍)— 抽 2 張卡', rarity: 'common' },
 ];
 
-type Phase = 'short_rest_decision' | 'investigator' | 'mythos' | 'turn_end';
+// 初始狀態(寫死的調查員 + 三地點 + 5 張手牌 + 牌庫 5 張)
+function makeInitialInvestigator(): InvestigatorState {
+  return {
+    investigatorId: 'inv-1',
+    investigatorDefinitionId: 'def-范例調查員',
+    ownerPlayerId: 'p1',
+    attributes: {
+      strength: 3, agility: 3, constitution: 3, reflex: 3,
+      intellect: 3, willpower: 3, perception: 3, charisma: 4,
+    },
+    combatStyle: 'sidearm',
+    specializations: [],
+    deck: ['d1', 'd2', 'd3', 'd4', 'd5'],
+    hand: HAND_CARD_DEFS.map((c) => c.id),
+    discardPile: [],
+    removedPile: [],
+    assetsInPlay: [],
+    hp: 7, hpMax: 7, san: 7, sanMax: 7,
+    actionPoints: 3,
+    resources: 0,
+    currentLocationId: 'alley',
+    engagedWith: [],
+    triggeredHorrorChecks: [],
+    traumas: [],
+    secretTaskState: null,
+    permanentlyDead: false,
+    startingXp: 0,
+  };
+}
+
+function makeInitialScenario(): ScenarioState {
+  return {
+    scenarioId: 'test-3loc',
+    scenarioDefinitionId: 'test-three-locations',
+    campaignId: 'test',
+    locations: [
+      { locationDefinitionId: 'alley', visibility: 'night', connectedTo: ['bookshop'], isObstacle: false },
+      { locationDefinitionId: 'bookshop', visibility: 'night', connectedTo: ['alley', 'backdoor'], isObstacle: false },
+      { locationDefinitionId: 'backdoor', visibility: 'darkness', connectedTo: ['bookshop'], isObstacle: true },
+    ],
+    enemies: [],
+    tokens: [],
+    agendaProgress: 0,
+    objectiveProgress: 0,
+    chaosBag: [],
+    turnNumber: 1,
+    phase: 'short_rest_decision',
+  };
+}
+
+const LOCATION_META: Record<string, { name: string; desc: string }> = {
+  alley: { name: '昏暗小巷', desc: '潮濕的鵝卵石,遠處模糊燈光' },
+  bookshop: { name: '舊書店', desc: '霉味 / 未拆包裹 / 地下室低響' },
+  backdoor: { name: '霧中後門', desc: '門縫透出冷氣,隱約有東西在另一側' },
+};
+
+const HAND_CARD_BY_ID: Record<string, HandCard> = Object.fromEntries(HAND_CARD_DEFS.map((c) => [c.id, c]));
+
+function describeEffect(eff: ResultEffect): string {
+  switch (eff.type) {
+    case 'spend_action_point': return '扣 ' + (eff.params as { amount: number }).amount + ' 行動點';
+    case 'gain_resource': return '獲得 ' + (eff.params as { amount: number }).amount + ' 資源';
+    case 'draw_card': return '抽 1 張卡 → 手牌';
+    case 'deck_empty_horror': return '⚠ 牌庫空,改受 ' + (eff.params as { amount: number }).amount + ' 點恐懼(§3.3)';
+    case 'move': {
+      const p = eff.params as { from: string; to: string };
+      return '移動 ' + (LOCATION_META[p.from]?.name || p.from) + ' → ' + (LOCATION_META[p.to]?.name || p.to);
+    }
+    case 'attack_of_opportunity_warning': return '⚠ 交戰中強行移動 — 應觸發藉機攻擊(§7.2,完整邏輯待 attack 實作)';
+    default: return eff.type;
+  }
+}
 
 export function TestScenarioScreen() {
   const navigate = useNavigate();
-  const [currentLocation, setCurrentLocation] = useState('alley');
-  const [actionPoints, setActionPoints] = useState(3);
-  const [phase, setPhase] = useState<Phase>('short_rest_decision');
+
+  // 訊息匯流排與回合狀態機:單次建立,跨重渲染保留
+  const bus = useMemo(() => createInMemoryMessageBus(), []);
+  const turnLoopRef = useRef<ReturnType<typeof createTurnLoop> | null>(null);
+  if (turnLoopRef.current === null) {
+    turnLoopRef.current = createTurnLoop({ bus, source: 'engine' });
+  }
+
+  // React state — 驅動畫面
+  const [investigator, setInvestigator] = useState<InvestigatorState>(makeInitialInvestigator);
+  const [scenario, setScenario] = useState<ScenarioState>(makeInitialScenario);
+  const [phase, setPhase] = useState<TurnPhase>('short_rest_decision');
   const [turnNumber, setTurnNumber] = useState(1);
-  const [hp] = useState(7);
-  const [san] = useState(7);
   const [keeperEnergy, setKeeperEnergy] = useState(8);
-  const [doomTokens] = useState(0);
-  const [clueTokens] = useState(0);
   const [activeCard, setActiveCard] = useState<HandCard | null>(null);
   const [log, setLog] = useState<string[]>([
     '第 1 回合開始 — 短休息決定階段',
-    '你站在昏暗小巷。挑「不休息」進入調查員階段。',
+    '寫死的調查員站在昏暗小巷。挑「不休息」進入調查員階段。',
   ]);
 
   const append = (s: string) => setLog((l) => [...l.slice(-15), s]);
 
+  // 訂閱訊息匯流排:notification 階段切換 + result 顯示
+  useEffect(() => {
+    const unsubNotif = bus.subscribe('notification', (m: NotificationMessage) => {
+      if (m.notificationType === 'phase_changed') {
+        const p = m.payload as { newPhase: TurnPhase; newTurnNumber: number };
+        setPhase(p.newPhase);
+        setTurnNumber(p.newTurnNumber);
+      }
+    });
+    const unsubResult = bus.subscribe('result', (m: ResultMessage) => {
+      if (m.outcome === 'rejected') {
+        append('[駁回] ' + (m.rejection?.narrative ?? '未知原因'));
+        if (m.rejection?.suggestion) append('   建議:' + m.rejection.suggestion);
+      } else {
+        const effects = m.effects ?? [];
+        for (const eff of effects) append('[結算] ' + describeEffect(eff));
+      }
+    });
+    return () => { unsubNotif(); unsubResult(); };
+  }, [bus]);
+
+  // ─── 動作:走訊息協議 ──────────────────
+  const submitIntent = (
+    actionType: IntentMessage['actionType'],
+    payload: Record<string, unknown> = {}
+  ) => {
+    const intent: IntentMessage = {
+      id: 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+      timestamp: new Date().toISOString(),
+      schemaVersion: CURRENT_MESSAGE_SCHEMA_VERSION,
+      source: 'p1',
+      kind: 'intent',
+      actionType,
+      payload,
+      playerId: 'p1',
+      investigatorId: investigator.investigatorId,
+    };
+    // 先 publish 給訊息匯流排(供記錄/觀察)
+    bus.publish(intent);
+
+    // 走規則引擎結算
+    const turn: TurnState = {
+      turnNumber,
+      phase,
+      actionPointsSpent: {},
+      pendingLegendaryActions: [],
+      triggeredReactions: [],
+    };
+    const ctx: RuleContext = {
+      scenario,
+      investigator,
+      turn,
+      investigators: { [investigator.investigatorId]: investigator },
+    };
+    const out = resolveIntent(intent, ctx);
+
+    // publish ResultMessage → useEffect 訂閱會記 log
+    bus.publish(out.result);
+
+    // 套用 newState
+    if (out.newState?.investigator) setInvestigator(out.newState.investigator);
+    if (out.newState?.scenario) setScenario(out.newState.scenario);
+  };
+
+  // ─── 階段控制 ──────────────────────
   const startInvestigatorPhase = () => {
-    setPhase('investigator');
+    turnLoopRef.current?.advance(); // short_rest_decision → investigator
     append('[階段切換] 進入調查員階段(3 行動點)');
   };
-
   const takeShortRest = () => {
-    setPhase('mythos');
-    setActionPoints(0);
+    turnLoopRef.current?.setPhase('mythos', turnNumber);
+    setInvestigator((i) => ({ ...i, actionPoints: 0 }));
     append('[短休息] 本回合結束於短休息 — 直接進入神話階段');
   };
-
-  const tryAction = (label: string, cost: number) => {
-    if (phase !== 'investigator') {
-      append('[駁回] 不在調查員階段,無法執行行動');
-      return;
-    }
-    if (actionPoints < cost) {
-      append(`[駁回] 行動點不足:需 ${cost},剩 ${actionPoints}`);
-      return;
-    }
-    setActionPoints((p) => p - cost);
-    append(`[執行] ${label}(花 ${cost} 行動點)`);
-  };
-
-  const moveTo = (locId: string) => {
-    if (phase !== 'investigator') {
-      append('[駁回] 不在調查員階段');
-      return;
-    }
-    if (locId === currentLocation) return;
-    const target = LOCATIONS.find((l) => l.id === locId);
-    if (!target) return;
-    const cost = target.isObstacle ? 2 : 1;
-    if (actionPoints < cost) {
-      append(`[駁回] 移動到「${target.name}」需 ${cost} 行動點`);
-      return;
-    }
-    setActionPoints((p) => p - cost);
-    setCurrentLocation(locId);
-    append(`[移動] → ${target.name}(花 ${cost})`);
-  };
-
-  const usePlay = () => {
-    if (!activeCard) return;
-    tryAction(`打出「${activeCard.name}」`, activeCard.cost);
-    setActiveCard(null);
-  };
-
-  const useCommit = () => {
-    if (!activeCard) return;
-    append(`[加值] 「${activeCard.name}」貢獻屬性圖示給當前檢定 → 棄牌堆`);
-    setActiveCard(null);
-  };
-
-  const useConsume = () => {
-    if (!activeCard) return;
-    append(`[消費] 「${activeCard.name}」永久移除 → 觸發更強效果`);
-    setActiveCard(null);
-  };
-
   const enterMythosPhase = () => {
-    setPhase('mythos');
+    turnLoopRef.current?.advance(); // investigator → mythos
     setKeeperEnergy((e) => Math.max(0, e - 2));
-    // 第三章 §9.7 三層敘事:環境 / 城主行動 / 傳奇行動
     append('[階段切換] 進入神話階段(2 秒色調變暗,§6.2)');
     setTimeout(() => append('[城主行動] 黑暗從牆角滲出,吞沒了走廊。'), 1200);
     setTimeout(() => append('[環境敘事] 窗外的雨變大了。'), 2400);
   };
-
   const endTurn = () => {
-    setPhase('short_rest_decision');
-    setTurnNumber((n) => n + 1);
-    setActionPoints(3);
+    turnLoopRef.current?.advance(); // mythos → turn_end
+    turnLoopRef.current?.advance(); // turn_end → short_rest_decision(下一回合)
+    setInvestigator((i) => ({ ...i, actionPoints: 3 }));
     setKeeperEnergy((e) => Math.min(12, e + 1));
-    append(`── 第 ${turnNumber + 1} 回合開始 ── 短休息決定階段`);
   };
+
+  // ─── 卡片三合一(視覺占位,結算 stub)─
+  const usePlay = () => {
+    if (!activeCard) return;
+    submitIntent('play_card', { cardInstanceId: activeCard.id, cost: activeCard.cost });
+    setActiveCard(null);
+  };
+  const useCommit = () => {
+    if (!activeCard) return;
+    submitIntent('commit_attribute_icon', { cardInstanceId: activeCard.id });
+    setActiveCard(null);
+  };
+  const useConsume = () => {
+    if (!activeCard) return;
+    submitIntent('consume', { cardInstanceId: activeCard.id });
+    setActiveCard(null);
+  };
+
+  // ─── 衍生資料 ──────────────────────
+  const currentLocation = investigator.currentLocationId;
+  const actionPoints = investigator.actionPoints;
+  const hp = investigator.hp;
+  const san = investigator.san;
+  const handCards = investigator.hand.map((id) => HAND_CARD_BY_ID[id]).filter((x): x is HandCard => !!x);
 
   return (
     <div className={'ts-root phase-' + phase}>
-      {/* 上方角落:城主能量條(§6.3.6) */}
       <header className="ts-topbar">
-        <button className="ts-back" onClick={() => navigate('/departure')}>
-          ← 回出發板
-        </button>
+        <button className="ts-back" onClick={() => navigate('/departure')}>← 回出發板</button>
         <div className="ts-keeper">
           <span className="ts-keeper-label">城主能量</span>
           <div className="ts-keeper-bar">
@@ -165,9 +269,7 @@ export function TestScenarioScreen() {
         </div>
       </header>
 
-      {/* 主版面:左側調查員區 + 中央地點/遭遇 + 右側回合追蹤 */}
       <div className="ts-main">
-        {/* 左側:調查員區(§6.3.4) */}
         <aside className="ts-left">
           <h3 className="ts-section-title">調查員</h3>
           <div className="ts-investigator">
@@ -178,17 +280,17 @@ export function TestScenarioScreen() {
             <div className="ts-bar-row">
               <span className="ts-bar-label">HP</span>
               <div className="ts-bar ts-bar-hp">
-                <div className="ts-bar-fill" style={{ width: `${(hp / 7) * 100}%` }} />
+                <div className="ts-bar-fill" style={{ width: `${(hp / investigator.hpMax) * 100}%` }} />
               </div>
-              <span className="ts-bar-num">{hp}/7</span>
+              <span className="ts-bar-num">{hp}/{investigator.hpMax}</span>
             </div>
 
             <div className="ts-bar-row">
               <span className="ts-bar-label">SAN</span>
               <div className="ts-bar ts-bar-san">
-                <div className="ts-bar-fill" style={{ width: `${(san / 7) * 100}%` }} />
+                <div className="ts-bar-fill" style={{ width: `${(san / investigator.sanMax) * 100}%` }} />
               </div>
-              <span className="ts-bar-num">{san}/7</span>
+              <span className="ts-bar-num">{san}/{investigator.sanMax}</span>
             </div>
 
             <div className="ts-ap-row">
@@ -201,66 +303,81 @@ export function TestScenarioScreen() {
             </div>
 
             <div className="ts-loc-info">
-              在 <strong>{LOCATIONS.find((l) => l.id === currentLocation)?.name}</strong>
+              在 <strong>{LOCATION_META[currentLocation || '']?.name ?? '未知'}</strong>
             </div>
 
             <div className="ts-statuses">
-              <span className="ts-status">無狀態</span>
+              <span className="ts-status">資源 {investigator.resources}</span>
+              <span className="ts-status">手牌 {investigator.hand.length}</span>
+              <span className="ts-status">牌庫 {investigator.deck.length}</span>
             </div>
+
+            {/* 行動按鈕:走真實訊息協議的三個基本動作 */}
+            {phase === 'investigator' && (
+              <div className="ts-actions-quick">
+                <button className="ts-action-btn" onClick={() => submitIntent('gain_resource')}>
+                  拿資源
+                </button>
+                <button className="ts-action-btn" onClick={() => submitIntent('draw_card')}>
+                  抽卡
+                </button>
+              </div>
+            )}
           </div>
         </aside>
 
-        {/* 中央:地點區(上)+ 遭遇區(下) */}
         <main className="ts-center">
-          {/* 地點區 — §6.3.1 */}
           <section className="ts-locations">
             <h3 className="ts-section-title">地點區(俯瞰)</h3>
             <div className="ts-loc-row">
-              {LOCATIONS.map((loc, i) => (
-                <button
-                  key={loc.id}
-                  className={
-                    'ts-loc-card' +
-                    (loc.id === currentLocation ? ' active' : '') +
-                    ' vis-' + loc.visibility
-                  }
-                  onClick={() => moveTo(loc.id)}
-                  title={loc.isObstacle ? '障礙物連接(2 行動點)' : '相鄰連接(1 行動點)'}
-                >
-                  <div className="ts-loc-name">{loc.name}</div>
-                  <div className="ts-loc-desc">{loc.desc}</div>
-                  <div className="ts-loc-foot">
-                    <span className="ts-loc-vis">
-                      {loc.visibility === 'darkness' && '🌑 黑暗'}
-                      {loc.visibility === 'night' && '🌙 夜間'}
-                      {loc.visibility === 'day' && '☀ 白天'}
-                      {loc.visibility === 'fire' && '🔥 失火'}
-                    </span>
-                    {loc.enemies.length > 0 && <span className="ts-loc-enemy">⚔ {loc.enemies.length}</span>}
-                  </div>
-                  {/* 連接線 — 簡化:相鄰 = 實線 / 障礙 = 虛線(箭頭由布局自然展示) */}
-                  {i < LOCATIONS.length - 1 && (
-                    <span className={'ts-loc-link' + (LOCATIONS[i + 1].isObstacle ? ' obstacle' : '')} aria-hidden />
-                  )}
-                </button>
-              ))}
+              {scenario.locations.map((loc, i) => {
+                const meta = LOCATION_META[loc.locationDefinitionId];
+                return (
+                  <button
+                    key={loc.locationDefinitionId}
+                    className={
+                      'ts-loc-card' +
+                      (loc.locationDefinitionId === currentLocation ? ' active' : '') +
+                      ' vis-' + loc.visibility
+                    }
+                    onClick={() => submitIntent('move', { targetLocationId: loc.locationDefinitionId })}
+                    title={loc.isObstacle ? '障礙物連接(2 行動點)' : '相鄰連接(1 行動點)'}
+                  >
+                    <div className="ts-loc-name">{meta?.name ?? loc.locationDefinitionId}</div>
+                    <div className="ts-loc-desc">{meta?.desc ?? ''}</div>
+                    <div className="ts-loc-foot">
+                      <span className="ts-loc-vis">
+                        {loc.visibility === 'darkness' && '🌑 黑暗'}
+                        {loc.visibility === 'night' && '🌙 夜間'}
+                        {loc.visibility === 'day' && '☀ 白天'}
+                        {loc.visibility === 'fire' && '🔥 失火'}
+                        {loc.isObstacle && ' · ⚠ 障礙物'}
+                      </span>
+                    </div>
+                    {i < scenario.locations.length - 1 && (
+                      <span
+                        className={'ts-loc-link' + (scenario.locations[i + 1].isObstacle ? ' obstacle' : '')}
+                        aria-hidden
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </section>
 
-          {/* 遭遇區 — §6.3.2 */}
           <section className="ts-encounter">
             <h3 className="ts-section-title">遭遇區</h3>
             <div className="ts-encounter-body">
               <div className="ts-encounter-empty">
                 等待第一張神話卡翻開
                 <br />
-                <small>(進入神話階段時自動翻開)</small>
+                <small>(進入神話階段時自動翻開,G1 階段尚未實作神話卡池)</small>
               </div>
             </div>
           </section>
         </main>
 
-        {/* 右側:回合追蹤器 — §6.3.5 */}
         <aside className="ts-right">
           <h3 className="ts-section-title">回合追蹤</h3>
           <div className="ts-turn-num">第 {turnNumber} 回合</div>
@@ -274,7 +391,6 @@ export function TestScenarioScreen() {
             </strong>
           </div>
 
-          {/* 短休息決定 — §10 */}
           {phase === 'short_rest_decision' && (
             <div className="ts-rest-buttons">
               <button className="ts-rest ts-rest-no" onClick={startInvestigatorPhase}>
@@ -285,13 +401,11 @@ export function TestScenarioScreen() {
               </button>
             </div>
           )}
-
           {phase === 'investigator' && (
             <button className="ts-end-phase" onClick={enterMythosPhase}>
               結束調查員階段 →
             </button>
           )}
-
           {phase === 'mythos' && (
             <button className="ts-end-phase" onClick={endTurn}>
               結束神話階段 → 下回合
@@ -302,27 +416,26 @@ export function TestScenarioScreen() {
             <div className="ts-tracker-row">
               <span className="ts-tracker-label">目標牌堆</span>
               <div className="ts-tracker-bar">
-                <div className="ts-tracker-fill ts-clue" style={{ width: `${Math.min(clueTokens, 5) * 20}%` }} />
+                <div className="ts-tracker-fill ts-clue" style={{ width: `${Math.min(scenario.objectiveProgress, 5) * 20}%` }} />
               </div>
-              <span className="ts-tracker-num">線索 {clueTokens}/5</span>
+              <span className="ts-tracker-num">線索 {scenario.objectiveProgress}/5</span>
             </div>
             <div className="ts-tracker-row">
               <span className="ts-tracker-label">議程牌堆</span>
               <div className="ts-tracker-bar">
-                <div className="ts-tracker-fill ts-doom" style={{ width: `${Math.min(doomTokens, 6) * 100 / 6}%` }} />
+                <div className="ts-tracker-fill ts-doom" style={{ width: `${Math.min(scenario.agendaProgress, 6) * 100 / 6}%` }} />
               </div>
-              <span className="ts-tracker-num">毀滅 {doomTokens}/6</span>
+              <span className="ts-tracker-num">毀滅 {scenario.agendaProgress}/6</span>
             </div>
           </div>
         </aside>
       </div>
 
-      {/* 下方:手牌區(§6.3.3 扇形展開)*/}
       <section className="ts-hand">
         <h3 className="ts-section-title">手牌(扇形)</h3>
         <div className="ts-hand-fan">
-          {HAND_CARDS.map((card, i) => {
-            const center = (HAND_CARDS.length - 1) / 2;
+          {handCards.map((card, i) => {
+            const center = (handCards.length - 1) / 2;
             const offset = i - center;
             const rot = offset * 4;
             const ty = Math.abs(offset) * 4;
@@ -343,7 +456,6 @@ export function TestScenarioScreen() {
         </div>
       </section>
 
-      {/* 卡片三合一用途彈出 — §8.2 */}
       {activeCard && (
         <div className="ts-card-modal" onClick={() => setActiveCard(null)}>
           <div className="ts-card-zoom" onClick={(e) => e.stopPropagation()}>
@@ -353,15 +465,15 @@ export function TestScenarioScreen() {
             <div className="ts-zoom-actions">
               <button className="ts-action ts-action-play" onClick={usePlay}>
                 打出
-                <small>花 {activeCard.cost} 行動點 + 費用,效果觸發</small>
+                <small>花 {activeCard.cost} 行動點 + 費用,效果觸發(規則引擎尚未實作)</small>
               </button>
               <button className="ts-action ts-action-commit" onClick={useCommit}>
                 加值
-                <small>貢獻屬性圖示給檢定 → 棄牌堆</small>
+                <small>貢獻屬性圖示給檢定 → 棄牌堆(尚未實作)</small>
               </button>
               <button className="ts-action ts-action-consume" onClick={useConsume}>
                 消費
-                <small>永久移除 → 觸發更強效果</small>
+                <small>永久移除 → 觸發更強效果(尚未實作)</small>
               </button>
             </div>
             <button className="ts-zoom-close" onClick={() => setActiveCard(null)}>
@@ -371,9 +483,8 @@ export function TestScenarioScreen() {
         </div>
       )}
 
-      {/* 事件記錄 */}
       <section className="ts-log">
-        <h3 className="ts-section-title">事件記錄</h3>
+        <h3 className="ts-section-title">事件記錄(訊息匯流排輸出)</h3>
         <div className="ts-log-body">
           {log.map((line, i) => (
             <p key={i}>{line}</p>
@@ -383,9 +494,8 @@ export function TestScenarioScreen() {
 
       <footer className="ts-foot">
         <p>
-          ⚠ G1 視覺骨架 — 五區塊布局已對齊第六章 Part 2 §6.3。
-          引擎邏輯已備:訊息協議 ✓ / 回合狀態機 ✓。
-          下一步接:d20 擲骰 / 混沌袋 / 戰鬥風格卡 / 卡片效果結算。
+          ⚠ G1 階段:訊息協議已接(拿資源/抽卡/移動 三個動作走規則引擎結算);
+          其他動作仍是 stub。下一步接 d20 / 混沌袋 / 戰鬥風格卡 / 視野光照。
         </p>
       </footer>
     </div>

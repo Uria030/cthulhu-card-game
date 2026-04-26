@@ -1,42 +1,56 @@
+/**
+ * 大廳 — 第六章 Part 2 §3 視覺規格
+ * 主視覺:深胡桃木 + 舊紙 + 黃銅;主光源:綠罩檯燈(中央)+ 壁爐(角落)
+ * 整體色調延續低明度舊物件,戲劇性明暗
+ */
+
 .lobby-root {
   flex: 1;
   background:
-    radial-gradient(ellipse at 30% 20%, rgba(184, 137, 61, 0.08), transparent 50%),
-    radial-gradient(ellipse at 80% 80%, rgba(45, 61, 42, 0.10), transparent 60%),
+    radial-gradient(ellipse at 50% 35%, rgba(184, 137, 61, 0.10), transparent 45%),
+    radial-gradient(ellipse at 8% 30%, rgba(45, 61, 42, 0.12), transparent 40%),
+    radial-gradient(ellipse at 92% 80%, rgba(74, 69, 64, 0.08), transparent 50%),
     var(--bg-primary);
   position: relative;
   overflow: hidden;
 }
 
-/* 雨景動畫(極簡 — 線性下落) */
+/* 窗外雨景 — §3.3.7 */
+.lobby-window {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(58, 90, 122, 0.05), transparent 30%);
+  pointer-events: none;
+}
+
 .lobby-rain {
   position: absolute;
   inset: 0;
   background-image: repeating-linear-gradient(
     100deg,
     transparent 0,
-    transparent 6px,
-    rgba(217, 210, 197, 0.04) 6px,
-    rgba(217, 210, 197, 0.04) 7px
+    transparent 7px,
+    rgba(217, 210, 197, 0.05) 7px,
+    rgba(217, 210, 197, 0.05) 8px
   );
-  animation: rain 0.4s linear infinite;
-  pointer-events: none;
+  animation: rainFall 0.5s linear infinite;
 }
 
-@keyframes rain {
+@keyframes rainFall {
   from { background-position: 0 0; }
-  to { background-position: 8px 24px; }
+  to { background-position: 8px 30px; }
 }
 
 .lobby-frame {
   position: relative;
   z-index: 1;
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: var(--sp-xl) var(--sp-lg);
+  padding: var(--sp-lg);
   display: flex;
   flex-direction: column;
-  gap: var(--sp-xl);
+  gap: var(--sp-md);
 }
 
 .lobby-header {
@@ -47,7 +61,7 @@
 
 .lobby-title {
   font-family: 'Noto Serif TC', serif;
-  font-size: 48px;
+  font-size: 36px;
   font-weight: 700;
   letter-spacing: 0.1em;
   color: var(--world-antique-brass);
@@ -55,65 +69,133 @@
 
 .lobby-sub {
   font-family: 'Noto Sans TC', sans-serif;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-tertiary);
   letter-spacing: 0.2em;
-  margin-top: var(--sp-sm);
+  margin-top: var(--sp-xs);
 }
 
-/* 三面牆 */
-.lobby-walls {
+/* 書房布局 — grid:四角是椅子,中央是書桌,周圍是三面牆 */
+.lobby-room {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: 1fr 2fr 1fr;
+  grid-template-rows: auto auto auto;
   gap: var(--sp-md);
+  align-items: stretch;
 }
 
+/* 三面牆 — §3.3.4 §3.3.5 §3.3.6 */
 .lobby-wall {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--r-sharp);
   padding: var(--sp-md);
-  min-height: 120px;
+  font-family: 'Noto Sans TC', sans-serif;
   position: relative;
+  overflow: hidden;
 }
 
 .lobby-wall-fireplace {
+  grid-column: 1;
+  grid-row: 1;
   border-color: var(--world-ochre);
-  background: linear-gradient(180deg, var(--bg-card), rgba(184, 137, 61, 0.06));
+  background: linear-gradient(180deg, var(--bg-card), rgba(184, 137, 61, 0.10));
+}
+
+.fire-glow {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 70%;
+  height: 60%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center bottom, rgba(184, 137, 61, 0.4), transparent 60%);
+  animation: fireFlicker 2s ease-in-out infinite;
+}
+
+@keyframes fireFlicker {
+  0%, 100% { opacity: 0.7; transform: translateX(-50%) scale(1); }
+  50% { opacity: 0.9; transform: translateX(-50%) scale(1.05); }
 }
 
 .lobby-wall-memorial {
+  grid-column: 2;
+  grid-row: 1;
   border-color: var(--world-deep-walnut);
+  background: linear-gradient(180deg, rgba(184, 137, 61, 0.05), var(--bg-card));
 }
 
 .lobby-wall-bookshelf {
+  grid-column: 3;
+  grid-row: 1;
   border-color: var(--world-soot-grey);
+}
+
+.globe {
+  position: absolute;
+  bottom: var(--sp-sm);
+  right: var(--sp-sm);
+  font-size: 28px;
+  animation: globeRotate 30s linear infinite;
+}
+
+@keyframes globeRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .wall-label {
   font-family: 'Noto Serif TC', serif;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: var(--sp-sm);
+  margin-bottom: var(--sp-xs);
 }
 
 .wall-detail {
-  font-family: 'Noto Sans TC', sans-serif;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.7;
 }
 
-/* 書桌 */
+.wall-empty {
+  font-style: italic;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+/* 書桌 — §3.3.1 + §3.3.2 七物件 + §3.3.1 地圖紙 + 綠罩檯燈 */
 .lobby-desk {
+  grid-column: 2;
+  grid-row: 2;
   background:
-    linear-gradient(180deg, rgba(61, 40, 23, 0.4), rgba(61, 40, 23, 0.7)),
-    var(--bg-card);
-  border: 2px solid var(--world-deep-walnut);
-  border-radius: var(--r-sharp);
+    linear-gradient(180deg, rgba(61, 40, 23, 0.5), rgba(61, 40, 23, 0.85)),
+    repeating-linear-gradient(180deg, transparent 0, transparent 4px, rgba(0, 0, 0, 0.08) 4px, rgba(0, 0, 0, 0.08) 5px),
+    var(--world-deep-walnut);
+  border: 2px solid var(--world-antique-brass);
+  border-radius: var(--r-subtle);
   padding: var(--sp-lg);
-  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.4);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.4), 0 0 60px rgba(184, 137, 61, 0.08);
+  position: relative;
+}
+
+/* 綠罩檯燈光暈(§3.2 主光源) */
+.lamp {
+  position: absolute;
+  top: -10px;
+  right: 20px;
+  width: 50px;
+  height: 50px;
+  background: radial-gradient(circle, rgba(184, 137, 61, 0.6), rgba(74, 124, 155, 0.3) 40%, transparent 70%);
+  filter: blur(8px);
+  animation: lampFlicker 8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes lampFlicker {
+  0%, 90%, 100% { opacity: 1; }
+  93% { opacity: 0.7; }
+  96% { opacity: 1; }
 }
 
 .desk-title {
@@ -121,14 +203,23 @@
   font-size: 22px;
   color: var(--world-antique-brass);
   letter-spacing: 0.1em;
-  margin-bottom: var(--sp-md);
   text-align: center;
+  margin-bottom: var(--sp-xs);
+}
+
+.desk-desc {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-align: center;
+  margin-bottom: var(--sp-md);
 }
 
 .desk-items {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: var(--sp-md);
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: var(--sp-sm);
+  margin-bottom: var(--sp-md);
 }
 
 .desk-item {
@@ -136,11 +227,11 @@
   color: var(--world-ink-black);
   border: 1px solid var(--world-deep-walnut);
   border-radius: var(--r-subtle);
-  padding: var(--sp-md);
+  padding: var(--sp-sm);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--sp-xs);
+  gap: 2px;
   transition: all 0.2s;
   font-family: 'Noto Serif TC', serif;
 }
@@ -149,47 +240,168 @@
   background: var(--world-smoke-white);
   border-color: var(--world-antique-brass);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .desk-item.disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
+  filter: grayscale(0.4);
 }
 
 .desk-glyph {
-  font-size: 32px;
+  font-size: 24px;
   line-height: 1;
 }
 
 .desk-zh {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.desk-state {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 10px;
+  color: var(--world-soot-grey);
+  letter-spacing: 0.1em;
+}
+
+/* 地圖紙(出發按鈕)— 桌面顯眼物件 */
+.desk-map {
+  width: 100%;
+  background:
+    linear-gradient(135deg, var(--world-aged-paper), var(--world-smoke-white) 60%, var(--world-aged-paper));
+  color: var(--world-ink-black);
+  border: 2px solid var(--world-antique-brass);
+  border-radius: var(--r-subtle);
+  padding: var(--sp-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-md);
+  font-family: 'Noto Serif TC', serif;
   font-size: 16px;
   font-weight: 600;
+  letter-spacing: 0.1em;
+  transition: all 0.2s;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+.desk-map:hover {
+  background: var(--world-smoke-white);
+  border-color: var(--herald);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(201, 168, 76, 0.25);
+}
+
+.map-glyph {
+  font-size: 28px;
+}
+
+.map-hint {
+  color: var(--world-oxblood);
+  font-weight: 500;
+}
+
+/* 4 張椅子層 — §3.3.3 圍繞書桌一圈,主位 + 三側 */
+.chairs-layer {
+  grid-column: 1 / 4;
+  grid-row: 3;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-md);
+}
+
+.chair {
+  background: var(--bg-secondary);
+  border: 1px solid var(--world-deep-walnut);
+  border-radius: var(--r-subtle);
+  padding: var(--sp-md);
+  font-family: 'Noto Serif TC', serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-xs);
+  cursor: not-allowed;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.chair.empty {
+  border-style: dashed;
+}
+
+.chair.empty:hover {
+  /* §3.3.3:空椅子有微微亮光提示 */
+  border-color: var(--world-antique-brass);
+  box-shadow: 0 0 12px rgba(184, 137, 61, 0.15);
+}
+
+.chair-glyph {
+  font-size: 28px;
+}
+
+.chair-label {
+  font-size: 14px;
+  color: var(--text-primary);
   letter-spacing: 0.05em;
 }
 
-.desk-hint {
+.chair-state {
   font-family: 'Noto Sans TC', sans-serif;
-  font-size: 12px;
-  color: var(--world-soot-grey);
-  text-align: center;
-  line-height: 1.4;
+  font-size: 11px;
+  color: var(--text-tertiary);
 }
 
 /* footer */
 .lobby-footer {
-  text-align: center;
-  padding-top: var(--sp-md);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--sp-sm);
+  flex-wrap: wrap;
+  gap: var(--sp-sm);
 }
 
 .lobby-back {
   background: transparent;
-  border: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r-subtle);
+  padding: 6px 12px;
   color: var(--text-tertiary);
   font-family: 'Noto Sans TC', sans-serif;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .lobby-back:hover {
-  color: var(--text-secondary);
+  border-color: var(--herald);
+  color: var(--herald);
+}
+
+.lobby-tip {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.05em;
+}
+
+/* 響應式 — Part 1 §7 + Part 2 §14.1 */
+@media (max-width: 768px) {
+  .lobby-room {
+    grid-template-columns: 1fr;
+  }
+  .lobby-wall-fireplace,
+  .lobby-wall-memorial,
+  .lobby-wall-bookshelf,
+  .lobby-desk {
+    grid-column: 1;
+  }
+  .lobby-wall-fireplace { grid-row: 1; }
+  .lobby-wall-memorial { grid-row: 2; }
+  .lobby-wall-bookshelf { grid-row: 3; }
+  .lobby-desk { grid-row: 4; }
+  .chairs-layer {
+    grid-column: 1;
+    grid-row: 5;
+    grid-template-columns: repeat(2, 1fr);
+  }
 }

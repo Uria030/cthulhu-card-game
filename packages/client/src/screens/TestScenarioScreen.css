@@ -1,47 +1,45 @@
+/**
+ * 三地點測試關卡 — 第六章 Part 2 §6 視覺規格
+ * 桌面俯瞰視角,五區塊布局,中央主光區聚焦,邊緣陰影,整體比大廳暗一級
+ * 背景:舊書桌的桌面紋理(深胡桃木 + 微微紙張、墨水痕跡)
+ */
+
 .ts-root {
   flex: 1;
-  background: var(--bg-primary);
-  padding: var(--sp-lg);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-lg);
-  max-width: 1200px;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(184, 137, 61, 0.07), transparent 50%),
+    radial-gradient(ellipse at 8% 50%, rgba(0, 0, 0, 0.3), transparent 40%),
+    radial-gradient(ellipse at 92% 50%, rgba(0, 0, 0, 0.3), transparent 40%),
+    repeating-linear-gradient(180deg, transparent 0, transparent 4px, rgba(0, 0, 0, 0.04) 4px, rgba(0, 0, 0, 0.04) 5px),
+    var(--bg-primary);
+  /* 整體比大廳暗一級(§6.2)*/
+  filter: brightness(0.92);
+  display: grid;
+  grid-template-rows: auto 1fr auto auto auto;
+  gap: var(--sp-md);
+  padding: var(--sp-md);
+  max-width: 1400px;
   margin: 0 auto;
   width: 100%;
 }
 
-.ts-header {
+/* ─── 上方角落:城主能量條 + 返回 ─────────── */
+.ts-topbar {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-md);
+  padding-bottom: var(--sp-sm);
   border-bottom: 1px solid var(--border);
-  padding-bottom: var(--sp-md);
-}
-
-.ts-title {
-  font-family: 'Noto Serif TC', serif;
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--world-antique-brass);
-  letter-spacing: 0.05em;
-}
-
-.ts-sub {
-  font-family: 'Noto Sans TC', sans-serif;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  letter-spacing: 0.15em;
-  margin-top: 4px;
 }
 
 .ts-back {
   background: transparent;
   border: 1px solid var(--border);
   border-radius: var(--r-subtle);
+  padding: 6px 12px;
   color: var(--text-secondary);
   font-family: 'Noto Sans TC', sans-serif;
-  font-size: 13px;
-  padding: 6px 14px;
+  font-size: 12px;
 }
 
 .ts-back:hover {
@@ -49,161 +47,684 @@
   color: var(--herald);
 }
 
-/* 三地點板 */
-.ts-board {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--sp-md);
+.ts-keeper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
 }
 
-.ts-loc {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sharp);
-  padding: var(--sp-md);
-  text-align: left;
+.ts-keeper-label {
   font-family: 'Noto Serif TC', serif;
-  color: var(--text-primary);
+  font-size: 13px;
+  color: var(--world-tarnished-silver);
+  letter-spacing: 0.1em;
+}
+
+.ts-keeper-bar {
+  flex: 1;
+  max-width: 400px;
+  height: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--world-tarnished-silver);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+
+.ts-keeper-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--info), var(--oracle));
+  transition: width 0.5s;
+}
+
+.ts-keeper-num {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 60px;
+}
+
+/* ─── 主版面:三欄 grid ─────────── */
+.ts-main {
+  display: grid;
+  grid-template-columns: 220px 1fr 220px;
+  gap: var(--sp-md);
+  min-height: 480px;
+}
+
+.ts-section-title {
+  font-family: 'Noto Serif TC', serif;
+  font-size: 13px;
+  color: var(--world-antique-brass);
+  letter-spacing: 0.15em;
+  text-transform: none;
+  margin-bottom: var(--sp-sm);
+  padding-bottom: 4px;
+  border-bottom: 1px dashed var(--border);
+}
+
+/* ─── 左側:調查員區 ─────────── */
+.ts-left {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--r-subtle);
+  padding: var(--sp-md);
+}
+
+.ts-investigator {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--sp-sm);
-  min-height: 140px;
-  transition: all 0.2s;
 }
 
-.ts-loc:hover {
-  border-color: var(--world-antique-brass);
-  background: var(--bg-card-hover);
+.ts-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--r-pill);
+  background: var(--herald);
+  border: 2px solid var(--world-antique-brass);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Noto Serif TC', serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--bg-primary);
+  /* §6.3.4 當前回合玩家頭像金色光環 + 微脈動 */
+  box-shadow: 0 0 0 3px var(--herald), 0 0 16px rgba(201, 168, 76, 0.3);
+  animation: pulseHalo 2s ease-in-out infinite;
 }
 
-.ts-loc.active {
-  border-color: var(--herald);
-  border-width: 2px;
-  box-shadow: 0 0 0 1px var(--herald) inset, 0 0 24px rgba(201, 168, 76, 0.18);
+@keyframes pulseHalo {
+  0%, 100% { box-shadow: 0 0 0 3px var(--herald), 0 0 16px rgba(201, 168, 76, 0.3); }
+  50% { box-shadow: 0 0 0 4px var(--herald), 0 0 24px rgba(201, 168, 76, 0.5); }
 }
 
-.ts-loc.vis-darkness {
-  background: linear-gradient(180deg, #08080d, var(--bg-card));
-  color: var(--text-secondary);
-}
-
-.ts-loc.vis-fire {
-  background: linear-gradient(180deg, rgba(184, 137, 61, 0.15), var(--bg-card));
-}
-
-.ts-loc-name {
-  font-size: 18px;
+.ts-inv-name {
+  font-family: 'Noto Serif TC', serif;
+  font-size: 14px;
+  color: var(--text-primary);
   font-weight: 600;
-  letter-spacing: 0.05em;
 }
 
-.ts-loc-desc {
-  font-family: 'Noto Sans TC', sans-serif;
-  font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  flex: 1;
-}
-
-.ts-loc-meta {
+.ts-inv-faction {
   font-family: 'Noto Sans TC', sans-serif;
   font-size: 11px;
   color: var(--text-tertiary);
   letter-spacing: 0.1em;
 }
 
-/* 調查員列 */
-.ts-investigator {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--r-subtle);
-  padding: var(--sp-md);
-}
-
-.ts-sec-title {
-  font-family: 'Noto Serif TC', serif;
-  font-size: 16px;
-  color: var(--world-antique-brass);
-  letter-spacing: 0.1em;
-  margin-bottom: var(--sp-sm);
-}
-
-.ts-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-md);
-  font-family: 'Noto Sans TC', sans-serif;
-  font-size: 14px;
-  color: var(--text-primary);
-}
-
-.ts-ap {
-  color: var(--herald);
-  font-weight: 600;
-}
-
-/* 行動 */
-.ts-actions {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--r-subtle);
-  padding: var(--sp-md);
-}
-
-.ts-action-grid {
+.ts-bar-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: var(--sp-sm);
-  margin-bottom: var(--sp-md);
+  grid-template-columns: 36px 1fr 50px;
+  align-items: center;
+  gap: var(--sp-xs);
+  width: 100%;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 11px;
 }
 
-.ts-action-btn {
+.ts-bar-label {
+  color: var(--text-secondary);
+  letter-spacing: 0.1em;
+}
+
+.ts-bar {
+  height: 8px;
   background: var(--bg-card);
-  color: var(--text-primary);
   border: 1px solid var(--border);
-  border-radius: var(--r-subtle);
-  padding: 10px 12px;
-  font-family: 'Noto Serif TC', serif;
-  font-size: 14px;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+
+.ts-bar-fill {
+  height: 100%;
+  transition: width 0.3s;
+}
+
+.ts-bar-hp .ts-bar-fill {
+  background: linear-gradient(90deg, var(--danger), #d96a6a);
+}
+
+.ts-bar-san .ts-bar-fill {
+  background: linear-gradient(90deg, var(--info), #6a9cb8);
+}
+
+.ts-bar-num {
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.ts-ap-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: var(--sp-xs);
+}
+
+.ts-ap-gears {
+  display: flex;
+  gap: 4px;
+}
+
+.ts-gear {
+  font-size: 18px;
+  color: var(--text-tertiary);
+  filter: grayscale(1) brightness(0.5);
+  transition: all 0.2s;
+}
+
+.ts-gear.active {
+  color: var(--herald);
+  filter: none;
+  text-shadow: 0 0 6px rgba(201, 168, 76, 0.4);
+}
+
+.ts-loc-info {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: var(--sp-sm);
+}
+
+.ts-statuses {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: var(--sp-xs);
+}
+
+.ts-status {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 2px 8px;
+}
+
+/* ─── 中央:地點區 + 遭遇區 ─────────── */
+.ts-center {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-md);
+}
+
+.ts-locations {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--r-subtle);
+  padding: var(--sp-md);
+}
+
+.ts-loc-row {
+  display: flex;
+  gap: var(--sp-sm);
+  align-items: stretch;
+  position: relative;
+}
+
+.ts-loc-card {
+  flex: 1;
+  background: var(--world-aged-paper);
+  color: var(--world-ink-black);
+  border: 1px solid var(--world-deep-walnut);
+  border-radius: var(--r-sharp);
+  padding: var(--sp-md);
+  text-align: left;
+  font-family: 'Noto Serif TC', serif;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
+  min-height: 140px;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.ts-loc-card:hover {
+  border-color: var(--world-antique-brass);
+  background: var(--world-smoke-white);
+}
+
+.ts-loc-card.active {
+  border-color: var(--world-oxblood);
+  border-width: 3px;
+  box-shadow: 0 0 0 1px var(--world-oxblood) inset, 0 0 16px rgba(92, 32, 24, 0.2);
+}
+
+.ts-loc-card.vis-darkness {
+  background: linear-gradient(180deg, #2a2520, var(--world-soot-grey));
+  color: var(--world-smoke-white);
+}
+
+.ts-loc-card.vis-darkness .ts-loc-desc {
+  color: var(--world-tarnished-silver);
+  filter: blur(0.4px);
+}
+
+.ts-loc-card.vis-night {
+  background: linear-gradient(180deg, #ddd0b4, var(--world-aged-paper));
+  filter: brightness(0.85);
+}
+
+.ts-loc-card.vis-fire {
+  background: linear-gradient(180deg, rgba(184, 137, 61, 0.4), var(--world-aged-paper));
+}
+
+.ts-loc-name {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.ts-loc-desc {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  color: var(--world-soot-grey);
+  line-height: 1.6;
+  flex: 1;
+}
+
+.ts-loc-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 11px;
+}
+
+.ts-loc-vis {
+  color: var(--world-soot-grey);
+}
+
+.ts-loc-enemy {
+  color: var(--world-oxblood);
+  font-weight: 600;
+}
+
+/* 連接線 — §6.3.1 手繪墨線 */
+.ts-loc-link {
+  position: absolute;
+  top: 50%;
+  right: -12px;
+  width: 12px;
+  height: 2px;
+  background: var(--world-deep-walnut);
+}
+
+.ts-loc-link.obstacle {
+  background: repeating-linear-gradient(90deg, var(--world-deep-walnut) 0, var(--world-deep-walnut) 3px, transparent 3px, transparent 6px);
+}
+
+/* 遭遇區 — §6.3.2 */
+.ts-encounter {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--r-subtle);
+  padding: var(--sp-md);
+}
+
+.ts-encounter-body {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sharp);
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  text-align: center;
+}
+
+.ts-encounter-empty small {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+/* ─── 右側:回合追蹤器 — §6.3.5 ─────── */
+.ts-right {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--r-subtle);
+  padding: var(--sp-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-sm);
+}
+
+.ts-turn-num {
+  font-family: 'Noto Serif TC', serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--world-antique-brass);
+  text-align: center;
+  letter-spacing: 0.1em;
+  padding: var(--sp-sm) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ts-phase {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.ts-phase strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--herald);
+  font-size: 16px;
+  letter-spacing: 0.1em;
+}
+
+.ts-rest-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
+  margin-top: var(--sp-sm);
+}
+
+.ts-rest {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-subtle);
+  padding: 8px 12px;
+  font-family: 'Noto Serif TC', serif;
+  font-size: 13px;
+  color: var(--text-primary);
   transition: all 0.15s;
 }
 
-.ts-action-btn:hover {
+.ts-rest:hover {
   border-color: var(--herald);
-  background: var(--bg-card-hover);
   color: var(--herald);
 }
 
-.ts-action-cost {
-  font-family: 'Noto Sans TC', sans-serif;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  background: var(--bg-primary);
-  padding: 2px 6px;
-  border-radius: var(--r-pill);
+.ts-rest-no {
+  border-color: var(--success);
 }
 
-.ts-end-turn {
-  width: 100%;
+.ts-rest-yes {
+  border-color: var(--world-tarnished-silver);
+}
+
+.ts-end-phase {
   background: var(--world-deep-walnut);
   color: var(--world-smoke-white);
   border: 1px solid var(--world-antique-brass);
   border-radius: var(--r-subtle);
   padding: 10px;
   font-family: 'Noto Serif TC', serif;
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: 0.1em;
+  margin-top: var(--sp-sm);
 }
 
-.ts-end-turn:hover {
+.ts-end-phase:hover {
   background: var(--world-soot-grey);
   color: var(--herald);
 }
 
-/* 事件記錄 */
+.ts-tracker {
+  margin-top: var(--sp-md);
+  padding-top: var(--sp-md);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-sm);
+}
+
+.ts-tracker-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.ts-tracker-label {
+  letter-spacing: 0.1em;
+}
+
+.ts-tracker-bar {
+  height: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+
+.ts-tracker-fill {
+  height: 100%;
+  transition: width 0.3s;
+}
+
+.ts-clue {
+  background: var(--success);
+}
+
+.ts-doom {
+  background: linear-gradient(90deg, var(--world-oxblood), #882010);
+}
+
+.ts-tracker-num {
+  text-align: right;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+/* ─── 下方:手牌區 — §6.3.3 扇形 ─────── */
+.ts-hand {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--r-subtle);
+  padding: var(--sp-md);
+}
+
+.ts-hand-fan {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: var(--sp-xs);
+  min-height: 180px;
+  padding: var(--sp-md) 0;
+}
+
+.ts-card {
+  background: var(--world-aged-paper);
+  color: var(--world-ink-black);
+  border: 1px solid var(--world-deep-walnut);
+  border-radius: var(--r-subtle);
+  padding: var(--sp-sm);
+  width: 130px;
+  height: 180px;
+  font-family: 'Noto Serif TC', serif;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+}
+
+.ts-card:hover {
+  /* §6.3.3 懸停抬起放大 */
+  transform: translateY(-12px) scale(1.08) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  z-index: 5;
+}
+
+/* §8.3 稀有度差異靠邊框 */
+.rarity-uncommon { border-color: var(--world-antique-brass); border-width: 2px; }
+.rarity-rare {
+  border-color: var(--world-tarnished-silver);
+  border-width: 2px;
+  box-shadow: 0 0 0 1px var(--world-antique-brass);
+}
+.rarity-legendary {
+  border-color: var(--herald);
+  border-width: 3px;
+  box-shadow: 0 0 12px rgba(201, 168, 76, 0.3);
+}
+
+.ts-card-cost {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--world-oxblood);
+  text-align: center;
+  border-bottom: 1px solid var(--world-soot-grey);
+  padding-bottom: 2px;
+}
+
+.ts-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.ts-card-desc {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 11px;
+  color: var(--world-soot-grey);
+  line-height: 1.5;
+  flex: 1;
+}
+
+/* ─── 卡片三合一彈出 — §8.2 ─────── */
+.ts-card-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 0.2s;
+}
+
+.ts-card-zoom {
+  background: var(--world-aged-paper);
+  color: var(--world-ink-black);
+  border: 2px solid var(--world-antique-brass);
+  border-radius: var(--r-subtle);
+  padding: var(--sp-lg);
+  max-width: 480px;
+  width: 90vw;
+  font-family: 'Noto Serif TC', serif;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-md);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+.ts-zoom-cost {
+  font-size: 14px;
+  color: var(--world-oxblood);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.ts-zoom-name {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--world-ink-black);
+}
+
+.ts-zoom-desc {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 14px;
+  color: var(--world-soot-grey);
+  line-height: 1.7;
+}
+
+.ts-zoom-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-sm);
+  margin-top: var(--sp-sm);
+}
+
+.ts-action {
+  border-radius: var(--r-subtle);
+  padding: 10px 14px;
+  font-family: 'Noto Serif TC', serif;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ts-action small {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+/* §8.2 三合一視覺規格 */
+.ts-action-play {
+  background: var(--world-deep-walnut);
+  color: var(--world-smoke-white);
+  border: 2px solid var(--world-antique-brass);
+}
+
+.ts-action-play:hover {
+  background: var(--world-soot-grey);
+}
+
+.ts-action-commit {
+  background: transparent;
+  color: var(--world-deep-walnut);
+  border: 2px solid var(--world-tarnished-silver);
+}
+
+.ts-action-commit:hover {
+  background: var(--world-smoke-white);
+}
+
+.ts-action-consume {
+  background: transparent;
+  color: var(--world-oxblood);
+  border: 2px solid var(--world-oxblood);
+  border-style: dashed;
+  /* §8.2 暗紅邊框 + 不對稱裂痕(用 dashed 模擬) */
+}
+
+.ts-action-consume:hover {
+  background: rgba(92, 32, 24, 0.08);
+}
+
+.ts-zoom-close {
+  background: transparent;
+  border: 1px solid var(--world-soot-grey);
+  border-radius: var(--r-subtle);
+  padding: 6px;
+  color: var(--world-soot-grey);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ─── 事件記錄 ─────── */
 .ts-log {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -216,10 +737,10 @@
   border: 1px solid var(--border);
   border-radius: var(--r-sharp);
   padding: var(--sp-sm) var(--sp-md);
-  max-height: 200px;
+  max-height: 150px;
   overflow-y: auto;
   font-family: 'Noto Sans TC', sans-serif;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -228,15 +749,43 @@
   line-height: 1.6;
 }
 
-/* footer */
 .ts-foot {
   text-align: center;
 }
 
-.ts-disclaimer {
+.ts-foot p {
   font-family: 'Noto Sans TC', sans-serif;
   font-size: 11px;
   color: var(--text-tertiary);
-  line-height: 1.7;
   letter-spacing: 0.05em;
+  line-height: 1.7;
+}
+
+/* ─── 響應式 — Part 2 §14.2 戰鬥手機直立禁用 ─────── */
+@media (max-width: 768px) {
+  .ts-main {
+    grid-template-columns: 1fr;
+  }
+  .ts-loc-row {
+    flex-direction: column;
+  }
+  .ts-loc-link { display: none; }
+  .ts-card { width: 100px; height: 150px; font-size: 11px; }
+}
+
+@media (orientation: portrait) and (max-width: 768px) {
+  .ts-root::after {
+    content: '請橫向使用以開始戰鬥(§14.2 響應式規則)';
+    position: fixed;
+    bottom: var(--sp-md);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--world-oxblood);
+    color: var(--world-smoke-white);
+    padding: 8px 16px;
+    border-radius: var(--r-pill);
+    font-family: 'Noto Sans TC', sans-serif;
+    font-size: 12px;
+    z-index: 50;
+  }
 }

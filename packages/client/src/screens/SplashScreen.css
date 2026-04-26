@@ -1,74 +1,58 @@
+/**
+ * 啟動畫面 — 第六章 Part 2 §2.2 視覺規格 + §2.3 動效
+ * 純墨黑底 + 碎裂石面紋理 8% + 觸手紋章舊銀色 + 標題思源宋體 64px 煙白
+ */
 .splash-root {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--sp-xl) var(--sp-lg);
-  background:
-    radial-gradient(ellipse at center, rgba(184, 137, 61, 0.06), transparent 60%),
-    var(--bg-primary);
-  color: var(--text-primary);
+  padding: var(--sp-xl);
+  background-color: var(--world-ink-black);
+  /* 碎裂石面紋理(極簡 — 用 SVG noise filter,透明度 8%) */
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(110, 104, 100, 0.06), transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(45, 61, 42, 0.05), transparent 40%);
   position: relative;
   text-align: center;
   gap: var(--sp-xl);
+  /* 圖騰淡入(§2.3 ease-fade 線性 1.0 秒) */
+  animation: splashFadeIn 1.0s linear both;
+  transition: opacity 0.5s linear;
+}
+
+.splash-root.fading-out {
+  opacity: 0;
+}
+
+@keyframes splashFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .splash-emblem {
-  font-size: 96px;
-  color: var(--world-antique-brass);
-  text-shadow: 0 0 24px rgba(139, 111, 61, 0.3);
-  letter-spacing: 0.1em;
+  filter: drop-shadow(0 0 24px rgba(45, 61, 42, 0.25));
 }
 
-.splash-narrative {
-  max-width: 640px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-md);
-  font-family: 'Noto Sans TC', sans-serif;
-  font-weight: 300;
-  font-size: 18px;
-  letter-spacing: 0.05em;
-  line-height: 1.9;
-  color: var(--text-primary);
-  min-height: 200px;
-}
-
-.splash-line {
-  margin: 0;
-}
-
-.splash-enter {
-  background: transparent;
-  color: var(--world-antique-brass);
-  border: 1px solid var(--world-antique-brass);
-  border-radius: var(--r-subtle);
-  padding: 12px 32px;
+.splash-title {
+  /* §2.2 規格:headline-display 64px / 思源宋體粗體 / 煙白 / 字距加寬 0.05em */
   font-family: 'Noto Serif TC', serif;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  transition: all 0.2s;
+  font-size: 64px;
+  font-weight: 700;
+  color: var(--world-smoke-white);
+  letter-spacing: 0.05em;
+  margin: 0;
+  /* 微妙的歲月感:極淡的陰影 */
+  text-shadow: 0 0 18px rgba(217, 210, 197, 0.12);
 }
 
-.splash-enter:hover {
-  background: rgba(139, 111, 61, 0.12);
-  color: var(--herald);
-  border-color: var(--herald);
-}
-
-.splash-skip {
-  position: absolute;
-  bottom: var(--sp-lg);
-  right: var(--sp-lg);
-  background: transparent;
-  color: var(--text-tertiary);
-  border: none;
-  font-size: 14px;
-  font-family: 'Noto Sans TC', sans-serif;
-}
-
-.splash-skip:hover {
-  color: var(--text-secondary);
+@media (max-width: 768px) {
+  .splash-title {
+    font-size: 40px;
+  }
+  .splash-emblem svg {
+    width: 140px;
+    height: 140px;
+  }
 }

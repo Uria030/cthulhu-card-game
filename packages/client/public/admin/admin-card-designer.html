@@ -125,8 +125,16 @@
     /* Right panel: in flex flow, pushes content when open */
     .panel-right-drawer { width: 340px; flex-shrink: 0; background: var(--bg-secondary); border-left: 1px solid var(--border); padding: 1rem; overflow-y: auto; max-height: calc(100vh - 50px); transition: width 0.2s, padding 0.2s, opacity 0.2s; }
     .panel-right-drawer.collapsed { width: 0; padding: 0; overflow: hidden; border-left: none; opacity: 0; }
-    .panel-right-toggle { flex-shrink: 0; width: 24px; background: var(--bg-secondary); border: none; border-left: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--gold-dim); font-size: 0.6875rem; padding: 0; writing-mode: vertical-rl; letter-spacing: 0.15em; }
-    .panel-right-toggle:hover { color: var(--gold); background: var(--bg-card); }
+    /* nav 工具選單(板手 icon dropdown):API Key / 匯入 / 匯出 */
+    .m1-tools-menu { position: relative; }
+    .m1-tools-menu summary { list-style: none; cursor: pointer; padding: 4px 8px; font-size: 1rem; color: var(--gold-dim); border: 1px solid var(--border); border-radius: 4px; user-select: none; transition: all 0.15s; }
+    .m1-tools-menu summary::-webkit-details-marker { display: none; }
+    .m1-tools-menu summary::marker { content: ''; }
+    .m1-tools-menu summary:hover { color: var(--gold); border-color: var(--gold-dim); }
+    .m1-tools-menu[open] summary { color: var(--gold); border-color: var(--gold); background: var(--bg-card); }
+    .m1-tools-dropdown { position: absolute; top: calc(100% + 4px); right: 0; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; padding: 4px; min-width: 180px; z-index: 200; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+    .m1-tools-dropdown button { background: transparent; border: none; color: var(--text-primary); padding: 6px 10px; text-align: left; font-size: 0.78rem; cursor: pointer; border-radius: 3px; font-family: inherit; }
+    .m1-tools-dropdown button:hover { background: var(--bg-card); color: var(--gold); }
     .panel-right-drawer .preview-card { width: 100%; transform: scale(0.7); transform-origin: top center; margin-bottom: -30%; }
     .panel-right-drawer .balance-panel { width: 100%; }
     /* Mobile 浮動按鈕(只在手機顯示) */
@@ -163,7 +171,7 @@
       body.m1-preview-mode .panel-right-drawer {
         transform: translateY(0); opacity: 1;
       }
-      .panel-right-toggle { display: none; }
+      /* panel-right-toggle 已於 v0.20.7 移除 */
 
       /* 表單兩欄改一欄 */
       .form-grid { grid-template-columns: 1fr; }
@@ -198,8 +206,16 @@
     <button type="button" class="m1-mobile-btn" id="m1BtnList" title="卡片列表" onclick="toggleLeftPanel();">📋 列表</button>
     <span class="nav-title">卡片設計器</span>
     <span class="nav-code">MOD-01</span>
-    <button type="button" class="m1-mobile-btn" id="m1BtnPreview" title="預覽" onclick="document.body.classList.toggle('m1-preview-mode');">👁️ 預覽</button>
+    <button type="button" class="m1-mobile-btn" id="m1BtnPreview" title="預覽" onclick="togglePreviewPanel();">👁️ 預覽</button>
     <button class="help-btn" onclick="openModuleHelp('MOD-01')" title="開啟使用說明">❓ 使用說明</button>
+    <details class="m1-tools-menu" id="m1ToolsMenu">
+      <summary title="工具選單">🔧</summary>
+      <div class="m1-tools-dropdown">
+        <button type="button" onclick="showApiKeyDialog(); document.getElementById('m1ToolsMenu').open=false;">🔑 設定 API Key</button>
+        <button type="button" onclick="importJSON(); document.getElementById('m1ToolsMenu').open=false;">📥 匯入 JSON</button>
+        <button type="button" onclick="exportJSON(); document.getElementById('m1ToolsMenu').open=false;">📤 匯出 JSON</button>
+      </div>
+    </details>
   </nav>
 
   <div class="main-layout">
@@ -221,16 +237,14 @@
     <div class="panel-right">
       <div class="toolbar">
         <button class="btn btn-primary" onclick="newCard()">+ 新增卡片</button>
-        <button class="btn" onclick="showApiKeyDialog()">設定 API Key</button>
+        <button class="btn" id="aiToggleBtn" onclick="toggleAiSection()">✦ AI 生成卡片</button>
         <span id="apiKeyStatus" class="ai-status"></span>
         <span class="spacer"></span>
-        <button class="btn" onclick="importJSON()">匯入 JSON</button>
-        <button class="btn" onclick="exportJSON()">匯出 JSON</button>
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
       </div>
 
-      <!-- AI -->
-      <div class="ai-section">
+      <!-- AI(預設隱藏,點 toolbar AI 按鈕展開) -->
+      <div class="ai-section" id="aiSection" style="display:none;">
         <div class="ai-title">AI 卡片生成</div>
 
         <!-- 模式切換 tab -->
@@ -619,7 +633,6 @@
 
       </div>
     </div>
-    <button class="panel-right-toggle" id="panelRightToggle" onclick="toggleRightPanel()" title="展開平衡/預覽面板">平衡 預覽</button>
     <div class="panel-right-drawer collapsed" id="panelRightDrawer">
     <div class="balance-panel" id="balancePanel">
       <div class="balance-title">平衡計算</div>
@@ -2476,11 +2489,32 @@
     if (btn) btn.classList.toggle('active', open);
   }
 
-  /* ── Right Panel Toggle ── */
-  function toggleRightPanel() {
+  /* ── 預覽面板 toggle (桌機/手機共用) ── */
+  function togglePreviewPanel() {
     const drawer = el('panelRightDrawer');
-    const collapsed = drawer.classList.toggle('collapsed');
-    el('panelRightToggle').title = collapsed ? '展開平衡/預覽面板' : '收合平衡/預覽面板';
+    const btn = el('m1BtnPreview');
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    if (isMobile) {
+      // 手機:用 m1-preview-mode 觸發 modal-style 浮起
+      const on = document.body.classList.toggle('m1-preview-mode');
+      if (btn) btn.classList.toggle('active', on);
+    } else {
+      // 桌機:toggle drawer.collapsed(展開/收合 flex panel)
+      const collapsed = drawer.classList.toggle('collapsed');
+      if (btn) btn.classList.toggle('active', !collapsed);
+    }
+  }
+  // 舊名相容(若有其他地方呼叫到)
+  function toggleRightPanel() { togglePreviewPanel(); }
+
+  /* ── AI 生成卡片 section toggle (預設隱藏) ── */
+  function toggleAiSection() {
+    const sec = el('aiSection');
+    const btn = el('aiToggleBtn');
+    if (!sec) return;
+    const open = sec.style.display === 'none' || sec.style.display === '';
+    sec.style.display = open ? 'block' : 'none';
+    if (btn) btn.classList.toggle('active', open);
   }
 
   /* ── Section Collapse ── */

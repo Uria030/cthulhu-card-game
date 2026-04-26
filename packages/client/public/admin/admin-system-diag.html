@@ -190,6 +190,13 @@
       <p style="margin:0.25rem 0;"><strong>用途:</strong>當卡片編輯器顯示的 V 值跟預期不符,按此鈕輸入卡片 code 或 name_zh,系統會把 DB 上該卡的完整資料攤開——卡資料 / effects[] 逐條 / 引擎逐條算出的 V 值 / 套用倍率 / 警告(如 effect_code 不在白名單、duration 缺漏、params 不完整),log 區會印出完整診斷,可複製 log 直接給開發者看。<strong>排錯不靠截圖、不靠猜測。</strong></p>
     </div>
 
+    <div class="diag-action-row" style="margin-top:0.75rem;" data-min-role="admin">
+      <button class="diag-btn primary" id="btnCopyAdminToken">🔐 複製當前 admin token(交給 Claude Code)</button>
+    </div>
+    <div style="padding:0.75rem 0;border-bottom:1px solid var(--border);font-size:0.75rem;color:var(--text-secondary);" data-min-role="admin">
+      <p style="margin:0.25rem 0;"><strong>用途:</strong>當 Claude Code 需要在本地呼叫 admin API(例如 G1 沙盒關卡批次寫零件),按此鈕一鍵複製當前登入 token 到剪貼簿,直接貼回 chat 給 Claude。Token 24 小時內有效,過期再按一次。<strong>不會洩漏密碼,僅輸出短期 token。</strong></p>
+    </div>
+
     <div class="diag-log-header">
       <strong>Log</strong>
       <span class="spacer"></span>
@@ -709,6 +716,27 @@
       }
     }
     document.getElementById('btnInspectCard').onclick = inspectCard;
+
+    async function copyAdminToken() {
+      const token = localStorage.getItem('admin_token');
+      if (!token) {
+        log('error', '✗ 找不到 admin_token,請先登入後台');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(token);
+        log('ok', `🔐 已複製 token 到剪貼簿(長度 ${token.length}),請直接貼回 chat 給 Claude Code`);
+      } catch (e) {
+        const ta = document.createElement('textarea');
+        ta.value = token;
+        ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); log('ok', `🔐 已複製 token(fallback,長度 ${token.length})`); }
+        catch (e2) { log('warn', `自動複製失敗,token 顯示如下供手動複製:\n${token}`); }
+        finally { document.body.removeChild(ta); }
+      }
+    }
+    document.getElementById('btnCopyAdminToken').onclick = copyAdminToken;
 
     document.getElementById('btnClearLog').onclick = () => { logArea.textContent = ''; };
     document.getElementById('btnCopyLog').onclick = async () => {

@@ -3,8 +3,14 @@ dist/
 .env
 .env.local
 .env.*.local
+.env.development
+.env.production
+*.env
 .DS_Store
 *.tsbuildinfo
 .vite/
 __pycache__/
 .claude/settings.local.json
+logs/
+.g1-token
+.admin-token-temp

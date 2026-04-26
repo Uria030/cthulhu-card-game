@@ -168,17 +168,36 @@
         /* 手機預設顯示卡片編輯器主頁(表單);panel-left 浮起時覆蓋 */
       }
 
-      /* 預覽抽屜在手機改為全螢幕 modal,以 m1-preview-mode 控制 */
-      .panel-right-drawer {
-        position: fixed; top: 50px; left: 0; right: 0; bottom: 0;
-        width: 100%; height: calc(100vh - 50px);
-        z-index: 250; padding: 1rem; opacity: 0;
-        transform: translateY(100%); transition: transform 0.25s, opacity 0.2s;
+      /* 預覽抽屜在手機:改為固定頂部 inline,左右分欄(左平衡 / 右卡面)
+         移除原本全螢幕 modal 機制(常壞、卡死、不直觀)*/
+      .panel-right-drawer,
+      .panel-right-drawer.collapsed {
+        position: relative; top: auto; left: auto; right: auto; bottom: auto;
+        width: 100%; height: auto; max-height: none;
+        z-index: 1; padding: 0.5rem; opacity: 1;
+        transform: none; transition: none;
+        order: -1;  /* 排到 panel-right 上方(main-layout flex-direction:column)*/
+        display: flex; flex-direction: row; gap: 0.5rem;
+        border-left: none; border-bottom: 1px solid var(--border);
+        background: var(--bg-secondary); overflow: visible;
       }
-      body.m1-preview-mode .panel-right-drawer {
-        transform: translateY(0); opacity: 1;
+      .panel-right-drawer .balance-panel {
+        flex: 1; min-width: 0; margin-bottom: 0; padding: 0.5rem;
+        font-size: 0.7rem;
       }
-      /* panel-right-toggle 已於 v0.20.7 移除 */
+      .panel-right-drawer .balance-row { font-size: 0.7rem; padding: 0.15rem 0; }
+      .panel-right-drawer .preview-card {
+        flex: 1; min-width: 0; transform: none; margin-bottom: 0;
+        width: auto; min-height: 280px; padding: 0.5rem;
+        font-size: 0.7rem;
+      }
+      .panel-right-drawer .preview-card .pv-name-zh { font-size: 0.95rem; }
+      .panel-right-drawer .preview-card .pv-name-en { font-size: 0.65rem; }
+      .panel-right-drawer .preview-card .pv-meta { font-size: 0.6rem; padding: 0.2rem 0.3rem; }
+      /* 手機隱藏預覽 toggle 按鈕(預覽常駐頂部)*/
+      #m1BtnPreview { display: none; }
+      /* m1-preview-mode 在手機不再生效(預覽常駐),保留變數避免 JS 引用錯誤 */
+      body.m1-preview-mode .panel-right-drawer { /* no-op */ }
 
       /* 表單兩欄改一欄 */
       .form-grid { grid-template-columns: 1fr; }

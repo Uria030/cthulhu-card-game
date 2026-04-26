@@ -399,6 +399,30 @@
             </div>
           </div>
 
+          <!-- 🎯 主軸（軸向宣告，雙軸戰鬥 s08 §2.1） -->
+          <div class="section-label collapsible open" id="secAxisHead" onclick="toggleSection('secAxis')">🎯 主軸（軸向宣告）<span id="axisLayerTag" style="display:inline-block;margin-left:0.5rem;padding:0.1rem 0.5rem;border-radius:3px;font-size:0.7rem;background:#6a6a6a;color:#fff;">無軸向</span></div>
+          <div class="section-content" id="secAxis">
+            <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.5rem;">宣告此卡設計時心中最強的軸向。強度合約：由粗到細 faction → combat_style → proficiency → card_name，軸向越細效果可越強。</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>主軸層</label>
+                <select id="f_primary_axis_layer" onchange="onPrimaryAxisLayerChange()">
+                  <option value="none">無軸向（工具卡）</option>
+                  <option value="faction">陣營極軸（最廣 · 效果要淡）</option>
+                  <option value="combat_style">戰鬥風格軸</option>
+                  <option value="proficiency">戰鬥專精軸</option>
+                  <option value="card_name">卡名軸（最細 · 效果可強）</option>
+                  <option value="talisman_type">法器類型軸（正交）</option>
+                </select>
+              </div>
+              <div class="form-group" id="primaryAxisValueGroup" style="display:none;">
+                <label>主軸值</label>
+                <div id="primaryAxisValueInputSlot"></div>
+              </div>
+            </div>
+            <div id="primaryAxisHint" style="font-size:0.7rem;color:var(--text-tertiary);margin-top:0.35rem;"></div>
+          </div><!-- /secAxis -->
+
           <!-- Book/Relic fields -->
           <div id="bookRelicFields" class="hidden">
             <div class="section-label collapsible open" id="secBookRelicHead" onclick="toggleSection('secBookRelic')">書籍/遺跡設定</div>
@@ -480,29 +504,11 @@
 
           </div><!-- /secPlay -->
 
-          <!-- 🎯 主軸（軸向宣告，雙軸戰鬥 s08 §2.1） -->
-          <div class="section-label collapsible open" id="secAxisHead" onclick="toggleSection('secAxis')">🎯 主軸（軸向宣告）<span id="axisLayerTag" style="display:inline-block;margin-left:0.5rem;padding:0.1rem 0.5rem;border-radius:3px;font-size:0.7rem;background:#6a6a6a;color:#fff;">無軸向</span></div>
-          <div class="section-content" id="secAxis">
-            <div style="font-size:0.6875rem;color:var(--text-tertiary);margin-bottom:0.5rem;">宣告此卡設計時心中最強的軸向。強度合約：由粗到細 faction → combat_style → proficiency → card_name，軸向越細效果可越強。</div>
-            <div class="form-grid">
-              <div class="form-group">
-                <label>主軸層</label>
-                <select id="f_primary_axis_layer" onchange="onPrimaryAxisLayerChange()">
-                  <option value="none">無軸向（工具卡）</option>
-                  <option value="faction">陣營極軸（最廣 · 效果要淡）</option>
-                  <option value="combat_style">戰鬥風格軸</option>
-                  <option value="proficiency">戰鬥專精軸</option>
-                  <option value="card_name">卡名軸（最細 · 效果可強）</option>
-                  <option value="talisman_type">法器類型軸（正交）</option>
-                </select>
-              </div>
-              <div class="form-group" id="primaryAxisValueGroup" style="display:none;">
-                <label>主軸值</label>
-                <div id="primaryAxisValueInputSlot"></div>
-              </div>
-            </div>
-            <div id="primaryAxisHint" style="font-size:0.7rem;color:var(--text-tertiary);margin-top:0.35rem;"></div>
-          </div><!-- /secAxis -->
+          <!-- Effects -->
+          <div class="section-label">效果資訊</div>
+          <div id="effectsList"></div>
+          <div class="effects-total-value" id="effectsTotalValue"></div>
+          <button class="btn" onclick="addEffect()" style="margin-top:0.5rem;">+ 新增效果</button>
 
           <!-- Stats: 加值數據 (Commit) -->
           <div class="section-label collapsible open" id="secCommitHead" onclick="toggleSection('secCommit')">加值數據（Commit）<span class="eff-value-tag" id="commitTotalTag">0V</span></div>
@@ -535,6 +541,16 @@
             <!-- Commit validation panel -->
             <div style="margin-top:0.5rem;padding:0.4rem;background:var(--bg-primary);border-radius:4px;border:1px solid var(--border);font-size:0.75rem;" id="commitValidation"></div>
           </div><!-- /secCommit -->
+
+          <!-- 強化菜單(玩家可購買的強化選項)— 取代舊 LV0-5 六頁籤 -->
+          <div class="section-label collapsible" id="secEnhSlotsHead" onclick="toggleSection('secEnhSlots')">強化菜單(玩家可購買的強化選項)</div>
+          <div class="section-content collapsed" id="secEnhSlots">
+            <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.5rem;">
+              勾選哪些卡面欄位開放玩家用 XP 強化。每張卡共 5 點配額,設計師起始投入(★N)+ 玩家後續投入 ≤ 5。售價 xp_cost 暫留待規格訂定後填入。
+            </div>
+            <div id="enhancement-slots-list" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+            <button class="btn" type="button" onclick="addEnhancementSlot()" style="font-size:0.75rem;margin-top:0.5rem;">＋ 新增強化標記</button>
+          </div>
 
           <!-- Stats: 消費功能 (Consume) -->
           <div class="section-label" id="secConsumeHead" style="display:flex;align-items:center;gap:0.5rem;">
@@ -650,22 +666,6 @@
               <div class="form-group"><label>殺敵軸 V 值（雙用途卡）</label><input type="number" id="f_kill_axis_value" value="0" min="0" max="20" step="0.1"></div>
               <div class="form-group"><label>槓桿修正（雙用途）</label><input type="number" id="f_leverage_modifier" value="0" min="0" max="5" step="0.1"></div>
             </div>
-          </div>
-
-          <!-- Effects -->
-          <div class="section-label">效果資訊</div>
-          <div id="effectsList"></div>
-          <div class="effects-total-value" id="effectsTotalValue"></div>
-          <button class="btn" onclick="addEffect()" style="margin-top:0.5rem;">+ 新增效果</button>
-
-          <!-- 強化菜單(玩家可購買的強化選項)— 取代舊 LV0-5 六頁籤 -->
-          <div class="section-label collapsible" id="secEnhSlotsHead" onclick="toggleSection('secEnhSlots')">強化菜單(玩家可購買的強化選項)</div>
-          <div class="section-content collapsed" id="secEnhSlots">
-            <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:0.5rem;">
-              勾選哪些卡面欄位開放玩家用 XP 強化。每張卡共 5 點配額,設計師起始投入(★N)+ 玩家後續投入 ≤ 5。售價 xp_cost 暫留待規格訂定後填入。
-            </div>
-            <div id="enhancement-slots-list" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
-            <button class="btn" type="button" onclick="addEnhancementSlot()" style="font-size:0.75rem;margin-top:0.5rem;">＋ 新增強化標記</button>
           </div>
 
           <!-- Narrative -->

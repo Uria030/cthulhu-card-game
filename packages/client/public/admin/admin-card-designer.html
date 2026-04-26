@@ -297,85 +297,93 @@
           </div>
 
           <!-- Identity -->
-          <div class="section-label">身份資訊</div>
-          <div class="form-grid">
-            <div class="form-group"><label>系列</label><select id="f_series"></select></div>
-            <div class="form-group"><label>起始投入點數 ★ <span style="color:var(--text-tertiary);font-size:0.7rem;">(0-5)</span></label><input type="number" id="f_level" value="0" min="0" max="5" title="設計師預先投入的成長空間點數,每點對應 1V 效果預算。玩家可在剩餘配額(5 - 起始投入)內以 XP 自行強化。"></div>
-            <div class="form-group"><label>卡片來源 (card_source)</label><select id="f_card_source">
-              <option value="standard">標準卡(可探索獲得 / 整備購買)</option>
-              <option value="story_fixed">劇情固定卡(不受天賦鎖、不可購買)</option>
-              <option value="book_upgrade">書籍升級版(僅 transform 取得)</option>
-              <option value="relic_upgrade">遺跡升級版(僅 transform 取得)</option>
-            </select></div>
-            <div class="form-group"><label>中文名稱</label><input type="text" id="f_name_zh" placeholder=".45 自動手槍"></div>
-            <div class="form-group"><label>英文名稱</label><div style="display:flex;gap:0.25rem;"><input type="text" id="f_name_en" placeholder=".45 Automatic" style="flex:1;"><button class="btn" type="button" onclick="aiTranslateName()" style="font-size:0.6875rem;white-space:nowrap;">生成英文</button></div></div>
-            <div class="form-group"><label>陣營極</label><select id="f_faction"></select></div>
-            <div class="form-group"><label>卡片風格</label><select id="f_style"></select></div>
-            <div class="form-group"><label>卡片類別</label><select id="f_type"></select></div>
-            <div class="form-group" id="slotGroup"><label>裝備欄位</label><select id="f_slot"></select><div class="slot-note" id="slotNote"></div></div>
-            <div class="form-group full">
-              <div class="check-row"><input type="checkbox" id="f_is_unique"><label for="f_is_unique">獨特卡（場上只能存在一張）</label></div>
-            </div>
-            <div class="form-group"><label>經驗值花費 (xp_cost)</label><input type="number" id="f_xp_cost" value="0" min="0" max="30"></div>
-            <div class="form-group"><label>稀有度（系統反推）</label><div class="rarity-display" id="rarityDisplay">—</div></div>
-            <div class="form-group full"><label>物品子類型 (subtypes)</label>
-              <div id="subtypesCheckboxes" style="display:flex;flex-wrap:wrap;gap:0.25rem 0.5rem;"></div>
+          <div class="section-label collapsible open" id="secIdentityHead" onclick="toggleSection('secIdentity')">身份資訊</div>
+          <div id="secIdentity">
+            <div class="form-grid">
+              <div class="form-group"><label>系列</label><select id="f_series"></select></div>
+              <div class="form-group"><label>起始投入點數 ★ <span style="color:var(--text-tertiary);font-size:0.7rem;">(0-5)</span></label><input type="number" id="f_level" value="0" min="0" max="5" title="設計師預先投入的成長空間點數,每點對應 1V 效果預算。玩家可在剩餘配額(5 - 起始投入)內以 XP 自行強化。"></div>
+              <div class="form-group"><label>卡片來源 (card_source)</label><select id="f_card_source">
+                <option value="standard">標準卡(可探索獲得 / 整備購買)</option>
+                <option value="story_fixed">劇情固定卡(不受天賦鎖、不可購買)</option>
+                <option value="book_upgrade">書籍升級版(僅 transform 取得)</option>
+                <option value="relic_upgrade">遺跡升級版(僅 transform 取得)</option>
+              </select></div>
+              <div class="form-group"><label>中文名稱</label><input type="text" id="f_name_zh" placeholder=".45 自動手槍"></div>
+              <div class="form-group"><label>英文名稱</label><div style="display:flex;gap:0.25rem;"><input type="text" id="f_name_en" placeholder=".45 Automatic" style="flex:1;"><button class="btn" type="button" onclick="aiTranslateName()" style="font-size:0.6875rem;white-space:nowrap;">生成英文</button></div></div>
+              <div class="form-group"><label>陣營極</label><select id="f_faction"></select></div>
+              <div class="form-group"><label>卡片風格</label><select id="f_style"></select></div>
+              <div class="form-group"><label>卡片類別</label><select id="f_type"></select></div>
+              <div class="form-group" id="slotGroup"><label>裝備欄位</label><select id="f_slot"></select><div class="slot-note" id="slotNote"></div></div>
+              <div class="form-group full">
+                <div class="check-row"><input type="checkbox" id="f_is_unique"><label for="f_is_unique">獨特卡（場上只能存在一張）</label></div>
+              </div>
+              <div class="form-group" id="xpCostGroup" title="只在永久卡 / 書籍 / 遺跡 / 升級版顯示;一般卡售價公式待規範訂定後自動推算"><label>經驗值花費 (xp_cost) <span style="color:var(--text-tertiary);font-size:0.7rem;">(永久/書籍/遺跡/升級版)</span></label><input type="number" id="f_xp_cost" value="0" min="0" max="30"></div>
+              <div class="form-group"><label>稀有度（系統反推）</label><div class="rarity-display" id="rarityDisplay">—</div></div>
+              <div class="form-group full"><label>物品子類型 (subtypes)</label>
+                <div id="subtypesCheckboxes" style="display:flex;flex-wrap:wrap;gap:0.25rem 0.5rem;"></div>
+              </div>
             </div>
           </div>
 
           <!-- Special Identity Tags -->
-          <div class="section-label">特殊身份標記</div>
-          <div class="form-grid">
-            <div class="form-group full">
-              <div class="check-row"><input type="checkbox" id="f_is_signature"><label for="f_is_signature">簽名卡 — 調查員獨有</label></div>
-              <div class="check-row"><input type="checkbox" id="f_is_weakness"><label for="f_is_weakness">弱點 — 負面卡，強制納入牌組</label></div>
-              <div class="check-row"><input type="checkbox" id="f_is_revelation"><label for="f_is_revelation">神啟卡 — 詛咒卡，抽到即觸發</label></div>
-              <div class="check-row"><input type="checkbox" id="f_is_exceptional"><label for="f_is_exceptional">Exceptional — 經驗值 ×2，額外抵扣 -2V</label></div>
-              <div class="check-row"><input type="checkbox" id="f_is_permanent" onchange="onPermanentChange()"><label for="f_is_permanent">永久卡 — 買來直接進場、僅被動能力、EXP ×2</label></div>
-              <div class="check-row"><input type="checkbox" id="f_is_extra" onchange="onExtraChange()"><label for="f_is_extra">額外卡 — 放額外牌組、僅能透過【反應】或【行動】從額外牌組打出（可支付費用）</label></div>
-            </div>
-          </div>
-          <!-- Signature sub-fields -->
-          <div id="signatureFields" class="hidden">
-            <div class="form-grid" style="margin-top:0.5rem;">
-              <div class="form-group full"><label>歸屬調查員代碼</label><input type="text" id="f_owner_investigator" placeholder="investigator_code"></div>
-            </div>
-          </div>
-          <!-- Revelation sub-fields -->
-          <div id="revelationFields" class="hidden">
-            <div class="form-grid" style="margin-top:0.5rem;">
+          <div class="section-label collapsible open" id="secSpecialTagsHead" onclick="toggleSection('secSpecialTags')">特殊身份標記</div>
+          <div id="secSpecialTags">
+            <div class="form-grid">
               <div class="form-group full">
-                <div class="check-row"><input type="checkbox" id="f_removable"><label for="f_removable">可移除</label></div>
-                <div class="check-row"><input type="checkbox" id="f_committable"><label for="f_committable">可用作加值</label></div>
+                <div class="check-row"><input type="checkbox" id="f_is_signature"><label for="f_is_signature">簽名卡 — 調查員獨有</label></div>
+                <div class="check-row"><input type="checkbox" id="f_is_weakness"><label for="f_is_weakness">弱點 — 負面卡，強制納入牌組</label></div>
+                <div class="check-row"><input type="checkbox" id="f_is_revelation"><label for="f_is_revelation">神啟卡 — 詛咒卡，抽到即觸發</label></div>
+                <div class="check-row"><input type="checkbox" id="f_is_exceptional"><label for="f_is_exceptional">Exceptional — 經驗值 ×2，額外抵扣 -2V</label></div>
+                <div class="check-row"><input type="checkbox" id="f_is_permanent" onchange="onPermanentChange()"><label for="f_is_permanent">永久卡 — 買來直接進場、僅被動能力、EXP ×2</label></div>
+                <div class="check-row"><input type="checkbox" id="f_is_extra" onchange="onExtraChange()"><label for="f_is_extra">額外卡 — 放額外牌組、僅能透過【反應】或【行動】從額外牌組打出（可支付費用）</label></div>
               </div>
-              <div class="form-group"><label>累計觸發致死次數 (0=不致死)</label><input type="number" id="f_lethal_count" value="0" min="0"></div>
+            </div>
+            <!-- Signature sub-fields -->
+            <div id="signatureFields" class="hidden">
+              <div class="form-grid" style="margin-top:0.5rem;">
+                <div class="form-group full"><label>歸屬調查員代碼</label><input type="text" id="f_owner_investigator" placeholder="investigator_code"></div>
+              </div>
+            </div>
+            <!-- Revelation sub-fields -->
+            <div id="revelationFields" class="hidden">
+              <div class="form-grid" style="margin-top:0.5rem;">
+                <div class="form-group full">
+                  <div class="check-row"><input type="checkbox" id="f_removable"><label for="f_removable">可移除</label></div>
+                  <div class="check-row"><input type="checkbox" id="f_committable"><label for="f_committable">可用作加值</label></div>
+                </div>
+                <div class="form-group"><label>累計觸發致死次數 (0=不致死)</label><input type="number" id="f_lethal_count" value="0" min="0"></div>
+              </div>
             </div>
           </div>
 
           <!-- Book/Relic fields -->
           <div id="bookRelicFields" class="hidden">
-            <div class="section-label">書籍/遺跡設定</div>
-            <div class="form-grid" style="margin-top:0.5rem;">
-              <div class="form-group full">
-                <div class="check-row"><input type="checkbox" id="f_is_book"><label for="f_is_book">書籍 — 附帶閱讀長期投資行動</label></div>
-                <div class="check-row"><input type="checkbox" id="f_is_relic"><label for="f_is_relic">遺跡 — 附帶研究長期投資行動</label></div>
+            <div class="section-label collapsible open" id="secBookRelicHead" onclick="toggleSection('secBookRelic')">書籍/遺跡設定</div>
+            <div id="secBookRelic">
+              <div class="form-grid" style="margin-top:0.5rem;">
+                <div class="form-group full">
+                  <div class="check-row"><input type="checkbox" id="f_is_book"><label for="f_is_book">書籍 — 附帶閱讀長期投資行動</label></div>
+                  <div class="check-row"><input type="checkbox" id="f_is_relic"><label for="f_is_relic">遺跡 — 附帶研究長期投資行動</label></div>
+                </div>
+                <div class="form-group"><label>研究方式</label><select id="f_study_method"><option value="">無</option><option value="count_only">純累積次數</option><option value="count_and_test">累積 + 檢定</option></select></div>
+                <div class="form-group"><label>所需累積次數</label><input type="number" id="f_study_required" value="0" min="0" max="20"></div>
+                <div class="form-group hidden" id="studyTestGroup"><label>檢定屬性</label><select id="f_study_test_attribute"><option value="">—</option></select></div>
+                <div class="form-group hidden" id="studyDcGroup"><label>檢定 DC</label><input type="number" id="f_study_test_dc" value="0" min="0" max="30"></div>
+                <div class="form-group"><label>難度等級 (1-5)</label><input type="number" id="f_study_difficulty_tier" value="0" min="0" max="5"></div>
+                <div class="form-group"><label>升級版卡片代碼</label><input type="text" id="f_study_upgrade_card" placeholder="升級後的卡片 code"></div>
               </div>
-              <div class="form-group"><label>研究方式</label><select id="f_study_method"><option value="">無</option><option value="count_only">純累積次數</option><option value="count_and_test">累積 + 檢定</option></select></div>
-              <div class="form-group"><label>所需累積次數</label><input type="number" id="f_study_required" value="0" min="0" max="20"></div>
-              <div class="form-group hidden" id="studyTestGroup"><label>檢定屬性</label><select id="f_study_test_attribute"><option value="">—</option></select></div>
-              <div class="form-group hidden" id="studyDcGroup"><label>檢定 DC</label><input type="number" id="f_study_test_dc" value="0" min="0" max="30"></div>
-              <div class="form-group"><label>難度等級 (1-5)</label><input type="number" id="f_study_difficulty_tier" value="0" min="0" max="5"></div>
-              <div class="form-group"><label>升級版卡片代碼</label><input type="text" id="f_study_upgrade_card" placeholder="升級後的卡片 code"></div>
             </div>
           </div>
 
           <!-- Transform fields -->
           <div id="transformFields" class="hidden">
-            <div class="section-label">變形設定（Transform）</div>
-            <div class="form-grid" style="margin-top:0.5rem;">
-              <div class="form-group full"><label>變形目標卡片代碼</label><input type="text" id="f_transform_to" placeholder="card_code 或 code1,code2（多型態）"></div>
-              <div class="form-group"><label>變形條件</label><select id="f_transform_condition"><option value="">無</option><option value="study_complete">研究完成</option><option value="hp_zero">HP 歸零</option><option value="on_success">檢定成功</option><option value="on_play">打出時</option><option value="manual">手動觸發</option></select></div>
-              <div class="form-group"><div class="check-row"><input type="checkbox" id="f_transform_reversible"><label for="f_transform_reversible">可逆（雙向切換）</label></div></div>
+            <div class="section-label collapsible open" id="secTransformHead" onclick="toggleSection('secTransform')">變形設定（Transform）</div>
+            <div id="secTransform">
+              <div class="form-grid" style="margin-top:0.5rem;">
+                <div class="form-group full"><label>變形目標卡片代碼</label><input type="text" id="f_transform_to" placeholder="card_code 或 code1,code2（多型態）"></div>
+                <div class="form-group"><label>變形條件</label><select id="f_transform_condition"><option value="">無</option><option value="study_complete">研究完成</option><option value="hp_zero">HP 歸零</option><option value="on_success">檢定成功</option><option value="on_play">打出時</option><option value="manual">手動觸發</option></select></div>
+                <div class="form-group"><div class="check-row"><input type="checkbox" id="f_transform_reversible"><label for="f_transform_reversible">可逆（雙向切換）</label></div></div>
+              </div>
             </div>
           </div>
 
@@ -2541,6 +2549,14 @@
     toggle('slotGroup', isAsset);
     toggle('signatureFields', el('f_is_signature').checked);
     toggle('revelationFields', el('f_is_revelation').checked);
+
+    // xp_cost 欄位條件顯示:只有「永久卡 / 書籍 / 遺跡 / 升級版來源」才需要(一般卡售價待規範訂定後自動推算)
+    const isPermanent = el('f_is_permanent')?.checked;
+    const isBook = el('f_is_book')?.checked;
+    const isRelic = el('f_is_relic')?.checked;
+    const cardSource = el('f_card_source')?.value || '';
+    const isUpgradeVersion = cardSource === 'book_upgrade' || cardSource === 'relic_upgrade';
+    toggle('xpCostGroup', isPermanent || isBook || isRelic || isUpgradeVersion);
 
     // Book/Relic fields — show when asset has book or relic subtype
     const subtypes = collectSubtypes ? collectSubtypes() : [];

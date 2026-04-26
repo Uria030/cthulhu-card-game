@@ -1,0 +1,69 @@
+/**
+ * 視覺 token — 對應 c:/Ug/docs/GamePlan/DESIGN.md
+ * 共用 token(陣營/語義/文字/背景/邊界)與 admin-shared.css 一致
+ * 世界觀色用 --world- 前綴(僅遊戲本體用)
+ */
+:root {
+  /* 共用 — 八陣營色 */
+  --herald: #C9A84C;
+  --abyss: #3A5FA0;
+  --witness: #8B5E3C;
+  --oracle: #7B4EA3;
+  --cipher: #4A7C9B;
+  --ember: #B84C4C;
+  --bastion: #6B6B6B;
+  --flux: #2D8B6F;
+
+  /* 共用 — 語義色 */
+  --danger: #B84C4C;
+  --success: #2D8B6F;
+  --warning: #C9A84C;
+  --info: #4A7C9B;
+
+  /* 共用 — 文字三層 */
+  --text-primary: #E8E4D9;
+  --text-secondary: #8A8778;
+  --text-tertiary: #5A5A52;
+
+  /* 共用 — 背景深紫黑系 */
+  --bg-primary: #0D0D14;
+  --bg-secondary: #13131F;
+  --bg-card: #1A1A2E;
+  --bg-card-hover: #22223A;
+
+  /* 共用 — 邊界 */
+  --border: #2A2A44;
+  --border-hover: #C9A84C;
+
+  /* 遊戲本體獨享 — 世界觀物件色 */
+  --world-aged-paper: #E8DCC4;
+  --world-deep-walnut: #3D2817;
+  --world-antique-brass: #8B6F3D;
+  --world-tarnished-silver: #6E6864;
+  --world-soot-grey: #4A4540;
+  --world-ink-green: #2D3D2A;
+  --world-oxblood: #5C2018;
+  --world-ochre: #B8893D;
+  --world-smoke-white: #D9D2C5;
+  --world-ink-black: #1A1614;
+
+  /* 玩家個人色(連線多人時依加入順序分配) */
+  --player-1-russet: #A04830;
+  --player-2-indigo: #3A4A78;
+  --player-3-moss: #5A6E3A;
+  --player-4-saffron: #B07828;
+
+  /* 圓角(遊戲本體刻度,非 admin) */
+  --r-sharp: 0;
+  --r-subtle: 2px;
+  --r-soft: 4px;
+  --r-pill: 999px;
+
+  /* 空間 */
+  --sp-xs: 4px;
+  --sp-sm: 8px;
+  --sp-md: 16px;
+  --sp-lg: 24px;
+  --sp-xl: 40px;
+  --sp-2xl: 64px;
+}

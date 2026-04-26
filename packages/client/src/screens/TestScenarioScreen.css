@@ -1,0 +1,242 @@
+.ts-root {
+  flex: 1;
+  background: var(--bg-primary);
+  padding: var(--sp-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-lg);
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.ts-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--sp-md);
+}
+
+.ts-title {
+  font-family: 'Noto Serif TC', serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--world-antique-brass);
+  letter-spacing: 0.05em;
+}
+
+.ts-sub {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.15em;
+  margin-top: 4px;
+}
+
+.ts-back {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-subtle);
+  color: var(--text-secondary);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 13px;
+  padding: 6px 14px;
+}
+
+.ts-back:hover {
+  border-color: var(--herald);
+  color: var(--herald);
+}
+
+/* 三地點板 */
+.ts-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--sp-md);
+}
+
+.ts-loc {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sharp);
+  padding: var(--sp-md);
+  text-align: left;
+  font-family: 'Noto Serif TC', serif;
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-sm);
+  min-height: 140px;
+  transition: all 0.2s;
+}
+
+.ts-loc:hover {
+  border-color: var(--world-antique-brass);
+  background: var(--bg-card-hover);
+}
+
+.ts-loc.active {
+  border-color: var(--herald);
+  border-width: 2px;
+  box-shadow: 0 0 0 1px var(--herald) inset, 0 0 24px rgba(201, 168, 76, 0.18);
+}
+
+.ts-loc.vis-darkness {
+  background: linear-gradient(180deg, #08080d, var(--bg-card));
+  color: var(--text-secondary);
+}
+
+.ts-loc.vis-fire {
+  background: linear-gradient(180deg, rgba(184, 137, 61, 0.15), var(--bg-card));
+}
+
+.ts-loc-name {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.ts-loc-desc {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  flex: 1;
+}
+
+.ts-loc-meta {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.1em;
+}
+
+/* 調查員列 */
+.ts-investigator {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--r-subtle);
+  padding: var(--sp-md);
+}
+
+.ts-sec-title {
+  font-family: 'Noto Serif TC', serif;
+  font-size: 16px;
+  color: var(--world-antique-brass);
+  letter-spacing: 0.1em;
+  margin-bottom: var(--sp-sm);
+}
+
+.ts-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-md);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.ts-ap {
+  color: var(--herald);
+  font-weight: 600;
+}
+
+/* 行動 */
+.ts-actions {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--r-subtle);
+  padding: var(--sp-md);
+}
+
+.ts-action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--sp-sm);
+  margin-bottom: var(--sp-md);
+}
+
+.ts-action-btn {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--r-subtle);
+  padding: 10px 12px;
+  font-family: 'Noto Serif TC', serif;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.15s;
+}
+
+.ts-action-btn:hover {
+  border-color: var(--herald);
+  background: var(--bg-card-hover);
+  color: var(--herald);
+}
+
+.ts-action-cost {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  background: var(--bg-primary);
+  padding: 2px 6px;
+  border-radius: var(--r-pill);
+}
+
+.ts-end-turn {
+  width: 100%;
+  background: var(--world-deep-walnut);
+  color: var(--world-smoke-white);
+  border: 1px solid var(--world-antique-brass);
+  border-radius: var(--r-subtle);
+  padding: 10px;
+  font-family: 'Noto Serif TC', serif;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+}
+
+.ts-end-turn:hover {
+  background: var(--world-soot-grey);
+  color: var(--herald);
+}
+
+/* 事件記錄 */
+.ts-log {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--r-subtle);
+  padding: var(--sp-md);
+}
+
+.ts-log-body {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sharp);
+  padding: var(--sp-sm) var(--sp-md);
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.ts-log-body p {
+  margin: 4px 0;
+  line-height: 1.6;
+}
+
+/* footer */
+.ts-foot {
+  text-align: center;
+}
+
+.ts-disclaimer {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.7;
+  letter-spacing: 0.05em;
+}

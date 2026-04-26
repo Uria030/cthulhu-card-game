@@ -2,5 +2,8 @@
   "framework": "vite",
   "buildCommand": "cd ../.. && pnpm install && pnpm --filter client build",
   "outputDirectory": "dist",
-  "installCommand": "corepack enable && pnpm install"
+  "installCommand": "corepack enable && pnpm install",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

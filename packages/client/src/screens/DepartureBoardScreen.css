@@ -1,0 +1,129 @@
+.dep-root {
+  flex: 1;
+  background:
+    radial-gradient(ellipse at top, rgba(74, 124, 155, 0.05), transparent 60%),
+    var(--bg-primary);
+  padding: var(--sp-xl) var(--sp-lg);
+}
+
+.dep-frame {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xl);
+}
+
+.dep-header {
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--sp-md);
+}
+
+.dep-title {
+  font-family: 'Noto Serif TC', serif;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--world-antique-brass);
+}
+
+.dep-sub {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 14px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.2em;
+  margin-top: var(--sp-sm);
+}
+
+.dep-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--sp-lg);
+}
+
+.dep-card {
+  background: var(--world-aged-paper);
+  color: var(--world-ink-black);
+  border: 1px solid var(--world-deep-walnut);
+  border-radius: var(--r-sharp);
+  padding: var(--sp-lg);
+  text-align: left;
+  font-family: 'Noto Serif TC', serif;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-sm);
+  min-height: 220px;
+  transition: all 0.2s;
+}
+
+.dep-card-active {
+  cursor: pointer;
+  border-color: var(--world-antique-brass);
+  border-width: 2px;
+  box-shadow: 0 0 0 1px var(--world-antique-brass) inset, 0 4px 16px rgba(184, 137, 61, 0.12);
+}
+
+.dep-card-active:hover {
+  background: var(--world-smoke-white);
+  transform: translateY(-3px);
+  box-shadow: 0 0 0 1px var(--herald) inset, 0 6px 24px rgba(201, 168, 76, 0.2);
+}
+
+.dep-card.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.dep-card-tag {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--world-soot-grey);
+  background: rgba(74, 69, 64, 0.1);
+  padding: 2px 8px;
+  align-self: flex-start;
+  border-radius: var(--r-sharp);
+}
+
+.dep-card-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--world-ink-black);
+}
+
+.dep-card-desc {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--world-soot-grey);
+  flex: 1;
+}
+
+.dep-card-meta {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  color: var(--world-soot-grey);
+  letter-spacing: 0.05em;
+  border-top: 1px solid rgba(110, 104, 100, 0.3);
+  padding-top: var(--sp-sm);
+  margin-top: auto;
+}
+
+.dep-footer {
+  text-align: center;
+}
+
+.dep-back {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 13px;
+}
+
+.dep-back:hover {
+  color: var(--text-secondary);
+}

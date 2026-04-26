@@ -1,20 +1,17 @@
-import { ATTRIBUTES, GAME_RULES } from '@cthulhu/shared';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { SplashScreen } from './screens/SplashScreen';
+import { LobbyScreen } from './screens/LobbyScreen';
+import { DepartureBoardScreen } from './screens/DepartureBoardScreen';
+import { TestScenarioScreen } from './screens/TestScenarioScreen';
 
 export function App() {
   return (
-    <div style={{ maxWidth: 640, margin: '4rem auto', fontFamily: 'sans-serif' }}>
-      <h1>克蘇魯卡牌冒險</h1>
-      <p>Cthulhu Card-Driven Cooperative Adventure</p>
-      <hr />
-      <h2>七大屬性</h2>
-      <ul>
-        {Object.values(ATTRIBUTES).map((attr) => (
-          <li key={attr.id}>
-            {attr.zh}（{attr.en}）— {attr.abbr}
-          </li>
-        ))}
-      </ul>
-      <p>骰子系統：{GAME_RULES.DICE}｜每回合行動數：{GAME_RULES.ACTIONS_PER_TURN}</p>
-    </div>
+    <Routes>
+      <Route path="/" element={<SplashScreen />} />
+      <Route path="/lobby" element={<LobbyScreen />} />
+      <Route path="/departure" element={<DepartureBoardScreen />} />
+      <Route path="/scenario/test" element={<TestScenarioScreen />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

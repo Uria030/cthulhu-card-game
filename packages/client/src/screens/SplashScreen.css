@@ -1,0 +1,74 @@
+.splash-root {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-xl) var(--sp-lg);
+  background:
+    radial-gradient(ellipse at center, rgba(184, 137, 61, 0.06), transparent 60%),
+    var(--bg-primary);
+  color: var(--text-primary);
+  position: relative;
+  text-align: center;
+  gap: var(--sp-xl);
+}
+
+.splash-emblem {
+  font-size: 96px;
+  color: var(--world-antique-brass);
+  text-shadow: 0 0 24px rgba(139, 111, 61, 0.3);
+  letter-spacing: 0.1em;
+}
+
+.splash-narrative {
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-md);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-weight: 300;
+  font-size: 18px;
+  letter-spacing: 0.05em;
+  line-height: 1.9;
+  color: var(--text-primary);
+  min-height: 200px;
+}
+
+.splash-line {
+  margin: 0;
+}
+
+.splash-enter {
+  background: transparent;
+  color: var(--world-antique-brass);
+  border: 1px solid var(--world-antique-brass);
+  border-radius: var(--r-subtle);
+  padding: 12px 32px;
+  font-family: 'Noto Serif TC', serif;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  transition: all 0.2s;
+}
+
+.splash-enter:hover {
+  background: rgba(139, 111, 61, 0.12);
+  color: var(--herald);
+  border-color: var(--herald);
+}
+
+.splash-skip {
+  position: absolute;
+  bottom: var(--sp-lg);
+  right: var(--sp-lg);
+  background: transparent;
+  color: var(--text-tertiary);
+  border: none;
+  font-size: 14px;
+  font-family: 'Noto Sans TC', sans-serif;
+}
+
+.splash-skip:hover {
+  color: var(--text-secondary);
+}

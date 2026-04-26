@@ -21,6 +21,20 @@
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
+  /* 第六章 Part 1 §6.2 + Part 2 §7.2:神話階段切換 2.0 秒色調變暗 */
+  transition: filter var(--beat-mythos-fade) var(--ease-fade);
+}
+
+.ts-root.phase-mythos {
+  /* 神話階段:明度再降 15%,飽和度降 10%(§7.2)*/
+  filter: brightness(0.78) saturate(0.9);
+}
+
+.ts-root.phase-mythos .ts-hand,
+.ts-root.phase-mythos .ts-investigator,
+.ts-root.phase-mythos .ts-locations {
+  /* 手牌與行動點暗化、不可互動(§7.2 過場時)*/
+  opacity: 0.6;
 }
 
 /* ─── 上方角落:城主能量條 + 返回 ─────────── */

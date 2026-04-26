@@ -13,6 +13,13 @@
     var(--bg-primary);
   position: relative;
   overflow: hidden;
+  /* 第六章 Part 1 §6.2:大廳入場 3.0 秒 ease-paper */
+  animation: lobbyEnter var(--beat-lobby-enter) var(--ease-paper) both;
+}
+
+@keyframes lobbyEnter {
+  from { opacity: 0; transform: scale(1.02); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 /* 窗外雨景 — §3.3.7 */

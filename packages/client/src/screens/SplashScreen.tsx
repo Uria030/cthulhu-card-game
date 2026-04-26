@@ -12,6 +12,7 @@ import './SplashScreen.css';
  * 啟動畫面只是「氛圍校準」,沒有按鈕、沒有跳過——這 2.5 秒是設計意圖。
  */
 
+// 第六章 Part 1 §6.2:啟動圖騰 2.5 秒,§2.3 淡出 0.5 秒
 const SPLASH_DURATION_MS = 2500;
 const FADE_OUT_MS = 500;
 

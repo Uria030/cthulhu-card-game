@@ -135,7 +135,10 @@ export function TestScenarioScreen() {
   const enterMythosPhase = () => {
     setPhase('mythos');
     setKeeperEnergy((e) => Math.max(0, e - 2));
-    append('[階段切換] 進入神話階段 — 城主消耗 2 能量,黑暗從牆角滲出');
+    // 第三章 §9.7 三層敘事:環境 / 城主行動 / 傳奇行動
+    append('[階段切換] 進入神話階段(2 秒色調變暗,§6.2)');
+    setTimeout(() => append('[城主行動] 黑暗從牆角滲出,吞沒了走廊。'), 1200);
+    setTimeout(() => append('[環境敘事] 窗外的雨變大了。'), 2400);
   };
 
   const endTurn = () => {
@@ -147,7 +150,7 @@ export function TestScenarioScreen() {
   };
 
   return (
-    <div className="ts-root">
+    <div className={'ts-root phase-' + phase}>
       {/* 上方角落:城主能量條(§6.3.6) */}
       <header className="ts-topbar">
         <button className="ts-back" onClick={() => navigate('/departure')}>

@@ -8,12 +8,9 @@
   <link rel="stylesheet" href="admin-shared.css">
   <style>
     .main-layout { display: flex; gap: 0; min-height: calc(100vh - 50px); }
-    /* Left panel: fixed overlay, does NOT push content */
-    .panel-left { position: fixed; top: 50px; left: 0; width: 280px; height: calc(100vh - 50px); background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 1rem; overflow-y: auto; z-index: 100; transition: transform 0.25s ease; transform: translateX(0); }
-    .panel-left.collapsed { transform: translateX(-100%); }
-    .panel-toggle { position: fixed; top: 50%; left: 280px; z-index: 101; width: 28px; height: 72px; background: var(--bg-secondary); border: 1px solid var(--border); border-left: none; border-radius: 0 6px 6px 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 0.75rem; padding: 0; transform: translateY(-50%); transition: left 0.25s ease; }
-    .panel-toggle.shifted { left: 0; }
-    .panel-toggle:hover { color: var(--gold); background: var(--bg-card); }
+    /* Left panel: fixed overlay, **預設收合**(translateX(-100%));點 nav 列表按鈕 toggle .open 顯示 */
+    .panel-left { position: fixed; top: 50px; left: 0; width: 280px; height: calc(100vh - 50px); background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 1rem; overflow-y: auto; z-index: 100; transition: transform 0.25s ease; transform: translateX(-100%); }
+    .panel-left.open { transform: translateX(0); }
     .panel-right { flex: 1; padding: 1rem 1.5rem; overflow-y: auto; max-height: calc(100vh - 50px); }
     .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }
     .toolbar .spacer { flex: 1; }
@@ -133,8 +130,10 @@
     .panel-right-drawer .preview-card { width: 100%; transform: scale(0.7); transform-origin: top center; margin-bottom: -30%; }
     .panel-right-drawer .balance-panel { width: 100%; }
     /* Mobile 浮動按鈕(只在手機顯示) */
-    .m1-mobile-btn { display: none; background: transparent; border: 1px solid var(--border); color: var(--gold-dim); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.78rem; }
+    /* nav 上的列表/預覽按鈕 — 桌機與手機都顯示 */
+    .m1-mobile-btn { display: inline-flex; align-items: center; background: transparent; border: 1px solid var(--border); color: var(--gold-dim); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.78rem; }
     .m1-mobile-btn:hover { color: var(--gold); border-color: var(--gold-dim); }
+    .m1-mobile-btn.active { color: var(--gold); border-color: var(--gold); background: var(--bg-card); }
 
     /* Mobile responsive (≤ 768px):堆疊模式 */
     @media (max-width: 768px) {
@@ -143,6 +142,7 @@
       .nav-title, .nav-code { display: none; }
 
       .main-layout { flex-direction: column; }
+      /* 手機:panel-left 預設收合(同桌機),點列表按鈕 toggle .open 全寬覆蓋表單 */
       .panel-left {
         position: fixed; top: 50px; left: 0; right: 0;
         width: 100%; height: calc(100vh - 50px);
@@ -150,10 +150,8 @@
       }
       .panel-right {
         width: 100%; padding: 0.75rem;
+        /* 手機預設顯示卡片編輯器主頁(表單);panel-left 浮起時覆蓋 */
       }
-      /* 預設手機顯示「列表」(panel-left);選了卡片或新增加 m1-form-mode 切到表單 */
-      body:not(.m1-form-mode) .panel-right { display: none; }
-      body.m1-form-mode .panel-left { display: none; }
 
       /* 預覽抽屜在手機改為全螢幕 modal,以 m1-preview-mode 控制 */
       .panel-right-drawer {
@@ -197,7 +195,7 @@
 <body>
   <nav class="admin-nav">
     <a href="index.html" class="nav-back">&larr; 首頁</a>
-    <button type="button" class="m1-mobile-btn" id="m1BtnList" title="卡片列表" onclick="document.body.classList.remove('m1-form-mode','m1-preview-mode');">📋 列表</button>
+    <button type="button" class="m1-mobile-btn" id="m1BtnList" title="卡片列表" onclick="toggleLeftPanel();">📋 列表</button>
     <span class="nav-title">卡片設計器</span>
     <span class="nav-code">MOD-01</span>
     <button type="button" class="m1-mobile-btn" id="m1BtnPreview" title="預覽" onclick="document.body.classList.toggle('m1-preview-mode');">👁️ 預覽</button>
@@ -219,8 +217,6 @@
       <div id="cardList"></div>
       <div class="list-stats" id="listStats">0 張卡片</div>
     </div>
-    <button class="panel-toggle" id="panelToggle" onclick="toggleLeftPanel()" title="收合/展開卡片列表">&#9664;</button>
-
     <!-- Right Panel -->
     <div class="panel-right">
       <div class="toolbar">
@@ -1645,7 +1641,9 @@
 
   /* ── Load / Collect / Save ── */
   function loadCard(id) {
-    document.body.classList.add('m1-form-mode');  // 手機:點卡片自動切到表單模式
+    // 點選卡片後自動收回 panel,讓使用者看見表單
+    el('panelLeft')?.classList.remove('open');
+    el('m1BtnList')?.classList.remove('active');
     const c = cards.find(x => x.id === id);
     if (!c) return;
     editingId = id;
@@ -1859,7 +1857,6 @@
         await loadCards();
         clearForm();
         renderList();
-        document.body.classList.remove('m1-form-mode');  // 刪除後回列表
         alert('已刪除');
       } else {
         alert('刪除失敗：' + result.error);
@@ -1870,7 +1867,9 @@
   }
 
   function newCard() {
-    document.body.classList.add('m1-form-mode');  // 手機:新增卡片自動切到表單模式
+    // 新增卡片後收回 panel,聚焦表單
+    el('panelLeft')?.classList.remove('open');
+    el('m1BtnList')?.classList.remove('active');
     clearForm();
     el('f_name_zh').focus();
   }
@@ -2469,14 +2468,12 @@
     }
   }
 
-  /* ── Left Panel Toggle ── */
+  /* ── Left Panel Toggle (預設收合,點 nav 列表按鈕 toggle .open) ── */
   function toggleLeftPanel() {
     const panel = el('panelLeft');
-    const btn = el('panelToggle');
-    const collapsed = panel.classList.toggle('collapsed');
-    btn.classList.toggle('shifted', collapsed);
-    btn.innerHTML = collapsed ? '&#9654;' : '&#9664;';
-    btn.title = collapsed ? '展開卡片列表' : '收合卡片列表';
+    const btn = el('m1BtnList');
+    const open = panel.classList.toggle('open');
+    if (btn) btn.classList.toggle('active', open);
   }
 
   /* ── Right Panel Toggle ── */

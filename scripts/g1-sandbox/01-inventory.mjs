@@ -16,14 +16,35 @@ log(`# G1 動工前既有零件盤點 (${stamp})`);
 log(`API base: ${BASE_URL}`);
 log('');
 
+function pickArray(r) {
+  if (Array.isArray(r)) return r;
+  if (Array.isArray(r?.data)) return r.data;
+  if (Array.isArray(r?.items)) return r.items;
+  if (Array.isArray(r?.locations)) return r.locations;
+  if (Array.isArray(r?.mythos_cards)) return r.mythos_cards;
+  if (Array.isArray(r?.encounter_cards)) return r.encounter_cards;
+  if (Array.isArray(r?.cards)) return r.cards;
+  if (Array.isArray(r?.investigators)) return r.investigators;
+  if (Array.isArray(r?.combat_styles)) return r.combat_styles;
+  if (Array.isArray(r?.styles)) return r.styles;
+  if (Array.isArray(r?.stages)) return r.stages;
+  if (Array.isArray(r?.campaigns)) return r.campaigns;
+  if (Array.isArray(r?.trees)) return r.trees;
+  return null;
+}
+
 async function safeGet(label, url, render) {
   try {
     const r = await adminGet(url);
-    const arr = r?.data ?? r ?? [];
+    const arr = pickArray(r);
     log(`## ${label}`);
     log(`endpoint: \`${url}\``);
-    log(`count: **${Array.isArray(arr) ? arr.length : (arr?.length ?? 'n/a')}**`);
-    if (render && Array.isArray(arr)) render(arr);
+    if (arr) {
+      log(`count: **${arr.length}**`);
+      if (render) render(arr, r);
+    } else {
+      log(`count: n/a (response keys: ${Object.keys(r || {}).join(', ')})`);
+    }
     log('');
   } catch (e) {
     log(`## ${label}  ❌`);

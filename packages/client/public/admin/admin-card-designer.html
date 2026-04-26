@@ -126,6 +126,9 @@
     .pv-meta-label { color: var(--text-tertiary); }
     .pv-meta-val { color: var(--gold); font-weight: 500; }
     .pv-meta-sep { color: var(--text-tertiary); opacity: 0.5; }
+    /* 桌機:m1-preview-toggle bar 隱藏;m1-preview-content 透明(等同子元素直屬 drawer) */
+    .m1-preview-toggle { display: none; }
+    .m1-preview-content { display: contents; }
     /* Effect value tags */
     .eff-value-tag { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; color: var(--gold); background: rgba(201,168,76,0.1); border: 1px solid var(--gold-dim); border-radius: 3px; padding: 0.1rem 0.35rem; margin-left: 0.5rem; }
     .effects-total-value { text-align: right; font-size: 0.8125rem; color: var(--gold); font-family: 'JetBrains Mono', monospace; padding: 0.35rem 0; margin-top: 0.25rem; border-top: 1px solid var(--border); }
@@ -168,18 +171,39 @@
         /* 手機預設顯示卡片編輯器主頁(表單);panel-left 浮起時覆蓋 */
       }
 
-      /* 預覽抽屜在手機:改為固定頂部 inline,左右分欄(左平衡 / 右卡面)
+      /* 預覽抽屜在手機:改為固定頂部 inline,內含 toggle bar(可收攏)+ 左平衡 右卡面
          移除原本全螢幕 modal 機制(常壞、卡死、不直觀)*/
       .panel-right-drawer,
       .panel-right-drawer.collapsed {
         position: relative; top: auto; left: auto; right: auto; bottom: auto;
         width: 100%; height: auto; max-height: none;
-        z-index: 1; padding: 0.5rem; opacity: 1;
+        z-index: 1; padding: 0; opacity: 1;
         transform: none; transition: none;
         order: -1;  /* 排到 panel-right 上方(main-layout flex-direction:column)*/
-        display: flex; flex-direction: row; gap: 0.5rem;
+        display: flex; flex-direction: column; gap: 0;
         border-left: none; border-bottom: 1px solid var(--border);
         background: var(--bg-secondary); overflow: visible;
+      }
+      /* m1-preview-toggle:手機顯示,點 toggle 收攏 */
+      .m1-preview-toggle {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 8px 12px; background: var(--bg-card);
+        color: var(--gold-dim); font-size: 0.78rem;
+        cursor: pointer; user-select: none;
+        -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+        border-bottom: 1px solid var(--border); min-height: 36px;
+      }
+      .m1-preview-toggle:active { background: var(--bg-card-hover); }
+      .m1-preview-toggle .chevron { transition: transform 0.2s; font-size: 0.7rem; color: var(--gold-dim); }
+      .panel-right-drawer.m1-preview-collapsed .m1-preview-toggle .chevron { transform: rotate(180deg); }
+      /* 預覽內容:手機 row 兩欄(左平衡 右卡面),需用 inner div 包覆 */
+      .m1-preview-content {
+        display: flex; flex-direction: row; gap: 0.5rem;
+        padding: 0.5rem; transition: max-height 0.25s ease, padding 0.25s ease, opacity 0.2s ease;
+        max-height: 600px; overflow: hidden;
+      }
+      .panel-right-drawer.m1-preview-collapsed .m1-preview-content {
+        max-height: 0; padding: 0; opacity: 0;
       }
       .panel-right-drawer .balance-panel {
         flex: 1; min-width: 0; margin-bottom: 0; padding: 0.5rem;
@@ -661,6 +685,12 @@
       </div>
     </div>
     <div class="panel-right-drawer collapsed" id="panelRightDrawer">
+    <!-- 手機 only:預覽收攏切換條(桌機隱藏)-->
+    <div class="m1-preview-toggle" id="m1PreviewToggle" onclick="toggleMobilePreview()">
+      <span>📊 平衡 / 卡面預覽</span>
+      <span class="chevron">▲</span>
+    </div>
+    <div class="m1-preview-content">
     <div class="balance-panel" id="balancePanel">
       <div class="balance-title">平衡計算</div>
       <div id="balanceContent">
@@ -715,8 +745,9 @@
       <div id="pvAttrMods" style="font-size:0.6875rem;margin-bottom:0.25rem;"></div>
       <div class="pv-bottom" id="pvBottom"></div>
     </div>
-  </div>
-  </div>
+    </div><!-- /m1-preview-content -->
+  </div><!-- /panel-right-drawer -->
+  </div><!-- /main-layout -->
 
   <script src="admin-shared.js"></script>
   <script src="admin-card-prompt.js"></script>
@@ -2538,6 +2569,13 @@
   }
   // 舊名相容(若有其他地方呼叫到)
   function toggleRightPanel() { togglePreviewPanel(); }
+
+  /* ── 手機預覽收攏(panel-right-drawer 內部 m1-preview-content) ── */
+  function toggleMobilePreview() {
+    const drawer = el('panelRightDrawer');
+    if (!drawer) return;
+    drawer.classList.toggle('m1-preview-collapsed');
+  }
 
   /* ── AI 生成卡片 section toggle (預設隱藏) ── */
   function toggleAiSection() {

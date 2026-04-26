@@ -114,11 +114,18 @@
     .balance-result.err { background: rgba(184,76,76,0.15); color: var(--danger); border: 1px solid var(--danger); }
     .rarity-display { font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; text-align: center; padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--gold); margin-top: 0.25rem; }
     /* Collapsible sections */
-    .section-label.collapsible { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.35rem; }
+    /* collapsible section label:加大觸控區域 + 防 mobile tap 閃爍 */
+    .section-label.collapsible { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.35rem; padding: 0.4rem 0.25rem; -webkit-tap-highlight-color: transparent; touch-action: manipulation; min-height: 36px; }
+    .section-label.collapsible:active { background: var(--bg-card); }
     .section-label.collapsible::before { content: ''; display: inline-block; width: 0; height: 0; border-left: 5px solid var(--gold-dim); border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform 0.15s; }
     .section-label.collapsible.open::before { transform: rotate(90deg); }
-    .section-content { overflow: hidden; transition: max-height 0.2s ease; }
+    .section-content { overflow: hidden; transition: max-height 0.2s ease; max-height: 9999px; }
     .section-content.collapsed { max-height: 0 !important; overflow: hidden; padding: 0; margin: 0; }
+    /* preview-card 內的代碼/稀有度 meta(從主編輯區移過來,只在預覽顯示) */
+    .pv-meta { font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); padding: 0.35rem 0.5rem; margin: -0.5rem -0.5rem 0.5rem; background: var(--bg-primary); border-radius: 6px 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
+    .pv-meta-label { color: var(--text-tertiary); }
+    .pv-meta-val { color: var(--gold); font-weight: 500; }
+    .pv-meta-sep { color: var(--text-tertiary); opacity: 0.5; }
     /* Effect value tags */
     .eff-value-tag { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; color: var(--gold); background: rgba(201,168,76,0.1); border: 1px solid var(--gold-dim); border-radius: 3px; padding: 0.1rem 0.35rem; margin-left: 0.5rem; }
     .effects-total-value { text-align: right; font-size: 0.8125rem; color: var(--gold); font-family: 'JetBrains Mono', monospace; padding: 0.35rem 0; margin-top: 0.25rem; border-top: 1px solid var(--border); }
@@ -290,15 +297,9 @@
       <!-- Edit + Preview -->
       <div class="edit-preview-layout">
         <div class="form-area">
-          <!-- Auto-generated code display -->
-          <div class="code-display">
-            <span class="code-label">自動生成代碼（儲存時確定）</span>
-            <span id="codePreview">—</span>
-          </div>
-
           <!-- Identity -->
           <div class="section-label collapsible open" id="secIdentityHead" onclick="toggleSection('secIdentity')">身份資訊</div>
-          <div id="secIdentity">
+          <div id="secIdentity" class="section-content">
             <div class="form-grid">
               <div class="form-group"><label>系列</label><select id="f_series"></select></div>
               <div class="form-group"><label>起始投入點數 ★ <span style="color:var(--text-tertiary);font-size:0.7rem;">(0-5)</span></label><input type="number" id="f_level" value="0" min="0" max="5" title="設計師預先投入的成長空間點數,每點對應 1V 效果預算。玩家可在剩餘配額(5 - 起始投入)內以 XP 自行強化。"></div>
@@ -318,7 +319,6 @@
                 <div class="check-row"><input type="checkbox" id="f_is_unique"><label for="f_is_unique">獨特卡（場上只能存在一張）</label></div>
               </div>
               <div class="form-group" id="xpCostGroup" title="只在永久卡 / 書籍 / 遺跡 / 升級版顯示;一般卡售價公式待規範訂定後自動推算"><label>經驗值花費 (xp_cost) <span style="color:var(--text-tertiary);font-size:0.7rem;">(永久/書籍/遺跡/升級版)</span></label><input type="number" id="f_xp_cost" value="0" min="0" max="30"></div>
-              <div class="form-group"><label>稀有度（系統反推）</label><div class="rarity-display" id="rarityDisplay">—</div></div>
               <div class="form-group full"><label>物品子類型 (subtypes)</label>
                 <div id="subtypesCheckboxes" style="display:flex;flex-wrap:wrap;gap:0.25rem 0.5rem;"></div>
               </div>
@@ -327,7 +327,7 @@
 
           <!-- Special Identity Tags -->
           <div class="section-label collapsible open" id="secSpecialTagsHead" onclick="toggleSection('secSpecialTags')">特殊身份標記</div>
-          <div id="secSpecialTags">
+          <div id="secSpecialTags" class="section-content">
             <div class="form-grid">
               <div class="form-group full">
                 <div class="check-row"><input type="checkbox" id="f_is_signature"><label for="f_is_signature">簽名卡 — 調查員獨有</label></div>
@@ -359,7 +359,7 @@
           <!-- Book/Relic fields -->
           <div id="bookRelicFields" class="hidden">
             <div class="section-label collapsible open" id="secBookRelicHead" onclick="toggleSection('secBookRelic')">書籍/遺跡設定</div>
-            <div id="secBookRelic">
+            <div id="secBookRelic" class="section-content">
               <div class="form-grid" style="margin-top:0.5rem;">
                 <div class="form-group full">
                   <div class="check-row"><input type="checkbox" id="f_is_book"><label for="f_is_book">書籍 — 附帶閱讀長期投資行動</label></div>
@@ -378,7 +378,7 @@
           <!-- Transform fields -->
           <div id="transformFields" class="hidden">
             <div class="section-label collapsible open" id="secTransformHead" onclick="toggleSection('secTransform')">變形設定（Transform）</div>
-            <div id="secTransform">
+            <div id="secTransform" class="section-content">
               <div class="form-grid" style="margin-top:0.5rem;">
                 <div class="form-group full"><label>變形目標卡片代碼</label><input type="text" id="f_transform_to" placeholder="card_code 或 code1,code2（多型態）"></div>
                 <div class="form-group"><label>變形條件</label><select id="f_transform_condition"><option value="">無</option><option value="study_complete">研究完成</option><option value="hp_zero">HP 歸零</option><option value="on_success">檢定成功</option><option value="on_play">打出時</option><option value="manual">手動觸發</option></select></div>
@@ -671,6 +671,11 @@
       </div>
     </div>
     <div class="preview-card" id="previewCard">
+      <div class="pv-meta">
+        <span class="pv-meta-label">代碼</span><span id="codePreview" class="pv-meta-val">—</span>
+        <span class="pv-meta-sep">·</span>
+        <span class="pv-meta-label">稀有度</span><span id="rarityDisplay" class="pv-meta-val">—</span>
+      </div>
       <div class="pv-top">
         <div class="pv-cost" id="pvCost">0</div>
         <div class="pv-faction" id="pvFaction">—</div>

@@ -41,7 +41,7 @@ function makeInv(overrides: Partial<InvestigatorState> = {}): InvestigatorState 
     ...overrides,
   };
 }
-function makeScenario(): ScenarioState {
+function makeScenario(unlockedLocations: string[] = []): ScenarioState {
   return {
     scenarioId: 's1', scenarioDefinitionId: 'sd1', campaignId: 'c1',
     locations: [
@@ -49,6 +49,7 @@ function makeScenario(): ScenarioState {
       { locationDefinitionId: 'loc-b', visibility: 'night', connectedTo: ['loc-a', 'loc-c'], isObstacle: false },
       { locationDefinitionId: 'loc-c', visibility: 'darkness', connectedTo: ['loc-b'], isObstacle: true },
     ],
+    unlockedLocations,
     enemies: [], tokens: [], agendaProgress: 0, objectiveProgress: 0,
     chaosBag: [], turnNumber: 1, phase: 'investigator',
   };
@@ -149,10 +150,59 @@ test('移動:已在該地點駁回', () => {
   assertEq(r.result.outcome, 'rejected');
 });
 
-// ─── stub 動作 ───────────────────────
-test('attack stub 駁回(後續展開)', () => {
-  const ctx = makeCtx();
+// ─── 地點解鎖鏈 ───────────────────────
+test('移動:目標未解鎖駁回', () => {
+  const sc = makeScenario(['loc-a']); // 只解鎖 a
+  const inv = makeInv({ currentLocationId: 'loc-a' });
+  const ctx: RuleContext = { scenario: sc, investigator: inv, turn: makeTurn(), investigators: { 'inv-1': inv } };
+  const r = resolveIntent(makeIntent('move', { targetLocationId: 'loc-b' }), ctx);
+  assertEq(r.result.outcome, 'rejected');
+});
+
+test('移動:目標已解鎖通過', () => {
+  const sc = makeScenario(['loc-a', 'loc-b']);
+  const inv = makeInv({ currentLocationId: 'loc-a' });
+  const ctx: RuleContext = { scenario: sc, investigator: inv, turn: makeTurn(), investigators: { 'inv-1': inv } };
+  const r = resolveIntent(makeIntent('move', { targetLocationId: 'loc-b' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+});
+
+// ─── investigate ─────────────────────
+test('investigate:扣 1 行動點 + 擲 d20', () => {
+  const ctx = makeCtx({ actionPoints: 3 });
+  const r = resolveIntent(makeIntent('investigate'), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.actionPoints, 2);
+  // 不論成功失敗都會扣行動點
+});
+
+test('investigate:行動點不足駁回', () => {
+  const ctx = makeCtx({ actionPoints: 0 });
+  const r = resolveIntent(makeIntent('investigate'), ctx);
+  assertEq(r.result.outcome, 'rejected');
+});
+
+// ─── attack ──────────────────────────
+test('attack:當前地點無敵人駁回', () => {
+  const ctx = makeCtx({ currentLocationId: 'loc-a', actionPoints: 3 });
   const r = resolveIntent(makeIntent('attack'), ctx);
+  assertEq(r.result.outcome, 'rejected');
+});
+
+test('attack:扣 1 行動點 + 結算', () => {
+  const sc = makeScenario(['loc-a']);
+  sc.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'def-e1', locationId: 'loc-a', hp: 3, engagedWith: [], modifiers: [] }];
+  const inv = makeInv({ currentLocationId: 'loc-a', actionPoints: 3 });
+  const ctx: RuleContext = { scenario: sc, investigator: inv, turn: makeTurn(), investigators: { 'inv-1': inv } };
+  const r = resolveIntent(makeIntent('attack'), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.actionPoints, 2);
+});
+
+// ─── stub 動作 ───────────────────────
+test('play_card stub 駁回(後續展開)', () => {
+  const ctx = makeCtx();
+  const r = resolveIntent(makeIntent('play_card'), ctx);
   assertEq(r.result.outcome, 'rejected');
 });
 

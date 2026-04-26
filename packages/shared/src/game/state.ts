@@ -47,6 +47,8 @@ export interface ScenarioState {
   campaignId: string; // 屬於哪個戰役
   /** 當前所有地點(對應 MOD-08 地點定義 + 動態狀態) */
   locations: LocationInstance[];
+  /** 已解鎖的地點 ID(教學關卡用,逐步解鎖三地點;一般戰役預設全解鎖) */
+  unlockedLocations: string[];
   /** 場上敵人(對應 MOD-03 敵人定義 + 當下血量、位置) */
   enemies: EnemyInstance[];
   /** 場上標記(線索、毀滅、隱藏調查點等,規則書 §13) */

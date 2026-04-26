@@ -69,10 +69,12 @@ export function resolveIntent(intent: IntentMessage, ctx: RuleContext): RuleReso
       return resolveDrawCard(intent, ctx);
     case 'move':
       return resolveMove(intent, ctx);
+    case 'investigate':
+      return resolveInvestigate(intent, ctx);
+    case 'attack':
+      return resolveAttack(intent, ctx);
     // 以下 stub,等後續里程碑展開
     case 'play_card':
-    case 'attack':
-    case 'investigate':
     case 'taunt':
     case 'evade':
     case 'execute_card_action':
@@ -151,6 +153,10 @@ function resolveMove(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput
   if (!current || !current.connectedTo.includes(targetId)) {
     return reject(intent, '目標地點與當前位置不相鄰');
   }
+  // 解鎖檢查(教學關卡用)
+  if (ctx.scenario.unlockedLocations.length > 0 && !ctx.scenario.unlockedLocations.includes(targetId)) {
+    return reject(intent, '「' + targetId + '」這條路還沒打開', '完成當前地點的目標即可解鎖');
+  }
   const cost = target.isObstacle ? 2 : 1;
   if (ctx.investigator.actionPoints < cost) {
     return reject(intent, '行動點不足:移動到「' + targetId + '」需 ' + cost + ',剩 ' + ctx.investigator.actionPoints);
@@ -188,6 +194,119 @@ function resolveMove(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput
       },
     }
   );
+}
+
+/**
+ * 調查 — §6.1 / §13(線索系統)
+ * G1 階段簡化:扣 1 行動點,擲 d20 + 感知,DC 10 → 成功則找到 1 線索
+ * 完整版需含隱藏調查點、感知檢定、難度由地點定義(後續展開)
+ */
+function resolveInvestigate(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
+  if (ctx.investigator.actionPoints < 1) {
+    return reject(intent, '行動點不足:調查需 1,剩 ' + ctx.investigator.actionPoints);
+  }
+  const perception = ctx.investigator.attributes.perception;
+  const roll = rollD20();
+  const total = roll + perception;
+  const dc = 10;
+  const success = total >= dc;
+  const newInv: InvestigatorState = { ...ctx.investigator, actionPoints: ctx.investigator.actionPoints - 1 };
+  const baseEffects: ResultEffect[] = [
+    { type: 'spend_action_point', params: { amount: 1 } },
+    { type: 'roll_d20', params: { roll, attribute: 'perception', modifier: perception, total, dc, outcome: success ? 'success' : 'fail' } },
+  ];
+  if (!success) {
+    return accept(intent, [...baseEffects, { type: 'investigate_fail', params: { narrative: '你翻找了一圈,什麼線索都沒留下。' } }], { investigator: newInv });
+  }
+  // 成功:在當前地點放 1 線索
+  const newScenario: ScenarioState = {
+    ...ctx.scenario,
+    objectiveProgress: ctx.scenario.objectiveProgress + 1,
+    tokens: [
+      ...ctx.scenario.tokens,
+      { tokenType: 'clue', locationId: ctx.investigator.currentLocationId || '', amount: 1 },
+    ],
+  };
+  return accept(
+    intent,
+    [
+      ...baseEffects,
+      { type: 'investigate_success', params: { narrative: '你在塵埃裡發現了一張被遺忘的紙條。', clueAmount: 1 }, targetId: ctx.investigator.currentLocationId || undefined },
+      { type: 'gain_clue', params: { amount: 1 } },
+    ],
+    { investigator: newInv, scenario: newScenario }
+  );
+}
+
+/**
+ * 攻擊 — §6.1 / §5(完整版見第三章 §5)
+ * G1 階段簡化:擲 d20 + 力量修正 vs 怪物 DC 10
+ * 命中 → 怪物 hp -1
+ * 未實作:戰鬥風格卡 / 武器加值 / 三層修正 / 自然 20/1 特殊處理
+ */
+function resolveAttack(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
+  if (ctx.investigator.actionPoints < 1) {
+    return reject(intent, '行動點不足:攻擊需 1,剩 ' + ctx.investigator.actionPoints);
+  }
+  const targetEnemyId = (intent.payload as { enemyInstanceId?: string }).enemyInstanceId;
+  if (!targetEnemyId) {
+    // 自動鎖定當前地點第一隻活著的怪物
+    const enemyHere = ctx.scenario.enemies.find((e) => e.locationId === ctx.investigator.currentLocationId && e.hp > 0);
+    if (!enemyHere) {
+      return reject(intent, '當前地點沒有可攻擊的目標');
+    }
+    return performAttack(intent, ctx, enemyHere.instanceId);
+  }
+  return performAttack(intent, ctx, targetEnemyId);
+}
+
+function performAttack(intent: IntentMessage, ctx: RuleContext, enemyInstanceId: string): RuleResolveOutput {
+  const enemy = ctx.scenario.enemies.find((e) => e.instanceId === enemyInstanceId);
+  if (!enemy || enemy.hp <= 0) {
+    return reject(intent, '目標已倒下或不存在');
+  }
+  if (enemy.locationId !== ctx.investigator.currentLocationId) {
+    return reject(intent, '目標不在你所在地點');
+  }
+  const strength = ctx.investigator.attributes.strength;
+  const roll = rollD20();
+  const total = roll + strength;
+  const dc = 10;
+  const newInv: InvestigatorState = { ...ctx.investigator, actionPoints: ctx.investigator.actionPoints - 1 };
+  const baseEffects: ResultEffect[] = [
+    { type: 'spend_action_point', params: { amount: 1 } },
+    { type: 'roll_d20', params: { roll, attribute: 'strength', modifier: strength, total, dc, outcome: total >= dc ? 'hit' : 'miss' }, targetId: enemyInstanceId },
+  ];
+  if (total < dc) {
+    return accept(intent, [...baseEffects, { type: 'attack_miss', params: { narrative: '你的攻擊擦身而過,牠仍站在那裡。' }, targetId: enemyInstanceId }], { investigator: newInv });
+  }
+  // 命中:1 點傷害(簡化版)
+  const newHp = enemy.hp - 1;
+  const newScenario: ScenarioState = {
+    ...ctx.scenario,
+    enemies: ctx.scenario.enemies.map((e) => (e.instanceId === enemyInstanceId ? { ...e, hp: newHp } : e)),
+  };
+  const effects: ResultEffect[] = [
+    ...baseEffects,
+    { type: 'attack_hit', params: { damage: 1, narrative: hpToNarrative(newHp, enemy.hp) }, targetId: enemyInstanceId },
+  ];
+  if (newHp <= 0) {
+    effects.push({ type: 'enemy_defeated', params: { narrative: '牠倒下了,空氣裡只剩下血腥與沉默。' }, targetId: enemyInstanceId });
+  }
+  return accept(intent, effects, { investigator: newInv, scenario: newScenario });
+}
+
+function rollD20(): number {
+  return 1 + Math.floor(Math.random() * 20);
+}
+
+/** §7.8 隱藏資訊:敵人血量轉敘事性狀態(簡化:依絕對 hp 不依百分比)*/
+function hpToNarrative(newHp: number, prevHp: number): string {
+  if (newHp <= 0) return '牠倒下了';
+  if (newHp <= 1) return '牠瀕臨倒下,呼吸像是漏氣的風箱';
+  if (newHp <= 2) return '牠拖著斷裂的肢體,動作明顯遲緩';
+  if (prevHp >= 5 && newHp < 5) return '牠的動作慢了下來,有幾道傷口';
+  return '牠看起來幾乎毫髮無傷';
 }
 
 // ─── 輔助:接受 / 駁回 構造 ResultMessage ──

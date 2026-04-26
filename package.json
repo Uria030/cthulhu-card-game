@@ -1,6 +1,6 @@
 {
   "name": "cthulhu-card-game",
-  "version": "0.20.4",
+  "version": "0.20.5",
   "private": true,
   "scripts": {
     "dev": "pnpm --parallel -r dev",

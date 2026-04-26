@@ -272,6 +272,67 @@
   background: var(--bg-card-hover);
 }
 
+.ts-attack-btn {
+  border-color: var(--world-oxblood);
+  color: var(--danger);
+  background: rgba(184, 76, 76, 0.08);
+}
+
+.ts-attack-btn:hover {
+  border-color: var(--danger);
+  background: rgba(184, 76, 76, 0.15);
+  color: var(--danger);
+}
+
+/* 鎖定地點視覺 */
+.ts-loc-card.locked {
+  opacity: 0.4;
+  filter: grayscale(0.7) blur(0.3px);
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.ts-loc-card.locked:hover {
+  background: var(--world-aged-paper);
+  border-color: var(--world-deep-walnut);
+}
+
+.ts-loc-lock {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 14px;
+  color: var(--world-soot-grey);
+}
+
+/* 遭遇區的子內容 */
+.ts-encounter-event,
+.ts-encounter-enemy {
+  font-family: 'Noto Serif TC', serif;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.ts-encounter-event strong {
+  display: block;
+  font-size: 18px;
+  color: var(--world-antique-brass);
+  margin-bottom: 4px;
+}
+
+.ts-encounter-enemy strong {
+  display: block;
+  font-size: 18px;
+  color: var(--danger);
+  margin-bottom: 4px;
+}
+
+.ts-encounter-event p,
+.ts-encounter-enemy p {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 .ts-statuses {
   display: flex;
   gap: 4px;

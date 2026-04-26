@@ -16,6 +16,7 @@ import { campaignRoutes } from './routes/campaigns.js';
 import { stageRoutes } from './routes/stages.js';
 import { typesRegistryRoutes } from './routes/types-registry.js';
 import { dbDiagRoutes } from './routes/db-diag.js';
+import { sandboxConfigRoutes } from './routes/sandbox-configs.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -49,6 +50,7 @@ export async function buildApp() {
   await app.register(aiConsoleRoutes);
   await app.register(typesRegistryRoutes);
   await app.register(dbDiagRoutes);
+  await app.register(sandboxConfigRoutes);
 
   return app;
 }

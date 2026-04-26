@@ -2830,6 +2830,53 @@ COMMENT ON COLUMN card_definitions.starting_xp IS
 `;
 
 // ============================================
+// MIGRATION_027:沙盒測試模式 (G1 階段落地)
+// ============================================
+// 1. stages 加 is_sandbox / sandbox_config_id
+// 2. 新增 sandbox_configs 表(命名儲存的內容池配置)
+// 引擎讀取邏輯:當 stage.is_sandbox=true 時,內容池(monster/mythos/encounter
+// /injected_cards) 由 sandbox_config_id 引用的配置覆寫;場景骨架(scenarios
+// /act_cards/agenda_cards) 仍從 stage 讀。詳見《G1 沙盒關卡執行交付書 Part 1 §3》。
+// ============================================
+export const MIGRATION_027_SQL = `
+ALTER TABLE stages
+  ADD COLUMN IF NOT EXISTS is_sandbox BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS sandbox_config_id UUID;
+
+CREATE TABLE IF NOT EXISTS sandbox_configs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  stage_id UUID NOT NULL REFERENCES stages(id) ON DELETE CASCADE,
+  config_name VARCHAR(100) NOT NULL,
+  monster_pool JSONB NOT NULL DEFAULT '[]',
+  mythos_pool JSONB NOT NULL DEFAULT '[]',
+  encounter_pool JSONB NOT NULL DEFAULT '[]',
+  injected_cards JSONB NOT NULL DEFAULT '[]',
+  keeper_action_pool JSONB NOT NULL DEFAULT '[]',
+  combat_style_override JSONB NOT NULL DEFAULT '{}',
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (stage_id, config_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sandbox_configs_stage ON sandbox_configs(stage_id);
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_stages_sandbox_config'
+  ) THEN
+    ALTER TABLE stages
+      ADD CONSTRAINT fk_stages_sandbox_config
+      FOREIGN KEY (sandbox_config_id) REFERENCES sandbox_configs(id)
+      ON DELETE SET NULL;
+  END IF;
+END $$;
+
+COMMENT ON COLUMN stages.is_sandbox IS 'G1 沙盒測試關卡標記。為 true 時,引擎讀取內容池從 sandbox_config_id 引用的配置覆寫。';
+COMMENT ON TABLE sandbox_configs IS 'G1 沙盒模式命名儲存的內容池配置(怪物/神話/遭遇/玩家臨時注入卡)。場景骨架仍存於 stages,僅內容池替換。';
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -3006,6 +3053,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_024_SQL);
     await client.query(MIGRATION_025_SQL);
     await client.query(MIGRATION_026_SQL);
+    await client.query(MIGRATION_027_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

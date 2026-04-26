@@ -626,7 +626,7 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
         await client.query(`
           INSERT INTO monster_status_descriptions (variant_id, hp_threshold, description_zh, description_en, sort_order)
           VALUES ($1, $2, $3, $4, $5)
-        `, [newVariant.id, t.hp_threshold, null, null, t.sort_order]);
+        `, [newVariant.id, t.hp_threshold, '（待設計）', null, t.sort_order]);
       }
 
       // Update species variant_count

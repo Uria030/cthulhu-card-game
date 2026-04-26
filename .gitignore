@@ -14,3 +14,4 @@ __pycache__/
 logs/
 .g1-token
 .admin-token-temp
+g1-cred.txt

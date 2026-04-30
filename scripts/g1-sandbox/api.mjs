@@ -49,9 +49,13 @@ export async function adminFetch(pathOrUrl, options = {}, _retry = false) {
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : `${BASE_URL}${pathOrUrl}`;
   const headers = {
     'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json; charset=utf-8',
     ...(options.headers || {}),
   };
+  // Content-Type: application/json 僅在確實帶 body 時才加(對應 admin-shared.js 同邏輯)
+  // 空 body + JSON header 會被 Fastify 擋 400 Bad Request(發生在 DELETE / 無 body GET)
+  if (options.body !== undefined && options.body !== null && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json; charset=utf-8';
+  }
   const res = await fetch(url, { ...options, headers });
   const text = await res.text();
   let body;

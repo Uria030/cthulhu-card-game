@@ -501,6 +501,94 @@ function checkForbiddenTermsRegistered() {
   }
 }
 
+// ───────────────────────────────────────────────
+// CHECK 12: G1 自動生成 — admin-card-prompt.js UMD 雙環境結構
+// + 規則表雙寫一致性(admin-shared.js ↔ scripts/g1-sandbox/lib/card-validator.mjs)
+// 對應坑:上次 60+ 件零件 desc_zh 違反 s06 規範,因腳本繞開 buildCardGeminiPrompt
+// 落地版本:v0.21.x B2 路徑,規範主檔三路徑單一來源
+// ───────────────────────────────────────────────
+function checkG1AutoGenInfra() {
+  // 12a:admin-card-prompt.js vm sandbox 載入測試
+  const promptFile = 'packages/client/public/admin/admin-card-prompt.js';
+  if (!exists(promptFile)) {
+    fail('admin-card-prompt.js 不存在'); return;
+  }
+  try {
+    const vm = require('vm');
+    const code = read(promptFile);
+    const ctx = { window: {}, console: { log: () => {}, warn: () => {} } };
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx, { filename: 'admin-card-prompt.js' });
+    if (typeof ctx.window.buildCardGeminiPrompt !== 'function') {
+      fail('admin-card-prompt.js sandbox 後 buildCardGeminiPrompt 不是 function');
+      return;
+    }
+    if (typeof ctx.window.buildMiniCardGeminiPrompt !== 'function') {
+      fail('admin-card-prompt.js sandbox 後 buildMiniCardGeminiPrompt 不是 function');
+      return;
+    }
+    // 確保 prompt 仍含 s06 v2 規範文字
+    const sample = ctx.window.buildCardGeminiPrompt('test', { batchCount: 1 });
+    if (!sample.includes('s06 v2') || !sample.includes('在 X 時')) {
+      fail('admin-card-prompt.js prompt 缺 s06 v2 規範文字 — 三路徑共用會失效');
+      return;
+    }
+    ok('admin-card-prompt.js UMD 雙環境結構 OK(buildCardGeminiPrompt + buildMiniCardGeminiPrompt 雙函式可用,prompt 含 s06 v2)');
+  } catch (e) {
+    fail('admin-card-prompt.js sandbox 載入失敗: ' + e.message);
+    return;
+  }
+
+  // 12b:lib 模組存在
+  const libFiles = [
+    'scripts/g1-sandbox/lib/prompt-loader.mjs',
+    'scripts/g1-sandbox/lib/gemini-client.mjs',
+    'scripts/g1-sandbox/lib/card-validator.mjs',
+    'scripts/g1-sandbox/lib/existing-cards.mjs',
+    'scripts/g1-sandbox/lib/api-key.mjs',
+    'scripts/g1-sandbox/lib/generate-card.mjs',
+  ];
+  let libMissing = 0;
+  for (const f of libFiles) {
+    if (!exists(f)) { fail('lib 模組缺檔: ' + f); libMissing++; }
+  }
+  if (libMissing === 0) ok('G1 lib 模組 6 支齊全');
+
+  // 12c:規則表雙寫一致性(admin-shared.js ↔ lib/card-validator.mjs)
+  // 抽 CARD_TEXT_FORBIDDEN_TERMS 的 key 列表,雙邊必須相同(短期雙寫,Uria 拍板 B2 後容忍)
+  const sharedSrc = read('packages/client/public/admin/admin-shared.js');
+  const validatorSrc = read('scripts/g1-sandbox/lib/card-validator.mjs');
+
+  function extractForbiddenKeys(src, anchor) {
+    const idx = src.indexOf(anchor);
+    if (idx < 0) return null;
+    const tail = src.slice(idx);
+    const blockEnd = tail.indexOf('};');
+    if (blockEnd < 0) return null;
+    const block = tail.slice(0, blockEnd);
+    const keys = [];
+    const re = /'([^']+)'\s*:/g;
+    let m;
+    while ((m = re.exec(block)) !== null) keys.push(m[1]);
+    return keys;
+  }
+  const sharedKeys = extractForbiddenKeys(sharedSrc, 'CARD_TEXT_FORBIDDEN_TERMS = {');
+  const validatorKeys = extractForbiddenKeys(validatorSrc, 'CARD_TEXT_FORBIDDEN_TERMS = {');
+  if (!sharedKeys || !validatorKeys) {
+    fail('CARD_TEXT_FORBIDDEN_TERMS 抽取失敗(admin-shared.js 或 lib/card-validator.mjs 結構異動?)');
+  } else {
+    const onlyInShared = sharedKeys.filter(k => !validatorKeys.includes(k));
+    const onlyInValidator = validatorKeys.filter(k => !sharedKeys.includes(k));
+    if (onlyInShared.length || onlyInValidator.length) {
+      fail('CARD_TEXT_FORBIDDEN_TERMS 雙寫不一致 — 任一邊規則升級,另一邊必須同步:');
+      if (onlyInShared.length) console.error('   只在 admin-shared.js: ' + onlyInShared.join(', '));
+      if (onlyInValidator.length) console.error('   只在 card-validator.mjs: ' + onlyInValidator.join(', '));
+    } else {
+      ok('CARD_TEXT_FORBIDDEN_TERMS 雙寫一致(' + sharedKeys.length + ' 條)');
+    }
+  }
+}
+
 // ──────────── 主流程 ────────────
 console.log('=== Preflight Check ===');
 process.chdir(ROOT);
@@ -546,6 +634,9 @@ checkGamePlanNoMResidual();
 
 section('MEMORY 索引完整性');
 checkMemoryIndex();
+
+section('G1 自動生成基礎建設(B2)— UMD 結構 + 規則表雙寫一致性');
+checkG1AutoGenInfra();
 
 console.log('\n=== ' + (failed === 0 ? '✓ ALL PASS — 可推送' : '❌ ' + failed + ' 項失敗 — 不准推送') + ' ===');
 process.exit(failed === 0 ? 0 : 1);

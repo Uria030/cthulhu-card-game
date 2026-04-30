@@ -1,4 +1,8 @@
+// G1 神話 + 遭遇卡 — 規範化過濾版
+// description_zh / scenario_text_zh / flavor_text_zh 跑 normalizeCardText + autoFixSanHp(修「3 點 SAN」→「3 點恐懼」) + scanForbiddenTerms 警告
+// 未來若要全 AI 化:寫專屬 buildMythosCardGeminiPrompt 與 buildEncounterCardGeminiPrompt
 import { adminFetch, adminGet } from './api.mjs';
+import { normalizeCardText, autoFixSanHp, scanForbiddenTerms } from './lib/card-validator.mjs';
 import fs from 'fs';
 import path from 'path';
 
@@ -140,10 +144,38 @@ const ENCOUNTERS = [
   },
 ];
 
+// 規範化單張卡的所有中文敘事字段
+function normalizeMythosOrEncounter(card) {
+  const fields = ['description_zh','flavor_text_zh','scenario_text_zh','design_notes'];
+  const warnings = [];
+  for (const f of fields) {
+    if (typeof card[f] === 'string') {
+      const before = card[f];
+      let txt = normalizeCardText(before);
+      txt = autoFixSanHp(txt);
+      card[f] = txt;
+      if (txt !== before) {
+        warnings.push({ field: f, type: 'auto_fixed', before: before.slice(0, 60), after: txt.slice(0, 60) });
+      }
+      const ws = scanForbiddenTerms(txt);
+      for (const w of ws) warnings.push({ field: f, type: 'forbidden_term', term: w.term, suggestion: w.suggestion });
+    }
+  }
+  return warnings;
+}
+
 let mAdded = 0, mSkipped = 0;
 log('\n── 神話卡 ──');
 for (const m of MYTHOS) {
   if (exMythNames.has(m.name_zh)) { log(`⊙ skip: ${m.name_zh}`); mSkipped++; continue; }
+  const warns = normalizeMythosOrEncounter(m);
+  if (warns.length) {
+    log(`  ⚠ s06 過濾 × ${warns.length}: ${m.name_zh}`);
+    for (const w of warns) {
+      if (w.type === 'auto_fixed') log(`    [auto] ${w.field}: ${w.before} → ${w.after}`);
+      else log(`    [warn] ${w.field}「${w.term}」→ ${w.suggestion}`);
+    }
+  }
   const r = await adminFetch('/api/admin/keeper/mythos-cards', { method: 'POST', body: JSON.stringify(m) });
   if (!r.ok) { log(`✗ ${m.name_zh}: ${r.status} ${JSON.stringify(r.body).slice(0, 250)}`); continue; }
   log(`✓ ${m.name_zh}`); mAdded++;
@@ -153,6 +185,14 @@ let eAdded = 0, eSkipped = 0;
 log('\n── 遭遇卡 ──');
 for (const e of ENCOUNTERS) {
   if (exEncNames.has(e.name_zh)) { log(`⊙ skip: ${e.name_zh}`); eSkipped++; continue; }
+  const warns = normalizeMythosOrEncounter(e);
+  if (warns.length) {
+    log(`  ⚠ s06 過濾 × ${warns.length}: ${e.name_zh}`);
+    for (const w of warns) {
+      if (w.type === 'auto_fixed') log(`    [auto] ${w.field}: ${w.before} → ${w.after}`);
+      else log(`    [warn] ${w.field}「${w.term}」→ ${w.suggestion}`);
+    }
+  }
   const r = await adminFetch('/api/admin/keeper/encounter-cards', { method: 'POST', body: JSON.stringify(e) });
   if (!r.ok) { log(`✗ ${e.name_zh}: ${r.status} ${JSON.stringify(r.body).slice(0, 250)}`); continue; }
   log(`✓ ${e.name_zh}`); eAdded++;

@@ -1,4 +1,9 @@
+// G1 戰鬥風格卡 — 規範化過濾版
+// 風格卡的 narrative_* 屬風味敘事(類似 flavor_text),不適用 buildCardGeminiPrompt(那是普通卡 prompt)
+// POST 前每段敘事自動跑 normalizeCardText(修符號/數字) + autoFixSanHp + scanForbiddenTerms(警告)
+// 未來若要全 AI 化:寫專屬 buildStyleCardGeminiPrompt 即可,本檔改用 generateValidatedCard 模式
 import { adminFetch, adminGet } from './api.mjs';
+import { normalizeCardText, autoFixSanHp, scanForbiddenTerms } from './lib/card-validator.mjs';
 import fs from 'fs';
 import path from 'path';
 
@@ -123,12 +128,36 @@ const BRAWL_CARDS = [
   },
 ];
 
+// 對風格卡敘事字段跑 s06 文字規範化(自動修正符號/SAN/HP) + 印警告
+function normalizeStyleCard(card) {
+  const fields = ['narrative_attack_zh','narrative_success_zh','narrative_fail_zh',
+                  'narrative_attack_en','narrative_success_en','narrative_fail_en'];
+  const warnings = [];
+  for (const f of fields) {
+    if (typeof card[f] === 'string') {
+      // 中文欄位才跑 SAN/HP 修正(英文無此問題)
+      if (f.endsWith('_zh')) {
+        card[f] = normalizeCardText(card[f]);
+        card[f] = autoFixSanHp(card[f]);
+        const ws = scanForbiddenTerms(card[f]);
+        for (const w of ws) warnings.push({ field: f, term: w.term, suggestion: w.suggestion });
+      }
+    }
+  }
+  return warnings;
+}
+
 let added = 0, skipped = 0, failed = 0;
 async function postCard(styleId, card) {
   if (existingNames.has(card.name_zh)) {
     log(`⊙ skip: ${card.name_zh}`);
     skipped++;
     return;
+  }
+  // s06 規範化
+  const warns = normalizeStyleCard(card);
+  if (warns.length) {
+    log(`  ⚠ s06 警告 × ${warns.length}: ${warns.map(w => `${w.field}「${w.term}」→${w.suggestion}`).join('; ')}`);
   }
   const r = await adminFetch(`/api/combat-styles/${styleId}/cards`, {
     method: 'POST', body: JSON.stringify(card),

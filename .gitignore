@@ -15,3 +15,5 @@ logs/
 .g1-token
 .admin-token-temp
 g1-cred.txt
+.gemini-key
+*.bak.hardcoded

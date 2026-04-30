@@ -271,15 +271,74 @@ export const cardRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── DELETE /api/cards/:id
+  // 智能刪除(處理非 CASCADE FK):
+  //   1. card_effects 是 ON DELETE CASCADE → 自動刪
+  //   2. investigator_starting_deck.card_definition_id 無 CASCADE,且 chk_exactly_one_source
+  //      強制每行剛好一個 source 非 NULL → 不能 SET NULL,必須整行 DELETE
+  //   3. crafting_recipes.output_card_id 無 CASCADE,可 SET NULL
+  //   修法源自 v0.12.2 批次刪除 transaction(v0.12.3 拆掉 UI 但 FK 邏輯仍適用)。
+  //   2026-04-30 v0.21.x:單張 DELETE 一直沒處理 FK,Uria 反饋「無法刪除」即此 bug。
   app.delete<{ Params: { id: string } }>('/api/cards/:id', { preHandler: requireAdminRole }, async (request, reply) => {
     const { id } = request.params;
+    const client = await pool.connect();
     try {
-      const result = await pool.query('DELETE FROM card_definitions WHERE id = $1 RETURNING id, code', [id]);
-      if (result.rows.length === 0) return reply.status(404).send({ success: false, error: 'Card not found' });
-      return reply.send({ success: true, data: { deleted: result.rows[0] } });
-    } catch (error) {
+      await client.query('BEGIN');
+
+      // 預掃引用情況(回傳給前端讓 Uria 知道清掉了什麼)
+      const deckRefRes = await client.query(
+        'SELECT COUNT(*)::int AS n FROM investigator_starting_deck WHERE card_definition_id = $1',
+        [id]
+      );
+      const recipeRefRes = await client.query(
+        'SELECT COUNT(*)::int AS n FROM crafting_recipes WHERE output_card_id = $1',
+        [id]
+      );
+      const deckRefs = deckRefRes.rows[0]?.n ?? 0;
+      const recipeRefs = recipeRefRes.rows[0]?.n ?? 0;
+
+      // 1. 整行 DELETE investigator_starting_deck(因 CHECK 約束無法 SET NULL)
+      if (deckRefs > 0) {
+        await client.query('DELETE FROM investigator_starting_deck WHERE card_definition_id = $1', [id]);
+      }
+
+      // 2. crafting_recipes.output_card_id SET NULL(食譜本身保留,只清輸出卡引用)
+      if (recipeRefs > 0) {
+        await client.query('UPDATE crafting_recipes SET output_card_id = NULL WHERE output_card_id = $1', [id]);
+      }
+
+      // 3. DELETE 卡片(card_effects 會 CASCADE 自動跟著刪)
+      const result = await client.query(
+        'DELETE FROM card_definitions WHERE id = $1 RETURNING id, code, name_zh',
+        [id]
+      );
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return reply.status(404).send({ success: false, error: 'Card not found' });
+      }
+
+      await client.query('COMMIT');
+      return reply.send({
+        success: true,
+        data: {
+          deleted: result.rows[0],
+          deck_rows_removed: deckRefs,
+          recipe_refs_cleared: recipeRefs,
+        },
+      });
+    } catch (error: any) {
+      await client.query('ROLLBACK').catch(() => {});
       request.log.error(error, 'DELETE card error');
-      return reply.status(500).send({ success: false, error: 'Failed to delete card' });
+      // 回傳完整錯誤(PostgreSQL code + message),方便除錯不是吞成 generic 500
+      return reply.status(500).send({
+        success: false,
+        error: error?.message || 'Failed to delete card',
+        pgCode: error?.code || null,
+        detail: error?.detail || null,
+        constraint: error?.constraint || null,
+        table: error?.table || null,
+      });
+    } finally {
+      client.release();
     }
   });
 

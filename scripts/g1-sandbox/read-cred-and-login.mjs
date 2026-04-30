@@ -33,21 +33,17 @@ const res = await fetch(URL, {
 });
 const data = await res.json();
 
-// 不論成敗,都先刪掉 cred 檔
-try {
-  fs.unlinkSync(CRED_PATH);
-  console.log(`✓ 已刪除 g1-cred.txt(密碼不留電腦)`);
-} catch (e) {
-  console.error(`⚠ 無法刪除 g1-cred.txt: ${e.message}`);
-}
-
 if (!res.ok || !data?.data?.token) {
   console.error(`✗ 登入失敗: ${res.status} ${JSON.stringify(data).slice(0, 300)}`);
   process.exit(1);
 }
 
+// 注意:此版本「保留」cred 檔。已 .gitignore,本地檔等同於密碼管理器條目。
+// 改造原因:舊版每次登入後刪 cred,Uria 每次 token 過期(24h)都要重建——4 天 4 次重複工。
+// 新設計:cred 永久存,api.mjs 遇 401 自動 refresh,Uria 不再被打擾。
 fs.writeFileSync(TOKEN_PATH, data.data.token);
 console.log(`✓ token 已儲存到 .g1-token`);
+console.log(`  cred 已保留(自動 refresh 機制依賴此檔)`);
 console.log(`  長度: ${data.data.token.length}`);
 console.log(`  角色: ${data.data.user.role}`);
 console.log(`  有效時間: 約 ${Math.round(data.data.expiresIn / 3600)} 小時`);

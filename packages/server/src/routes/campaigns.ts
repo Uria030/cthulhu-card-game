@@ -245,13 +245,7 @@ export const campaignRoutes: FastifyPluginAsync = async (app) => {
       if (error.code === '23505') {
         return reply.status(409).send({ success: false, error: '戰役代碼已存在' });
       }
-      // 暫時回 detail 用於診斷 migration 028 是否生效
-      return reply.status(500).send({
-        success: false,
-        error: '建立戰役失敗',
-        detail: String(error?.message || error),
-        sql_code: error?.code,
-      });
+      return reply.status(500).send({ success: false, error: '建立戰役失敗' });
     } finally {
       client.release();
     }

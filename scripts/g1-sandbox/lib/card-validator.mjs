@@ -130,6 +130,54 @@ export function scanForbiddenTerms(text) {
   return warnings;
 }
 
+// ─── 語言規範(2026-05-01 加):繁體 + 遊戲文件用詞 ─────────────────
+// 高頻簡體單字黑名單(命中即 warning)
+export const SIMPLIFIED_CHAR_BLACKLIST = [
+  '头','学','严','书','体','发','为','后','门','间','开','单','钢','脸','举',
+  '点','击','议','试','离','听','灵','习','识','视','觉','类','来','处','让',
+  '优','经','动','团','队','尽','凤','网','备','览','东','业','厂','时','这',
+  '个','们','远','进','过','双','万','块','帅','应','无','实','亚','务','边',
+  '员','级','样','样','亲','亲','线','纸','纸','钱','钱','节','节','岁','岁',
+];
+
+// 程式術語黑名單(必須改用遊戲內中文用詞)
+export const PROGRAMMING_TERMS = [
+  { pattern: /\btier\s*[0-9]/gi,    suggestion: '改用「雜兵 / 威脅 / 精英 / 頭目 / 巨頭」位階詞' },
+  { pattern: /\bboss\b/gi,          suggestion: '改用「頭目」' },
+  { pattern: /\bminion\b/gi,        suggestion: '改用「雜兵」' },
+  { pattern: /\belite\b/gi,         suggestion: '改用「精英」' },
+  { pattern: /\bdamage\b/gi,        suggestion: '改用「傷害」' },
+  { pattern: /\bHP\b/g,             suggestion: '改用「生命 / 點傷害」' },
+  { pattern: /\bSAN\b/g,            suggestion: '改用「理智 / 點恐懼」' },
+  { pattern: /\bDC\b/g,             suggestion: '檢定難度寫成「(屬性) (DC數字) 檢定」是允許的縮寫,單獨 DC 改用「難度」' },
+];
+
+export function scanSimplifiedChars(text) {
+  if (!text || typeof text !== 'string') return [];
+  const warnings = [];
+  for (const ch of SIMPLIFIED_CHAR_BLACKLIST) {
+    let idx = text.indexOf(ch);
+    while (idx !== -1) {
+      warnings.push({ char: ch, index: idx, kind: 'simplified_char' });
+      idx = text.indexOf(ch, idx + 1);
+    }
+  }
+  return warnings;
+}
+
+export function scanProgrammingTerms(text) {
+  if (!text || typeof text !== 'string') return [];
+  const warnings = [];
+  for (const { pattern, suggestion } of PROGRAMMING_TERMS) {
+    pattern.lastIndex = 0;
+    let m;
+    while ((m = pattern.exec(text)) !== null) {
+      warnings.push({ term: m[0], suggestion, index: m.index, kind: 'programming_term' });
+    }
+  }
+  return warnings;
+}
+
 // ─── 掃 hallucination（AI 發明的關鍵字 / 狀態）─────────────────────
 export function scanCardDescForHallucinations(card) {
   if (!card || typeof card !== 'object') return [];
@@ -304,6 +352,25 @@ export function validateCard(card) {
         term: w.term,
         suggestion: w.suggestion,
         message: `禁用詞「${w.term}」(建議:${w.suggestion})`,
+      });
+    }
+    // 簡體字偵測(2026-05-01 加,Uria 規定:必須繁中)
+    for (const w of scanSimplifiedChars(text)) {
+      warnings.push({
+        field,
+        type: 'simplified_char',
+        char: w.char,
+        message: `含簡體字「${w.char}」,必須繁體中文`,
+      });
+    }
+    // 程式術語偵測(2026-05-01 加,Uria 規定:必須用遊戲文件用詞)
+    for (const w of scanProgrammingTerms(text)) {
+      warnings.push({
+        field,
+        type: 'programming_term',
+        term: w.term,
+        suggestion: w.suggestion,
+        message: `程式術語「${w.term}」(建議:${w.suggestion})`,
       });
     }
   }

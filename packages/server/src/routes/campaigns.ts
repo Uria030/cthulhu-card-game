@@ -172,6 +172,21 @@ export const campaignRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
+  // GET /api/admin/diag/campaigns-schema(診斷:列 campaigns 表 columns)
+  app.get('/api/admin/diag/campaigns-schema', async (_request, reply) => {
+    try {
+      const r = await pool.query(
+        `SELECT column_name, data_type, is_nullable, column_default
+           FROM information_schema.columns
+          WHERE table_name = 'campaigns'
+          ORDER BY ordinal_position`,
+      );
+      return reply.send({ success: true, columns: r.rows });
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, error: error.message });
+    }
+  });
+
   // POST /api/campaigns ── 建立戰役 + 自動十章骨架（交易）
   app.post<{ Body: Record<string, any> }>('/api/campaigns', async (request, reply) => {
     const b = request.body || {};
@@ -245,7 +260,12 @@ export const campaignRoutes: FastifyPluginAsync = async (app) => {
       if (error.code === '23505') {
         return reply.status(409).send({ success: false, error: '戰役代碼已存在' });
       }
-      return reply.status(500).send({ success: false, error: '建立戰役失敗' });
+      return reply.status(500).send({
+        success: false,
+        error: '建立戰役失敗',
+        detail: String(error?.message || error),
+        sql_code: error?.code,
+      });
     } finally {
       client.release();
     }

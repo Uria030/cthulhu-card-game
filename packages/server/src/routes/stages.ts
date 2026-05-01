@@ -320,12 +320,41 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
       );
       const stage = sRes.rows[0];
 
-      // 預設混沌袋
-      const preset = b.scaling_rules?.difficulty_preset || 'standard';
+      // 預設混沌袋:主線關卡從所屬 campaign 繼承 initial_chaos_bag,其餘走 'standard'
+      let inheritedPreset = b.scaling_rules?.difficulty_preset || 'standard';
+      let inheritedNumber: any = {};
+      let inheritedScenario: any = {};
+      let inheritedMythos: any = {};
+      if (b.stage_type === 'main' && b.chapter_id) {
+        const campRes = await client.query(
+          `SELECT c.difficulty_tier, c.initial_chaos_bag
+             FROM chapters ch
+             JOIN campaigns c ON c.id = ch.campaign_id
+             WHERE ch.id = $1`,
+          [b.chapter_id],
+        );
+        if (campRes.rows.length > 0) {
+          const camp = campRes.rows[0];
+          if (camp.difficulty_tier && VALID_DIFFICULTY.has(camp.difficulty_tier)) {
+            inheritedPreset = camp.difficulty_tier;
+          }
+          const bag = camp.initial_chaos_bag || {};
+          inheritedNumber = bag.number_markers || {};
+          inheritedScenario = bag.scenario_markers || {};
+          inheritedMythos = bag.mythos_markers || {};
+        }
+      }
       await client.query(
-        `INSERT INTO stage_chaos_bag (stage_id, difficulty_preset)
-         VALUES ($1, $2)`,
-        [stage.id, VALID_DIFFICULTY.has(preset) ? preset : 'standard'],
+        `INSERT INTO stage_chaos_bag (stage_id, difficulty_preset,
+                                       number_markers, scenario_markers, mythos_markers)
+         VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb)`,
+        [
+          stage.id,
+          VALID_DIFFICULTY.has(inheritedPreset) ? inheritedPreset : 'standard',
+          JSON.stringify(inheritedNumber),
+          JSON.stringify(inheritedScenario),
+          JSON.stringify(inheritedMythos),
+        ],
       );
 
       // 隨機地城：建立空 generator
@@ -1323,6 +1352,62 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
       } catch (error) {
         request.log.error(error, '儲存混沌袋失敗');
         return reply.status(500).send({ success: false, error: '儲存混沌袋失敗' });
+      }
+    },
+  );
+
+  // POST /api/stages/:stageId/chaos-bag/reset-from-campaign
+  // 從關卡所屬戰役的 initial_chaos_bag 重置(只適用 main stage)
+  app.post<{ Params: { stageId: string } }>(
+    '/api/stages/:stageId/chaos-bag/reset-from-campaign',
+    async (request, reply) => {
+      const { stageId } = request.params;
+      try {
+        const campRes = await pool.query(
+          `SELECT c.difficulty_tier, c.initial_chaos_bag, s.stage_type
+             FROM stages s
+             LEFT JOIN chapters ch ON ch.id = s.chapter_id
+             LEFT JOIN campaigns c ON c.id = ch.campaign_id
+             WHERE s.id = $1`,
+          [stageId],
+        );
+        if (campRes.rows.length === 0) {
+          return reply.status(404).send({ success: false, error: '關卡不存在' });
+        }
+        const row = campRes.rows[0];
+        if (row.stage_type !== 'main' || !row.initial_chaos_bag) {
+          return reply.status(400).send({
+            success: false,
+            error: '此關卡不屬於戰役主線,無法從戰役繼承',
+          });
+        }
+        const bag = row.initial_chaos_bag;
+        const preset = VALID_DIFFICULTY.has(row.difficulty_tier) ? row.difficulty_tier : 'standard';
+        const upRes = await pool.query(
+          `INSERT INTO stage_chaos_bag (stage_id, difficulty_preset,
+                                        number_markers, scenario_markers,
+                                        mythos_markers, dynamic_markers)
+           VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb)
+           ON CONFLICT (stage_id) DO UPDATE
+             SET difficulty_preset = EXCLUDED.difficulty_preset,
+                 number_markers = EXCLUDED.number_markers,
+                 scenario_markers = EXCLUDED.scenario_markers,
+                 mythos_markers = EXCLUDED.mythos_markers,
+                 dynamic_markers = EXCLUDED.dynamic_markers
+           RETURNING *`,
+          [
+            stageId,
+            preset,
+            JSON.stringify(bag.number_markers || {}),
+            JSON.stringify(bag.scenario_markers || {}),
+            JSON.stringify(bag.mythos_markers || {}),
+            JSON.stringify({ bless: 0, curse: 0 }),
+          ],
+        );
+        return reply.send({ success: true, data: upRes.rows[0] });
+      } catch (error) {
+        request.log.error(error, '從戰役重置混沌袋失敗');
+        return reply.status(500).send({ success: false, error: '從戰役重置混沌袋失敗' });
       }
     },
   );

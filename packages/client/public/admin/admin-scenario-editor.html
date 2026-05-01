@@ -2514,6 +2514,7 @@ function renderChaosBagTab() {
         <button class="btn btn-sm" onclick="applyChaosBagPreset('standard')" type="button">標準</button>
         <button class="btn btn-sm" onclick="applyChaosBagPreset('hard')" type="button">困難</button>
         <button class="btn btn-sm" onclick="applyChaosBagPreset('expert')" type="button">專家</button>
+        ${currentStage.stage_type === 'main' ? `<button class="btn btn-sm btn-secondary" onclick="resetChaosBagFromCampaign()" type="button" title="從所屬戰役的 initial_chaos_bag 重置">從戰役預設重置</button>` : ''}
       </div>
     </section>
 
@@ -2619,6 +2620,27 @@ function applyEffectSuggestion(marker, effectCode) {
   const sel = document.querySelector(`.scen-effect[data-marker="${marker}"]`);
   if (sel) { sel.value = effectCode; markDirty(); }
 }
+
+async function resetChaosBagFromCampaign() {
+  if (!currentStage?.id) return;
+  if (!confirm('將從所屬戰役的「初始混沌袋」重置目前配置，確定？')) return;
+  try {
+    const { ok, data, body } = await apiJson(
+      `/api/stages/${currentStage.id}/chaos-bag/reset-from-campaign`,
+      { method: 'POST' },
+    );
+    if (!ok) {
+      showToast(data?.error || body?.error || '重置失敗', 'error');
+      return;
+    }
+    currentStage.chaos_bag = data;
+    renderChaosBagTab();
+    showToast('已從戰役預設重置', 'success');
+  } catch (e) {
+    showToast('重置失敗：' + e.message, 'error');
+  }
+}
+window.resetChaosBagFromCampaign = resetChaosBagFromCampaign;
 
 function applyChaosBagPreset(preset) {
   if (!confirm(`套用「${preset}」預設會覆蓋目前配置，確定？`)) return;

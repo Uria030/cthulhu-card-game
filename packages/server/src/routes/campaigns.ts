@@ -20,6 +20,9 @@ import {
 const CHINESE_DIGITS = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 const VALID_DIFFICULTY = new Set(['easy', 'standard', 'hard', 'expert']);
 const VALID_DESIGN_STATUS = new Set(['draft', 'review', 'published']);
+const VALID_CAMPAIGN_TYPES = new Set(['main', 'side']);
+const MIN_CHAPTER_COUNT = 1;
+const MAX_CHAPTER_COUNT = 10;
 const VALID_FLAG_CATEGORIES = new Set([
   'act', 'agenda', 'npc', 'item', 'location',
   'choice', 'outcome', 'time', 'hidden',
@@ -179,6 +182,21 @@ export const campaignRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ success: false, error: '中文名稱為必填' });
     }
     const difficulty = VALID_DIFFICULTY.has(b.difficulty_tier) ? b.difficulty_tier : 'standard';
+    const campaignType = VALID_CAMPAIGN_TYPES.has(b.campaign_type) ? b.campaign_type : 'main';
+    let chapterCount: number;
+    if (b.chapter_count !== undefined) {
+      const n = Number(b.chapter_count);
+      if (!Number.isInteger(n) || n < MIN_CHAPTER_COUNT || n > MAX_CHAPTER_COUNT) {
+        return reply.status(400).send({
+          success: false,
+          error: `章節數必須是 ${MIN_CHAPTER_COUNT}-${MAX_CHAPTER_COUNT} 之間的整數`,
+        });
+      }
+      chapterCount = n;
+    } else {
+      // 沒指定:主線預設 10、支線預設 1
+      chapterCount = campaignType === 'side' ? 1 : 10;
+    }
 
     const client = await pool.connect();
     try {
@@ -186,19 +204,22 @@ export const campaignRoutes: FastifyPluginAsync = async (app) => {
 
       const cRes = await client.query(
         `INSERT INTO campaigns (code, name_zh, name_en, theme, cover_narrative,
-                                difficulty_tier, initial_chaos_bag, design_status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8)
+                                difficulty_tier, initial_chaos_bag, design_status,
+                                campaign_type, chapter_count)
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10)
          RETURNING *`,
         [
           b.code, b.name_zh, b.name_en || '', b.theme || '', b.cover_narrative || '',
           difficulty,
           JSON.stringify(b.initial_chaos_bag || {}),
           'draft',
+          campaignType,
+          chapterCount,
         ],
       );
       const campaign = cRes.rows[0];
 
-      for (let n = 1; n <= 10; n++) {
+      for (let n = 1; n <= chapterCount; n++) {
         await client.query(
           `INSERT INTO chapters (campaign_id, chapter_number, chapter_code, name_zh)
            VALUES ($1, $2, $3, $4)`,

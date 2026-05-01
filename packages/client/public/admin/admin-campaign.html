@@ -500,7 +500,7 @@
           </div>
 
           <div class="editor-section">
-            <h3>十章骨架</h3>
+            <h3 id="chapter-skeleton-title">章節骨架</h3>
             <div class="chapter-grid" id="chapter-grid"></div>
           </div>
 
@@ -721,7 +721,7 @@
           <div class="ci-name">${escHtml(c.name_zh)}</div>
           <div class="ci-meta">
             <span class="status-${c.design_status}">${statusLabel(c.design_status)}</span>
-            · v${c.version} · ${c.chapter_count || 0} 章
+            · v${c.version} · ${c.campaign_type === 'side' ? '支線' : '主線'} ${c.chapter_count || 0} 章
           </div>
         </div>
       `).join('');
@@ -763,6 +763,15 @@
           <label>中文名稱
             <input type="text" id="new-campaign-name-zh" placeholder="例：印斯茅斯陰影">
           </label>
+          <label>戰役類型
+            <select id="new-campaign-type" onchange="onNewCampaignTypeChange()">
+              <option value="main">主線（預設 10 章）</option>
+              <option value="side">支線（1-10 章彈性）</option>
+            </select>
+          </label>
+          <label>章節數（1-10）
+            <input type="number" id="new-campaign-chapter-count" min="1" max="10" value="10">
+          </label>
           <div class="dialog-footer">
             <button class="btn-secondary" onclick="closeDialog()">取消</button>
             <button class="btn-primary" onclick="confirmCreateCampaign()">建立</button>
@@ -773,18 +782,31 @@
     }
     window.openCreateCampaignDialog = openCreateCampaignDialog;
 
+    function onNewCampaignTypeChange() {
+      const type = document.getElementById('new-campaign-type').value;
+      const cc = document.getElementById('new-campaign-chapter-count');
+      if (type === 'main') cc.value = 10;
+      else cc.value = 1;
+    }
+    window.onNewCampaignTypeChange = onNewCampaignTypeChange;
+
     function closeDialog() { document.getElementById('dialogs-root').innerHTML = ''; }
     window.closeDialog = closeDialog;
 
     async function confirmCreateCampaign() {
       const code = document.getElementById('new-campaign-code').value.trim();
       const name = document.getElementById('new-campaign-name-zh').value.trim();
+      const campaignType = document.getElementById('new-campaign-type').value;
+      const chapterCount = parseInt(document.getElementById('new-campaign-chapter-count').value, 10);
       if (!/^[a-z0-9_]{3,32}$/.test(code)) { alert('戰役代碼格式錯誤'); return; }
       if (!name) { alert('中文名稱為必填'); return; }
+      if (!Number.isInteger(chapterCount) || chapterCount < 1 || chapterCount > 10) {
+        alert('章節數必須是 1-10 之間的整數'); return;
+      }
       try {
         const res = await adminFetch('/api/campaigns', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, name_zh: name }),
+          body: JSON.stringify({ code, name_zh: name, campaign_type: campaignType, chapter_count: chapterCount }),
         });
         const data = await res.json();
         if (!res.ok) { alert(data.error || '建立失敗'); return; }
@@ -838,6 +860,12 @@
       document.getElementById('field-design-status').value = c.design_status;
       renderChaosBagEditor(c.initial_chaos_bag || {});
       renderChapterGrid(c.chapters || []);
+      const skTitle = document.getElementById('chapter-skeleton-title');
+      if (skTitle) {
+        const cCount = c.chapter_count || (c.chapters || []).length || 10;
+        const cType = c.campaign_type === 'side' ? '支線' : '主線';
+        skTitle.textContent = `章節骨架（${cType}・${cCount} 章）`;
+      }
       updateEditorHeader();
     }
 
@@ -1925,14 +1953,16 @@
 
     function checkCampaignLevel() {
       const c = state.currentCampaign;
+      const expectedCount = c.chapter_count || 10;
       return [
         { pass: !!c.name_zh, label: '中文名稱已填寫' },
         { pass: (c.cover_narrative || '').length >= 50, label: '封面敘事已撰寫（至少 50 字）' },
-        { pass: (c.chapters || []).length === 10, label: '十章骨架齊備' },
+        { pass: (c.chapters || []).length === expectedCount, label: `章節骨架齊備（${expectedCount} 章）` },
       ];
     }
 
     function checkAllChapters() {
+      const finalChapterNumber = state.currentCampaign.chapter_count || 10;
       return (state.currentCampaign.chapters || []).map((ch) => {
         const checks = [
           { pass: !!ch.name_zh, label: '章節名稱已填' },
@@ -1940,7 +1970,7 @@
           { pass: (ch.outcomes || []).length >= 2, label: '至少 2 種結果分支' },
           { pass: (ch.outcomes || []).every((o) => (o.narrative_text || '').length > 10), label: '每個結果有敘事' },
         ];
-        if (ch.chapter_number === 10) {
+        if (ch.chapter_number === finalChapterNumber) {
           checks.push({ pass: (ch.outcomes || []).every((o) => o.next_chapter_version == null), label: '終局章節不指向下一章' });
         } else {
           checks.push({ pass: (ch.outcomes || []).every((o) => !!o.next_chapter_version), label: '每個結果都有下一章指向' });
@@ -1951,8 +1981,9 @@
 
     function checkStructuralIntegrity() {
       const broken = [];
+      const finalChapterNumber = state.currentCampaign.chapter_count || 10;
       for (const ch of state.currentCampaign.chapters || []) {
-        if (ch.chapter_number === 10) continue;
+        if (ch.chapter_number === finalChapterNumber) continue;
         const nextCodes = new Set((state.currentCampaign.chapters || []).map((c) => c.chapter_code));
         for (const o of (ch.outcomes || [])) {
           if (o.next_chapter_version && !nextCodes.has(o.next_chapter_version)) {
@@ -2079,7 +2110,7 @@
 戰役名稱：${c.name_zh}
 主題：${c.theme || '(未設定)'}
 難度：${difficultyLabel(c.difficulty_tier)}
-章節數：10 章
+章節數：${c.chapter_count || 10} 章（${c.campaign_type === 'side' ? '支線' : '主線'}）
 
 要求：
 1. 300-500 字中文敘事，第二人稱視角
@@ -2243,14 +2274,16 @@
       if (!state.currentCampaign) { el.innerHTML = '<p class="placeholder" style="padding:1.5rem;">選擇戰役後顯示預覽</p>'; return; }
       if (state.currentTab === 'overview') {
         const c = state.currentCampaign;
+        const cCount = c.chapter_count || (c.chapters || []).length || 10;
+        const cType = c.campaign_type || 'main';
         const chMini = (c.chapters || []).map((ch) => `<div class="mini-ch status-${ch.design_status}" title="第 ${ch.chapter_number} 章 ${escHtml(ch.name_zh || '')}">${ch.chapter_number}</div>`).join('');
         el.innerHTML = `
           <div class="preview-card">
             <h3>${escHtml(c.name_zh)}</h3>
             <p class="theme">${escHtml(c.theme || '—')}</p>
-            <div><span class="status-${c.design_status}">${statusLabel(c.design_status)}</span> · <b>${difficultyLabel(c.difficulty_tier)}</b> · v${c.version}</div>
+            <div><span class="campaign-type-${cType}">${cType === 'main' ? '主線' : '支線'}</span> · <span class="status-${c.design_status}">${statusLabel(c.design_status)}</span> · <b>${difficultyLabel(c.difficulty_tier)}</b> · v${c.version}</div>
             <p class="cover-narrative">${escHtml(c.cover_narrative || '(尚未撰寫)')}</p>
-            <h4>十章進度</h4><div class="chapter-mini-grid">${chMini}</div>
+            <h4>章節進度（${cCount} 章）</h4><div class="chapter-mini-grid">${chMini}</div>
           </div>
         `;
       } else {

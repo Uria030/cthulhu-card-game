@@ -187,6 +187,25 @@ export const campaignRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
+  // POST /api/admin/diag/run-migration-028(直接觸發 028 並回報錯誤,診斷用)
+  app.post('/api/admin/diag/run-migration-028', async (_request, reply) => {
+    try {
+      const { MIGRATION_028_SQL } = await import('../db/migrate.js');
+      await pool.query(MIGRATION_028_SQL);
+      return reply.send({ success: true, message: 'MIGRATION_028 執行完成' });
+    } catch (error: any) {
+      return reply.status(500).send({
+        success: false,
+        error: String(error?.message || error),
+        code: error?.code,
+        detail: error?.detail,
+        hint: error?.hint,
+        position: error?.position,
+        stack: String(error?.stack || '').split('\n').slice(0, 5).join('\n'),
+      });
+    }
+  });
+
   // POST /api/campaigns ── 建立戰役 + 自動十章骨架（交易）
   app.post<{ Body: Record<string, any> }>('/api/campaigns', async (request, reply) => {
     const b = request.body || {};

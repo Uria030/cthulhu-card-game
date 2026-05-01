@@ -475,10 +475,10 @@
       // Depth effects
       currentDepths = [];
       for (let i = 1; i <= 5; i++) {
-        const d = (s.depth_effects || []).find(de => de.level === i) || {};
+        const d = (s.depth_effects || []).find(de => de.depth === i) || {};
         currentDepths.push({
           id: d.id || null,
-          level: i,
+          depth: i,
           effect_name_zh: d.effect_name_zh || '',
           effect_name_en: d.effect_name_en || '',
           effect_desc_zh: d.effect_desc_zh || '',
@@ -658,7 +658,7 @@
       // Save depth effects
       const depthRes = await adminFetch(`/api/team-spirits/${currentSpiritId}/depths`, {
         method: 'PUT',
-        body: JSON.stringify({ depths: currentDepths })
+        body: JSON.stringify(currentDepths)
       });
       const depthJson = await depthRes.json();
       if (!depthJson.success) { toast('深度效果儲存失敗: ' + (depthJson.error || ''), false); return; }
@@ -847,7 +847,7 @@
       ctx.beginPath();
 
       for (let lv = 1; lv <= 5; lv++) {
-        const de = depths.find(d => d.level === lv);
+        const de = depths.find(d => d.depth === lv);
         const val = de ? de.effect_value : 0;
         const x = pad.left + ((lv - 1) / 4) * plotW;
         const y = pad.top + plotH - (val / maxVal) * plotH;
@@ -858,7 +858,7 @@
 
       // Dots
       for (let lv = 1; lv <= 5; lv++) {
-        const de = depths.find(d => d.level === lv);
+        const de = depths.find(d => d.depth === lv);
         const val = de ? de.effect_value : 0;
         const x = pad.left + ((lv - 1) / 4) * plotW;
         const y = pad.top + plotH - (val / maxVal) * plotH;
@@ -891,7 +891,7 @@
     ];
     for (let lv = 1; lv <= 5; lv++) {
       rows.push({ label: `Lv${lv} 價值`, fn: it => {
-        const de = (it.depth_effects || []).find(d => d.level === lv);
+        const de = (it.depth_effects || []).find(d => d.depth === lv);
         return de ? de.effect_value + 'V' : '—';
       }});
     }
@@ -1003,13 +1003,13 @@ ${ctx}
 
 ## 輸出格式（JSON）
 [
-  { "level": 1, "effect_name_zh": "名稱", "effect_name_en": "Name", "effect_desc_zh": "描述", "effect_desc_en": "Description", "effect_value": 2, "effect_formula": "公式" },
+  { "depth": 1, "effect_name_zh": "名稱", "effect_name_en": "Name", "effect_desc_zh": "描述", "effect_desc_en": "Description", "effect_value": 2, "effect_formula": "公式" },
   ...共 5 個
 ]`);
     if (!result || !Array.isArray(result)) { toast('生成失敗', false); return; }
     result.forEach((r, i) => {
       if (i < 5) {
-        currentDepths[i] = { ...currentDepths[i], ...r, level: i + 1 };
+        currentDepths[i] = { ...currentDepths[i], ...r, depth: i + 1 };
       }
     });
     renderDepthTable();
@@ -1084,7 +1084,7 @@ ${ctx}
   "maxed_effect_zh": "滿級效果中文",
   "maxed_effect_en": "Maxed effect English",
   "depth_effects": [
-    { "level": 1, "effect_name_zh": "名稱", "effect_name_en": "Name", "effect_desc_zh": "描述", "effect_desc_en": "Desc", "effect_value": 2, "effect_formula": "" },
+    { "depth": 1, "effect_name_zh": "名稱", "effect_name_en": "Name", "effect_desc_zh": "描述", "effect_desc_en": "Desc", "effect_value": 2, "effect_formula": "" },
     ...共 5 個（Lv1~5，逐級增強，總價值 15-25V）
   ],
   "milestone_name_zh": "里程碑名稱",
@@ -1105,7 +1105,7 @@ ${ctx}
     // Fill depths
     if (Array.isArray(result.depth_effects)) {
       result.depth_effects.forEach((r, i) => {
-        if (i < 5) currentDepths[i] = { ...currentDepths[i], ...r, level: i + 1 };
+        if (i < 5) currentDepths[i] = { ...currentDepths[i], ...r, depth: i + 1 };
       });
       renderDepthTable();
     }

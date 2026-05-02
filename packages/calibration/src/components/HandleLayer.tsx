@@ -62,6 +62,11 @@ interface MidpointHandleProps {
 // 邊中點 ◇ 把手:雙擊(滑鼠)或長按 0.5s(觸控)在該位置插入頂點
 function MidpointHandle({ cx, cy, onAdd }: MidpointHandleProps) {
   const longPress = useLongPress({ onLongPress: onAdd, ms: 500 });
+  // pointerdown 必須 stopPropagation,否則會冒泡到 SVG 觸發取消選取 → 把手消失
+  const onPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    longPress.onPointerDown(e);
+  };
   const onDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onAdd();
@@ -75,7 +80,7 @@ function MidpointHandle({ cx, cy, onAdd }: MidpointHandleProps) {
       width={size}
       height={size}
       transform={`rotate(45 ${cx} ${cy})`}
-      onPointerDown={longPress.onPointerDown}
+      onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
     />
   );

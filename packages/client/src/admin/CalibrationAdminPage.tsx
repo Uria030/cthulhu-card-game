@@ -8,7 +8,7 @@
  *
  * 權限:admin / owner 才能進入,否則自動跳 /admin/login.html。
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalibrationProvider,
   CalibrationSurface,
@@ -317,8 +317,14 @@ function HotspotsLive() {
 
 function AutoEnterCalibration() {
   const { api } = useCalibrationContext();
+  const calledRef = useRef(false);
   useEffect(() => {
-    if (!api.isCalibrating) api.enterCalibration();
+    if (calledRef.current) return;
+    calledRef.current = true;
+    // 每次進 admin 校準頁:先 reset(清 localStorage draft + 從 hotspots.json 最新版開始)
+    // 再進校準模式。避免 SDK 用舊 draft 蓋掉 main 的最新狀態。
+    api.resetToDefault();
+    api.enterCalibration();
   }, [api]);
   return null;
 }

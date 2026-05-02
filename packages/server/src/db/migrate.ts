@@ -1812,58 +1812,22 @@ CREATE TRIGGER trg_weakness_recalc_ad
   EXECUTE FUNCTION trigger_recalc_from_weakness();
 
 -- 9. 64 筆預設模板骨架 seed
--- 注意:本 INSERT 包在 EXCEPTION block 內。
--- 原因:M_019 後 faction_attribute_map 改 mapping(T→agility, P→reflex),M_013 重跑時對 INTP 等 MBTI
--- 算出 7-attr total=12,加上 M_019 後加的 attr_reflex DEFAULT 1 = 8-attr total=13 < 14 違反 chk_inv_total_points (14-18)
--- 整個 INSERT statement 因 check_violation rollback,擋住後續 migration。
--- 解法:fresh deploy 時跑 M_013 INSERT 用舊 mapping 算出 7-attr=13 OK,可以正常進。
--- Railway 既存 DB(已跑過 M_019)時 INSERT 會違反 chk → catch + 忽略,M_030 之後會用 8-attr 補。
-DO $insert_64_skeletons$ BEGIN
-  WITH mbti_list AS (
-    SELECT unnest(ARRAY[
-      'INTJ','INTP','ENTJ','ENTP',
-      'INFJ','INFP','ENFJ','ENFP',
-      'ISTJ','ISFJ','ESTJ','ESFJ',
-      'ISTP','ISFP','ESTP','ESFP'
-    ]) AS mbti_code
-  ),
-  career_numbers AS (
-    SELECT generate_series(1, 4) AS career_index
-  ),
-  skeleton AS (
-    SELECT
-      m.mbti_code,
-      c.career_index,
-      SUBSTRING(m.mbti_code, c.career_index, 1) AS dominant_letter
-    FROM mbti_list m CROSS JOIN career_numbers c
-  )
-  INSERT INTO investigator_templates (
-    code, faction_code, mbti_code, career_index, dominant_letter,
-    attr_strength, attr_agility, attr_constitution,
-    attr_intellect, attr_willpower, attr_perception, attr_charisma,
-    is_preset, is_completed
-  )
-  SELECT
-    s.mbti_code || '-' || s.career_index::text,
-    SUBSTRING(s.mbti_code, 1, 1),
-    s.mbti_code,
-    s.career_index,
-    s.dominant_letter,
-    1 + CASE WHEN main_attr_is('strength',     s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('strength',     s.mbti_code),
-    1 + CASE WHEN main_attr_is('agility',      s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('agility',      s.mbti_code),
-    1 + CASE WHEN main_attr_is('constitution', s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('constitution', s.mbti_code),
-    1 + CASE WHEN main_attr_is('intellect',    s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('intellect',    s.mbti_code),
-    1 + CASE WHEN main_attr_is('willpower',    s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('willpower',    s.mbti_code),
-    1 + CASE WHEN main_attr_is('perception',   s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('perception',   s.mbti_code),
-    1 + CASE WHEN main_attr_is('charisma',     s.mbti_code) THEN 3 ELSE 0 END + sub_attr_count('charisma',     s.mbti_code),
-    TRUE,
-    FALSE
-  FROM skeleton s
-  ON CONFLICT (code) DO NOTHING;
-EXCEPTION WHEN check_violation THEN
-  -- Railway 已跑過 M_019:M_013 INSERT 違反新 chk → 跳過,M_030 補
-  RAISE NOTICE '[M_013] INSERT 64 skeletons 違反 chk_inv_total_points (M_019 後新 chk),跳過,等 M_030 用 8-attr 補';
-END $insert_64_skeletons$;
+-- DEPRECATED:本 INSERT 在 M_019 後因 faction_attribute_map 改 mapping (T→agility, P→reflex)
+-- 對 INTP 等 MBTI 算出 7-attr=12,加上 attr_reflex DEFAULT 1 = 13 < 14 違反 chk → 整批 rollback
+-- 改為跳過(WHERE FALSE),完全交給 M_030 用 8-attr 算法 seed
+-- Railway 既存 DB:M_013 已執行過,row 已存在,跳過無影響;若 row 不見了 M_030 補
+-- Fresh deploy:M_013 跳過 INSERT,M_030 直接 seed 64 row
+INSERT INTO investigator_templates (
+  code, faction_code, mbti_code, career_index, dominant_letter,
+  attr_strength, attr_agility, attr_constitution,
+  attr_intellect, attr_willpower, attr_perception, attr_charisma,
+  is_preset, is_completed
+)
+SELECT NULL::TEXT, NULL::VARCHAR, NULL::VARCHAR, NULL::INTEGER, NULL::CHAR,
+       NULL::INTEGER, NULL::INTEGER, NULL::INTEGER, NULL::INTEGER, NULL::INTEGER, NULL::INTEGER, NULL::INTEGER,
+       FALSE, FALSE
+WHERE FALSE
+ON CONFLICT (code) DO NOTHING;
 
 -- Seed 完成後對 64 筆預設模板跑一次初始 V 值計算
 DO $seed$

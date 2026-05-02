@@ -1,269 +1,254 @@
-/* CalibrationAdminPage — 後台校準 Mod */
+/* CalibrationAdminPage — 後台校準 Mod
+ * 設計:整個視窗讓給 surface,左上 hamburger + 抽屜,SDK 浮層自然顯示
+ */
 
-.calib-admin-root {
-  flex: 1;
-  padding: 32px;
-  max-width: 880px;
-  margin: 0 auto;
+/* ─── shell:全螢幕,蓋過所有 layout ──────────────── */
+.calib-admin-shell {
+  position: fixed;
+  inset: 0;
+  background: #0c0a08;
+  overflow: hidden;
   font-family: 'Noto Sans TC', sans-serif;
-  color: var(--text-primary);
+  z-index: 100;
 }
 
-.calib-admin-root-wide {
-  max-width: 1600px;
+/* ─── stage:容納 Surface,撐滿剩餘空間 ──────── */
+.calib-admin-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* 左清單 + 右舞台 */
-.calib-admin-layout {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 24px;
-  align-items: start;
+/* CalibrationSurface 自己會用 aspectRatio 撐尺寸 */
+.calib-admin-stage > div {
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
 }
 
-.calib-admin-sidebar {
+/* ─── hamburger:左上角懸浮按鈕 ──────────────── */
+.calib-admin-hamburger {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 10000;
+  background: rgba(20, 14, 8, 0.92);
+  color: var(--world-aged-paper, #d9d2c5);
+  border: 1px solid rgba(160, 120, 60, 0.45);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.15s, color 0.15s;
+}
+.calib-admin-hamburger:hover {
+  border-color: var(--world-antique-brass, #a0783c);
+  color: var(--world-antique-brass, #a0783c);
+}
+
+/* ─── drawer backdrop:點擊關閉 ──────────────── */
+.calib-admin-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+  animation: calibDrawerFadeIn 0.15s linear;
+}
+@keyframes calibDrawerFadeIn {
+  from { opacity: 0 }
+  to { opacity: 1 }
+}
+
+/* ─── drawer:左側滑入 ──────────────────────── */
+.calib-admin-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 340px;
+  max-width: 90vw;
+  background: #14110d;
+  border-right: 1px solid rgba(160, 120, 60, 0.3);
+  z-index: 10001;
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  position: sticky;
-  top: 24px;
+  color: var(--world-aged-paper, #d9d2c5);
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+}
+.calib-admin-drawer.is-open {
+  transform: translateX(0);
 }
 
-.calib-admin-sidebar-title {
-  font-size: 13px;
-  letter-spacing: 0.1em;
-  color: var(--text-secondary);
+.calib-admin-drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(160, 120, 60, 0.2);
+}
+.calib-admin-drawer-head h2 {
   margin: 0;
-  text-transform: uppercase;
+  font-family: 'Noto Serif TC', serif;
+  font-size: 20px;
+  letter-spacing: 0.1em;
+  color: var(--world-antique-brass, #a0783c);
+}
+.calib-admin-drawer-close {
+  background: transparent;
+  border: 1px solid rgba(160, 120, 60, 0.3);
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.calib-admin-drawer-close:hover {
+  border-color: var(--world-antique-brass, #a0783c);
+  color: var(--world-antique-brass, #a0783c);
 }
 
+/* ─── surface 清單 ──────────────────────────── */
+.calib-admin-list {
+  list-style: none;
+  margin: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 .calib-admin-tab {
   width: 100%;
   text-align: left;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--r-subtle);
+  background: rgba(40, 30, 20, 0.4);
+  border: 1px solid rgba(160, 120, 60, 0.25);
+  border-radius: 8px;
   padding: 12px 14px;
-  color: var(--text-primary);
+  color: inherit;
   font-family: inherit;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
   position: relative;
+  transition: border-color 0.15s, background 0.15s;
 }
-
 .calib-admin-tab:hover:not(:disabled) {
-  border-color: var(--world-antique-brass);
+  border-color: var(--world-antique-brass, #a0783c);
+  background: rgba(160, 120, 60, 0.1);
 }
-
 .calib-admin-tab.is-selected {
-  border-color: var(--world-antique-brass);
-  background: rgba(160, 120, 60, 0.12);
+  border-color: var(--world-antique-brass, #a0783c);
+  background: rgba(160, 120, 60, 0.18);
 }
-
 .calib-admin-tab:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
-
 .calib-admin-tab-title {
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 4px;
 }
-
 .calib-admin-tab-desc {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: rgba(217, 210, 197, 0.65);
   line-height: 1.5;
 }
-
-.calib-admin-stage {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--r-subtle);
-  padding: 16px;
-  min-height: 600px;
-  position: relative;
-  overflow: hidden;
-}
-
-.calib-admin-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 600px;
-  color: var(--text-tertiary);
-  font-size: 14px;
-}
-
-@media (max-width: 1100px) {
-  .calib-admin-layout {
-    grid-template-columns: 1fr;
-  }
-  .calib-admin-sidebar {
-    position: static;
-  }
-}
-
-.calib-admin-header {
-  margin-bottom: 24px;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 16px;
-}
-
-.calib-admin-title {
-  margin: 0;
-  font-family: 'Noto Serif TC', serif;
-  font-size: 28px;
-  letter-spacing: 0.1em;
-  color: var(--world-antique-brass);
-}
-
-.calib-admin-sub {
-  color: var(--text-secondary);
-  margin-top: 8px;
-  line-height: 1.6;
-  font-size: 14px;
-}
-
-.calib-admin-sub code {
-  background: var(--bg-secondary);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.calib-admin-warn {
-  background: var(--bg-card);
-  border: 1px solid var(--world-oxblood);
-  border-radius: var(--r-subtle);
-  padding: 16px;
-  color: var(--text-secondary);
-}
-
-.calib-admin-warn code {
-  background: var(--bg-secondary);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.calib-admin-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 12px;
-}
-
-.calib-admin-item {
-  border: 1px solid var(--border);
-  border-radius: var(--r-subtle);
-  padding: 14px 18px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: var(--bg-card);
-  gap: 16px;
-}
-
-.calib-admin-item-planned {
-  opacity: 0.6;
-}
-
-.calib-admin-item-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.calib-admin-item-title {
-  font-weight: 600;
-  font-size: 16px;
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.calib-admin-item-id {
-  font-size: 12px;
-  opacity: 0.55;
-  background: var(--bg-secondary);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-}
-
-.calib-admin-item-badge {
-  font-size: 11px;
-  background: var(--world-soot-grey);
-  color: var(--world-aged-paper);
+.calib-admin-tab-badge {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-size: 10px;
+  background: rgba(110, 104, 100, 0.4);
   padding: 2px 8px;
   border-radius: 10px;
   letter-spacing: 0.05em;
 }
 
-.calib-admin-item-desc {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-top: 4px;
-  line-height: 1.5;
-}
-
-.calib-admin-enter {
-  background: var(--world-antique-brass);
-  color: var(--world-ink-black);
-  border: none;
-  padding: 8px 14px;
-  border-radius: var(--r-subtle);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  font-family: 'Noto Sans TC', sans-serif;
-  white-space: nowrap;
-  transition: opacity 0.2s, transform 0.1s;
-}
-
-.calib-admin-enter:hover:not(:disabled) {
-  opacity: 0.85;
-  transform: translateY(-1px);
-}
-
-.calib-admin-enter:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
-}
-
+/* ─── 操作說明 + 回首頁連結 ─────────────────── */
 .calib-admin-help {
-  margin-top: 32px;
-  font-size: 13px;
-  color: var(--text-tertiary);
-  border-top: 1px dashed var(--border);
-  padding-top: 16px;
+  padding: 16px 20px;
+  border-top: 1px solid rgba(160, 120, 60, 0.2);
+  font-size: 12px;
+  color: rgba(217, 210, 197, 0.7);
+  line-height: 1.7;
 }
-
 .calib-admin-help h3 {
-  font-size: 14px;
-  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: rgba(217, 210, 197, 0.85);
   margin: 0 0 8px;
+  text-transform: uppercase;
 }
-
 .calib-admin-help ul {
   margin: 0;
-  padding-left: 20px;
-  line-height: 1.8;
+  padding-left: 18px;
 }
-
-.calib-admin-help code,
-.calib-admin-help kbd {
-  background: var(--bg-secondary);
+.calib-admin-help code {
+  background: rgba(0, 0, 0, 0.4);
   padding: 1px 6px;
   border-radius: 4px;
   font-family: 'Courier New', monospace;
+  font-size: 11px;
+}
+.calib-admin-back {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--world-antique-brass, #a0783c);
+  text-decoration: none;
   font-size: 12px;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 1px;
+}
+.calib-admin-back:hover {
+  opacity: 0.8;
 }
 
-.calib-admin-help kbd {
-  border: 1px solid var(--border);
-  box-shadow: 0 1px 0 var(--border);
+/* ─── 載入 / 權限不足提示頁 ─────────────────── */
+.calib-admin-loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #0c0a08;
+  color: var(--world-aged-paper, #d9d2c5);
+  font-family: 'Noto Sans TC', sans-serif;
+}
+.calib-admin-loading h1 {
+  font-family: 'Noto Serif TC', serif;
+  color: var(--world-antique-brass, #a0783c);
+  margin: 0;
+}
+.calib-admin-loading code {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.calib-admin-loading a {
+  color: var(--world-antique-brass, #a0783c);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+}
+
+.calib-admin-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(217, 210, 197, 0.5);
+  font-size: 14px;
 }

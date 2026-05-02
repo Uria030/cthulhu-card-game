@@ -1,14 +1,12 @@
 /**
  * CalibrationAdminPage — 後台「介面校準」Mod
  *
- * 系統管理員工具:在後台內嵌渲染遊戲畫面骨架,直接拖曳調整熱區位置/形狀,
- * 完成後下載 hotspots.json 蓋回 packages/client/public/surfaces/<id>/。
+ * 設計:
+ *  - 整個視窗(position: fixed inset:0)讓給選中的 surface 全螢幕渲染
+ *  - 左上角 hamburger 按鈕展開「介面清單」抽屜
+ *  - 進頁自動進校準模式 → SDK Toolbar(頂部居中)+ Panel(右側)自動浮現
  *
- * 權限:只有 admin / owner 可進入。
- *   - 沒 admin_token   → 自動跳 /admin/login.html
- *   - role < admin     → 顯示「權限不足」訊息
- *
- * 未來新增遊戲畫面要校準,在 SURFACES 陣列追加一筆即可。
+ * 權限:admin / owner 才能進入,否則自動跳 /admin/login.html。
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -19,6 +17,7 @@ import {
   HandleLayer,
   Hotspot,
   parseHotspotsJson,
+  useCalibrationContext,
   type HotspotsJsonV2,
   type ViewBox,
 } from '@cthulhu/calibration';
@@ -32,7 +31,6 @@ interface SurfaceEntry {
   label: string;
   description: string;
   status: 'live' | 'planned';
-  /** live 場景必填:hotspots.json 與 viewBox */
   json?: unknown;
   viewBox?: ViewBox;
   background?: { src: string; alt: string };
@@ -89,6 +87,7 @@ export function CalibrationAdminPage() {
   const [selectedId, setSelectedId] = useState<string>(
     SURFACES.find((s) => s.status === 'live')?.id ?? '',
   );
+  const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const token = localStorage.getItem('admin_token');
@@ -107,24 +106,21 @@ export function CalibrationAdminPage() {
 
   if (auth.kind === 'checking' || auth.kind === 'unauthenticated') {
     return (
-      <main className="calib-admin-root">
-        <h1 className="calib-admin-title">介面校準</h1>
-        <p className="calib-admin-sub">驗證中⋯</p>
+      <main className="calib-admin-loading">
+        <p>驗證中⋯</p>
       </main>
     );
   }
 
   if (auth.kind === 'forbidden') {
     return (
-      <main className="calib-admin-root">
-        <h1 className="calib-admin-title">介面校準</h1>
-        <p className="calib-admin-warn">
-          權限不足。本 Mod 限 <strong>admin / owner</strong> 進入,
-          目前角色:<code>{auth.user.role ?? 'unknown'}</code>。請聯絡管理員調整權限。
+      <main className="calib-admin-loading">
+        <h1>權限不足</h1>
+        <p>
+          本 Mod 限 admin / owner 進入,目前角色:
+          <code>{auth.user.role ?? 'unknown'}</code>
         </p>
-        <p className="calib-admin-sub">
-          <a href="/admin/index.html">← 回後台首頁</a>
-        </p>
+        <a href="/admin/index.html">← 回後台首頁</a>
       </main>
     );
   }
@@ -132,62 +128,85 @@ export function CalibrationAdminPage() {
   const selected = SURFACES.find((s) => s.id === selectedId);
 
   return (
-    <main className="calib-admin-root calib-admin-root-wide">
-      <header className="calib-admin-header">
-        <h1 className="calib-admin-title">介面校準</h1>
-        <p className="calib-admin-sub">
-          選擇左側介面 → 進入校準 → 拖曳熱區 →「下載 JSON」覆蓋
-          <code>packages/client/public/surfaces/&lt;id&gt;/hotspots.json</code>
-        </p>
-      </header>
+    <div className="calib-admin-shell">
+      {selected && selected.status === 'live' ? (
+        <CalibrationStage entry={selected} />
+      ) : (
+        <div className="calib-admin-empty">請從清單選擇一個 live 介面</div>
+      )}
 
-      <div className="calib-admin-layout">
-        <aside className="calib-admin-sidebar">
-          <h3 className="calib-admin-sidebar-title">介面清單</h3>
-          <ul className="calib-admin-list">
-            {SURFACES.map((s) => (
-              <li key={s.id}>
-                <button
-                  type="button"
-                  className={`calib-admin-tab calib-admin-tab-${s.status} ${
-                    s.id === selectedId ? 'is-selected' : ''
-                  }`}
-                  onClick={() => s.status === 'live' && setSelectedId(s.id)}
-                  disabled={s.status !== 'live'}
-                  title={s.status === 'planned' ? '尚未實作' : ''}
-                >
-                  <div className="calib-admin-tab-title">{s.label}</div>
-                  <div className="calib-admin-tab-desc">{s.description}</div>
-                  {s.status === 'planned' && (
-                    <span className="calib-admin-item-badge">規劃中</span>
-                  )}
-                </button>
-              </li>
-            ))}
+      <button
+        type="button"
+        className="calib-admin-hamburger"
+        onClick={() => setDrawerOpen((v) => !v)}
+        aria-label="切換介面清單"
+      >
+        ☰ 介面清單
+      </button>
+
+      {drawerOpen && (
+        <div
+          className="calib-admin-drawer-backdrop"
+          onClick={() => setDrawerOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`calib-admin-drawer ${drawerOpen ? 'is-open' : ''}`}
+        aria-hidden={!drawerOpen}
+      >
+        <header className="calib-admin-drawer-head">
+          <h2>介面校準</h2>
+          <button
+            type="button"
+            className="calib-admin-drawer-close"
+            onClick={() => setDrawerOpen(false)}
+            aria-label="關閉抽屜"
+          >
+            ✕
+          </button>
+        </header>
+
+        <ul className="calib-admin-list">
+          {SURFACES.map((s) => (
+            <li key={s.id}>
+              <button
+                type="button"
+                className={`calib-admin-tab calib-admin-tab-${s.status} ${
+                  s.id === selectedId ? 'is-selected' : ''
+                }`}
+                onClick={() => {
+                  if (s.status !== 'live') return;
+                  setSelectedId(s.id);
+                  setDrawerOpen(false);
+                }}
+                disabled={s.status !== 'live'}
+              >
+                <div className="calib-admin-tab-title">{s.label}</div>
+                <div className="calib-admin-tab-desc">{s.description}</div>
+                {s.status === 'planned' && (
+                  <span className="calib-admin-tab-badge">規劃中</span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        <div className="calib-admin-help">
+          <h3>操作</h3>
+          <ul>
+            <li>進頁自動進校準模式</li>
+            <li>頂部 Toolbar:Undo / Redo / 載入 / 下載 JSON / Reset</li>
+            <li>右側 Panel:熱區清單(點擊選取)</li>
+            <li>拖把手調形狀,拖熱區移位置</li>
+            <li>「下載 JSON」匯出後覆蓋 <code>packages/client/public/surfaces/&lt;id&gt;/hotspots.json</code></li>
           </ul>
-
-          <div className="calib-admin-help">
-            <h3>操作</h3>
-            <ul>
-              <li>校準預設關閉,點 Toolbar「進入校準」啟動</li>
-              <li>拖把手調形狀;拖熱區移動位置</li>
-              <li>支援 <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd> 復原/重做</li>
-              <li>「下載 JSON」匯出後覆蓋對應 surface 檔案</li>
-            </ul>
-          </div>
-        </aside>
-
-        <section className="calib-admin-stage">
-          {selected && selected.status === 'live' ? (
-            <CalibrationStage entry={selected} />
-          ) : (
-            <div className="calib-admin-empty">
-              請從左側選擇一個 live 介面
-            </div>
-          )}
-        </section>
-      </div>
-    </main>
+          <a className="calib-admin-back" href="/admin/index.html">
+            ← 回後台首頁
+          </a>
+        </div>
+      </aside>
+    </div>
   );
 }
 
@@ -196,7 +215,7 @@ interface CalibrationStageProps {
 }
 
 function CalibrationStage({ entry }: CalibrationStageProps) {
-  const parsed = useMemo(() => {
+  const parsed: HotspotsJsonV2 | null = useMemo(() => {
     if (!entry.json || !entry.viewBox) return null;
     return parseHotspotsJson(entry.json, {
       fallbackSurface: entry.id,
@@ -207,7 +226,6 @@ function CalibrationStage({ entry }: CalibrationStageProps) {
   if (!parsed || !entry.background) return null;
 
   const onSaveJson = (json: HotspotsJsonV2) => {
-    // 走 SDK 預設下載行為(包裝後同樣會走 fallback);這裡只用來 console 提示
     const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -219,7 +237,7 @@ function CalibrationStage({ entry }: CalibrationStageProps) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     console.info(
-      `[calib-admin] 下載完成 → 請覆蓋至 packages/client/public/surfaces/${entry.id}/hotspots.json,然後 commit`,
+      `[calib-admin] 下載完成 → 請覆蓋至 packages/client/public/surfaces/${entry.id}/hotspots.json`,
     );
   };
 
@@ -232,14 +250,25 @@ function CalibrationStage({ entry }: CalibrationStageProps) {
       onSaveJson={onSaveJson}
       permissionCheck={() => true}
     >
+      <AutoEnterCalibration />
       <CalibrationToolbar />
       <CalibrationPanel />
-      <CalibrationSurface background={entry.background}>
-        {parsed.hotspots.map((hs) => (
-          <Hotspot key={hs.id} {...hs} />
-        ))}
-        <HandleLayer />
-      </CalibrationSurface>
+      <div className="calib-admin-stage">
+        <CalibrationSurface background={entry.background}>
+          {parsed.hotspots.map((hs) => (
+            <Hotspot key={hs.id} {...hs} />
+          ))}
+          <HandleLayer />
+        </CalibrationSurface>
+      </div>
     </CalibrationProvider>
   );
+}
+
+function AutoEnterCalibration() {
+  const { api } = useCalibrationContext();
+  useEffect(() => {
+    if (!api.isCalibrating) api.enterCalibration();
+  }, [api]);
+  return null;
 }

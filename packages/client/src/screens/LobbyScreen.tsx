@@ -3,9 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   CalibrationProvider,
   CalibrationSurface,
-  CalibrationToolbar,
-  CalibrationPanel,
-  HandleLayer,
   Hotspot,
   parseHotspotsJson,
   type HotspotClickDetail,
@@ -13,7 +10,6 @@ import {
 import '@cthulhu/calibration/styles';
 
 import hotspotsJson from '../data/surfaces/study-room/hotspots.json';
-import { useCalibrationPermission } from '../admin/useCalibrationPermission';
 import './LobbyScreen.css';
 
 /**
@@ -21,20 +17,15 @@ import './LobbyScreen.css';
  * 美術:packages/client/public/surfaces/study-room/bg.webp(1408x800)
  * 熱區:hotspots.json(@cthulhu/calibration v2 schema)
  *
- * 12 個熱區:
- *   prep.ledger / prep.scale / prep.censer / prep.forge /
- *   prep.flask / prep.tomes / prep.parch — 整備七物件
- *   prep.map — 地圖紙(出發)
- *   seat.head / seat.front / seat.left / seat.right — 四椅子
- *
- * 校準:管理員從後台 /admin/calibration 進入,或 URL 加 ?calibrate=1
+ * 玩家側只渲染 Provider + Surface + Hotspot,純展示+點擊事件。
+ * 校準工具(Toolbar / Panel / HandleLayer)只存在於系統管理員後台
+ * /admin/calibration,玩家側不可進入。
  */
 
 const SURFACE = 'study-room';
 
 export function LobbyScreen() {
   const navigate = useNavigate();
-  const canCalibrate = useCalibrationPermission();
   const { hotspots, viewBox } = useMemo(
     () =>
       parseHotspotsJson(hotspotsJson, {
@@ -48,7 +39,6 @@ export function LobbyScreen() {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<HotspotClickDetail>).detail;
       if (detail.surface !== SURFACE) return;
-      (window as unknown as { __ugCalibrationHandled?: boolean }).__ugCalibrationHandled = true;
 
       switch (detail.hotspotId) {
         case 'prep.map':
@@ -58,13 +48,9 @@ export function LobbyScreen() {
         case 'prep.scale':
         case 'prep.censer':
         case 'prep.parch':
-          // G2 開放:整備四項可動作
-          console.info(`[lobby] ${detail.label} — G2 開放`);
-          break;
         case 'prep.forge':
         case 'prep.flask':
         case 'prep.tomes':
-          // G2/G3 開放:鍛造/製作/升級
           console.info(`[lobby] ${detail.label} — G2 開放`);
           break;
         case 'seat.head':
@@ -87,11 +73,8 @@ export function LobbyScreen() {
         surface={SURFACE}
         hotspots={hotspots}
         viewBox={viewBox}
-        permissionCheck={() => canCalibrate}
+        permissionCheck={() => false}
       >
-        <CalibrationToolbar />
-        <CalibrationPanel />
-
         <header className="lobby-header">
           <h1 className="lobby-title">書房</h1>
           <p className="lobby-sub">1922 年・新英格蘭・雨夜</p>
@@ -106,7 +89,6 @@ export function LobbyScreen() {
           {hotspots.map((hs) => (
             <Hotspot key={hs.id} {...hs} />
           ))}
-          <HandleLayer />
         </CalibrationSurface>
 
         <footer className="lobby-footer">
@@ -115,7 +97,6 @@ export function LobbyScreen() {
           </button>
           <span className="lobby-tip">
             G1 視覺骨架 — 整備七功能 / 椅子設定 / 邀請隊友 / 召喚 AI 在 G2 開放
-            {canCalibrate && '(管理員可按 Shift+C 進入校準)'}
           </span>
         </footer>
       </CalibrationProvider>

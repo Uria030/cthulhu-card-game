@@ -29,6 +29,41 @@
   height: 100%;
 }
 
+/* ─── 右上「熱區清單」收攏切換 ──────────────── */
+/* 用 aria-label 跨 CSS module 命中 SDK Panel(它的 className 是 hash 的) */
+aside[aria-label="熱區清單"] {
+  transition: transform 0.25s ease, opacity 0.2s ease;
+}
+body[data-calib-panel="closed"] aside[aria-label="熱區清單"] {
+  transform: translateX(110%) !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.calib-admin-panel-toggle {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 10000;
+  background: rgba(20, 14, 8, 0.92);
+  color: var(--world-aged-paper, #d9d2c5);
+  border: 1px solid rgba(160, 120, 60, 0.45);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.15s, color 0.15s;
+}
+.calib-admin-panel-toggle:hover {
+  border-color: var(--world-antique-brass, #a0783c);
+  color: var(--world-antique-brass, #a0783c);
+}
+
 /* ─── hamburger:左上角懸浮按鈕 ──────────────── */
 .calib-admin-hamburger {
   position: fixed;

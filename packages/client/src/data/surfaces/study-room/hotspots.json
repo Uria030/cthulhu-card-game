@@ -14,8 +14,15 @@
       "label": "帳本",
       "tooltip": "調整下一關牌組",
       "direction": "up",
-      "shape": "rect",
-      "geometry": { "x": 370, "y": 480, "width": 194, "height": 98, "rotation": -3 }
+      "shape": "polygon",
+      "geometry": {
+        "points": [
+          { "x": 368, "y": 485 },
+          { "x": 561, "y": 475 },
+          { "x": 566, "y": 573 },
+          { "x": 373, "y": 583 }
+        ]
+      }
     },
     {
       "id": "prep.scale",
@@ -43,8 +50,19 @@
       "label": "黃銅香爐",
       "tooltip": "花費凝聚力",
       "direction": "right",
-      "shape": "ellipse",
-      "geometry": { "cx": 568, "cy": 485, "rx": 49, "ry": 49 }
+      "shape": "polygon",
+      "geometry": {
+        "points": [
+          { "x": 617, "y": 485 },
+          { "x": 603, "y": 520 },
+          { "x": 568, "y": 534 },
+          { "x": 533, "y": 520 },
+          { "x": 519, "y": 485 },
+          { "x": 533, "y": 450 },
+          { "x": 568, "y": 436 },
+          { "x": 603, "y": 450 }
+        ]
+      }
     },
     {
       "id": "prep.forge",
@@ -70,8 +88,15 @@
       "label": "玻璃藥瓶",
       "tooltip": "製作(G2 開放)",
       "direction": "up",
-      "shape": "rect",
-      "geometry": { "x": 774, "y": 396, "width": 130, "height": 124 }
+      "shape": "polygon",
+      "geometry": {
+        "points": [
+          { "x": 774, "y": 396 },
+          { "x": 904, "y": 396 },
+          { "x": 904, "y": 520 },
+          { "x": 774, "y": 520 }
+        ]
+      }
     },
     {
       "id": "prep.tomes",
@@ -79,8 +104,15 @@
       "label": "厚書",
       "tooltip": "購買升級版",
       "direction": "left",
-      "shape": "rect",
-      "geometry": { "x": 827, "y": 338, "width": 185, "height": 98, "rotation": -3 }
+      "shape": "polygon",
+      "geometry": {
+        "points": [
+          { "x": 825, "y": 343 },
+          { "x": 1009, "y": 333 },
+          { "x": 1014, "y": 431 },
+          { "x": 830, "y": 441 }
+        ]
+      }
     },
     {
       "id": "prep.parch",
@@ -88,8 +120,15 @@
       "label": "發黃文件",
       "tooltip": "花費天賦點",
       "direction": "down",
-      "shape": "rect",
-      "geometry": { "x": 634, "y": 484, "width": 211, "height": 98, "rotation": -2 }
+      "shape": "polygon",
+      "geometry": {
+        "points": [
+          { "x": 632, "y": 488 },
+          { "x": 843, "y": 480 },
+          { "x": 847, "y": 578 },
+          { "x": 636, "y": 586 }
+        ]
+      }
     },
     {
       "id": "prep.map",
@@ -113,8 +152,15 @@
       "label": "主位",
       "tooltip": "主位(桌後,G2 開放)",
       "direction": "up",
-      "shape": "rect",
-      "geometry": { "x": 475, "y": 302, "width": 158, "height": 71 }
+      "shape": "polygon",
+      "geometry": {
+        "points": [
+          { "x": 475, "y": 302 },
+          { "x": 633, "y": 302 },
+          { "x": 633, "y": 373 },
+          { "x": 475, "y": 373 }
+        ]
+      }
     },
     {
       "id": "seat.front",
@@ -169,6 +215,6 @@
     "calibratedBy": "Uria",
     "calibratedAt": "2026-05-02T00:00:00+08:00",
     "appVersion": "0.3.1",
-    "notes": "初始座標來自交付包 study-room.hotspots.json,id 已對齊 cthulhu 命名(prep.{ledger/scale/censer/forge/flask/tomes/parch/map} + seat.{head/front/left/right})"
+    "notes": "全部熱區統一 polygon — 所有形狀皆可自由變形與加錨點。原 rect/ellipse 已升級(rect+rotation 先轉成 4 角座標,ellipse 取 8 點)。"
   }
 }

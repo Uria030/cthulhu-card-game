@@ -88,6 +88,7 @@ export function CalibrationAdminPage() {
     SURFACES.find((s) => s.status === 'live')?.id ?? '',
   );
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
+  const [panelHidden, setPanelHidden] = useState<boolean>(false);
 
   useEffect(() => {
     const token = localStorage.getItem('admin_token');
@@ -103,6 +104,12 @@ export function CalibrationAdminPage() {
     }
     setAuth({ kind: 'ok', user });
   }, []);
+
+  useEffect(() => {
+    if (panelHidden) document.body.setAttribute('data-calib-panel', 'closed');
+    else document.body.removeAttribute('data-calib-panel');
+    return () => document.body.removeAttribute('data-calib-panel');
+  }, [panelHidden]);
 
   if (auth.kind === 'checking' || auth.kind === 'unauthenticated') {
     return (
@@ -142,6 +149,15 @@ export function CalibrationAdminPage() {
         aria-label="切換介面清單"
       >
         ☰ 介面清單
+      </button>
+
+      <button
+        type="button"
+        className="calib-admin-panel-toggle"
+        onClick={() => setPanelHidden((v) => !v)}
+        aria-label="切換熱區清單"
+      >
+        {panelHidden ? '☷ 熱區清單' : '✕ 收起清單'}
       </button>
 
       {drawerOpen && (

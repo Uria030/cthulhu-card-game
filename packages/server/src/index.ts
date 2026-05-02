@@ -20,6 +20,7 @@ async function start() {
       detail: error?.detail,
       hint: error?.hint,
       where: error?.where,
+      failures: error?.failures,
       stack: (error?.stack || '').split('\n').slice(0, 5).join('\n'),
     });
     // Don't crash — allow server to start even if DB is unavailable

@@ -3212,37 +3212,50 @@ async function seedInnsmouthCampaign(client: PoolClient) {
 
 export async function runMigrations() {
   const client = await pool.connect();
+  const failures: { name: string; error: string; code?: string }[] = [];
+  async function runOne(name: string, sql: string) {
+    try {
+      await client.query(sql);
+    } catch (e: any) {
+      failures.push({
+        name,
+        error: e?.message || String(e),
+        code: e?.code,
+      });
+      console.error(`[migration ${name}] FAILED:`, e?.message || e);
+    }
+  }
   try {
     console.log('Running database migrations...');
-    await client.query(MIGRATION_SQL);
-    await client.query(MIGRATION_002_SQL);
-    await client.query(MIGRATION_003_SQL);
-    await client.query(MIGRATION_004_SQL);
-    await client.query(MIGRATION_005_SQL);
-    await client.query(MIGRATION_006_SQL);
-    await client.query(MIGRATION_007_SQL);
-    await client.query(MIGRATION_008_SQL);
-    await client.query(MIGRATION_009_SQL);
-    await client.query(MIGRATION_010_SQL);
-    await client.query(MIGRATION_011_SQL);
-    await client.query(MIGRATION_012_SQL);
-    await client.query(MIGRATION_013_SQL);
-    await client.query(MIGRATION_014_SQL);
-    await client.query(MIGRATION_015_SQL);
-    await client.query(MIGRATION_016_SQL);
-    await client.query(MIGRATION_017_SQL);
-    await client.query(MIGRATION_018_SQL);
-    await client.query(MIGRATION_019_SQL);
-    await client.query(MIGRATION_020_SQL);
-    await client.query(MIGRATION_021_SQL);
-    await client.query(MIGRATION_022_SQL);
-    await client.query(MIGRATION_023_SQL);
-    await client.query(MIGRATION_024_SQL);
-    await client.query(MIGRATION_025_SQL);
-    await client.query(MIGRATION_026_SQL);
-    await client.query(MIGRATION_027_SQL);
-    await client.query(MIGRATION_028_SQL);
-    await client.query(MIGRATION_029_SQL);
+    await runOne('MIGRATION_001', MIGRATION_SQL);
+    await runOne('MIGRATION_002', MIGRATION_002_SQL);
+    await runOne('MIGRATION_003', MIGRATION_003_SQL);
+    await runOne('MIGRATION_004', MIGRATION_004_SQL);
+    await runOne('MIGRATION_005', MIGRATION_005_SQL);
+    await runOne('MIGRATION_006', MIGRATION_006_SQL);
+    await runOne('MIGRATION_007', MIGRATION_007_SQL);
+    await runOne('MIGRATION_008', MIGRATION_008_SQL);
+    await runOne('MIGRATION_009', MIGRATION_009_SQL);
+    await runOne('MIGRATION_010', MIGRATION_010_SQL);
+    await runOne('MIGRATION_011', MIGRATION_011_SQL);
+    await runOne('MIGRATION_012', MIGRATION_012_SQL);
+    await runOne('MIGRATION_013', MIGRATION_013_SQL);
+    await runOne('MIGRATION_014', MIGRATION_014_SQL);
+    await runOne('MIGRATION_015', MIGRATION_015_SQL);
+    await runOne('MIGRATION_016', MIGRATION_016_SQL);
+    await runOne('MIGRATION_017', MIGRATION_017_SQL);
+    await runOne('MIGRATION_018', MIGRATION_018_SQL);
+    await runOne('MIGRATION_019', MIGRATION_019_SQL);
+    await runOne('MIGRATION_020', MIGRATION_020_SQL);
+    await runOne('MIGRATION_021', MIGRATION_021_SQL);
+    await runOne('MIGRATION_022', MIGRATION_022_SQL);
+    await runOne('MIGRATION_023', MIGRATION_023_SQL);
+    await runOne('MIGRATION_024', MIGRATION_024_SQL);
+    await runOne('MIGRATION_025', MIGRATION_025_SQL);
+    await runOne('MIGRATION_026', MIGRATION_026_SQL);
+    await runOne('MIGRATION_027', MIGRATION_027_SQL);
+    await runOne('MIGRATION_028', MIGRATION_028_SQL);
+    await runOne('MIGRATION_029', MIGRATION_029_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {
@@ -3254,10 +3267,14 @@ export async function runMigrations() {
     } catch (seedErr) {
       console.warn('[talisman seed] 種子資料插入失敗（不影響 migration）:', seedErr);
     }
+    if (failures.length > 0) {
+      console.warn(`Migrations completed with ${failures.length} per-migration failures (server starts anyway):`, failures);
+      const err: any = new Error(`${failures.length} migration(s) failed: ${failures.map(f => f.name).join(', ')}`);
+      err.failures = failures;
+      err.code = 'PARTIAL_MIGRATION_FAILURE';
+      throw err;
+    }
     console.log('All migrations completed successfully!');
-  } catch (error) {
-    console.error('Migration failed:', error);
-    throw error;
   } finally {
     client.release();
   }

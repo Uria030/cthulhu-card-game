@@ -1,11 +1,15 @@
 /**
  * 大廳 — 第六章 Part 2 §3 視覺規格
- * 美術:lobby-bg.png 提供完整書房視覺(壁爐/書桌/書櫃/地球儀/雨夜窗/紀念照牆)
- * UI 元素(七物件 / 地圖紙 / 四椅子)以 absolute % 定位疊在背景圖物件上
+ * 美術:bg.webp(1408x800)由 SDK 透過 CalibrationSurface 渲染為 SVG 內 image
+ * 熱區:hotspots.json 透過 SDK Hotspot/HandleLayer 自動渲染,本檔不再寫 absolute % 定位
+ *
+ * 本檔僅負責:lobby-root 容器、Header(標題)、Footer(返回按鈕)
  */
 
 .lobby-root {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   position: relative;
   overflow: hidden;
   background: var(--bg-primary);
@@ -17,30 +21,16 @@
   to { opacity: 1; transform: scale(1); }
 }
 
-/* 背景圖鋪滿 */
-.lobby-bg {
-  position: absolute;
-  inset: 0;
-  background-image: url('/images/lobby-bg.webp');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  pointer-events: none;
-}
-
-/* 框架:Header / Stage / Footer 三段直排 */
-.lobby-frame {
-  position: relative;
-  z-index: 1;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
 .lobby-header {
   text-align: center;
-  padding: var(--sp-md) var(--sp-lg);
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent);
+  padding: var(--sp-md) var(--sp-lg) var(--sp-sm);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.65), transparent);
+  pointer-events: none;
 }
 
 .lobby-title {
@@ -50,7 +40,7 @@
   letter-spacing: 0.15em;
   color: var(--world-antique-brass);
   margin: 0;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
 }
 
 .lobby-sub {
@@ -58,165 +48,27 @@
   font-size: 12px;
   color: var(--world-aged-paper);
   letter-spacing: 0.3em;
-  margin: 4px 0 0 0;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  margin: 4px 0 0;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
 }
 
-/* 舞台 — 互動 hot zone 容器,維持 16:9 比例 */
-.lobby-stage {
-  flex: 1;
-  position: relative;
-  width: 100%;
-  /* 16:9 視覺中心,內部 absolute 元素以 % 定位 */
-  max-width: min(100vw, calc(100vh * 16 / 9));
-  aspect-ratio: 16 / 9;
-  margin: 0 auto;
-}
-
-/* 七物件 hot zone */
-.desk-item {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  background: rgba(20, 14, 8, 0.55);
-  color: var(--world-aged-paper);
-  border: 1px solid var(--world-antique-brass);
-  border-radius: 8px;
-  padding: 6px 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  font-family: 'Noto Serif TC', serif;
-  backdrop-filter: blur(2px);
-  transition: all 0.2s;
-  cursor: pointer;
-  min-width: 72px;
-}
-
-.desk-item:not(.disabled):hover {
-  background: rgba(40, 28, 16, 0.85);
-  border-color: var(--herald);
-  transform: translate(-50%, -50%) scale(1.05);
-  box-shadow: 0 0 16px rgba(201, 168, 76, 0.45);
-}
-
-.desk-item.disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  filter: grayscale(0.5);
-}
-
-.desk-glyph {
-  font-size: 22px;
-  line-height: 1;
-}
-
-.desk-zh {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-}
-
-.desk-state {
-  font-family: 'Noto Sans TC', sans-serif;
-  font-size: 9px;
-  color: var(--world-soot-grey);
-  letter-spacing: 0.1em;
-}
-
-/* 地圖紙(出發按鈕)— 顯眼,稍大 */
-.desk-map {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  background: linear-gradient(135deg, rgba(217, 210, 197, 0.92), rgba(245, 240, 230, 0.92));
-  color: var(--world-ink-black);
-  border: 2px solid var(--world-antique-brass);
-  border-radius: 8px;
-  padding: 10px 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: 'Noto Serif TC', serif;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-}
-
-.desk-map:hover {
-  background: linear-gradient(135deg, var(--world-smoke-white), var(--world-aged-paper));
-  border-color: var(--herald);
-  transform: translate(-50%, -50%) scale(1.06);
-  box-shadow: 0 6px 24px rgba(201, 168, 76, 0.45);
-}
-
-.map-glyph {
-  font-size: 22px;
-}
-
-.map-hint {
-  color: var(--world-oxblood);
-  font-weight: 500;
-}
-
-/* 四椅子 hot zone */
-.chair {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  background: rgba(20, 14, 8, 0.5);
-  border: 1px dashed var(--world-deep-walnut);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-family: 'Noto Serif TC', serif;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  cursor: not-allowed;
-  opacity: 0.75;
-  transition: all 0.2s;
-  min-width: 64px;
-  color: var(--world-aged-paper);
-  backdrop-filter: blur(2px);
-}
-
-.chair.empty:hover {
-  border-color: var(--world-antique-brass);
-  box-shadow: 0 0 12px rgba(184, 137, 61, 0.25);
-  opacity: 0.9;
-}
-
-.chair-glyph {
-  font-size: 24px;
-  line-height: 1;
-}
-
-.chair-label {
-  font-size: 12px;
-  letter-spacing: 0.08em;
-}
-
-.chair-state {
-  font-family: 'Noto Sans TC', sans-serif;
-  font-size: 9px;
-  color: var(--world-soot-grey);
-}
-
-/* footer */
 .lobby-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: var(--sp-sm) var(--sp-lg);
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.65), transparent);
   flex-wrap: wrap;
   gap: var(--sp-sm);
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.55), transparent);
 }
 
 .lobby-back {
-  background: rgba(20, 14, 8, 0.6);
+  background: rgba(20, 14, 8, 0.7);
   border: 1px solid var(--border);
   border-radius: var(--r-subtle);
   padding: 6px 14px;
@@ -225,6 +77,7 @@
   font-size: 12px;
   cursor: pointer;
   backdrop-filter: blur(2px);
+  transition: border-color 0.2s, color 0.2s;
 }
 
 .lobby-back:hover {
@@ -237,33 +90,5 @@
   font-size: 11px;
   color: var(--world-aged-paper);
   letter-spacing: 0.05em;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-}
-
-/* 響應式:窄螢幕(< 768px)時舞台滿寬,UI 略縮小 */
-@media (max-width: 768px) {
-  .desk-item {
-    min-width: 56px;
-    padding: 4px 6px;
-  }
-  .desk-glyph { font-size: 18px; }
-  .desk-zh { font-size: 10px; }
-  .desk-state { font-size: 8px; }
-
-  .desk-map {
-    padding: 6px 10px;
-    font-size: 12px;
-  }
-  .map-glyph { font-size: 18px; }
-
-  .chair {
-    min-width: 50px;
-    padding: 4px 6px;
-  }
-  .chair-glyph { font-size: 18px; }
-  .chair-label { font-size: 10px; }
-  .chair-state { font-size: 8px; }
-
-  .lobby-title { font-size: 24px; }
-  .lobby-sub { font-size: 10px; }
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }

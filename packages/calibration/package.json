@@ -1,0 +1,24 @@
+{
+  "name": "@cthulhu/calibration",
+  "version": "0.1.0",
+  "description": "不可名狀遊戲 — 通用熱區校準 SDK",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles": "./src/styles/calibration.module.css"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.8.0"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}

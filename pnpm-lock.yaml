@@ -8,8 +8,30 @@ importers:
 
   .: {}
 
+  packages/calibration:
+    dependencies:
+      react:
+        specifier: '>=18.0.0'
+        version: 19.2.5
+      react-dom:
+        specifier: '>=18.0.0'
+        version: 19.2.5(react@19.2.5)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.1.0
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.1.0
+        version: 19.2.3(@types/react@19.2.14)
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+
   packages/client:
     dependencies:
+      '@cthulhu/calibration':
+        specifier: workspace:*
+        version: link:../calibration
       '@cthulhu/shared':
         specifier: workspace:*
         version: link:../shared

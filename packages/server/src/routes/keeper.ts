@@ -334,8 +334,16 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
       const result = await pool.query(`
         INSERT INTO mythos_cards (code, name_zh, name_en, description_zh, description_en,
           action_cost, activation_timing, card_category, intensity_tag, response_trigger,
-          flavor_text_zh, flavor_text_en, art_url, design_notes, design_status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          flavor_text_zh, flavor_text_en, art_url, design_notes, design_status,
+          reusable, cooldown_rounds, max_uses_per_stage, axis_tag,
+          persistence_mode, attachment_target, has_chain_trigger, has_self_dedupe,
+          threat_type, attack_surfaces, faction_pressure, complexity_tier,
+          dv_average, dv_peak, dv_peak_target)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+          $16, $17, $18, $19::jsonb,
+          $20, $21, $22, $23,
+          $24::jsonb, $25::jsonb, $26::jsonb, $27,
+          $28, $29, $30)
         RETURNING *
       `, [
         body.code, body.name_zh, body.name_en || '',
@@ -346,6 +354,15 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
         body.flavor_text_zh || null, body.flavor_text_en || null,
         body.art_url || null, body.design_notes || null,
         body.design_status || 'draft',
+        body.reusable ?? false, body.cooldown_rounds ?? null, body.max_uses_per_stage ?? null,
+        JSON.stringify(body.axis_tag || []),
+        body.persistence_mode || 'instant', body.attachment_target ?? null,
+        body.has_chain_trigger ?? false, body.has_self_dedupe ?? false,
+        JSON.stringify(body.threat_type || []),
+        JSON.stringify(body.attack_surfaces || []),
+        JSON.stringify(body.faction_pressure || {}),
+        body.complexity_tier ?? null,
+        body.dv_average ?? null, body.dv_peak ?? null, body.dv_peak_target ?? null,
       ]);
       return reply.status(201).send({ mythos_card: result.rows[0] });
     } catch (error: any) {
@@ -404,13 +421,36 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
           art_url = $13,
           design_notes = $14,
           design_status = COALESCE($15, design_status),
+          reusable = COALESCE($16, reusable),
+          cooldown_rounds = $17,
+          max_uses_per_stage = $18,
+          axis_tag = COALESCE($19::jsonb, axis_tag),
+          persistence_mode = COALESCE($20, persistence_mode),
+          attachment_target = $21,
+          has_chain_trigger = COALESCE($22, has_chain_trigger),
+          has_self_dedupe = COALESCE($23, has_self_dedupe),
+          threat_type = COALESCE($24::jsonb, threat_type),
+          attack_surfaces = COALESCE($25::jsonb, attack_surfaces),
+          faction_pressure = COALESCE($26::jsonb, faction_pressure),
+          complexity_tier = $27,
+          dv_average = $28,
+          dv_peak = $29,
+          dv_peak_target = $30,
           updated_at = NOW()
         WHERE id = $1
         RETURNING *
       `, [id, body.name_zh, body.name_en, body.description_zh, body.description_en,
           body.action_cost, body.activation_timing, body.card_category, body.intensity_tag,
           body.response_trigger, body.flavor_text_zh, body.flavor_text_en,
-          body.art_url, body.design_notes, body.design_status]);
+          body.art_url, body.design_notes, body.design_status,
+          body.reusable, body.cooldown_rounds, body.max_uses_per_stage,
+          body.axis_tag !== undefined ? JSON.stringify(body.axis_tag) : null,
+          body.persistence_mode, body.attachment_target,
+          body.has_chain_trigger, body.has_self_dedupe,
+          body.threat_type !== undefined ? JSON.stringify(body.threat_type) : null,
+          body.attack_surfaces !== undefined ? JSON.stringify(body.attack_surfaces) : null,
+          body.faction_pressure !== undefined ? JSON.stringify(body.faction_pressure) : null,
+          body.complexity_tier, body.dv_average, body.dv_peak, body.dv_peak_target]);
       if (result.rows.length === 0) return reply.status(404).send({ error: 'mythos_card_not_found' });
       return reply.send({ mythos_card: result.rows[0] });
     } catch (error) {
@@ -704,15 +744,36 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
       const result = await client.query(`
         INSERT INTO encounter_cards (code, name_zh, name_en, scenario_text_zh, scenario_text_en,
           encounter_type, art_url, design_notes, design_status,
-          threat_type, threat_strength, designer_dv)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          threat_type, threat_strength, designer_dv,
+          threat_type_array, dv_average, dv_peak, dv_peak_target,
+          has_peril, has_surge_builtin, has_surge_conditional, has_self_dedupe, has_progressive_strengthen,
+          persistence_mode, attachment_target, deployment_mode,
+          attack_surfaces, faction_pressure, complexity_tier,
+          encounter_set_id, copies_in_set)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+          $13::jsonb, $14, $15, $16,
+          $17, $18, $19, $20, $21,
+          $22, $23, $24,
+          $25::jsonb, $26::jsonb, $27,
+          $28, $29)
         RETURNING *
       `, [body.code, body.name_zh, body.name_en || '',
           body.scenario_text_zh || '', body.scenario_text_en || null,
           body.encounter_type || 'choice',
           body.art_url || null, body.design_notes || null,
           body.design_status || 'draft',
-          body.threat_type || null, body.threat_strength || null, body.designer_dv ?? null]);
+          body.threat_type || null, body.threat_strength || null, body.designer_dv ?? null,
+          JSON.stringify(body.threat_type_array || []),
+          body.dv_average ?? null, body.dv_peak ?? null, body.dv_peak_target ?? null,
+          body.has_peril ?? false, body.has_surge_builtin ?? false,
+          body.has_surge_conditional ?? false, body.has_self_dedupe ?? false,
+          body.has_progressive_strengthen ?? false,
+          body.persistence_mode || 'instant', body.attachment_target ?? null,
+          body.deployment_mode ?? null,
+          JSON.stringify(body.attack_surfaces || []),
+          JSON.stringify(body.faction_pressure || {}),
+          body.complexity_tier ?? null,
+          body.encounter_set_id ?? null, body.copies_in_set ?? 1]);
       const newId = (result.rows[0] as any).id;
 
       // 自動建立 2 個空選項
@@ -804,12 +865,38 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
           threat_type = $10,
           threat_strength = $11,
           designer_dv = $12,
+          threat_type_array = COALESCE($13::jsonb, threat_type_array),
+          dv_average = $14,
+          dv_peak = $15,
+          dv_peak_target = $16,
+          has_peril = COALESCE($17, has_peril),
+          has_surge_builtin = COALESCE($18, has_surge_builtin),
+          has_surge_conditional = COALESCE($19, has_surge_conditional),
+          has_self_dedupe = COALESCE($20, has_self_dedupe),
+          has_progressive_strengthen = COALESCE($21, has_progressive_strengthen),
+          persistence_mode = COALESCE($22, persistence_mode),
+          attachment_target = $23,
+          deployment_mode = $24,
+          attack_surfaces = COALESCE($25::jsonb, attack_surfaces),
+          faction_pressure = COALESCE($26::jsonb, faction_pressure),
+          complexity_tier = $27,
+          encounter_set_id = $28,
+          copies_in_set = COALESCE($29, copies_in_set),
           updated_at = NOW()
         WHERE id = $1
         RETURNING *
       `, [id, body.name_zh, body.name_en, body.scenario_text_zh, body.scenario_text_en,
           body.encounter_type, body.art_url, body.design_notes, body.design_status,
-          body.threat_type ?? null, body.threat_strength ?? null, body.designer_dv ?? null]);
+          body.threat_type ?? null, body.threat_strength ?? null, body.designer_dv ?? null,
+          body.threat_type_array !== undefined ? JSON.stringify(body.threat_type_array) : null,
+          body.dv_average ?? null, body.dv_peak ?? null, body.dv_peak_target ?? null,
+          body.has_peril, body.has_surge_builtin, body.has_surge_conditional,
+          body.has_self_dedupe, body.has_progressive_strengthen,
+          body.persistence_mode, body.attachment_target ?? null, body.deployment_mode ?? null,
+          body.attack_surfaces !== undefined ? JSON.stringify(body.attack_surfaces) : null,
+          body.faction_pressure !== undefined ? JSON.stringify(body.faction_pressure) : null,
+          body.complexity_tier ?? null,
+          body.encounter_set_id ?? null, body.copies_in_set]);
       if (result.rows.length === 0) return reply.status(404).send({ error: 'encounter_card_not_found' });
       return reply.send({ encounter_card: result.rows[0] });
     } catch (error) {

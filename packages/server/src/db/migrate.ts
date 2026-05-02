@@ -2909,6 +2909,161 @@ COMMENT ON COLUMN campaigns.chapter_count IS '此戰役實際章節數,主線通
 `;
 
 // ============================================
+// MIGRATION_029:神話卡 + 遭遇卡 schema 擴充(對應 keeper_ai_regulation v0.2 + s14 遭遇卡規範草案 v0.1)
+// ============================================
+// 神話卡新欄位:open-hand 模型 / 時間維度 / 修飾關鍵字 / 威脅類型陣列 / 攻擊面 / 派系壓力 / 複雜度 / 雙 DV
+// 遭遇卡新欄位:同上 + 修飾關鍵字 5 種 + deployment_mode + encounter_set + copies_in_set
+// 遭遇卡 encounter_type 枚舉擴充:加 passive/conditional/choice_entry/choice_fail/choice_responsibility/test/chaos_bag
+// 新表:encounter_sets(7 個基底遭遇集 seed)
+// 既有資料:threat_type VARCHAR → threat_type_array JSONB(舊欄位保留 60 天向後相容)
+// ============================================
+export const MIGRATION_029_SQL = `
+-- ─── 神話卡新欄位 ─────────────────────────────────────────
+ALTER TABLE mythos_cards
+  ADD COLUMN IF NOT EXISTS reusable BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS cooldown_rounds INTEGER,
+  ADD COLUMN IF NOT EXISTS max_uses_per_stage INTEGER,
+  ADD COLUMN IF NOT EXISTS axis_tag JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS persistence_mode VARCHAR(16) NOT NULL DEFAULT 'instant',
+  ADD COLUMN IF NOT EXISTS attachment_target VARCHAR(16),
+  ADD COLUMN IF NOT EXISTS has_chain_trigger BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS has_self_dedupe BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS threat_type JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS attack_surfaces JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS faction_pressure JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS complexity_tier INTEGER,
+  ADD COLUMN IF NOT EXISTS dv_average DECIMAL(5,2),
+  ADD COLUMN IF NOT EXISTS dv_peak DECIMAL(5,2),
+  ADD COLUMN IF NOT EXISTS dv_peak_target VARCHAR(32);
+
+DO $$ BEGIN
+  ALTER TABLE mythos_cards ADD CONSTRAINT mythos_persistence_mode_check
+    CHECK (persistence_mode IN ('instant','persistent'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE mythos_cards ADD CONSTRAINT mythos_attachment_target_check
+    CHECK (attachment_target IS NULL OR attachment_target IN ('location','player','enemy','agenda_act'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE mythos_cards ADD CONSTRAINT mythos_complexity_tier_check
+    CHECK (complexity_tier IS NULL OR complexity_tier IN (1,2,3));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_mythos_persistence ON mythos_cards(persistence_mode);
+CREATE INDEX IF NOT EXISTS idx_mythos_complexity ON mythos_cards(complexity_tier);
+
+-- ─── 遭遇卡新欄位 ─────────────────────────────────────────
+-- 注意:既有 threat_type 是 VARCHAR(16) 來自 MIGRATION_022,本 migration 改用 threat_type_array JSONB
+-- 舊欄位保留 60 天向後相容,新建卡寫 threat_type_array
+ALTER TABLE encounter_cards
+  ADD COLUMN IF NOT EXISTS threat_type_array JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS dv_average DECIMAL(5,2),
+  ADD COLUMN IF NOT EXISTS dv_peak DECIMAL(5,2),
+  ADD COLUMN IF NOT EXISTS dv_peak_target VARCHAR(32),
+  ADD COLUMN IF NOT EXISTS has_peril BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS has_surge_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS has_surge_conditional BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS has_self_dedupe BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS has_progressive_strengthen BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS persistence_mode VARCHAR(16) NOT NULL DEFAULT 'instant',
+  ADD COLUMN IF NOT EXISTS attachment_target VARCHAR(16),
+  ADD COLUMN IF NOT EXISTS deployment_mode VARCHAR(16),
+  ADD COLUMN IF NOT EXISTS attack_surfaces JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS faction_pressure JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS complexity_tier INTEGER,
+  ADD COLUMN IF NOT EXISTS encounter_set_id UUID,
+  ADD COLUMN IF NOT EXISTS copies_in_set INTEGER NOT NULL DEFAULT 1;
+
+-- 既有 threat_type(VARCHAR)遷到 threat_type_array(JSONB 陣列)
+UPDATE encounter_cards
+  SET threat_type_array = jsonb_build_array(threat_type)
+  WHERE threat_type IS NOT NULL
+    AND threat_type != ''
+    AND (threat_type_array IS NULL OR jsonb_array_length(threat_type_array) = 0);
+
+-- encounter_type 枚舉擴充(s14 part4 §2.3 細分九類 + 既有 6 類保留)
+ALTER TABLE encounter_cards DROP CONSTRAINT IF EXISTS encounter_cards_encounter_type_check;
+ALTER TABLE encounter_cards ADD CONSTRAINT encounter_cards_encounter_type_check
+  CHECK (encounter_type IN (
+    'thriller','choice','trade','puzzle','social','discovery',
+    'passive','conditional','choice_entry','choice_fail','choice_responsibility','test','chaos_bag'
+  ));
+
+DO $$ BEGIN
+  ALTER TABLE encounter_cards ADD CONSTRAINT encounter_persistence_mode_check
+    CHECK (persistence_mode IN ('instant','persistent'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE encounter_cards ADD CONSTRAINT encounter_attachment_target_check
+    CHECK (attachment_target IS NULL OR attachment_target IN ('location','player','enemy','agenda_act'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE encounter_cards ADD CONSTRAINT encounter_deployment_mode_check
+    CHECK (deployment_mode IS NULL OR deployment_mode IN ('passive','targeted'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE encounter_cards ADD CONSTRAINT encounter_complexity_tier_check
+    CHECK (complexity_tier IS NULL OR complexity_tier IN (1,2,3));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_encounter_persistence ON encounter_cards(persistence_mode);
+CREATE INDEX IF NOT EXISTS idx_encounter_complexity ON encounter_cards(complexity_tier);
+CREATE INDEX IF NOT EXISTS idx_encounter_set ON encounter_cards(encounter_set_id) WHERE encounter_set_id IS NOT NULL;
+
+-- ─── encounter_sets 主表(s14 part4 §3.6 提案) ────────────
+CREATE TABLE IF NOT EXISTS encounter_sets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(64) UNIQUE NOT NULL,
+  name_zh VARCHAR(128) NOT NULL,
+  name_en VARCHAR(128),
+  expansion_code VARCHAR(64),
+  icon_url VARCHAR(512),
+  family_design_method VARCHAR(32)
+    CHECK (family_design_method IS NULL OR family_design_method IN (
+      'threat_type_unified','narrative_unified','attack_surface_unified','multi_axis_compound'
+    )),
+  primary_threat_type VARCHAR(32),
+  primary_attack_surface VARCHAR(32),
+  god_lineage_id UUID,
+  narrative_description TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_encounter_sets_code ON encounter_sets(code);
+
+-- 7 個基底遭遇集 seed(對應 keeper_ai_regulation v0.2 §5.1)
+INSERT INTO encounter_sets (code, name_zh, name_en, expansion_code, family_design_method, primary_threat_type, narrative_description)
+VALUES
+  ('set_ritual_curse', '儀式詛咒', 'Ritual Curse', 'base', 'threat_type_unified', 'ritual',
+   '邪教儀式、詛咒契約、神話力量主動施為。對應主軸 1/2/9。'),
+  ('set_physical_mutation', '物質異變', 'Physical Mutation', 'base', 'threat_type_unified', 'physical',
+   '物理世界扭曲、空間崩壞、生物異變。對應主軸 3/5/6。'),
+  ('set_mental_erosion', '精神侵蝕', 'Mental Erosion', 'base', 'threat_type_unified', 'mental',
+   '禁忌典籍、邪神低語、心智崩潰。對應主軸 4/7/10。'),
+  ('set_rule_distortion', '規則扭曲', 'Rule Distortion', 'base', 'attack_surface_unified', 'meta_personal',
+   '克蘇魯式現實滲透,遊戲規則被外力改寫。對應主軸 7/8/10,每關 ≤ 4 張。'),
+  ('set_compound_pressure', '混合複合', 'Compound Pressure', 'base', 'multi_axis_compound', 'mental',
+   '高威脅進階,多軸壓力同時發動。對應主軸 8 高潮關卡。'),
+  ('set_dunwich_local', '敦威治當地', 'Dunwich Local', 'expansion', 'narrative_unified', 'mental',
+   '地域氣質專一,敦威治當地的敵意凝視。跨主軸通用。'),
+  ('set_base_filler', '基底填料', 'Base Filler', 'base', 'narrative_unified', 'physical',
+   '中性壓力填料,跨主軸通用,強度 1-2 純結算為主。')
+ON CONFLICT (code) DO NOTHING;
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -3087,6 +3242,7 @@ export async function runMigrations() {
     await client.query(MIGRATION_026_SQL);
     await client.query(MIGRATION_027_SQL);
     await client.query(MIGRATION_028_SQL);
+    await client.query(MIGRATION_029_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

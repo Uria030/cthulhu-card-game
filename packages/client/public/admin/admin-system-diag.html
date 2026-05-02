@@ -510,7 +510,7 @@
     }
 
     async function rerunAxisMigrations() {
-      const ok = confirm('將在遠端資料庫補跑 MIGRATION_021-025（雙軸戰鬥 v1.0 / 主軸 v0.13 / 永久額外卡 v0.14）。\n\n所有 migration 使用 IF NOT EXISTS / ON CONFLICT，重跑安全不會破壞既有資料。\n\n確定要執行嗎？');
+      const ok = confirm('將在遠端資料庫補跑 MIGRATION_021-029(雙軸戰鬥 / 主軸 / 永久額外卡 / 神話遭遇卡 schema 擴充)。\n\n所有 migration 使用 IF NOT EXISTS / ON CONFLICT,重跑安全不會破壞既有資料。逐個 migration try/catch 失敗不會中斷後面。\n\n確定要執行嗎?');
       if (!ok) { log('warn', '使用者取消補跑'); return; }
       log('info', '呼叫 POST /api/admin/db-diag/rerun-axis-migrations ...');
       try {
@@ -522,17 +522,27 @@
         }
         for (const r of data.results) {
           if (r.ok) log('ok', '  ✓ ' + r.name + ' 成功');
-          else log('error', '  ✗ ' + r.name + ' 失敗：' + r.error, r.detail || '');
+          else log('error', '  ✗ ' + r.name + ' 失敗:' + r.error, r.detail || '');
         }
         log('info', '最終欄位狀態', {
           is_talisman: data.has_is_talisman ? '✓' : '✗',
           primary_axis_layer: data.has_primary_axis ? '✓' : '✗',
           is_permanent: data.has_is_permanent ? '✓' : '✗',
+          mythos_cards_欄位數: data.mythos_cards_column_count,
+          mythos_reusable: data.mythos_cards_has_reusable ? '✓' : '✗',
+          mythos_axis_tag: data.mythos_cards_has_axis_tag ? '✓' : '✗',
+          encounter_cards_欄位數: data.encounter_cards_column_count,
+          encounter_threat_type_array: data.encounter_cards_has_threat_type_array ? '✓' : '✗',
+          encounter_sets_表存在: data.encounter_sets_exists ? '✓' : '✗',
         });
-        if (data.has_is_talisman && data.has_primary_axis && data.has_is_permanent) {
-          log('ok', '✓ 全部修復完成！回到 MOD-12 重試批次寫卡。');
+        const mod12_ok = data.has_is_talisman && data.has_primary_axis && data.has_is_permanent;
+        const mig029_ok = data.mythos_cards_has_reusable && data.encounter_cards_has_threat_type_array && data.encounter_sets_exists;
+        if (mod12_ok && mig029_ok) {
+          log('ok', '✓ MOD-12 + MIGRATION_029 全部修復完成!');
+        } else if (mig029_ok) {
+          log('ok', '✓ MIGRATION_029 修復完成,神話/遭遇卡 schema 已擴充。');
         } else {
-          log('warn', '仍有欄位缺席，請把完整 log 貼給 Claude 接著排。');
+          log('warn', '仍有欄位缺席,請把完整 log 貼給 Claude 接著排。');
         }
       } catch (e) {
         log('error', '補跑例外', e.message || String(e));

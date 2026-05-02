@@ -9,6 +9,9 @@ import {
   MIGRATION_024_SQL,
   MIGRATION_025_SQL,
   MIGRATION_026_SQL,
+  MIGRATION_027_SQL,
+  MIGRATION_028_SQL,
+  MIGRATION_029_SQL,
 } from '../db/migrate.js';
 
 /**
@@ -44,6 +47,9 @@ export const dbDiagRoutes: FastifyPluginAsync = async (app) => {
       { name: 'MIGRATION_024', sql: MIGRATION_024_SQL },
       { name: 'MIGRATION_025', sql: MIGRATION_025_SQL },
       { name: 'MIGRATION_026', sql: MIGRATION_026_SQL },
+      { name: 'MIGRATION_027', sql: MIGRATION_027_SQL },
+      { name: 'MIGRATION_028', sql: MIGRATION_028_SQL },
+      { name: 'MIGRATION_029', sql: MIGRATION_029_SQL },
     ];
     const results: { name: string; ok: boolean; error?: string; detail?: string }[] = [];
     const client = await pool.connect();
@@ -70,6 +76,19 @@ export const dbDiagRoutes: FastifyPluginAsync = async (app) => {
         WHERE table_schema='public' AND table_name='card_definitions' ORDER BY ordinal_position`
     );
 
+    const mythCols = await pool.query(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='mythos_cards' ORDER BY ordinal_position`
+    );
+    const encCols = await pool.query(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='encounter_cards' ORDER BY ordinal_position`
+    );
+    const setCols = await pool.query(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='encounter_sets' ORDER BY ordinal_position`
+    );
+
     return reply.send({
       success: true,
       results,
@@ -80,6 +99,12 @@ export const dbDiagRoutes: FastifyPluginAsync = async (app) => {
       has_starting_xp: cols.rows.some((r: any) => r.column_name === 'starting_xp'),
       has_enhancement_slots: cols.rows.some((r: any) => r.column_name === 'enhancement_slots'),
       has_card_source: cols.rows.some((r: any) => r.column_name === 'card_source'),
+      mythos_cards_column_count: mythCols.rows.length,
+      mythos_cards_has_reusable: mythCols.rows.some((r: any) => r.column_name === 'reusable'),
+      mythos_cards_has_axis_tag: mythCols.rows.some((r: any) => r.column_name === 'axis_tag'),
+      encounter_cards_column_count: encCols.rows.length,
+      encounter_cards_has_threat_type_array: encCols.rows.some((r: any) => r.column_name === 'threat_type_array'),
+      encounter_sets_exists: setCols.rows.length > 0,
     });
   });
 

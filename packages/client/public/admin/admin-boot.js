@@ -39,7 +39,7 @@
       '  color: #d9d2c5; margin: 0;',
       '  text-shadow: 0 0 18px rgba(217,210,197,0.12);',
       '}',
-      '#' + OVERLAY_ID + ' .__splash-emblem { filter: drop-shadow(0 0 24px rgba(45, 61, 42, 0.25)); }',
+      '#' + OVERLAY_ID + ' .__splash-emblem { filter: drop-shadow(0 0 24px rgba(242, 196, 21, 0.35)); }',
       '@keyframes __adminSplashFadeIn { from { opacity: 0 } to { opacity: 1 } }',
       '@keyframes __adminSplashBreathe { 0%,100% { opacity: 0.4 } 50% { opacity: 0.9 } }',
       '#' + OVERLAY_ID + ' .__splash-pulse { animation: __adminSplashBreathe 1.5s ease-in-out infinite; }',
@@ -51,25 +51,23 @@
     (document.head || document.documentElement).appendChild(style);
   }
 
-  function buildTentacles() {
-    var paths = [];
-    for (var i = 0; i < 8; i++) {
-      var angle = (i * 45 * Math.PI) / 180;
-      var x1 = 100 + Math.cos(angle) * 16;
-      var y1 = 100 + Math.sin(angle) * 12;
-      var cx1 = 100 + Math.cos(angle) * 35;
-      var cy1 = 100 + Math.sin(angle) * 35;
-      var cx2 = 100 + Math.cos(angle + 0.5) * 60;
-      var cy2 = 100 + Math.sin(angle + 0.5) * 60;
-      var x2 = 100 + Math.cos(angle + 0.3) * 75;
-      var y2 = 100 + Math.sin(angle + 0.3) * 75;
-      paths.push(
-        '<path d="M ' + x1 + ' ' + y1 + ' C ' + cx1 + ' ' + cy1 +
-        ', ' + cx2 + ' ' + cy2 + ', ' + x2 + ' ' + y2 +
-        '" stroke="#6E6864" stroke-width="2.5" fill="none" opacity="0.85"/>'
-      );
-    }
-    return paths.join('');
+  // Yellow Sign — Robert W. Chambers《The King in Yellow》的經典符號
+  // 三條螺旋觸手 120° 對稱 + 中心同心圓 + 呼吸光點
+  var YELLOW = '#F2C415';
+  var TENTACLE_PATH =
+    'M 100 86 Q 100 55, 73 50 Q 45 52, 48 80 Q 53 96, 75 90 Q 84 86, 88 80';
+
+  function buildYellowSign() {
+    return [
+      '<g fill="none" stroke="' + YELLOW + '" stroke-width="7" ',
+      'stroke-linecap="round" stroke-linejoin="round">',
+      '<path d="' + TENTACLE_PATH + '"/>',
+      '<g transform="rotate(120 100 100)"><path d="' + TENTACLE_PATH + '"/></g>',
+      '<g transform="rotate(240 100 100)"><path d="' + TENTACLE_PATH + '"/></g>',
+      '</g>',
+      '<circle cx="100" cy="100" r="14" fill="none" stroke="' + YELLOW + '" stroke-width="3"/>',
+      '<circle cx="100" cy="100" r="5" fill="' + YELLOW + '" class="__splash-pulse"/>',
+    ].join('');
   }
 
   function injectOverlay() {
@@ -79,11 +77,8 @@
     overlay.id = OVERLAY_ID;
     overlay.innerHTML = [
       '<div class="__splash-emblem">',
-      '<svg viewBox="0 0 200 200" width="180" height="180" aria-hidden="true">',
-      '<ellipse cx="100" cy="100" rx="14" ry="10" fill="#2D3D2A" opacity="0.7" class="__splash-pulse"/>',
-      '<ellipse cx="100" cy="100" rx="6" ry="4" fill="#6E6864"/>',
-      buildTentacles(),
-      '<circle cx="100" cy="100" r="40" fill="none" stroke="#2D3D2A" stroke-width="0.5" opacity="0.3" class="__splash-pulse"/>',
+      '<svg viewBox="0 0 200 200" width="180" height="180" aria-label="The Yellow Sign">',
+      buildYellowSign(),
       '</svg>',
       '</div>',
       '<h1 class="__splash-title">Unknowable Game</h1>',

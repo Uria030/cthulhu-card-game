@@ -5,12 +5,18 @@ import './SplashScreen.css';
 /**
  * 啟動圖騰 — 對應第二章 §3 + 第六章 Part 2 §2
  *
- * 黑畫面浮現一個古老圖騰(刻在石板上的觸手紋章,舊銀色 + 墨綠微光),
+ * 黑畫面浮現 The Yellow Sign — Robert W. Chambers《The King in Yellow》的經典符號,
+ * 三條螺旋觸手 120° 對稱環繞中心同心圓,亮黃色刻在石板上。
  * 圖騰下方四個字「Unknowable Game」。停留 2.5 秒後自動進入大廳。
  *
  * 不是劇情演示(§7 那是主線章節限定,從出發板進入後才出現)。
  * 啟動畫面只是「氛圍校準」,沒有按鈕、沒有跳過——這 2.5 秒是設計意圖。
  */
+
+// Yellow Sign 三觸手共用 path,其餘兩條用 rotate(120/240) 變換
+const TENTACLE_PATH =
+  'M 100 86 Q 100 55, 73 50 Q 45 52, 48 80 Q 53 96, 75 90 Q 84 86, 88 80';
+const YELLOW = '#F2C415';
 
 // 第六章 Part 1 §6.2:啟動圖騰 2.5 秒,§2.3 淡出 0.5 秒
 const SPLASH_DURATION_MS = 2500;
@@ -31,41 +37,37 @@ export function SplashScreen() {
 
   return (
     <div className={'splash-root' + (fadingOut ? ' fading-out' : '')}>
-      {/* 觸手紋章(刻在石板上的浮雕,舊銀色 + 墨綠呼吸微光) */}
-      <div className="splash-emblem" aria-label="觸手紋章">
+      {/* The Yellow Sign(刻在石板上的浮雕,亮黃色) */}
+      <div className="splash-emblem" aria-label="The Yellow Sign">
         <svg viewBox="0 0 200 200" width="200" height="200">
-          {/* 中央眼狀核心 */}
-          <ellipse cx="100" cy="100" rx="14" ry="10" fill="#2D3D2A" opacity="0.7">
-            <animate attributeName="opacity" values="0.4;0.9;0.4" dur="1.5s" repeatCount="indefinite" />
-          </ellipse>
-          <ellipse cx="100" cy="100" rx="6" ry="4" fill="#6E6864" />
+          {/* 三條螺旋觸手,120° 對稱 */}
+          <g
+            fill="none"
+            stroke={YELLOW}
+            strokeWidth="7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d={TENTACLE_PATH} />
+            <g transform="rotate(120 100 100)">
+              <path d={TENTACLE_PATH} />
+            </g>
+            <g transform="rotate(240 100 100)">
+              <path d={TENTACLE_PATH} />
+            </g>
+          </g>
 
-          {/* 八支觸手環繞 */}
-          {Array.from({ length: 8 }).map((_, i) => {
-            const angle = (i * 45 * Math.PI) / 180;
-            const x1 = 100 + Math.cos(angle) * 16;
-            const y1 = 100 + Math.sin(angle) * 12;
-            const cx1 = 100 + Math.cos(angle) * 35;
-            const cy1 = 100 + Math.sin(angle) * 35;
-            const cx2 = 100 + Math.cos(angle + 0.5) * 60;
-            const cy2 = 100 + Math.sin(angle + 0.5) * 60;
-            const x2 = 100 + Math.cos(angle + 0.3) * 75;
-            const y2 = 100 + Math.sin(angle + 0.3) * 75;
-            return (
-              <path
-                key={i}
-                d={`M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`}
-                stroke="#6E6864"
-                strokeWidth="2.5"
-                fill="none"
-                opacity="0.85"
-              />
-            );
-          })}
+          {/* 中心同心圓 */}
+          <circle cx="100" cy="100" r="14" fill="none" stroke={YELLOW} strokeWidth="3" />
 
-          {/* 凹陷縫隙的呼吸微光 */}
-          <circle cx="100" cy="100" r="40" fill="none" stroke="#2D3D2A" strokeWidth="0.5" opacity="0.3">
-            <animate attributeName="opacity" values="0.15;0.45;0.15" dur="1.5s" repeatCount="indefinite" />
+          {/* 中心呼吸光點(凝視感) */}
+          <circle cx="100" cy="100" r="5" fill={YELLOW}>
+            <animate
+              attributeName="opacity"
+              values="0.5;1;0.5"
+              dur="1.8s"
+              repeatCount="indefinite"
+            />
           </circle>
         </svg>
       </div>

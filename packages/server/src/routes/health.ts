@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db/pool.js';
+import { getLastMigrationError, getStartupTimestamp } from '../lib/startup-state.js';
 
 export const healthRoutes: FastifyPluginAsync = async (app) => {
   app.get('/health', async () => {
@@ -21,6 +22,15 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
     } catch (e: any) {
       db = `error: ${e.message}`;
     }
-    return { status: 'ok', version: '0.1.0', db, tables, adminCount, seedCounts };
+    return {
+      status: 'ok',
+      version: '0.1.0',
+      db,
+      tables,
+      adminCount,
+      seedCounts,
+      startedAt: getStartupTimestamp(),
+      lastMigrationError: getLastMigrationError(),
+    };
   });
 };

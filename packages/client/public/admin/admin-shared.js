@@ -6,7 +6,7 @@
 // ============================================
 // 版本號
 // ============================================
-const ADMIN_VERSION = '0.21.35+b95';
+const ADMIN_VERSION = '0.21.36+b96';
 
 // ============================================
 // 僅 admin / owner 可見的模組
@@ -24,14 +24,23 @@ window.ADMIN_API_BASE = ADMIN_API_BASE;
 
 // ============================================
 // 認證檢查（在非登入頁面執行）
+// 搭配 admin-boot.js 的 splash overlay:
+//   - 通過 → 呼叫 __adminSplashReveal() 顯露後台
+//   - 失敗 → 不 reveal,直接 redirect login.html(splash 蓋到跳轉完成)
 // ============================================
 function checkAdminAuth() {
-  if (window.location.pathname.includes('login.html')) return;
+  if (window.location.pathname.includes('login.html')) {
+    if (window.__adminSplashReveal) window.__adminSplashReveal();
+    return;
+  }
   const token = localStorage.getItem('admin_token');
   if (!token) { window.location.href = 'login.html'; return; }
   fetch(`${ADMIN_API_BASE}/api/auth/me`, {
     headers: { 'Authorization': `Bearer ${token}` }
-  }).then(res => { if (!res.ok) throw new Error(); }).catch(() => {
+  }).then(res => {
+    if (!res.ok) throw new Error();
+    if (window.__adminSplashReveal) window.__adminSplashReveal();
+  }).catch(() => {
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_user');
     window.location.href = 'login.html';

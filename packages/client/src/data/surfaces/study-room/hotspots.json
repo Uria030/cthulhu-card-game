@@ -1,0 +1,174 @@
+{
+  "schema": "ug-hotspots",
+  "version": "2.0",
+  "surface": "study-room",
+  "viewBox": { "width": 1408, "height": 800 },
+  "background": {
+    "src": "/surfaces/study-room/bg.webp",
+    "alt": "書房俯瞰場景"
+  },
+  "hotspots": [
+    {
+      "id": "prep.ledger",
+      "group": "prep",
+      "label": "帳本",
+      "tooltip": "調整下一關牌組",
+      "direction": "up",
+      "shape": "rect",
+      "geometry": { "x": 370, "y": 480, "width": 194, "height": 98, "rotation": -3 }
+    },
+    {
+      "id": "prep.scale",
+      "group": "prep",
+      "label": "銀色天平",
+      "tooltip": "花費經驗值購買 / 強化",
+      "direction": "up",
+      "shape": "polygon",
+      "geometry": {
+        "points": [
+          { "x": 387, "y": 364 },
+          { "x": 528, "y": 364 },
+          { "x": 528, "y": 418 },
+          { "x": 475, "y": 436 },
+          { "x": 475, "y": 516 },
+          { "x": 440, "y": 516 },
+          { "x": 440, "y": 436 },
+          { "x": 387, "y": 418 }
+        ]
+      }
+    },
+    {
+      "id": "prep.censer",
+      "group": "prep",
+      "label": "黃銅香爐",
+      "tooltip": "花費凝聚力",
+      "direction": "right",
+      "shape": "ellipse",
+      "geometry": { "cx": 568, "cy": 485, "rx": 49, "ry": 49 }
+    },
+    {
+      "id": "prep.forge",
+      "group": "prep",
+      "label": "鐵錘砧板",
+      "tooltip": "鍛造(G2 開放)",
+      "direction": "up",
+      "shape": "polygon",
+      "geometry": {
+        "points": [
+          { "x": 634, "y": 391 },
+          { "x": 748, "y": 391 },
+          { "x": 748, "y": 453 },
+          { "x": 695, "y": 453 },
+          { "x": 695, "y": 480 },
+          { "x": 634, "y": 480 }
+        ]
+      }
+    },
+    {
+      "id": "prep.flask",
+      "group": "prep",
+      "label": "玻璃藥瓶",
+      "tooltip": "製作(G2 開放)",
+      "direction": "up",
+      "shape": "rect",
+      "geometry": { "x": 774, "y": 396, "width": 130, "height": 124 }
+    },
+    {
+      "id": "prep.tomes",
+      "group": "prep",
+      "label": "厚書",
+      "tooltip": "購買升級版",
+      "direction": "left",
+      "shape": "rect",
+      "geometry": { "x": 827, "y": 338, "width": 185, "height": 98, "rotation": -3 }
+    },
+    {
+      "id": "prep.parch",
+      "group": "prep",
+      "label": "發黃文件",
+      "tooltip": "花費天賦點",
+      "direction": "down",
+      "shape": "rect",
+      "geometry": { "x": 634, "y": 484, "width": 211, "height": 98, "rotation": -2 }
+    },
+    {
+      "id": "prep.map",
+      "group": "depart",
+      "label": "地圖紙",
+      "tooltip": "點擊出發",
+      "direction": "up",
+      "shape": "polygon",
+      "geometry": {
+        "points": [
+          { "x": 880, "y": 498 },
+          { "x": 1091, "y": 480 },
+          { "x": 1100, "y": 604 },
+          { "x": 889, "y": 613 }
+        ]
+      }
+    },
+    {
+      "id": "seat.head",
+      "group": "seat",
+      "label": "主位",
+      "tooltip": "主位(桌後,G2 開放)",
+      "direction": "up",
+      "shape": "rect",
+      "geometry": { "x": 475, "y": 302, "width": 158, "height": 71 }
+    },
+    {
+      "id": "seat.front",
+      "group": "seat",
+      "label": "前位",
+      "tooltip": "前位(桌前,G2 開放)",
+      "direction": "up",
+      "shape": "polygon",
+      "geometry": {
+        "points": [
+          { "x": 616, "y": 640 },
+          { "x": 950, "y": 640 },
+          { "x": 968, "y": 782 },
+          { "x": 598, "y": 782 }
+        ]
+      }
+    },
+    {
+      "id": "seat.left",
+      "group": "seat",
+      "label": "左側",
+      "tooltip": "左側(G2 開放)",
+      "direction": "right",
+      "shape": "polygon",
+      "geometry": {
+        "points": [
+          { "x": 132, "y": 409 },
+          { "x": 317, "y": 391 },
+          { "x": 334, "y": 675 },
+          { "x": 123, "y": 711 }
+        ]
+      }
+    },
+    {
+      "id": "seat.right",
+      "group": "seat",
+      "label": "右側",
+      "tooltip": "右側(地圖紙右邊,G2 開放)",
+      "direction": "left",
+      "shape": "polygon",
+      "geometry": {
+        "points": [
+          { "x": 1126, "y": 480 },
+          { "x": 1276, "y": 480 },
+          { "x": 1294, "y": 738 },
+          { "x": 1135, "y": 764 }
+        ]
+      }
+    }
+  ],
+  "metadata": {
+    "calibratedBy": "Uria",
+    "calibratedAt": "2026-05-02T00:00:00+08:00",
+    "appVersion": "0.3.1",
+    "notes": "初始座標來自交付包 study-room.hotspots.json,id 已對齊 cthulhu 命名(prep.{ledger/scale/censer/forge/flask/tomes/parch/map} + seat.{head/front/left/right})"
+  }
+}

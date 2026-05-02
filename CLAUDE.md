@@ -8,6 +8,21 @@
 - `docs/數值規格文件_v0.1.md` — 所有數值參數
 - `docs/資料庫結構設計_v0.1.md` — PostgreSQL + Redis Schema
 
+## Story-to-Stage 自動生產線索引(本機 .gitignore)
+
+**位置:** `scripts/mod-agent-local/pipeline-story-to-stage/`(從劇本 txt 自動建好 MOD-06/07/08 全部資料)
+
+**啟動 Claude Code 時必讀:**
+- 索引文件:`C:\Users\user\.claude\projects\c--Ug\memory\reference_pipeline_story_to_stage.md`
+  涵蓋階段腳本、規範主檔、API 端點、三個 mod 完整性檢查項目對照
+- 首次跑通記錄:`C:\Users\user\.claude\projects\c--Ug\memory\project_pipeline_story_to_stage_v1.md`
+  2026-05-01 用 story01.txt 驗證 PASS=46/WARN=2/FAIL=0,已知限制(重跑非冪等等)
+
+**遇到下列情境必先讀上述兩份:**
+- Uria 提到「生產線」「Story-to-Stage」「pipeline」「劇本轉關卡」
+- 接到「跑 storyXX.txt」「建一條戰役」「驗證後台全綠」這類任務
+- 修改 MOD-06/07/08 的完整性檢查邏輯 / migration 028 / campaigns 表結構
+
 ## 技術決策
 - Monorepo：pnpm workspaces
 - 前端：React + TypeScript + Vite → Vercel

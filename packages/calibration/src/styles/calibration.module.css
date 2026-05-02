@@ -1,0 +1,302 @@
+/* @cthulhu/calibration — SDK 樣式
+ *
+ * 所有顏色 / 字型 / 動效都用 CSS 變數,預設值是 placeholder。
+ * 整合進 monorepo 時請以 DESIGN.md 的 token 覆蓋這些變數,例如:
+ *   :root {
+ *     --ug-cal-handle-fill: var(--color-accent-primary);
+ *     --ug-cal-toolbar-bg: var(--color-surface-elevated);
+ *   }
+ */
+
+/* ─── CSS 變數預設 ────────────────────────────────── */
+.surface {
+  --ug-cal-handle-fill: #7dd3fc;
+  --ug-cal-handle-stroke: #0284c7;
+  --ug-cal-selected-stroke: #fbbf24;
+  --ug-cal-modified-fill: rgba(251, 191, 36, 0.18);
+  --ug-cal-cal-fill: rgba(125, 211, 252, 0.16);
+  --ug-cal-cal-stroke: rgba(2, 132, 199, 0.65);
+  --ug-cal-toolbar-bg: rgba(15, 23, 42, 0.92);
+  --ug-cal-toolbar-fg: #f1f5f9;
+  --ug-cal-toolbar-border: rgba(148, 163, 184, 0.25);
+  --ug-cal-btn-bg: rgba(51, 65, 85, 0.9);
+  --ug-cal-btn-bg-hover: rgba(71, 85, 105, 1);
+  --ug-cal-btn-primary: #0284c7;
+  --ug-cal-btn-danger: #b91c1c;
+  --ug-cal-panel-bg: rgba(15, 23, 42, 0.94);
+  --ug-cal-panel-fg: #e2e8f0;
+  --ug-cal-radius: 8px;
+  --ug-cal-font: ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", sans-serif;
+}
+
+/* ─── Surface(底圖容器) ────────────────────────── */
+.surface {
+  position: relative;
+  width: 100%;
+  max-width: 1280px;
+  margin: 12px auto;
+  flex-shrink: 0;
+}
+
+.background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.surface.calibrating .overlay {
+  touch-action: none;
+}
+.surface.calibrating .background {
+  touch-action: none;
+  pointer-events: none;
+}
+.surface.calibrating {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ─── 熱區 ─────────────────────────────────────── */
+.hotspot {
+  fill: transparent;
+  stroke: transparent;
+  cursor: pointer;
+  transition: fill 120ms ease, stroke 120ms ease;
+}
+
+.hotspot:hover,
+.hotspot:focus-visible {
+  fill: rgba(125, 211, 252, 0.18);
+  stroke: rgba(2, 132, 199, 0.55);
+  stroke-width: 2;
+  outline: none;
+}
+
+.hotspotCal {
+  fill: var(--ug-cal-cal-fill);
+  stroke: var(--ug-cal-cal-stroke);
+  stroke-width: 1.5;
+  cursor: move;
+}
+
+.hotspotSelected {
+  stroke: var(--ug-cal-selected-stroke) !important;
+  stroke-width: 2.5 !important;
+  stroke-dasharray: 6 3;
+}
+
+.hotspotModified {
+  fill: var(--ug-cal-modified-fill);
+}
+
+/* ─── 把手層 ───────────────────────────────────── */
+.handleLayer {
+  pointer-events: none;
+}
+
+.handle {
+  fill: var(--ug-cal-handle-fill);
+  stroke: var(--ug-cal-handle-stroke);
+  stroke-width: 2;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.handle:hover {
+  fill: #fde68a;
+}
+
+/* ─── Toolbar ──────────────────────────────────── */
+.toolbar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--ug-cal-toolbar-bg);
+  color: var(--ug-cal-toolbar-fg);
+  border: 1px solid var(--ug-cal-toolbar-border);
+  border-radius: var(--ug-cal-radius);
+  font-family: var(--ug-cal-font);
+  font-size: 14px;
+  z-index: 9999;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.toolbarGroup {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.toolbarBadge {
+  background: var(--ug-cal-btn-primary);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.toolbarModifiedBadge {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.toolbarBtn,
+.toolbarBtnPrimary,
+.toolbarBtnDanger {
+  background: var(--ug-cal-btn-bg);
+  color: var(--ug-cal-toolbar-fg);
+  border: 1px solid transparent;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.toolbarBtn:hover:not(:disabled) {
+  background: var(--ug-cal-btn-bg-hover);
+}
+
+.toolbarBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolbarBtnPrimary {
+  background: var(--ug-cal-btn-primary);
+  color: white;
+}
+
+.toolbarBtnDanger {
+  background: var(--ug-cal-btn-danger);
+  color: white;
+}
+
+/* ─── Panel ────────────────────────────────────── */
+.panel {
+  position: fixed;
+  right: 12px;
+  top: 80px;
+  bottom: 12px;
+  width: 280px;
+  background: var(--ug-cal-panel-bg);
+  color: var(--ug-cal-panel-fg);
+  border: 1px solid var(--ug-cal-toolbar-border);
+  border-radius: var(--ug-cal-radius);
+  font-family: var(--ug-cal-font);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  z-index: 9998;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.panelHeader {
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--ug-cal-toolbar-border);
+  font-weight: 600;
+}
+
+.panelBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.panelGroup {
+  margin-bottom: 12px;
+}
+
+.panelGroupTitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(226, 232, 240, 0.6);
+  margin: 4px 8px;
+}
+
+.panelList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.panelItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  background: transparent;
+  color: inherit;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.panelItem:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.panelItemSelected {
+  background: rgba(251, 191, 36, 0.18);
+  border-color: var(--ug-cal-selected-stroke);
+}
+
+.panelItemModified {
+  /* dot 已顯示,這裡僅微調 */
+}
+
+.panelItemLabel {
+  flex-shrink: 0;
+}
+
+.panelItemId {
+  flex: 1;
+  font-size: 11px;
+  opacity: 0.55;
+  text-align: right;
+}
+
+.panelItemDot {
+  color: var(--ug-cal-selected-stroke);
+  font-size: 10px;
+}
+
+.panelFooter {
+  padding: 8px 14px;
+  border-top: 1px solid var(--ug-cal-toolbar-border);
+  font-size: 11px;
+  opacity: 0.7;
+}

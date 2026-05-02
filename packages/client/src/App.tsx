@@ -3,6 +3,7 @@ import { SplashScreen } from './screens/SplashScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { DepartureBoardScreen } from './screens/DepartureBoardScreen';
 import { TestScenarioScreen } from './screens/TestScenarioScreen';
+import { CalibrationAdminPage } from './admin/CalibrationAdminPage';
 
 export function App() {
   return (
@@ -11,6 +12,7 @@ export function App() {
       <Route path="/lobby" element={<LobbyScreen />} />
       <Route path="/departure" element={<DepartureBoardScreen />} />
       <Route path="/scenario/test" element={<TestScenarioScreen />} />
+      <Route path="/admin/calibration" element={<CalibrationAdminPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

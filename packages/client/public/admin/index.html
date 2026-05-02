@@ -2,6 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
+  <script src="admin-boot.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>系統管理員後台 — Admin Module</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -291,6 +292,18 @@
           <div class="card-desc">檢查 Admin / Bridge / Ollama / Gemini 連線，含遠端裝置 log 複製（僅 admin 可見）</div>
         `;
         simGrid.appendChild(diag);
+
+        // CALIB 介面校準：在後台內嵌渲染遊戲畫面骨架，拖曳熱區位置/形狀
+        const calib = document.createElement('a');
+        calib.href = '/admin/calibration';
+        calib.className = 'module-card';
+        calib.innerHTML = `
+          <div class="card-code"><span>CALIB</span><span class="badge-ready">READY</span></div>
+          <div class="card-title">介面校準</div>
+          <div class="card-en">Surface Calibration</div>
+          <div class="card-desc">後台內嵌遊戲畫面骨架（書房/出發板/戰鬥…），拖曳調整熱區位置與形狀，匯出 JSON 蓋回 surfaces/（僅 admin 可見）</div>
+        `;
+        simGrid.appendChild(calib);
       }
     }
   </script>

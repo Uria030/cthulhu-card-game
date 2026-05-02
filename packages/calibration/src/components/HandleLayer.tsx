@@ -13,11 +13,13 @@ import { useRef } from 'react';
 import type { HotspotGeometry } from '../types';
 import { useCalibrationContext } from './CalibrationContext';
 import { usePointerDrag } from '../hooks/usePointerDrag';
+import { useLongPress } from '../hooks/useLongPress';
 import { isEllipse, isPolygon, isRect, clamp } from '../utils/shapes';
 import { screenDeltaToSvgDelta } from '../utils/coordinates';
 import styles from '../styles/calibration.module.css';
 
 const HANDLE_R = 8;
+const MIDPOINT_R = 5;
 
 interface DragOriginRef {
   geom: HotspotGeometry;
@@ -47,6 +49,34 @@ function Handle({ cx, cy, onDrag, onStart, cursor }: HandleProps) {
       r={HANDLE_R}
       style={cursor ? { cursor } : undefined}
       onPointerDown={onPointerDown}
+    />
+  );
+}
+
+interface MidpointHandleProps {
+  cx: number;
+  cy: number;
+  onAdd: () => void;
+}
+
+// 邊中點 ◇ 把手:雙擊(滑鼠)或長按 0.5s(觸控)在該位置插入頂點
+function MidpointHandle({ cx, cy, onAdd }: MidpointHandleProps) {
+  const longPress = useLongPress({ onLongPress: onAdd, ms: 500 });
+  const onDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onAdd();
+  };
+  const size = MIDPOINT_R * 2;
+  return (
+    <rect
+      className={styles.midHandle}
+      x={cx - MIDPOINT_R}
+      y={cy - MIDPOINT_R}
+      width={size}
+      height={size}
+      transform={`rotate(45 ${cx} ${cy})`}
+      onPointerDown={longPress.onPointerDown}
+      onDoubleClick={onDoubleClick}
     />
   );
 }
@@ -154,14 +184,37 @@ export function HandleLayer() {
     );
   }
 
-  // ─── 多邊形:每個頂點 ───────────────────────────
+  // ─── 多邊形:頂點 ● + 邊中點 ◇(雙擊/長按新增頂點) ───
   if (selected.shape === 'polygon' && isPolygon(selected.geometry)) {
     const g = selected.geometry;
+    const insertVertex = (afterIdx: number, x: number, y: number) => {
+      const newPts = [...g.points];
+      newPts.splice(afterIdx + 1, 0, { x, y });
+      const nextList = api.hotspots.map((hs) =>
+        hs.id === selected.id ? { ...hs, geometry: { points: newPts } } : hs,
+      );
+      commit(nextList, selected.id);
+    };
     return (
       <g className={styles.handleLayer}>
+        {/* 邊中點 ◇:雙擊或長按 → 在該邊新增頂點 */}
+        {g.points.map((p, idx) => {
+          const next = g.points[(idx + 1) % g.points.length]!;
+          const midX = (p.x + next.x) / 2;
+          const midY = (p.y + next.y) / 2;
+          return (
+            <MidpointHandle
+              key={`mid-${idx}`}
+              cx={midX}
+              cy={midY}
+              onAdd={() => insertVertex(idx, midX, midY)}
+            />
+          );
+        })}
+        {/* 頂點 ●:拖曳改變該頂點座標(其他頂點不動) */}
         {g.points.map((p, idx) => (
           <Handle
-            key={idx}
+            key={`v-${idx}`}
             cx={p.x}
             cy={p.y}
             cursor="grab"

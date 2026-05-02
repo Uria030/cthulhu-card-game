@@ -255,13 +255,26 @@ function CalibrationStage({ entry }: CalibrationStageProps) {
       <CalibrationPanel />
       <div className="calib-admin-stage">
         <CalibrationSurface background={entry.background}>
-          {parsed.hotspots.map((hs) => (
-            <Hotspot key={hs.id} {...hs} />
-          ))}
+          <HotspotsLive />
           <HandleLayer />
         </CalibrationSurface>
       </div>
     </CalibrationProvider>
+  );
+}
+
+/**
+ * 用 context 的 live api.hotspots 渲染熱區,確保拖頂點時反應區域立即跟隨。
+ * 不可改用 props.hotspots(初始值)— 那是初始 snapshot,拖了不會更新。
+ */
+function HotspotsLive() {
+  const { api } = useCalibrationContext();
+  return (
+    <>
+      {api.hotspots.map((hs) => (
+        <Hotspot key={hs.id} {...hs} />
+      ))}
+    </>
   );
 }
 

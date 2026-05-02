@@ -118,6 +118,22 @@
   fill: #fde68a;
 }
 
+/* 邊中點微把手 ◇:雙擊 / 長按 → 在該邊新增頂點
+ * 比頂點把手更小、更暗淡,避免視覺混淆但仍可被點到
+ */
+.midHandle {
+  fill: var(--ug-cal-handle-stroke, #d9d2c5);
+  fill-opacity: 0.55;
+  stroke: var(--ug-cal-handle-fill, #8b6f3d);
+  stroke-width: 1;
+  cursor: copy;
+  pointer-events: auto;
+}
+.midHandle:hover {
+  fill-opacity: 1;
+  stroke-width: 1.5;
+}
+
 /* ─── Toolbar ──────────────────────────────────── */
 .toolbar {
   position: fixed;

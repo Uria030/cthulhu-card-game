@@ -32,7 +32,8 @@
 }
 
 .splash-emblem {
-  filter: drop-shadow(0 0 24px rgba(45, 61, 42, 0.25));
+  /* Yellow Sign 黃色光暈,呼應 Chambers《The King in Yellow》 */
+  filter: drop-shadow(0 0 24px rgba(242, 196, 21, 0.35));
 }
 
 .splash-title {

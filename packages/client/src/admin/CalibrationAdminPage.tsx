@@ -212,10 +212,10 @@ export function CalibrationAdminPage() {
           <h3>操作</h3>
           <ul>
             <li>進頁自動進校準模式</li>
-            <li>頂部 Toolbar:Undo / Redo / 載入 / 下載 JSON / Reset</li>
-            <li>右側 Panel:熱區清單(點擊選取)</li>
-            <li>拖把手調形狀,拖熱區移位置</li>
-            <li>「下載 JSON」匯出後覆蓋 <code>packages/client/public/surfaces/&lt;id&gt;/hotspots.json</code></li>
+            <li>頂部 Toolbar:Undo / Redo / 載入 JSON / 下載 JSON / Reset</li>
+            <li>右側 Panel:熱區清單(點擊選取);右上「✕ 收起清單」可收攏</li>
+            <li>拖頂點 ● 自由變形;雙擊 ◇(滑鼠)或長按 ◇(觸控)在邊上加錨點</li>
+            <li><strong>「下載 JSON」= 直接寫進 main 並觸發部署</strong>,1-2 分鐘玩家側生效</li>
           </ul>
           <a className="calib-admin-back" href="/admin/index.html">
             ← 回後台首頁
@@ -241,20 +241,41 @@ function CalibrationStage({ entry }: CalibrationStageProps) {
 
   if (!parsed || !entry.background) return null;
 
-  const onSaveJson = (json: HotspotsJsonV2) => {
-    const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const date = new Date().toISOString().slice(0, 10);
-    a.href = url;
-    a.download = `${entry.id}.hotspots.${date}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    console.info(
-      `[calib-admin] 下載完成 → 請覆蓋至 packages/client/public/surfaces/${entry.id}/hotspots.json`,
-    );
+  const onSaveJson = async (json: HotspotsJsonV2) => {
+    const apiBase =
+      window.location.hostname === 'localhost'
+        ? 'http://localhost:3001'
+        : 'https://server-production-fc4f.up.railway.app';
+    const token = localStorage.getItem('admin_token');
+    if (!token) {
+      window.alert('未登入,無法儲存。請重新登入後再試。');
+      return;
+    }
+    try {
+      const res = await fetch(`${apiBase}/api/admin/calibration/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ surface: entry.id, json }),
+      });
+      const data = (await res.json()) as {
+        success: boolean;
+        error?: string;
+        commitUrl?: string;
+        message?: string;
+      };
+      if (!res.ok || !data.success) {
+        window.alert(`儲存失敗:${data.error ?? `HTTP ${res.status}`}`);
+        return;
+      }
+      window.alert(
+        `已儲存到 main!\n${data.message ?? ''}\n\nCommit: ${data.commitUrl ?? '(無連結)'}`,
+      );
+    } catch (err) {
+      window.alert(`儲存失敗(網路錯誤):${(err as Error).message}`);
+    }
   };
 
   return (

@@ -3,7 +3,11 @@
  * 純墨黑底 + 碎裂石面紋理 8% + 觸手紋章舊銀色 + 標題思源宋體 64px 煙白
  */
 .splash-root {
-  flex: 1;
+  /* 鎖滿 viewport,不超出(全域守則:遊戲畫面不超過一個螢幕)*/
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;

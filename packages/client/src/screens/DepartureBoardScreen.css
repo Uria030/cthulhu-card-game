@@ -4,7 +4,11 @@
  */
 
 .dep-root {
-  flex: 1;
+  /* 鎖滿 viewport,不超出(全域守則:遊戲畫面不超過一個螢幕)*/
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
   position: relative;
   padding: var(--sp-lg);
   background: var(--bg-primary);
@@ -25,18 +29,22 @@
   pointer-events: none;
 }
 
-/* 地圖紙容器(浮在大廳之上) */
+/* 地圖紙容器(浮在大廳之上,撐滿可用高度不超出)*/
 .dep-paper {
   position: relative;
   z-index: 1;
   max-width: 1200px;
   width: 100%;
+  height: 100%;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--sp-md);
+  min-height: 0;
 }
 
 .dep-header {
+  flex: 0 0 auto;
   text-align: center;
   margin-bottom: var(--sp-sm);
 }
@@ -57,9 +65,12 @@
   margin-top: var(--sp-xs);
 }
 
-/* 地圖板本體 — 米黃舊紙質感 */
+/* 地圖板本體 — 米黃舊紙質感(撐滿剩餘高度,內容超出時內部 scroll)*/
 .dep-map {
   position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   background:
     radial-gradient(ellipse at 30% 20%, rgba(184, 137, 61, 0.15), transparent 50%),
     radial-gradient(ellipse at 70% 80%, rgba(74, 69, 64, 0.12), transparent 60%),
@@ -67,7 +78,6 @@
   border: 1px solid var(--world-deep-walnut);
   border-radius: var(--r-sharp);
   padding: var(--sp-xl);
-  min-height: 480px;
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.5),
     inset 0 0 60px rgba(110, 78, 30, 0.08);
@@ -348,8 +358,9 @@
   margin-top: var(--sp-sm);
 }
 
-/* footer */
+/* footer(固定底部,不被 dep-map 推走)*/
 .dep-footer {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;

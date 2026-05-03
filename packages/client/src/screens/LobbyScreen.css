@@ -7,13 +7,36 @@
  */
 
 .lobby-root {
-  flex: 1;
+  /* 鎖滿 viewport,不超出(全域守則:遊戲畫面不超過一個螢幕)*/
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
   background: var(--bg-primary);
   animation: lobbyEnter var(--beat-lobby-enter) var(--ease-paper) both;
+}
+
+/* CalibrationSurface 撐滿剩餘空間並依比例縮(不超出 viewport)*/
+.lobby-root > [data-calibration-surface],
+.lobby-root .calibration-surface {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lobby-root .calibration-surface img,
+.lobby-root .calibration-surface svg {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
 }
 
 @keyframes lobbyEnter {
@@ -22,12 +45,10 @@
 }
 
 .lobby-header {
+  flex: 0 0 auto;
   text-align: center;
   padding: var(--sp-md) var(--sp-lg) var(--sp-sm);
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
   z-index: 5;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.65), transparent);
   pointer-events: none;
@@ -53,14 +74,12 @@
 }
 
 .lobby-footer {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: var(--sp-sm) var(--sp-lg);
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  position: relative;
   z-index: 5;
   background: linear-gradient(0deg, rgba(0, 0, 0, 0.65), transparent);
   flex-wrap: wrap;

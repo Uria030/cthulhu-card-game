@@ -14,7 +14,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--sp-lg);
+  /* 上下不對稱:下緣多留 20px,避開 iPad Safari 底部 home bar */
+  padding: var(--sp-lg) var(--sp-lg) calc(var(--sp-lg) + 20px);
 }
 
 .brief-backdrop {

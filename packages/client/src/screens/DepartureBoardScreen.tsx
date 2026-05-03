@@ -17,13 +17,8 @@ export function DepartureBoardScreen() {
   const navigate = useNavigate();
 
   const enterTest = () => {
-    // 第二章 §6 確認對話框格式
-    const msg =
-      '你準備好踏入這條街了嗎?\n\n' +
-      '——三地點測試關卡(G1 教學)\n' +
-      '推薦人數:1 · 預計時長:30 分鐘\n' +
-      '結算:通過/失敗 · 不產生戰役旗標 · 可重玩';
-    if (confirm(msg)) navigate('/scenario/test');
+    // 進入劇情提要頁(劇情提要本身就是「閱讀後決定是否進入」的橋接畫面)
+    navigate('/scenario/test/briefing');
   };
 
   return (

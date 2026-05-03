@@ -1,0 +1,156 @@
+/**
+ * 劇情提要 — 出發板 → 戰鬥板的橋接畫面
+ * 視覺承襲戰鬥板 modal-frame 的舊紙風格(米黃舊紙 + 胡桃木邊框 + 古銅內框)
+ */
+
+.brief-root {
+  /* 鎖滿 viewport,不超出 */
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-lg);
+}
+
+.brief-backdrop {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(184, 137, 61, 0.06), transparent 50%),
+    radial-gradient(ellipse at 20% 80%, rgba(45, 61, 42, 0.08), transparent 45%),
+    var(--bg-primary);
+  pointer-events: none;
+}
+
+/* 信件 / 紙頁容器 */
+.brief-paper {
+  position: relative;
+  z-index: 1;
+  max-width: 720px;
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--world-aged-paper);
+  color: var(--bg-primary);
+  border: 8px solid var(--world-deep-walnut);
+  box-shadow:
+    inset 0 0 0 1px var(--world-antique-brass),
+    0 16px 48px rgba(0, 0, 0, 0.8);
+  padding: var(--sp-xl);
+  background-image:
+    radial-gradient(ellipse at top left, rgba(92, 32, 24, 0.05), transparent 50%),
+    radial-gradient(ellipse at bottom right, rgba(0, 0, 0, 0.08), transparent 50%),
+    repeating-linear-gradient(0deg, transparent 0, transparent 24px, rgba(92, 32, 24, 0.025) 24px, rgba(92, 32, 24, 0.025) 25px);
+}
+
+.brief-header {
+  text-align: center;
+}
+.brief-eyebrow {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.4em;
+  color: var(--world-oxblood);
+  margin-bottom: var(--sp-sm);
+}
+.brief-title {
+  font-family: 'Noto Serif TC', serif;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--world-deep-walnut);
+  margin: 0;
+}
+.brief-subtitle {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--world-soot-grey);
+  margin-top: var(--sp-xs);
+}
+
+.brief-divider {
+  border: none;
+  border-top: 1px dashed var(--world-deep-walnut);
+  margin: var(--sp-lg) 0;
+  opacity: 0.4;
+}
+
+/* 敘事段落 — 用手寫字型營造信件感 */
+.brief-narrative {
+  font-family: 'Ma Shan Zheng', cursive;
+  font-size: 19px;
+  line-height: 2.0;
+  color: var(--world-deep-walnut);
+  text-align: justify;
+  padding: 0 var(--sp-md);
+  font-style: italic;
+}
+.brief-narrative p {
+  margin: 0 0 var(--sp-md) 0;
+}
+.brief-narrative p:last-child {
+  margin-bottom: 0;
+}
+
+.brief-meta {
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--world-soot-grey);
+  text-align: center;
+}
+
+.brief-footer {
+  margin-top: var(--sp-xl);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-md);
+  flex-wrap: wrap;
+}
+
+.brief-back {
+  background: transparent;
+  border: 1px solid var(--world-deep-walnut);
+  border-radius: var(--r-subtle);
+  padding: 8px 16px;
+  color: var(--world-deep-walnut);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-paper);
+}
+.brief-back:hover {
+  background: var(--world-deep-walnut);
+  color: var(--world-aged-paper);
+}
+
+.brief-enter {
+  background: var(--world-oxblood);
+  border: 2px solid var(--world-deep-walnut);
+  border-radius: var(--r-subtle);
+  padding: 12px 28px;
+  color: var(--world-aged-paper);
+  font-family: 'Noto Serif TC', serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(92, 32, 24, 0.4);
+  transition: all 0.2s var(--ease-paper);
+}
+.brief-enter:hover {
+  background: var(--world-deep-walnut);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+.brief-enter:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}

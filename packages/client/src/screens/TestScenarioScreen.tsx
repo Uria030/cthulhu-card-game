@@ -194,7 +194,7 @@ export function TestScenarioScreen() {
   const [modal, setModal] = useState<ModalType>(null);
   const [panel, setPanel] = useState<PanelType>(null);
   const [locationBarId, setLocationBarId] = useState<string | null>(null);
-  const [logCollapsed, setLogCollapsed] = useState(false);
+  const [logCollapsed, setLogCollapsed] = useState(true);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
   const [systemSub, setSystemSub] = useState<null | 'settings' | 'rules'>(null);
 

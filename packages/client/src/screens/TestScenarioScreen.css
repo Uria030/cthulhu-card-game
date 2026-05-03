@@ -612,7 +612,7 @@
 /* === 階段控制(浮在地圖中下方,fixed 對齊 viewport)=== */
 .phase-control {
   position: fixed;
-  bottom: var(--sp-md);
+  bottom: calc(var(--sp-md) + 20px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;

@@ -45,11 +45,14 @@
 }
 
 .lobby-header {
-  flex: 0 0 auto;
-  text-align: center;
-  padding: var(--sp-md) var(--sp-lg) var(--sp-sm);
-  position: relative;
+  /* 浮在底圖上方,不獨立佔位 */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 5;
+  text-align: center;
+  padding: var(--sp-md) var(--sp-lg) var(--sp-lg);
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.65), transparent);
   pointer-events: none;
 }
@@ -74,13 +77,16 @@
 }
 
 .lobby-footer {
-  flex: 0 0 auto;
+  /* 浮在底圖上方,不獨立佔位(因 lobby-root 已鎖 100vh,bottom:0 對齊 viewport 底)*/
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: var(--sp-sm) var(--sp-lg);
-  position: relative;
-  z-index: 5;
   background: linear-gradient(0deg, rgba(0, 0, 0, 0.65), transparent);
   flex-wrap: wrap;
   gap: var(--sp-sm);

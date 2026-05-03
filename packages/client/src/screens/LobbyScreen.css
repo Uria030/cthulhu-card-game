@@ -39,21 +39,34 @@
   object-fit: contain;
 }
 
-/* 熱區形狀本身永久顯示成 badge 樣式(深底 + 金邊),非僅 hover 時 */
-.lobby-root g[data-hotspot-id] > rect,
-.lobby-root g[data-hotspot-id] > ellipse,
-.lobby-root g[data-hotspot-id] > polygon {
-  fill: rgba(13, 13, 20, 0.85) !important;
-  stroke: rgba(184, 137, 61, 0.9) !important;
-  stroke-width: 1.5 !important;
-  transition: fill 0.2s, stroke 0.2s;
+/* 熱區形狀:預設完全透明保留美術,hover/觸控才浮現 10% 深色 + 金色光暈漸層 */
+.lobby-root .hotspot-wrap g[data-hotspot-id] > rect,
+.lobby-root .hotspot-wrap g[data-hotspot-id] > ellipse,
+.lobby-root .hotspot-wrap g[data-hotspot-id] > polygon {
+  fill: transparent !important;
+  stroke: transparent !important;
+  transition: fill 0.25s ease, stroke 0.25s ease, filter 0.25s ease;
 }
-.lobby-root g[data-hotspot-id] > rect:hover,
-.lobby-root g[data-hotspot-id] > ellipse:hover,
-.lobby-root g[data-hotspot-id] > polygon:hover {
-  fill: rgba(34, 34, 58, 0.95) !important;
-  stroke: var(--herald) !important;
+.lobby-root .hotspot-wrap:hover g[data-hotspot-id] > rect,
+.lobby-root .hotspot-wrap:hover g[data-hotspot-id] > ellipse,
+.lobby-root .hotspot-wrap:hover g[data-hotspot-id] > polygon,
+.lobby-root .hotspot-wrap:active g[data-hotspot-id] > rect,
+.lobby-root .hotspot-wrap:active g[data-hotspot-id] > ellipse,
+.lobby-root .hotspot-wrap:active g[data-hotspot-id] > polygon {
+  fill: rgba(13, 13, 20, 0.1) !important;
+  stroke: rgba(184, 137, 61, 0.7) !important;
   stroke-width: 2 !important;
+  filter: drop-shadow(0 0 12px rgba(201, 168, 76, 0.55));
+}
+
+/* 標籤文字:預設隱藏,hover wrapper 時淡入(pointer-events:none 不影響 hover 偵測)*/
+.lobby-root .hotspot-wrap .hotspot-label-group {
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.lobby-root .hotspot-wrap:hover .hotspot-label-group,
+.lobby-root .hotspot-wrap:active .hotspot-label-group {
+  opacity: 1;
 }
 
 @keyframes lobbyEnter {

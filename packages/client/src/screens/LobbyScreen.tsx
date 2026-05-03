@@ -33,7 +33,7 @@ function hotspotCentroid(hs: HotspotData): { cx: number; cy: number } {
 function HotspotLabel({ hs }: { hs: HotspotData }) {
   const { cx, cy } = hotspotCentroid(hs);
   return (
-    <g pointer-events="none" transform={`translate(${cx}, ${cy})`}>
+    <g pointer-events="none" className="hotspot-label-group" transform={`translate(${cx}, ${cy})`}>
       <text
         x={0} y={-4}
         textAnchor="middle"
@@ -128,12 +128,12 @@ export function LobbyScreen() {
             alt: '書房俯瞰場景',
           }}
         >
+          {/* 熱區 + 標籤成對包在 wrapper g,讓 hover 能同步觸發兩者顯示 */}
           {hotspots.map((hs) => (
-            <Hotspot key={hs.id} {...hs} />
-          ))}
-          {/* 永久可見的標籤層(pointer-events:none 不擋點擊)*/}
-          {hotspots.map((hs) => (
-            <HotspotLabel key={`label-${hs.id}`} hs={hs} />
+            <g key={hs.id} className="hotspot-wrap">
+              <Hotspot {...hs} />
+              <HotspotLabel hs={hs} />
+            </g>
           ))}
         </CalibrationSurface>
 

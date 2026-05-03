@@ -201,6 +201,7 @@ export function TestScenarioScreen() {
   // 地圖 pan / zoom
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ x: number; y: number; sl: number; st: number; moved: boolean } | null>(null);
+  const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
   const [zoom, setZoom] = useState(1);
 
   const append = (s: string) => setLog((l) => [...l.slice(-50), s]);
@@ -344,18 +345,45 @@ export function TestScenarioScreen() {
     v.scrollTop = d.st - dy * 1.5;
   };
   const onMapMouseUpOrLeave = () => { setTimeout(() => { dragRef.current = null; }, 0); };
+
+  // touch:1 指 pan / 2 指 pinch
+  const touchDist = (a: React.Touch, b: React.Touch) => {
+    const dx = a.pageX - b.pageX, dy = a.pageY - b.pageY;
+    return Math.hypot(dx, dy);
+  };
   const onMapTouchStart = (e: React.TouchEvent) => {
     const v = viewportRef.current; if (!v) return;
-    const t = e.touches[0];
-    dragRef.current = { x: t.pageX, y: t.pageY, sl: v.scrollLeft, st: v.scrollTop, moved: false };
+    if (e.touches.length === 2) {
+      // 雙指 pinch:存初始距離 + 當前 zoom
+      pinchRef.current = { dist: touchDist(e.touches[0], e.touches[1]), zoom };
+      dragRef.current = null;
+    } else if (e.touches.length === 1) {
+      // 單指 pan
+      const t = e.touches[0];
+      dragRef.current = { x: t.pageX, y: t.pageY, sl: v.scrollLeft, st: v.scrollTop, moved: false };
+      pinchRef.current = null;
+    }
   };
   const onMapTouchMove = (e: React.TouchEvent) => {
-    const v = viewportRef.current; const d = dragRef.current; if (!v || !d) return;
-    const t = e.touches[0];
-    const dx = t.pageX - d.x, dy = t.pageY - d.y;
-    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) d.moved = true;
-    v.scrollLeft = d.sl - dx * 1.5;
-    v.scrollTop = d.st - dy * 1.5;
+    const v = viewportRef.current; if (!v) return;
+    if (e.touches.length === 2 && pinchRef.current) {
+      // pinch 中:依雙指距離變化更新 zoom
+      e.preventDefault();
+      const d = touchDist(e.touches[0], e.touches[1]);
+      const ratio = d / pinchRef.current.dist;
+      const newZoom = Math.max(0.4, Math.min(2.5, pinchRef.current.zoom * ratio));
+      setZoom(newZoom);
+    } else if (e.touches.length === 1 && dragRef.current) {
+      const t = e.touches[0];
+      const dx = t.pageX - dragRef.current.x, dy = t.pageY - dragRef.current.y;
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) dragRef.current.moved = true;
+      v.scrollLeft = dragRef.current.sl - dx * 1.5;
+      v.scrollTop = dragRef.current.st - dy * 1.5;
+    }
+  };
+  const onMapTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length < 2) pinchRef.current = null;
+    if (e.touches.length === 0) setTimeout(() => { dragRef.current = null; }, 0);
   };
   const onMapWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -367,6 +395,22 @@ export function TestScenarioScreen() {
     const v = viewportRef.current; if (!v) return;
     v.scrollLeft = (v.scrollWidth - v.clientWidth) / 2;
     v.scrollTop = (v.scrollHeight - v.clientHeight) / 2;
+  }, []);
+
+  // iPad 雙指縮放與滑鼠滾輪縮放需 passive: false 才能 preventDefault
+  // 否則 iOS Safari 會走原生雙指縮放整個頁面
+  useEffect(() => {
+    const v = viewportRef.current; if (!v) return;
+    const nativeWheel = (e: WheelEvent) => { e.preventDefault(); };
+    const nativeTouch = (e: TouchEvent) => {
+      if (e.touches.length === 2) e.preventDefault();
+    };
+    v.addEventListener('wheel', nativeWheel, { passive: false });
+    v.addEventListener('touchmove', nativeTouch, { passive: false });
+    return () => {
+      v.removeEventListener('wheel', nativeWheel);
+      v.removeEventListener('touchmove', nativeTouch);
+    };
   }, []);
 
   // 地點點擊
@@ -415,7 +459,8 @@ export function TestScenarioScreen() {
             onMouseLeave={onMapMouseUpOrLeave}
             onTouchStart={onMapTouchStart}
             onTouchMove={onMapTouchMove}
-            onTouchEnd={onMapMouseUpOrLeave}
+            onTouchEnd={onMapTouchEnd}
+            onTouchCancel={onMapTouchEnd}
             onWheel={onMapWheel}
           >
             <div className="map-content">

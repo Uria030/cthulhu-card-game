@@ -196,9 +196,9 @@
   transform: translateY(-2px);
 }
 
-/* === 左上 UI 群組 === */
+/* === 左上 UI 群組(fixed 對齊 viewport)=== */
 .top-left-ui {
-  position: absolute;
+  position: fixed;
   top: var(--sp-md);
   left: var(--sp-md);
   display: flex;
@@ -302,9 +302,9 @@
   line-height: 1;
 }
 
-/* === Block 3 左下 1/4 圓 === */
+/* === Block 3 左下 1/4 圓(fixed 對齊 viewport,避開 zoom 影響)=== */
 .block-3-quarter {
-  position: absolute;
+  position: fixed;
   bottom: 0;
   left: 0;
   width: 250px;
@@ -515,9 +515,9 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
-/* === Block 5 右側敘事 LOG === */
+/* === Block 5 右側敘事 LOG(fixed 對齊 viewport)=== */
 .narrative-log {
-  position: absolute;
+  position: fixed;
   top: var(--sp-md);
   right: var(--sp-md);
   bottom: var(--sp-md);
@@ -609,9 +609,9 @@
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
-/* === 階段控制(浮在地圖中下方)=== */
+/* === 階段控制(浮在地圖中下方,fixed 對齊 viewport)=== */
 .phase-control {
-  position: absolute;
+  position: fixed;
   bottom: var(--sp-md);
   left: 50%;
   transform: translateX(-50%);

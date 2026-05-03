@@ -27,26 +27,33 @@
   pointer-events: none;
 }
 
-/* 信件 / 紙頁容器 */
+/* 信件 / 紙頁容器 — flex column,讓敘事區可內捲、footer 固定底 */
 .brief-paper {
   position: relative;
   z-index: 1;
-  max-width: 720px;
+  max-width: 1100px;
   width: 100%;
+  height: 100%;
   max-height: 100%;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: var(--world-aged-paper);
   color: var(--bg-primary);
   border: 8px solid var(--world-deep-walnut);
   box-shadow:
     inset 0 0 0 1px var(--world-antique-brass),
     0 16px 48px rgba(0, 0, 0, 0.8);
-  padding: var(--sp-xl);
+  padding: var(--sp-lg) var(--sp-xl);
   background-image:
     radial-gradient(ellipse at top left, rgba(92, 32, 24, 0.05), transparent 50%),
     radial-gradient(ellipse at bottom right, rgba(0, 0, 0, 0.08), transparent 50%),
     repeating-linear-gradient(0deg, transparent 0, transparent 24px, rgba(92, 32, 24, 0.025) 24px, rgba(92, 32, 24, 0.025) 25px);
 }
+
+.brief-header { flex: 0 0 auto; }
+.brief-meta { flex: 0 0 auto; }
+.brief-footer { flex: 0 0 auto; }
 
 .brief-header {
   text-align: center;
@@ -75,22 +82,30 @@
 }
 
 .brief-divider {
+  flex: 0 0 auto;
   border: none;
   border-top: 1px dashed var(--world-deep-walnut);
-  margin: var(--sp-lg) 0;
+  margin: var(--sp-md) 0;
   opacity: 0.4;
 }
 
-/* 敘事段落 — 用手寫字型營造信件感 */
+/* 敘事段落 — 撐剩餘高度,內容超量自己內捲 */
 .brief-narrative {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   font-family: 'Ma Shan Zheng', cursive;
   font-size: 19px;
-  line-height: 2.0;
+  line-height: 1.9;
   color: var(--world-deep-walnut);
   text-align: justify;
   padding: 0 var(--sp-md);
   font-style: italic;
+  scrollbar-width: thin;
+  scrollbar-color: var(--world-deep-walnut) transparent;
 }
+.brief-narrative::-webkit-scrollbar { width: 6px; }
+.brief-narrative::-webkit-scrollbar-thumb { background-color: var(--world-deep-walnut); border-radius: 3px; }
 .brief-narrative p {
   margin: 0 0 var(--sp-md) 0;
 }
@@ -107,7 +122,7 @@
 }
 
 .brief-footer {
-  margin-top: var(--sp-xl);
+  margin-top: var(--sp-md);
   display: flex;
   justify-content: space-between;
   align-items: center;

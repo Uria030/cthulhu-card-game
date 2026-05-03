@@ -133,7 +133,76 @@ E 魅力 charisma、I 智力 intellect、S 感知 perception、N 意志 willpowe
 | P 流影 | engineer | 反應 | 工兵×反應行動 |
 
 ### 違和即資產（v0.3 §11）
-E 號令×隨身武器、I 深淵×暗殺 這兩組配對的張力是**刻意保留**的設計資產，不是 bug——不要試圖「修正」成更直覺的配對。設計這些陣營的卡片時要把違和感寫進敘事（例：E 陣營的隨身武器卡可強調「領袖不必親自動手，但親自動手時展現真正的份量」）。
+E 號令×隨身武器、I 深淵×暗殺 這兩組配對的張力是**刻意保留**的設計資產，不是 bug——不要試圖「修正」成更直覺的配對。設計這些卡片時要把違和感寫進敘事（例：E 陣營的隨身武器卡可強調「領袖不必親自動手，但親自動手時展現真正的份量」）。
+
+## 三之一、戰鬥專精兩層級硬性對照（武器卡製作必讀，違反 = validator 攔截）
+
+> 本節是**最高權威**的武器歸類來源。任何 AI 在生成武器卡(包含調查員簽名武器卡)時,**必須先查本節對照表**,再決定 combat_style 與 proficiency。寧可不寫 proficiency,也不可寫錯 combat_style。
+> 上層權威:s08_axis_dual_combat_part1.md §2.1.4-2.1.5(層級體系)+ migration.ts L344-374(30 種代碼權威清單)
+
+### 第 1 層：8 種戰鬥風格 combat_style（重申硬規則）
+| code | 中文 | **絕對涵蓋的武器類別** |
+|---|---|---|
+| `shooting` | 槍枝射擊 | **任何能發射子彈的民用槍械**:手槍 / 左輪 / 步槍(含突擊步槍/卡賓槍/狙擊步槍) / 衝鋒槍 / 霰彈槍(含截短/軍規/泵動式霰彈槍) / 雙槍 |
+| `archery` | 弓術 | 長弓 / 短弓 / 十字弓 / 複合弓 / 弩 / 投擲武器(飛刀/標槍/擲斧) |
+| `sidearm` | 隨身武器 | **冷兵器/鈍器**:警棍 / 短刀 / 匕首 / 摺疊刀 / 指虎 / 拐杖 / 棒球棒 / 短劍 / 護身短刃 |
+| `military` | 軍用武器 | **重火力/爆裂物**:機槍(輕/重/通用) / 火焰噴射器 / 重型自動武器 / 榴彈發射器 / 反坦克武器(火箭筒/反器材槍) / 手榴彈 / **長柄武器(雙手戟/長矛)** / **雙手劍** |
+| `brawl` | 搏擊 | 徒手 / 拳套(布手套不算) / 格鬥術 / 摔技 / 空手道 |
+| `arcane` | 施法 | 法杖 / 魔典 / 符卷 / 儀式工具(spell_type 必填) |
+| `engineer` | 工兵 | 陷阱 / 地雷 / 手工改造武器 / 即興爆破 / 機械裝置 |
+| `assassin` | 暗殺 | 毒針 / 絞索 / 暗器 / 消音武器 / 投擲飛刀(偷襲用途) |
+
+### 第 2 層：30 種戰鬥專精 proficiency code（migration.ts L344-374 權威）
+> 寫 proficiency 欄位必填這 30 個代碼之一(或留空 null)。**禁止自創代碼**。
+
+| 戰鬥風格 | 4-5 個專精代碼(中文名) |
+|---|---|
+| **shooting**(4) | `shooting_rifle`(步槍)/ `shooting_smg`(衝鋒槍)/ `shooting_dual`(雙槍)/ `shooting_pistol`(手槍) |
+| **archery**(4) | `archery_hunter`(獵手)/ `archery_rapid`(連射)/ `archery_poison`(毒箭)/ `archery_silent`(無聲射手) |
+| **sidearm**(4) | `sidearm_dagger`(匕首術)/ `sidearm_parry`(護身格擋)/ `sidearm_blunt`(鈍擊)/ `sidearm_street`(街頭格鬥) |
+| **military**(4) | `military_twohanded`(雙手武器)/ `military_defense`(防禦架式)/ `military_dual`(雙持)/ `military_polearm`(長柄武器) |
+| **brawl**(3) | `brawl_tavern`(酒館鬥毆者)/ `brawl_wrestler`(摔角大師)/ `brawl_karate`(空手道) |
+| **arcane**(5) | `arcane_ritual`(儀式)/ `arcane_incantation`(咒語)/ `arcane_channeling`(引導)/ `arcane_meditation`(冥想)/ `arcane_alchemy`(煉金) |
+| **engineer**(3) | `engineer_demolition`(爆破)/ `engineer_trap`(陷阱)/ `engineer_mechanic`(機械) |
+| **assassin**(3) | `assassin_execute`(無聲處決)/ `assassin_ambush`(伏擊戰術)/ `assassin_hidden`(暗器) |
+
+### 武器名 → 必填 combat_style 與 proficiency 速查表（**寫卡前必查**）
+> 此表是「黑底紅線」級判定。任何 AI 寫含下列關鍵字的武器卡時,combat_style 欄位**只能填本表指定值**,違反會被 validator 即時拒收。
+
+| 武器名含關鍵字 | **必填 combat_style** | 建議 proficiency |
+|---|---|---|
+| 手槍 / 左輪 / 自動手槍 / 點 45 / .45 | `shooting` | `shooting_pistol` |
+| 步槍 / 突擊步槍 / 卡賓槍 / 狙擊步槍 / 來福 | `shooting` | `shooting_rifle` |
+| 衝鋒槍 / 湯姆森 / SMG | `shooting` | `shooting_smg` |
+| 霰彈槍 / 截短霰彈槍 / 軍規霰彈槍 / 泵動式 | `shooting` | `shooting_rifle` 或 `shooting_smg`(看設計取向) |
+| 雙槍 / 雙持手槍 | `shooting` | `shooting_dual` |
+| 長弓 / 短弓 / 弓 / 弩 / 十字弓 | `archery` | `archery_hunter` 等 |
+| 飛刀 / 擲斧 / 標槍 / 投擲(攻擊) | `archery` | `archery_silent` 等 |
+| 警棍 / 棒球棒 / 拐杖 / 鐵棍 / 鋼棍 | `sidearm` | `sidearm_blunt` |
+| 匕首 / 短刀 / 摺疊刀 / 短劍 / 短刃 | `sidearm` | `sidearm_dagger` |
+| 指虎 / 護身短刃 | `sidearm` | `sidearm_street` |
+| 機槍 / 火焰噴射器 / 榴彈 / 火箭筒 / 反器材 / 手榴彈 | `military` | `military_twohanded` 或 `military_polearm` |
+| 雙手劍 / 雙手斧 / 戰錘 / 長戟 / 長矛 | `military` | `military_twohanded` 或 `military_polearm` |
+| 拳套 / 拳擊 / 摔角 / 空手道 / 徒手 | `brawl` | `brawl_*` |
+| 法杖 / 魔典 / 符卷 / 召喚陣 / 儀式 | `arcane` | `arcane_*` |
+| 陷阱 / 地雷 / 改造武器 / 即興爆破 | `engineer` | `engineer_*` |
+| 毒針 / 絞索 / 消音(手槍以外) / 暗器 / 毒鏢 | `assassin` | `assassin_*` |
+
+### 三條鐵則(違反 = validator 拒收 + 重新生成)
+1. **「步槍 / 霰彈槍 / 手槍 / 衝鋒槍 / 左輪」開頭或結尾的卡名 → 必須 `combat_style = shooting`**(就算它聽起來「軍用」,只要它本質是發射子彈的單兵槍械,就是 shooting,不是 military)
+2. **`military` 留給「重火力/爆裂物/雙手大型冷兵器」**(機槍/火焰噴射器/榴彈/反坦克/長柄/雙手大劍),不給制式步兵槍械
+3. **`sidearm` 絕對不含任何槍械**——sidearm 是冷兵器專用,不是英文 side-arm(副手槍)
+
+### 陣營預設 vs 武器本體仲裁
+- 陣營預設(J=military、S=shooting)只是「該陣營傾向的戰鬥取向」,不是「該陣營的武器卡都必須是該 combat_style」
+- 寫 J 陣營卡:**首選機槍 / 火焰噴射器 / 榴彈 / 雙手劍 / 長柄武器**(本質是 military 的武器);若硬要寫步槍/霰彈槍,combat_style 必須改成 shooting,faction 仍可保留 J(陣營與 combat_style 正交)
+- 寫 S 陣營卡:首選手槍 / 步槍(本質是 shooting);若寫匕首則 combat_style=sidearm
+
+### 寫卡前自我檢查 SOP(必跑)
+1. 武器卡名想好後,**先在「武器名 → combat_style」速查表找關鍵字**
+2. 找到關鍵字 → 強制套用該 combat_style + 建議 proficiency
+3. 找不到關鍵字(罕見武器)→ 對照「8 種戰鬥風格涵蓋表」判定,並在 design_link 欄位註明「依 §三之一第 X 條判定」
+4. **生成 JSON 後重新讀一次**:卡名 vs combat_style 是否相符?
 
 ## 三之二、法術卡規格
 - 法術永遠命中，不擲骰，抽混沌袋決定副作用
@@ -251,19 +320,35 @@ stay, discard, long_rest, short_rest, removed
 - 寫完前自檢：全文 CJK 字符是否都是繁體版本
 
 ### 4.3.2 必須使用遊戲文件用詞（白名單）
-所有名詞必須使用本遊戲規則書（`packages/client/public/rulebook/`）已定義的用詞。**禁止程式術語**（tier、boss、minion、elite、damage、HP、SAN、DC 等英文）出現在玩家可見文字。
+所有名詞必須使用本遊戲規則書（`packages/client/public/rulebook/`）已定義的用詞。**禁止程式術語**(tier、boss、minion、elite、damage、HP、SAN、DC、shooting、archery、marked、weakened、Clue 等英文)出現在玩家可見文字。
 
-| 概念 | 正確用詞（必用） | 禁用 |
+| 概念 | 正確用詞(必用) | 禁用代碼/錯譯 |
 |---|---|---|
 | 怪物位階 | **雜兵 / 威脅 / 精英 / 頭目 / 巨頭** | tier 1-5、boss、minion、elite |
 | 怪物家族 | 克蘇魯眷族 / 哈斯塔眷族 / 莎布·尼古拉絲眷族 / 奈亞拉托提普眷族 / 猶格·索托斯眷族 / 克圖格亞眷族 / 伊格眷族 | family code、英文名 |
-| 八屬性 | 力量 / 智力 / 反射 / 體質 / 敏捷 / 意志 / 感知 / 魅力 | str / int / dex 等英文縮寫 |
-| 戰鬥風格 | 近戰 / 射擊 / 弓箭 / 軍械 / 暗殺 / 工程 / 法術 / 武術 | combat_style 代碼 |
-| 狀態 | 中毒 / 流血 / 燃燒 / 冷凍 / 發瘋 / 標記 / 護甲 / 護盾 / 強化 / 隱蔽 / 再生 / 脆弱 / 弱化 / 無力 / 沈默 / 繳械 / 疲勞 / 潮濕 / 毀滅 | poison / bleed / burn 等英文 |
+| 八屬性 | **力量 / 敏捷 / 體質 / 反應 / 智力 / 意志 / 感知 / 魅力** | strength / agility / constitution / reflex / intellect / willpower / perception / charisma |
+| 八陣營(寫陣營軸時必用中文) | **號令(E) / 深淵(I) / 鐵證(S) / 天啟(N) / 解析(T) / 聖燼(F) / 鐵壁(J) / 流影(P)** | 「另一張 E 陣營卡」→ 改寫「另一張『號令』陣營卡」 |
+| 戰鬥風格 8 種(對齊 §三) | **槍枝射擊(shooting) / 弓術(archery) / 隨身武器(sidearm) / 軍用武器(military) / 搏擊(brawl) / 施法(arcane) / 工兵(engineer) / 暗殺(assassin)** | shooting / archery / sidearm / military / brawl / arcane / engineer / assassin(代碼直接寫進玩家文字 = 違規) |
+| 戰鬥專精 30 種(常用) | 手槍 / 步槍 / 衝鋒槍 / 雙槍 / 獵手 / 連射 / 毒箭 / 無聲射手 / 匕首術 / 護身格擋 / 鈍擊 / 街頭格鬥 / 雙手武器 / 防禦架式 / 雙持 / 長柄武器 / 酒館鬥毆者 / 摔角大師 / 空手道 / 儀式 / 咒語 / 引導 / 冥想 / 煉金 / 爆破 / 陷阱 / 機械 / 無聲處決 / 伏擊戰術 / 暗器 | shooting_pistol / shooting_rifle / sidearm_dagger / arcane_ritual 等 30 個代碼直寫 |
+| 狀態 | 中毒 / 流血 / 燃燒 / 冷凍 / 發瘋 / **標記(不寫 marked)** / 護甲 / 護盾 / 強化 / 隱蔽 / 再生 / 脆弱 / **衰弱(不寫 weakened)** / 無力 / 沈默 / 繳械 / 疲勞 / 潮濕 / 毀滅 | marked / weakened / poison / bleed / burn / stunned / armored 等英文狀態名 |
+| 線索 | **線索** | Clue / clue |
 | 卡片類型 | 資產 / 事件 / 盟友 / 技能 | asset / event / ally / skill |
-| 數值單位 | 點傷害 / 點恐懼 / 點 HP / 點 SAN | 「N HP」「N SAN」「N damage」（除非作為標準縮寫如「智力 (DC 12) 檢定」） |
+| 威脅類型 3 種 | **精神侵蝕(mental) / 物質異變(physical) / 儀式詛咒(ritual)** | mental / physical / ritual 直寫 |
+| 法器破除時機 | **即時 / 檢定 / 儲蓄** | instant / test / stockpile 直寫 |
+| 數值單位 | 點傷害 / 點恐懼 / 點 HP / 點 SAN | 「N HP」「N SAN」「N damage」(除非作為標準縮寫如「智力 (DC 12) 檢定」) |
 | 凝聚力 | 凝聚力 | cohesion |
 | 團隊精神 | 團隊精神 / 深度 / 里程碑 | team spirit / depth / milestone |
+
+### 4.3.2.1 禁止英文 markup tag(硬規則)
+玩家可見文字(name_zh / desc_zh / play_effect / consume_effect / flavor_text / negative_effect / removal_condition 等)**禁止出現** `<` 與 `>` 包夾的英文標籤,例如:
+- ❌ `<action>` / `<reaction>` / `<combat>` / `<forced>` / `<ammo>` / `<passive>` / `<free_action>` / `<on_play>` / `<on_success>` / `<on_commit>` / `<before_take_damage>`
+- ✅ 改用中文方括號:【行動】【反應】【免費行動】【被動】【強制】【加值】(這些已是 s06 文法標準前綴)
+
+trigger_type 等系統欄位用代碼是合法的(那不是玩家文字),但**任何 description_zh / desc_zh 內絕對不可有 `<>` 英文 tag**。
+
+### 4.3.2.2 flavor_text 必須繁中
+flavor_text 是玩家可見的風味文字,**禁止整段英文**(例:CEAH-11 老虎酒館 flavor 是「A dimly lit corner where whispers of power are exchanged for cheap ale and forgotten loyalties.」就是違規 — 必須改為繁中)。
+即使 AI 翻譯能力強,生成時也應直接寫繁中,不要寫英文等待後續翻譯。
 
 ### 4.3.3 引用其他卡片或機制
 - 引用具體卡片時用**完整中文卡名**（含書名號 if 有），不寫 code（例：寫《空殼盟誓》而非 `EEAH-12`）
@@ -437,6 +522,40 @@ add_status 使用 stacks 欄位表示層數：{ "status": "burning", "stacks": 1
 3. **禁止將角色本人做成實體卡**:不要生成 name_zh='老警長' 的盟友卡
 4. **有系列感要求**:好的卡名軸必須能容納 5+ 張不同類型卡(資產/技能/事件/盟友)成完整 RPG 配置
 5. **避開過於通用**:「武器」「刑警」太泛,用具體角色名如「老警長」
+
+### 軸值嵌入卡名(硬規則,2026-05-03 加,違反會造成假卡名軸)
+
+**卡名軸內,「至少 50%」(N 張軸卡 → 必有 ⌈N/2⌉ 張)的 name_zh 必須含 primary_axis_value 字串**。這是「卡名軸」的字面意義 — 玩家要靠卡名識別軸,不靠隱形 tag。
+
+#### 命名公式(必用其中一種)
+- `{axis_value}的{物品}`:私家偵探的左輪 / 古籍商人的書架 / 老警長的徽章 / 酒館老闆的私釀酒
+- `{axis_value}的{技能名詞}`:古籍商人的鑑定 / 私家偵探的觀察
+- `{axis_value}的{盟友}`:老警長的副手 / 酒館老闆的常客
+- `{axis_value}的{場所}`:私家偵探的辦公桌 / 古籍商人的書店
+
+#### 反例(禁,即「假卡名軸」)
+- 軸值「古籍商人」搭配 6 張卡叫「沒招牌的書店 / 私人收藏典籍 / 暗號往來 / 鑑定為真 / 同好交換 / 收銀機的鋼刀」 — **0/6 含軸值**,玩家完全無法識別這些卡屬於同軸,軸標記變空殼
+- 軸值「禁忌學學者」搭配「牆角的研究室 / 學術會議邀請函 / 過期的研討會手稿…」— 同樣 0/6 含軸值
+
+#### 被指定軸值時的命名強制(MOD-11/MOD-02 等呼叫者必遵)
+- 當呼叫方傳入 `primary_axis_value='私家偵探'` 要求寫 N 張卡時,**所有 N 張卡的 name_zh 必須含「私家偵探」字串**(例:私家偵探的左輪 / 私家偵探的辦公桌 / 私家偵探的線人)
+- 此時不適用「至少 50%」規則,而是「100% 必含」 — 因為呼叫者已明確要求把這個軸做成「玩家代入這個職業原型」的整套牌
+
+### 同軸禁機制重複(硬規則)
+**一個 card_name 軸內,「同一機制不可超過 1 張」**。「同一機制」定義為:effect_code 相同 + 觸發時機類似 + 效果結果同類。
+
+#### 反例(禁)
+- 「禁忌學學者」軸 6 張卡裡有 4 張都是「從棄牌堆撿同軸卡到手牌」(牆角的研究室 / 學術會議邀請函 / 過期的研討會手稿 / 研究筆記)— 4 張同效冗餘卡
+- 「法醫」軸 4 張同效「從棄牌堆撿同軸卡」(解剖室 / 檔案調閱 / 舊案卷宗 / 採樣紀錄)
+- 「靈媒」軸 4 張同效
+
+#### 正確分工(每張卡承擔不同 pattern)
+- 中央資產 1 張:提供軸的「世界」+ 累積機制 / 觸發引擎
+- 武器 1 張:該角色慣用的武器(對應陣營 combat_style)
+- 盟友 1 張:角色的人脈
+- 技能 2-3 張:對應主屬性的檢定加值,觸發點各異(on_commit / on_success / on_fail)
+- 事件 1-2 張:角色的「行動」(突襲 / 通報 / 結案)
+- 法器 0-1 張(可選):對應陣營氣質
 
 ### 單卡禁掛 card_name 軸(硬規則)
 - 若此卡為單張孤立卡、DB 無其他同值卡呼應、也不預計成系列 → **禁止** primary_axis_layer='card_name'

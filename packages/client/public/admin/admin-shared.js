@@ -1550,3 +1550,198 @@ if (typeof document !== 'undefined') {
 window.getCurrentUserRole = getCurrentUserRole;
 window.hasMinRole = hasMinRole;
 window.applyRoleVisibility = applyRoleVisibility;
+
+// ─────────────────────────────────────────────────────────────────────────
+// 卡片預覽 modal(共用,任何 admin 頁面可呼叫 window.showCardPreviewModal(card))
+// 視覺克隆 MOD-01 的 .preview-card,但唯讀(無「套用到表單」按鈕)
+// ─────────────────────────────────────────────────────────────────────────
+
+function _ensureCardPreviewModalCSS() {
+  if (document.getElementById('cardPreviewModalCSS')) return;
+  const style = document.createElement('style');
+  style.id = 'cardPreviewModalCSS';
+  style.textContent = `
+    .cpm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 1rem; }
+    .cpm-card { width: 320px; max-width: 92vw; min-height: 460px; max-height: 92vh; overflow-y: auto; border: 2px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 1rem; font-size: 0.8125rem; display: flex; flex-direction: column; position: relative; }
+    .cpm-close { position: absolute; top: 6px; right: 8px; background: none; border: none; color: var(--text-secondary); font-size: 1.2rem; cursor: pointer; padding: 0 0.4rem; }
+    .cpm-close:hover { color: var(--gold); }
+    .cpm-meta { font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); padding: 0.35rem 0.5rem; margin: -0.5rem -0.5rem 0.5rem; background: var(--bg-primary); border-radius: 6px 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
+    .cpm-meta-label { color: var(--text-tertiary); }
+    .cpm-meta-val { color: var(--gold); font-weight: 500; }
+    .cpm-meta-sep { color: var(--text-tertiary); opacity: 0.5; }
+    .cpm-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; }
+    .cpm-cost { width: 36px; height: 36px; border-radius: 50%; background: var(--bg-primary); border: 2px solid var(--gold-dim); display: flex; align-items: center; justify-content: center; font-family: 'Cinzel', serif; font-size: 1.125rem; font-weight: 700; color: var(--gold); }
+    .cpm-faction { font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; padding: 0.15rem 0.5rem; border-radius: 4px; border: 1px solid; }
+    .cpm-name { text-align: center; margin-bottom: 0.25rem; }
+    .cpm-name-zh { font-family: 'Cinzel', serif; font-size: 1.125rem; color: var(--text-primary); font-weight: 600; }
+    .cpm-name-en { font-size: 0.6875rem; color: var(--text-tertiary); }
+    .cpm-type { text-align: center; font-size: 0.6875rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+    .cpm-axis { text-align: center; font-size: 0.6875rem; margin-bottom: 0.5rem; }
+    .cpm-axis-tag { display: inline-block; padding: 1px 6px; border-radius: 3px; color: #fff; font-size: 0.625rem; margin-right: 4px; }
+    .cpm-badges { display: flex; justify-content: center; gap: 0.25rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+    .cpm-badge { font-size: 0.5625rem; padding: 0.1rem 0.4rem; border-radius: 3px; font-weight: 500; }
+    .cpm-badge-signature { background: rgba(201,168,76,0.2); color: var(--gold); border: 1px solid var(--gold-dim); }
+    .cpm-badge-weakness { background: rgba(184,76,76,0.2); color: var(--danger); border: 1px solid var(--danger); }
+    .cpm-badge-revelation { background: rgba(123,78,163,0.2); color: var(--oracle); border: 1px solid var(--oracle); }
+    .cpm-divider { border: none; border-top: 1px solid var(--border); margin: 0.5rem 0; }
+    .cpm-uses { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+    .cpm-effects { font-size: 0.8125rem; color: var(--text-primary); line-height: 1.55; margin-bottom: 0.5rem; flex: 1; }
+    .cpm-effect { margin-bottom: 0.6rem; }
+    .cpm-effect:last-child { margin-bottom: 0; }
+    .cpm-effect-trigger { display: inline-block; font-size: 0.6rem; background: var(--bg-primary); color: var(--gold-dim); padding: 1px 6px; border-radius: 3px; margin-right: 4px; }
+    .cpm-flavor { font-style: italic; font-size: 0.75rem; color: var(--text-tertiary); line-height: 1.4; }
+    .cpm-bottom { display: flex; justify-content: space-around; padding-top: 0.5rem; border-top: 1px solid var(--border); margin-top: auto; }
+    .cpm-stat { text-align: center; }
+    .cpm-stat-val { font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 700; }
+    .cpm-stat-label { font-size: 0.625rem; color: var(--text-tertiary); }
+    .cpm-cs { font-size: 0.6875rem; color: var(--text-secondary); margin-bottom: 0.25rem; }
+    .cpm-attr { font-size: 0.6875rem; margin-bottom: 0.25rem; }
+    .cpm-commit { font-size: 0.625rem; color: var(--text-secondary); margin-top: 0.25rem; }
+  `;
+  document.head.appendChild(style);
+}
+
+function _cpmEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+const _CPM_AXIS_META = {
+  none:           { label: '無軸', color: '#555' },
+  faction:        { label: '陣營軸', color: '#4a6880' },
+  combat_style:   { label: '風格軸', color: '#5a7f4a' },
+  proficiency:    { label: '專精軸', color: '#8a6f3a' },
+  card_name:      { label: '卡名軸', color: '#9a4a4a' },
+  talisman_type:  { label: '法器軸', color: '#8a4a8a' },
+};
+
+function showCardPreviewModal(card) {
+  if (!card) return;
+  _ensureCardPreviewModalCSS();
+  const esc = _cpmEsc;
+
+  // 取陣營顏色與標籤
+  const fac = (typeof FACTIONS !== 'undefined' && FACTIONS[card.faction]) ? FACTIONS[card.faction] : null;
+  const facColor = fac?.color || '#888';
+  const facLabel = fac ? `${fac.zh} ${card.faction}` : (card.faction || '中立');
+
+  // type label
+  const typeLabel = (typeof CARD_TYPES !== 'undefined' && CARD_TYPES[card.card_type]) ? CARD_TYPES[card.card_type].zh : (card.card_type || '?');
+  const slotLabel = (card.card_type === 'asset' && typeof SLOTS !== 'undefined' && SLOTS[card.slot]) ? ` · ${SLOTS[card.slot].zh}` : '';
+
+  // axis tag
+  const axisLayer = card.primary_axis_layer || 'none';
+  const axisMeta = _CPM_AXIS_META[axisLayer] || _CPM_AXIS_META.none;
+  const axisVal = String(card.primary_axis_value || '').replace(/[『』「」]/g, '').trim();
+  const axisHtml = axisLayer === 'none'
+    ? `<span class="cpm-axis-tag" style="background:${axisMeta.color}">${axisMeta.label}</span><span style="color:var(--text-tertiary);">無軸</span>`
+    : `<span class="cpm-axis-tag" style="background:${axisMeta.color}">${axisMeta.label}</span><b>${esc(axisVal)}</b>`;
+
+  // badges
+  let badges = '';
+  if (card.is_signature) badges += '<span class="cpm-badge cpm-badge-signature">簽名</span>';
+  if (card.is_weakness) badges += '<span class="cpm-badge cpm-badge-weakness">弱點</span>';
+  if (card.is_revelation) badges += '<span class="cpm-badge cpm-badge-revelation">神啟</span>';
+  if (card.is_permanent) badges += '<span class="cpm-badge" style="background:#444;color:#ddd;">永久</span>';
+  if (card.is_extra) badges += '<span class="cpm-badge" style="background:#444;color:#ddd;">額外</span>';
+
+  // ammo / uses
+  const ammo = Number(card.ammo) || 0;
+  const uses = Number(card.uses) || 0;
+  const usesHtml = ammo > 0 ? `彈藥:${'◆'.repeat(ammo)}` : uses > 0 ? `使用次數:${'◆'.repeat(uses)}` : '';
+
+  // effects
+  const effects = Array.isArray(card.effects) ? card.effects : [];
+  const effectsHtml = effects.length === 0
+    ? '<span style="color:var(--text-tertiary);">無效果</span>'
+    : effects.map(e => {
+        const trig = e.trigger_type || e.trigger || '?';
+        const trigZh = (typeof TRIGGERS !== 'undefined' && TRIGGERS[trig]) ? TRIGGERS[trig].zh : trig;
+        const desc = e.description_zh || e.desc_zh || '';
+        return `<div class="cpm-effect"><span class="cpm-effect-trigger">${esc(trigZh)}</span>${esc(desc)}</div>`;
+      }).join('');
+
+  // flavor
+  const flavor = card.flavor_text ? `<i>「${esc(card.flavor_text)}」</i>` : '';
+
+  // bottom stats
+  const bottomStats = [];
+  if (card.card_type === 'skill' && card.skill_value) bottomStats.push({ val: card.skill_value, label: '加值' });
+  if (Number(card.damage) > 0) bottomStats.push({ val: card.damage, label: '傷害' });
+  if (Number(card.horror) > 0) bottomStats.push({ val: card.horror, label: '恐懼' });
+  if (card.card_type === 'ally') {
+    if (card.ally_hp != null) bottomStats.push({ val: card.ally_hp, label: '盟友HP' });
+    if (card.ally_san != null) bottomStats.push({ val: card.ally_san, label: '盟友SAN' });
+  }
+  const bottomHtml = bottomStats.length
+    ? bottomStats.map(s => `<div class="cpm-stat"><div class="cpm-stat-val">${esc(s.val)}</div><div class="cpm-stat-label">${esc(s.label)}</div></div>`).join('')
+    : '';
+
+  // combat_style label
+  const cs = card.combat_style;
+  const csLabel = (cs && typeof COMBAT_STYLES !== 'undefined' && COMBAT_STYLES[cs]) ? COMBAT_STYLES[cs].zh : cs;
+  const csHtml = csLabel ? `戰鬥風格:${esc(csLabel)}` : '';
+
+  // attribute mods
+  const am = card.attribute_modifiers || {};
+  const ATTR_ABBR = { strength:'力', agility:'敏', constitution:'體', reflex:'反', intellect:'智', willpower:'意', perception:'感', charisma:'魅', all:'萬' };
+  const amParts = [];
+  for (const [k, v] of Object.entries(am)) {
+    if (v == null || v === 0) continue;
+    const sign = v > 0 ? '+' : '';
+    amParts.push(`<span style="color:${v > 0 ? 'var(--success)' : 'var(--danger)'}">${ATTR_ABBR[k] || k}${sign}${v}</span>`);
+  }
+  const amHtml = amParts.length ? amParts.join(' ') : '';
+
+  // commit icons
+  const ci = card.commit_icons || {};
+  const ciParts = [];
+  for (const [k, v] of Object.entries(ci)) {
+    if (Number(v) > 0) ciParts.push(`[${ATTR_ABBR[k] || k}]×${v}`);
+  }
+  const ciHtml = ciParts.length ? `加值投入:${ciParts.join(' ')}` : '';
+
+  // build modal
+  let overlay = document.getElementById('cardPreviewModalOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'cardPreviewModalOverlay';
+    overlay.className = 'cpm-overlay';
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.style.display = 'none';
+    });
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div class="cpm-card" style="border-color:${facColor};">
+      <button class="cpm-close" onclick="document.getElementById('cardPreviewModalOverlay').style.display='none'">✕</button>
+      <div class="cpm-meta">
+        <span class="cpm-meta-label">代碼</span><span class="cpm-meta-val">${esc(card.code || '—')}</span>
+        ${card.starting_xp != null ? `<span class="cpm-meta-sep">·</span><span class="cpm-meta-label">★</span><span class="cpm-meta-val">${esc(card.starting_xp)}</span>` : ''}
+      </div>
+      <div class="cpm-top">
+        <div class="cpm-cost">${esc(card.cost ?? 0)}</div>
+        <div class="cpm-faction" style="border-color:${facColor};color:${facColor};">${esc(facLabel)}</div>
+      </div>
+      <div class="cpm-name">
+        <div class="cpm-name-zh">${esc(card.name_zh || '(無名)')}</div>
+        ${card.name_en ? `<div class="cpm-name-en">${esc(card.name_en)}</div>` : ''}
+      </div>
+      <div class="cpm-type">${esc(typeLabel)}${esc(slotLabel)}</div>
+      <div class="cpm-axis">${axisHtml}</div>
+      ${badges ? `<div class="cpm-badges">${badges}</div>` : ''}
+      <hr class="cpm-divider">
+      ${usesHtml ? `<div class="cpm-uses">${esc(usesHtml)}</div>` : ''}
+      <div class="cpm-effects">${effectsHtml}</div>
+      ${flavor ? `<hr class="cpm-divider"><div class="cpm-flavor">${flavor}</div>` : ''}
+      ${(csHtml || amHtml || ciHtml) ? `<hr class="cpm-divider">` : ''}
+      ${csHtml ? `<div class="cpm-cs">${csHtml}</div>` : ''}
+      ${amHtml ? `<div class="cpm-attr">${amHtml}</div>` : ''}
+      ${ciHtml ? `<div class="cpm-commit">${esc(ciHtml)}</div>` : ''}
+      ${bottomHtml ? `<div class="cpm-bottom">${bottomHtml}</div>` : ''}
+    </div>
+  `;
+  overlay.style.display = 'flex';
+}
+
+window.showCardPreviewModal = showCardPreviewModal;

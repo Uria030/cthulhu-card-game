@@ -87,6 +87,8 @@
       min-width: 70px;
     }
     .card-name-mini { flex: 1; }
+    .card-name-link { cursor: pointer; color: var(--text-primary); text-decoration: none; }
+    .card-name-link:hover { color: var(--gold); text-decoration: underline; }
     .card-meta-mini { color: var(--text-tertiary); font-size: 0.7rem; }
 
     .btn-to-mod12 {
@@ -341,7 +343,7 @@
         const cardList = g.cards.slice(0, 12).map(c => {
           const parts = [];
           parts.push('<span class="card-code-mini">' + escapeHtml(c.code || '?') + '</span>');
-          parts.push('<span class="card-name-mini">' + escapeHtml(c.name_zh || '(無名)') + '</span>');
+          parts.push('<span class="card-name-mini"><a class="card-name-link" data-card-id="' + escapeHtml(c.id || '') + '" title="點擊預覽">' + escapeHtml(c.name_zh || '(無名)') + '</a></span>');
           const meta = [];
           if (c.faction) meta.push('F=' + c.faction);
           if (c.style) meta.push(c.style);
@@ -388,6 +390,19 @@
 
       const listEl = document.getElementById('axisList');
       listEl.innerHTML = out.join('');
+      // 卡名點擊 → 預覽 modal(從 state.cards 撈完整卡資料)
+      listEl.querySelectorAll('a.card-name-link[data-card-id]').forEach(link => {
+        link.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          const id = ev.currentTarget.dataset.cardId;
+          const card = state.cards.find(c => c.id === id);
+          if (card && typeof window.showCardPreviewModal === 'function') {
+            window.showCardPreviewModal(card);
+          } else {
+            console.warn('[axis] 找不到卡或 showCardPreviewModal 未載入', id);
+          }
+        });
+      });
       listEl.querySelectorAll('.btn-to-mod12[data-hint]').forEach(btn => {
         btn.addEventListener('click', (ev) => {
           const hint = decodeURIComponent(ev.currentTarget.dataset.hint || '');

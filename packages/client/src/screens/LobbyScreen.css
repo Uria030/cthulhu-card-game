@@ -39,6 +39,23 @@
   object-fit: contain;
 }
 
+/* 熱區形狀本身永久顯示成 badge 樣式(深底 + 金邊),非僅 hover 時 */
+.lobby-root g[data-hotspot-id] > rect,
+.lobby-root g[data-hotspot-id] > ellipse,
+.lobby-root g[data-hotspot-id] > polygon {
+  fill: rgba(13, 13, 20, 0.85) !important;
+  stroke: rgba(184, 137, 61, 0.9) !important;
+  stroke-width: 1.5 !important;
+  transition: fill 0.2s, stroke 0.2s;
+}
+.lobby-root g[data-hotspot-id] > rect:hover,
+.lobby-root g[data-hotspot-id] > ellipse:hover,
+.lobby-root g[data-hotspot-id] > polygon:hover {
+  fill: rgba(34, 34, 58, 0.95) !important;
+  stroke: var(--herald) !important;
+  stroke-width: 2 !important;
+}
+
 @keyframes lobbyEnter {
   from { opacity: 0; transform: scale(1.02); }
   to { opacity: 1; transform: scale(1); }

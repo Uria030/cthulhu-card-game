@@ -29,39 +29,26 @@ function hotspotCentroid(hs: HotspotData): { cx: number; cy: number } {
   return { cx: 0, cy: 0 };
 }
 
-// 熱區可見標籤(永久顯示,純視覺,pointer-events:none 不擋熱區點擊)
+// 熱區可見標籤(文字直接浮在熱區形狀上,背景由熱區形狀本身上色 — CSS 覆蓋)
 function HotspotLabel({ hs }: { hs: HotspotData }) {
   const { cx, cy } = hotspotCentroid(hs);
-  const label = hs.label;
-  const tooltip = hs.tooltip;
-  // 估算 badge 寬:label + tooltip 較長那一行 × 字寬
-  const longest = Math.max(label.length, tooltip.length);
-  const w = Math.max(120, longest * 14 + 24);
-  const h = 52;
   return (
-    <g pointer-events="none" transform={`translate(${cx - w / 2}, ${cy - h / 2})`}>
-      <rect
-        x={0} y={0} width={w} height={h}
-        rx={4} ry={4}
-        fill="rgba(13, 13, 20, 0.85)"
-        stroke="rgba(184, 137, 61, 0.9)"
-        strokeWidth={1.5}
-      />
+    <g pointer-events="none" transform={`translate(${cx}, ${cy})`}>
       <text
-        x={w / 2} y={20}
+        x={0} y={-4}
         textAnchor="middle"
         fill="#C9A84C"
-        style={{ font: '700 14px "Noto Serif TC", serif', letterSpacing: '0.05em' }}
+        style={{ font: '700 14px "Noto Serif TC", serif', letterSpacing: '0.05em', paintOrder: 'stroke', stroke: 'rgba(13,13,20,0.9)', strokeWidth: 3 }}
       >
-        {label}
+        {hs.label}
       </text>
       <text
-        x={w / 2} y={40}
+        x={0} y={16}
         textAnchor="middle"
         fill="#E8E4D9"
-        style={{ font: '400 12px "Noto Sans TC", sans-serif' }}
+        style={{ font: '400 12px "Noto Sans TC", sans-serif', paintOrder: 'stroke', stroke: 'rgba(13,13,20,0.9)', strokeWidth: 3 }}
       >
-        {tooltip}
+        {hs.tooltip}
       </text>
     </g>
   );

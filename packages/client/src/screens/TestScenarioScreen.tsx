@@ -195,6 +195,8 @@ export function TestScenarioScreen() {
   const [panel, setPanel] = useState<PanelType>(null);
   const [locationBarId, setLocationBarId] = useState<string | null>(null);
   const [logCollapsed, setLogCollapsed] = useState(false);
+  const [systemMenuOpen, setSystemMenuOpen] = useState(false);
+  const [systemSub, setSystemSub] = useState<null | 'settings' | 'rules'>(null);
 
   // 地圖 pan / zoom
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -309,6 +311,7 @@ export function TestScenarioScreen() {
   // ─── 浮層互動 ──────────────────
   const closeAllOverlays = useCallback(() => {
     setModal(null); setPanel(null); setLocationBarId(null);
+    setSystemMenuOpen(false); setSystemSub(null);
   }, []);
 
   const openModal = (t: ModalType) => { closeAllOverlays(); setModal(t); };
@@ -398,9 +401,6 @@ export function TestScenarioScreen() {
 
   return (
     <div className="bg-root">
-      {/* 隱藏的返回鈕(右上角不阻擋) */}
-      <button className="bg-back-fab" onClick={() => navigate('/departure')} title="返回出發板">←</button>
-
       <div className="battle-screen">
 
         {/* === Block 4 底層滿版地圖 === */}
@@ -686,6 +686,68 @@ export function TestScenarioScreen() {
                 </li>
               ))}
             </ul>
+          </div>
+        </div>
+      )}
+
+      {/* === 右下系統按鈕 + 浮動選單 === */}
+      <button
+        className="system-fab"
+        onClick={() => setSystemMenuOpen((v) => !v)}
+        title="系統選單"
+      >
+        <span className="system-icon">⚙</span>
+        <span>系統</span>
+      </button>
+
+      {systemMenuOpen && (
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 25 }}
+            onClick={() => setSystemMenuOpen(false)}
+          />
+          <div className="system-menu" onClick={(e) => e.stopPropagation()}>
+            <button className="system-menu-item" onClick={() => setSystemMenuOpen(false)}>
+              ▶ 繼續遊戲
+            </button>
+            <div className="system-menu-divider" />
+            <button className="system-menu-item" onClick={() => { setSystemMenuOpen(false); setSystemSub('settings'); }}>
+              ⚙ 設定
+            </button>
+            <button className="system-menu-item" onClick={() => { setSystemMenuOpen(false); setSystemSub('rules'); }}>
+              📖 遊戲規則
+            </button>
+            <div className="system-menu-divider" />
+            <button
+              className="system-menu-item danger"
+              onClick={() => {
+                if (confirm('確定要回到主選單嗎?目前進度將會遺失。')) navigate('/');
+              }}
+            >
+              ⌂ 回主選單
+            </button>
+          </div>
+        </>
+      )}
+
+      {systemSub && (
+        <div className="system-sub-modal" onClick={(e) => { if (e.target === e.currentTarget) setSystemSub(null); }}>
+          <div className="system-sub-frame">
+            <button className="close-btn" onClick={() => setSystemSub(null)}>✕</button>
+            {systemSub === 'settings' && (
+              <>
+                <h3>⚙ 設定</h3>
+                <p>畫面、音效、文字大小、操作偏好等設定 — 待開發。</p>
+                <p style={{ marginTop: 12, color: 'var(--text-tertiary)', fontSize: 12 }}>(M-Settings 里程碑接入)</p>
+              </>
+            )}
+            {systemSub === 'rules' && (
+              <>
+                <h3>📖 遊戲規則</h3>
+                <p>調查員階段規則、混沌袋判定、戰鬥流程、地點互動 ... — 待從 docs/ 注入規則總覽。</p>
+                <p style={{ marginTop: 12, color: 'var(--text-tertiary)', fontSize: 12 }}>(M-Rulebook 里程碑接入)</p>
+              </>
+            )}
           </div>
         </div>
       )}

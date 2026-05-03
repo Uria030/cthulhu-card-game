@@ -28,6 +28,8 @@
   height: 100vh;
   overflow: hidden;
   position: relative;
+  /* 整體 UI 縮 90%(Safari/Chrome 通用,單一 token 控制比例) */
+  zoom: 0.9;
 }
 
 .bg-root h1, .bg-root h2, .bg-root h3, .bg-root h4, .bg-root p, .bg-root ul {
@@ -35,28 +37,135 @@
   padding: 0;
 }
 
-.bg-back-fab {
+/* === 右下「系統」按鈕 + 浮動選單 === */
+.system-fab {
   position: fixed;
-  top: var(--sp-md);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 30;
-  background: rgba(13, 13, 20, 0.7);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
+  bottom: var(--sp-md);
+  right: var(--sp-md);
+  z-index: 25;
+  background: rgba(19, 19, 31, 0.85);
+  backdrop-filter: blur(4px);
+  color: var(--warning);
+  border: 1px solid var(--world-antique-brass);
   border-radius: var(--r-pill);
-  width: 36px;
-  height: 36px;
+  padding: var(--sp-sm) var(--sp-md);
   cursor: pointer;
-  font-size: 16px;
+  font-family: var(--font-headline);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  transition: all 0.2s var(--ease-paper);
+  user-select: none;
+}
+.system-fab:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  transform: translateY(-2px);
+}
+.system-fab .system-icon { font-size: 16px; }
+
+.system-menu {
+  position: fixed;
+  bottom: calc(var(--sp-md) + 56px);
+  right: var(--sp-md);
+  z-index: 26;
+  background: rgba(19, 19, 31, 0.96);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--world-antique-brass);
+  border-radius: var(--r-soft);
+  padding: var(--sp-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: system-menu-in 0.25s var(--ease-paper);
+}
+@keyframes system-menu-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.system-menu-item {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  text-align: left;
+  padding: var(--sp-sm) var(--sp-md);
+  font-family: var(--font-headline);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: var(--r-subtle);
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.system-menu-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--warning);
+}
+.system-menu-item.danger { color: var(--text-secondary); }
+.system-menu-item.danger:hover { color: var(--danger); }
+.system-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* 系統子選單 modal(設定/遊戲規則,簡易 placeholder)*/
+.system-sub-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 13, 20, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 27;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-typewriter);
-  opacity: 0.6;
-  transition: opacity 0.2s;
 }
-.bg-back-fab:hover { opacity: 1; }
+.system-sub-frame {
+  background: var(--bg-secondary);
+  border: 2px solid var(--world-antique-brass);
+  border-radius: var(--r-soft);
+  padding: var(--sp-xl);
+  max-width: 520px;
+  width: 90%;
+  max-height: 70vh;
+  overflow-y: auto;
+  position: relative;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+}
+.system-sub-frame h3 {
+  font-family: var(--font-headline);
+  color: var(--warning);
+  font-size: 22px;
+  margin-bottom: var(--sp-md);
+  letter-spacing: 0.1em;
+}
+.system-sub-frame p {
+  line-height: 1.7;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.system-sub-frame .close-btn {
+  position: absolute;
+  top: var(--sp-sm);
+  right: var(--sp-md);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: var(--r-pill);
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.system-sub-frame .close-btn:hover { color: var(--warning); border-color: var(--warning); }
 
 .battle-screen {
   position: relative;

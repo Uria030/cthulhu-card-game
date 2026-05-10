@@ -23,6 +23,36 @@
 - 接到「跑 storyXX.txt」「建一條戰役」「驗證後台全綠」這類任務
 - 修改 MOD-06/07/08 的完整性檢查邏輯 / migration 028 / campaigns 表結構
 
+## 專案結構圖譜(graphify 知識圖譜)
+
+**位置:** `C:\Ug\graphify-out\`(可擴充,目前一份)
+
+**目前圖譜:** 2026-05-07 建,scope = `cthulhu-card-game/` 排除 `old/`
+- **報告(必讀):** `C:\Ug\graphify-out\GRAPH_REPORT.md`
+  1182 節點 / 2352 邊 / 97 社群人話命名,涵蓋:
+  - **God Nodes** 跨群最連的核心抽象(adminFetch / adminGet / scanSimplifiedChars / requireGeminiKey / callGemini / 規則書 v07 索引)
+  - **Surprising Connections** 圖譜偵測到的非顯式連結(`packages/client/public/rulebook/` 是 `docs/v07_當前版本_26042606/` 的雙寫鏡像)
+  - **Communities** 97 個社群命名(DB 啟動與遷移 / Sandbox 投資者卡批次 / 校準前端套件 / 規則書核心機制 / 卡名軸與設計憲法 / Pipeline 量產 driver 等)
+  - **Knowledge Gaps** 107 個 weakly-connected 節點分類(規範索引覆蓋盲點線索)
+- **互動圖(視覺探索):** `C:\Ug\graphify-out\graph.html`(瀏覽器開,點節點看連結)
+- **原始 JSON(程式查詢):** `C:\Ug\graphify-out\graph.json`
+
+**用途:** 跨 session 維持專案整體認知。接任務時先 query 圖譜定位節點 / 所屬 community,再讀必要原檔,token 壓縮比 ~110×。
+
+**主動查圖譜的情境:**
+- Uria 提到沒見過的模組名 / 概念 / 卡片類型 → 看屬哪個 community
+- 「改 X 會影響哪些 Y」類問題 → 看 God Nodes + 跨群橋接(bridges)
+- 評估規範索引覆蓋盲點 → 看 Knowledge Gaps + Suggested Questions
+
+**已知限制(讀圖時心理打折):**
+- `packages/shared` 跨 package import 沒被 AST 抓到,tests + types 顯示為孤兒(假性)
+- `read-cred-and-login.mjs` 被 sensitive filter 誤擋(下次 update 應放回)
+- 規範索引部分子節點反向 cite 弱(真孤兒,GRAPH_REPORT A 類 Tier 3)
+
+**重跑時機:**
+- 增量(只重抽變更檔,~1/10 成本):`/graphify cthulhu-card-game --update`
+- 完整重建(~1M tokens):`/graphify cthulhu-card-game`
+
 ## 技術決策
 - Monorepo：pnpm workspaces
 - 前端：React + TypeScript + Vite → Vercel

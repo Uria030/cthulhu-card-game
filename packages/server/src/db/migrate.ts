@@ -3101,6 +3101,28 @@ END $m030_calc$;
 `;
 
 // ============================================
+// Migration 031: 分支限定鎖（天賦樹卡名軸的獲取資格鎖）
+// 依據:《天賦樹創作規範 v0.1 · Part 4》§7.3.1
+// - talent_branch_lock 為 NULL 表示一般卡片,不受天賦分支鎖定
+// - 不為 NULL 時格式為 <faction_code>_<branch_index>(例:`E_1` = E 號令樹分支 1)
+// - 鎖定生效於:探索卡庫購買 / 場景探索撿取 / 鍛造製作(由前後端分別校驗)
+// - 與 s11 §6.2 天賦等級鎖疊加運作:玩家獲取分支限定卡需同時滿足陣營天賦等級鎖 + 分支限定鎖
+// ============================================
+export const MIGRATION_031_SQL = `
+ALTER TABLE card_definitions ADD COLUMN IF NOT EXISTS talent_branch_lock VARCHAR(8) NULL;
+
+CREATE INDEX IF NOT EXISTS idx_card_talent_branch_lock
+  ON card_definitions(talent_branch_lock)
+  WHERE talent_branch_lock IS NOT NULL;
+
+-- 格式校驗:NULL 或 ^[EISNTFJP]_[123]$
+ALTER TABLE card_definitions DROP CONSTRAINT IF EXISTS chk_talent_branch_lock_format;
+ALTER TABLE card_definitions ADD CONSTRAINT chk_talent_branch_lock_format CHECK (
+  talent_branch_lock IS NULL OR talent_branch_lock ~ '^[EISNTFJP]_[123]$'
+) NOT VALID;
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -3294,6 +3316,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_028', MIGRATION_028_SQL);
     await runOne('MIGRATION_029', MIGRATION_029_SQL);
     await runOne('MIGRATION_030', MIGRATION_030_SQL);
+    await runOne('MIGRATION_031', MIGRATION_031_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

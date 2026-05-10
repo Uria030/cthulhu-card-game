@@ -382,6 +382,35 @@
                 <div class="check-row"><input type="checkbox" id="f_is_extra" onchange="onExtraChange()"><label for="f_is_extra">額外卡 — 放額外牌組、僅能透過【反應】或【行動】從額外牌組打出（可支付費用）</label></div>
               </div>
             </div>
+            <!-- 分支限定鎖（天賦樹卡名軸獲取資格鎖,規範 Part 4 §7.3-7.4）-->
+            <div class="form-grid" style="margin-top:0.5rem;">
+              <div class="form-group">
+                <label>分支限定鎖 — 陣營</label>
+                <select id="f_branch_lock_faction" onchange="onBranchLockChange()">
+                  <option value="">無</option>
+                  <option value="E">E 號令</option>
+                  <option value="I">I 深淵</option>
+                  <option value="S">S 鐵證</option>
+                  <option value="N">N 天啟</option>
+                  <option value="T">T 解析</option>
+                  <option value="F">F 聖燼</option>
+                  <option value="J">J 鐵壁</option>
+                  <option value="P">P 流影</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>分支限定鎖 — 分支序號</label>
+                <select id="f_branch_lock_index" onchange="onBranchLockChange()">
+                  <option value="">無</option>
+                  <option value="1">分支 1</option>
+                  <option value="2">分支 2</option>
+                  <option value="3">分支 3</option>
+                </select>
+              </div>
+              <div class="form-group full">
+                <div class="hint" id="branchLockHint" style="font-size:0.85rem;color:var(--text-tertiary);">未設定分支限定鎖（一般卡片，所有調查員可獲取）</div>
+              </div>
+            </div>
             <!-- Signature sub-fields -->
             <div id="signatureFields" class="hidden">
               <div class="form-grid" style="margin-top:0.5rem;">
@@ -1515,6 +1544,48 @@
     updatePreview();
   }
 
+  /* ─── 分支限定鎖（天賦樹卡名軸,規範 Part 4 §7.4.1） ─── */
+  function onBranchLockChange() {
+    const f = el('f_branch_lock_faction')?.value || '';
+    const i = el('f_branch_lock_index')?.value || '';
+    const hint = el('branchLockHint');
+    if (!hint) return;
+    if (f && i) {
+      const factionLabel = ({ E: 'E 號令', I: 'I 深淵', S: 'S 鐵證', N: 'N 天啟', T: 'T 解析', F: 'F 聖燼', J: 'J 鐵壁', P: 'P 流影' })[f] || f;
+      hint.textContent = `已鎖定 ${factionLabel} 樹分支 ${i}（talent_branch_lock = "${f}_${i}"）— 此卡只有走過該分支的調查員可獲取`;
+      hint.style.color = 'var(--text-secondary)';
+    } else if (f && !i) {
+      hint.textContent = '⚠ 已選陣營但未選分支序號 — 提交時會視為「無鎖」（兩者皆需選擇）';
+      hint.style.color = 'var(--warning, #c5a04a)';
+    } else if (!f && i) {
+      hint.textContent = '⚠ 已選分支序號但未選陣營 — 提交時會視為「無鎖」（兩者皆需選擇）';
+      hint.style.color = 'var(--warning, #c5a04a)';
+    } else {
+      hint.textContent = '未設定分支限定鎖（一般卡片，所有調查員可獲取）';
+      hint.style.color = 'var(--text-tertiary)';
+    }
+    updatePreview();
+  }
+  function collectBranchLock() {
+    const f = el('f_branch_lock_faction')?.value || '';
+    const i = el('f_branch_lock_index')?.value || '';
+    if (f && i) return `${f}_${i}`;
+    return null;
+  }
+  function loadBranchLock(value) {
+    const fSel = el('f_branch_lock_faction');
+    const iSel = el('f_branch_lock_index');
+    if (!fSel || !iSel) return;
+    if (value && /^[EISNTFJP]_[123]$/.test(value)) {
+      fSel.value = value.charAt(0);
+      iSel.value = value.charAt(2);
+    } else {
+      fSel.value = '';
+      iSel.value = '';
+    }
+    onBranchLockChange();
+  }
+
   function loadPrimaryAxis(c) {
     const sel = el('f_primary_axis_layer');
     if (!sel) return;
@@ -1741,6 +1812,7 @@
     el('f_is_revelation').checked = !!c.is_revelation;
     if (el('f_is_permanent')) el('f_is_permanent').checked = !!c.is_permanent;
     if (el('f_is_extra')) el('f_is_extra').checked = !!c.is_extra;
+    if (typeof loadBranchLock === 'function') loadBranchLock(c.talent_branch_lock || null);
     el('f_owner_investigator').value = c.owner_investigator || '';
     el('f_removable').checked = !!c.removable;
     el('f_committable').checked = !!c.committable;
@@ -1819,6 +1891,7 @@
       is_revelation: el('f_is_revelation').checked,
       is_permanent: el('f_is_permanent')?.checked || false,
       is_extra: el('f_is_extra')?.checked || false,
+      talent_branch_lock: typeof collectBranchLock === 'function' ? collectBranchLock() : null,
       owner_investigator: el('f_owner_investigator').value.trim() || null,
       removable: el('f_removable').checked,
       committable: el('f_committable').checked,

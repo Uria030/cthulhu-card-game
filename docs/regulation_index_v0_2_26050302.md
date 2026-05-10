@@ -91,19 +91,24 @@ s 專項規範(s01-s14)                   ← 高(s11-s13 V 值公式覆蓋 ch3 
 | **s11-s13_card_upgrade_v1** | **V 值線性公式(★0=0 至 ★5=-5V) + 5 點配額硬上限** — 玩家側為主,神話卡 V 公式對齊 |
 | **s14_encounter_card_spec_part1-4** | **遭遇卡規範草案 v0.1**(在 `C:/Ug/docs/`,4 份)— 四類威脅(含 meta)/ 五維框架 / 紅線五條 / 修飾關鍵字 / 句型範本 / 雙 DV / JSON Schema / 22 案例 |
 
-### §2.4 城主 / 神話卡規範(草案層,中)
+### §2.4 城主 / 神話卡 / 怪物規範(草案層,中)
 
 | 檔 | 路徑 | 管什麼 |
 |---|---|---|
 | **keeper_ai_regulation v0.2** | `docs/keeper_ai_regulation_v0_2_26050202.md` | §1 七大類動作 / §3 10 主軸動作 sequence / §4 神話卡庫四維度需求 30-38 張 / §5 遭遇卡庫 7 個遭遇集 34-43 張 / §7 schema 擴充 / §9 與 s14 引用矩陣 |
 | **regulation_mythos v0.1** | `scripts/mod-agent-local/keeper-cards/regulation_mythos.md` | **神話卡單卡設計權威** 17 章:七大類 / open-hand 合約(reusable/cooldown/連動觸發)/ 紅線六 / action_code 標準清單 / 啟用句型 / DV 公式 / 13 項驗證清單 |
 | **READING_GUIDE v0.1** | `scripts/mod-agent-local/keeper-cards/READING_GUIDE.md` | 城主卡 sub-agent 閱讀指引(本索引的下一層精細版) |
+| **s14 怪物設計草案 v0.1**(4 part)| `c:\Ug\docs\s14_monster_design_part1~4_*.md` | **怪物設計憲法**:五大設計維度(威脅形狀 / 對抗開放度 / 家族風味標記 / 位階張力 / 反差留白)/ 八眷族風味卡 / 15 種反差手法 / Schema-prompt-checklist 操作清單 |
+| **s14 命名補充 v0.1** | `c:\Ug\docs\s14_monster_design_supplement_naming_v0_1.md` | **命名分層級語彙紀律**:三段式命名(前綴+物種+後綴)/ 六階各自可用+禁用語彙池 / 11 家族特色詞池 / 4 個跨位階演進範例 / 「位階虛標」最終測試 / Gemini prompt 模板 |
+| **s14 行為腳本補充 v0.1** | `c:\Ug\docs\s14_monster_design_supplement_behavior_script_v0_1.md` | **行為腳本系統**(出招模式):六種模式(pure_random/weighted/conditional/phase_based/scripted_chain/ritual_sequence)× 位階預設 / 10 種觸發條件語法 / 6 個跨位階範例 / 多形態系統整合 / phase_rules JSONB 內容協議(對齊 s14_decisions §7 拍板) |
+| **s14_decisions 拍板補丁** | `c:\Ug\docs\s14_decisions_26050701.md` | **權威高於 s14 v0.1**。Uria 4 項拍板:外神=tag/萬象=tag/七威脅形狀平行 keeper_ai 四類威脅/機制卡=encounter 子類 |
 
 ### §2.5 生產線規範(本機 only,中)
 
 | 檔 | 路徑 | 管什麼 |
 |---|---|---|
 | **pipeline-story-to-stage regulation** | `scripts/mod-agent-local/pipeline-story-to-stage/regulation.md` | 12 點規範主檔:讀故事抽 outline / 寫戰役 / 寫地點 hidden_info / 綁三池 / 子 Agent 呼叫表(§13)|
+| **regulation_monster v0.1** | `scripts/mod-agent-local/monsters/regulation_monster.md` | **怪物量產操作手冊**(連接 s14 設計憲法到 monster_variants schema):必讀清單 / 欄位對照 / 紅線(神秘鐵則 + 黑名單 + 五紅線 + 換皮判定)/ JSONB 內容協議(keywords / phase_rules / legendary_actions / environment_effects)/ driver 流程 |
 
 ### §2.6 admin 既有 prompt 模組(本機在地化字典)
 
@@ -123,7 +128,7 @@ s 專項規範(s01-s14)                   ← 高(s11-s13 V 值公式覆蓋 ch3 
 |---|---|---|---|---|
 | MOD-01 | 卡片設計器(玩家卡)| `admin-card-designer.html` | 批次寫玩家卡(走 admin-card-prompt.js + geminiDirectClient,**已成熟生產線**) | s03/s04 卡片規格 + s06 文法 + s11-13 V 公式 + admin-card-prompt.js §4 |
 | MOD-02 | 天賦樹管理 | `admin-talent-skill.html` | 批次寫天賦卡 / 天賦樹節點 | s05 八派系 + 天賦樹 schema(migrate.ts MIGRATION_005~007) |
-| MOD-03 | 敵人設計器 | `admin-enemy-designer.html` | 批次寫怪物 family / species / variant / attack_card | **s01 13 family**(權威)+ 怪物 schema(MIGRATION_004) |
+| MOD-03 | 敵人設計器 | `admin-enemy-designer.html` | 批次寫怪物 family / species / variant / attack_card(**Gemini 對接驗證完成 26050701,driver 已寫 dry-run 通過**)| **s14 part1-4**(設計憲法)+ **s14_decisions**(拍板)+ **regulation_monster**(操作手冊)+ s01 13 family + 怪物 schema(migrate.ts MIGRATION_010,5 表)|
 | MOD-04 | 團隊精神管理 | `admin-team-spirit.html` | 批次寫 32 種團隊精神(已 Agent 化完成) | `project_mod_04_done` 記憶 + 團隊精神 V 表 |
 | MOD-05 | 戰鬥風格與專精 | `admin-proficiency.html` | 批次寫 30 種專精 | s09 雙軸戰鬥 part2(8 戰鬥風格 + 30 專精)+ s10 |
 | MOD-06 | 戰役敘事設計器 | `admin-campaign.html` | 批次寫戰役 / 章節骨架 / 旗標 / outcome | **pipeline-story-to-stage/regulation.md**(12 點規範主檔)+ ch5 場景系統 |
@@ -139,7 +144,8 @@ s 專項規範(s01-s14)                   ← 高(s11-s13 V 值公式覆蓋 ch3 
 **已成熟 Gemini 生產線**(可抄):
 - MOD-01 玩家卡批次:`packages/client/public/admin/admin-ai-tasks/geminiDirectClient.js + admin-card-prompt.js`
 - pipeline 階段 0 故事抽 outline:`scripts/mod-agent-local/pipeline-story-to-stage/00-parse-and-outline.mjs`
-- MOD-10 城主卡對接(本次 session 驗證):`scripts/mod-agent-local/keeper-cards/test-gemini-mythos.mjs`(test 腳本,正式 driver 待 fork)
+- MOD-10 城主卡批次:`scripts/mod-agent-local/keeper-cards/run-batch-mythos.mjs + run-batch-encounter.mjs`(已對接驗證 + 正式 driver)
+- **MOD-03 怪物量產**:`scripts/mod-agent-local/monsters/run-batch-monster.mjs`(對接驗證 26050701,dry-run 通過,可加 `--post` 入庫)
 
 **待 Gemini 化的生產線**(技術債):
 - pipeline-story-to-stage 階段 10 戰役 / 階段 20 地點 / 階段 30 stage 三池綁定 — 目前用腳本內 heuristic
@@ -269,13 +275,26 @@ s 專項規範(s01-s14)                   ← 高(s11-s13 V 值公式覆蓋 ch3 
 | s07_faction_narrative(地點氛圍 ↔ 陣營氣質)| 01_rulebook_ch1 |
 | location_style_tags 既有 seed(MIGRATION_???)| h05(混沌袋對地點觸發)|
 
-### §4.7 寫怪物 family / species / variant / attack_card(MOD-03)
+### §4.7 寫怪物 family / species / variant / attack_card(MOD-03,**已 master file 化**)
 
-| 必讀 | 可選 |
+**怪物變體(monster_variants)**:
+
+| 必讀(全文) | 可選(按需引用) |
 |---|---|
-| **s01_monster_family**(權威 13 family)| keeper_ai_regulation v0.2 §3(主軸召喚需求)|
-| 既有 admin-enemy-designer.html 邏輯 | s14 紅線一/二(strength × 章節)|
-| s06_card_text_style(命名 / 攻擊文)| s09 三威脅(physical/mental/ritual)|
+| **`scripts/mod-agent-local/monsters/master_monster_design.md`**(13 章節濃縮 master,~14k chars,driver 唯一入口)| s14 part 1-4 / 命名補充 / 行為腳本補充 / decisions(原 source,master 已抽精華,有疑義時回查)|
+| **`regulation_monster.md`**(操作手冊,連接 schema)| s01_monster_family(原家族骨架)|
+| `s06_card_text_style`(命名 / 攻擊文 / 簡繁) | admin-card-prompt.js §4(術語黑名單,master §1 已含)|
+| **driver**: `test-gemini-monster.mjs`(階段 2 試跑)+ `run-batch-monster.mjs`(階段 3 量產,dry-run 預設,加 `--post` 入庫)| — |
+
+**怪物招式卡(monster_attack_cards)** — 與戰鬥風格卡同源 4 份 attack_card 規範:
+
+| 必讀(全文) | 可選(按需引用) |
+|---|---|
+| **`scripts/mod-agent-local/monsters/master_attack_card.md`**(14 章節濃縮 master,~22k chars)| 4 份 `regulation_attack_card_part1-3` 原 source(master 已抽精華)|
+| **`regulation_attack_card.md`**(操作手冊,連接 monster_attack_cards schema) | s14 行為腳本補充(weight 配置)|
+| **driver**: `test-gemini-attack-card.mjs`(階段 2)+ `run-batch-attack-card.mjs`(階段 3)| — |
+
+**重要**:Gemini 呼叫一律走 `lib/cost-guard.mjs` 的 `guardedCallGemini`。改 prompt 重跑前先用 `node scripts/mod-agent-local/lib/estimate-prompt.mjs <pipeline>` 預估成本,prompt 過 80k chars 自動 abort(過去成功 baseline 38k chars 的 2× 餘裕)。
 
 ### §4.8 寫天賦樹 / 天賦卡(MOD-02)
 
@@ -285,12 +304,18 @@ s 專項規範(s01-s14)                   ← 高(s11-s13 V 值公式覆蓋 ch3 
 | s05_faction_pillars(每派系主屬性 / 戰鬥風格)| s07_faction_narrative |
 | MIGRATION_005~007 schema | s09-s10 雙軸戰鬥 |
 
-### §4.9 寫戰鬥風格與專精(MOD-05)
+### §4.9 寫戰鬥風格卡(MOD-05,**已 master file 化**)
 
-| 必讀 | 可選 |
+`combat_style_cards` 與怪物招式卡(MOD-03 §4.7)是「同機制一體兩面」(玩家擲攻 vs 怪物擲攻),共用 4 份 attack_card 規範。
+
+| 必讀(全文) | 可選(按需引用) |
 |---|---|
-| **s09_axis_dual_combat_part2 + s10_part3**(8 風格 + 30 專精權威)| s11-s13 V 公式 |
-| s05_faction_pillars(派系 ↔ 風格配對)| ch4 成長系統 |
+| **`scripts/mod-agent-local/combat-styles/master_combat_style.md`**(11 章節濃縮 master,~14k chars)| 4 份 `regulation_attack_card_part1-3` 原 source(master 已抽精華)|
+| **`regulation_combat_style.md`**(操作手冊,連接 combat_style_cards schema) | s09_axis_dual_combat_part2 + s10_part3(8 風格 + 30 專精權威,master §9 已抽精華)|
+| s05_faction_pillars(派系 ↔ 風格配對) | s11-s13 V 公式 |
+| **driver**: `test-gemini-combat-style.mjs`(階段 2)+ `run-batch-combat-style.mjs`(階段 3)| — |
+
+**重要**:Gemini 呼叫一律走 `guardedCallGemini`(同 §4.7 紀律)。
 
 ### §4.10 寫鍛造詞條 / 素材 / 配方(MOD-09)
 
@@ -306,13 +331,20 @@ s 專項規範(s01-s14)                   ← 高(s11-s13 V 值公式覆蓋 ch3 
 | `project_mod_04_done` 記憶(核心設計原則 + V 表)| keeper_ai_regulation v0.2 |
 | ch4 成長系統 | s11-s13 V 公式 |
 
-### §4.12 寫調查員模板 / 簽名卡 / 弱點 / 預組牌組(MOD-11)
+### §4.12 寫調查員模板 / 簽名卡 / 弱點 / 預組牌組(MOD-11,**已 master file 化**)
 
-| 必讀 | 可選 |
+兩階段 pipeline:**階段 a 核心設計**(personality / backstory / 屬性 / 能力 / 簽名卡 / 弱點)+ **階段 d 預組牌組**(從派系池挑 13 張)。
+
+| 必讀(全文) | 可選(按需引用) |
 |---|---|
-| s05_faction_pillars + s07_faction_narrative(每派系主屬性 / 動機)| ch4 成長系統 |
-| MIGRATION_013 + MIGRATION_019 + MIGRATION_030(若有)schema | s11-s13 V 公式 |
-| admin-card-prompt.js §4(術語對照)| ch3 卡片系統(預組牌組組成)|
+| **`scripts/mod-agent-local/investigator-cards/master_investigator.md`**(17 章節濃縮 master,~13k chars)| s14 investigator part 1-4 原 source(master 已抽精華)|
+| **`regulation_investigator.md`**(操作手冊,連接 schema)| MIGRATION_013 + MIGRATION_019 + MIGRATION_030 schema |
+| s05_faction_pillars(派系主屬性) | s07_faction_narrative(派系動機)/ ch4 成長系統 / s11-s13 V 公式 |
+| **driver**: `test-gemini-investigator.mjs MBTI-CAREER`(階段 2 試跑單個)+ `run-batch-investigators.mjs CODES`(階段 3 量產)| — |
+
+**已成功 baseline**:INTJ-1~4(私家偵探 / 靈媒 / 密碼學家 / 退役軍官)+ ENTJ-1(公司高管,2026-05-08 master 化試跑驗證)。剩餘 60 個 MBTI 殼待量產。
+
+**重要**:Gemini 呼叫一律走 `guardedCallGemini`(同 §4.7 紀律)。MOD-11 是兩階段 pipeline,單個調查員實際成本 ~$0.08(stageA + stageD)。
 
 ### §4.13 一般批次量產(若沒在上面對照表)
 
@@ -345,6 +377,13 @@ s 專項規範(s01-s14)                   ← 高(s11-s13 V 值公式覆蓋 ch3 
 
 7. **如果你是品質主管(Claude)**:啟動量產生產線前,一律先讀 SKILL `skill_quality_lead_for_gemini_production_v0_1.md`,該 SKILL 是本索引的執行手冊。
 
+8. **master file 模式紀律(2026-05-08 立)** — 嚴禁 readFileSync 多份 source 全文塞 prompt。任何 Gemini 量產 / 試跑 driver 必走:
+   - **prompt = 1 份 master file + DB 動態清單 + brief**(不是 N 份 source 全文)
+   - **master file 目標 30-40k bytes / ~14k chars**(對標過去成功 admin-card-prompt 的 38k 字 template)
+   - **callGemini 必須包 `scripts/mod-agent-local/lib/cost-guard.mjs` 的 `guardedCallGemini`**(prompt > 80k chars 自動 abort + 寫 .cost-log.jsonl)
+   - **重跑迭代前用 `scripts/mod-agent-local/lib/estimate-prompt.mjs <pipeline>` 估 prompt 大小**,確認在 baseline 量級才花錢
+   - 違反 = 跨 200k context 進貴檔燒錢撞 quota cap(2026-05-07 失誤教訓,4 條 pipeline 全部重構為 master file 模式)
+
 ---
 
 ## §6 本索引維護紀錄
@@ -353,5 +392,8 @@ s 專項規範(s01-s14)                   ← 高(s11-s13 V 值公式覆蓋 ch3 
 |---|---|---|
 | v0.1 | 26050301 | 初版 — 涵蓋規則書 / h / s / 草案 / 本機生產線 / admin 既有 prompt 模組,任務類型對照含寫神話卡 / 遭遇卡 / 關卡 |
 | v0.2 | 26050302 | 擴張到全專案:§2.7 全 MOD 模組對照(MOD-01~14 + AXIS)/ §3 在地化字典擴(戰鬥風格 / 法器 / 章節 / 鍛造 / 團隊精神 / 天賦樹)/ §4 任務對照擴 13 類(覆蓋 MOD-01 ~ MOD-12) |
+| v0.2.1 | 26050701 | 整合 MOD-03 怪物量產 pipeline:§2.4 加 s14 設計憲法 + s14_decisions 拍板補丁;§2.5 加 regulation_monster 操作手冊;§2.7 MOD-03 行加規範來源 + driver 路徑;§4.7 寫怪物對照升級為 6 列(設計憲法 / 拍板補丁 / 操作手冊 / s01 骨架 / s06 文法 / driver 入口) |
+| v0.2.2 | 26050702 | 加 s14 命名補充 + 行為腳本補充:§2.4 多兩條補充文件;§4.7 加命名 + 行為腳本兩列必讀;regulation_monster §2.5 加位階虛標紀律 + §2.6 加行為腳本紀律(出招模式 × 位階預設、phase_rules JSONB 協議、禁止組合) |
+| v0.2.3 | 26050801 | **master file 模式立(教訓:2026-05-07 把多份 source 全文塞 prompt → 跨 200k context 撞 quota cap)**:4 條 pipeline 重構為 1 份 master + DB 動態清單 + brief,加 cost-guard 守門。§4.7 怪物變體 / 招式卡分兩段重寫;§4.9 戰鬥風格卡升級為 master file;§4.12 調查員(MOD-11)升級為 master file 兩階段 pipeline;§5 加第 8 條 master file 紀律。新檔:`master_monster_design.md` / `master_attack_card.md` / `master_combat_style.md` / `master_investigator.md` / `lib/cost-guard.mjs` / `lib/estimate-prompt.mjs` |
 
 未來新增規範文件 / 新生產線時,補進 §2 對應分類 + §4 任務對照,版本號遞增。

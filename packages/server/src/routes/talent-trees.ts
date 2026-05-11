@@ -134,9 +134,20 @@ export const talentTreeRoutes: FastifyPluginAsync = async (app) => {
       } finally {
         client.release();
       }
-    } catch (error) {
+    } catch (error: any) {
       request.log.error(error, 'Import talent-trees error');
-      return reply.status(500).send({ success: false, error: 'Failed to import' });
+      return reply.status(500).send({
+        success: false,
+        error: 'Failed to import',
+        dbError: {
+          code: error.code || null,
+          message: error.message || String(error),
+          detail: error.detail || null,
+          column: error.column || null,
+          constraint: error.constraint || null,
+          table: error.table || null,
+        },
+      });
     }
   });
 

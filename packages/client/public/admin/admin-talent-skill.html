@@ -241,7 +241,7 @@
             <div class="form-group"><label>解鎖專精類型</label><select id="ne_proficiency" onchange="markNodeDirty()"></select></div>
           </div>
           <div id="neCardSection" style="display:none">
-            <div class="form-group"><label>綁定天賦卡代碼</label><div class="form-row"><input id="ne_card_code" style="flex:1" oninput="markNodeDirty()"><button class="btn" onclick="searchTalentCards()" style="padding:0.3rem 0.5rem;font-size:0.75rem">搜尋卡片</button></div></div>
+            <div class="form-group"><label>綁定天賦卡代碼</label><div class="form-row"><input id="ne_card_code" style="flex:1" oninput="markNodeDirty()"><button class="btn" onclick="previewBoundCard()" style="padding:0.3rem 0.5rem;font-size:0.75rem" title="預覽當前綁定的卡">預覽</button><button class="btn" onclick="searchTalentCards()" style="padding:0.3rem 0.5rem;font-size:0.75rem">搜尋卡片</button></div></div>
           </div>
 
           <!-- Effects -->
@@ -783,16 +783,111 @@ async function markNodeComplete() {
   setTimeout(() => openNodeEditor(saved), 50);
 }
 
-// ── Talent card search ──
-async function searchTalentCards() {
+// ── Talent card search + preview ──
+//  「綁定天賦卡代碼」旁「預覽」按鈕 — 讀 input 卡 code → 抓 /api/cards → 開 modal
+async function previewBoundCard() {
+  const code = (el('ne_card_code').value || '').trim();
+  if (!code) { alert('請先填入或選擇卡代碼'); return; }
   try {
-    const res = await adminFetch(`/api/cards?slot=talent&faction=${currentFaction}`);
+    const res = await adminFetch(`/api/cards?search=${encodeURIComponent(code)}`);
     const data = await res.json();
-    if (!data.success || !data.data.length) { alert('找不到天賦卡'); return; }
-    const list = data.data.map(c => `${c.code}: ${c.name_zh}`).join('\n');
-    const code = prompt('選擇天賦卡代碼：\n\n' + list);
-    if (code) { el('ne_card_code').value = code.split(':')[0].trim(); markNodeDirty(); }
-  } catch (e) { alert('搜尋失敗'); }
+    const list = Array.isArray(data) ? data : (data.data || []);
+    const card = list.find(c => c.code === code);
+    if (!card) { alert(`找不到卡 ${code}`); return; }
+    if (window.showCardPreviewModal) window.showCardPreviewModal(card);
+    else alert('預覽元件未載入(admin-shared.js 缺)');
+  } catch (e) { alert('讀取卡失敗:' + e.message); console.error(e); }
+}
+
+// 搜尋卡片 picker:列出該樹相關候選卡(含軸內卡 talent_branch_lock=faction_*)+ 點預覽 + 點選綁定
+//  關閉 picker:點遮罩 / 按 Esc / 點關閉
+async function searchTalentCards() {
+  let candidates = [];
+  try {
+    // 先撈 slot=talent + 該樹 faction 的卡
+    const r1 = await adminFetch(`/api/cards?slot=talent&faction=${currentFaction}`);
+    const d1 = await r1.json();
+    if (d1.success && Array.isArray(d1.data)) candidates = candidates.concat(d1.data);
+    // 再撈 talent_branch_lock 該樹的軸內卡
+    const r2 = await adminFetch(`/api/cards`);
+    const d2 = await r2.json();
+    const all = Array.isArray(d2) ? d2 : (d2.data || []);
+    const branchLocked = all.filter(c => (c.talent_branch_lock || '').startsWith(`${currentFaction}_`));
+    // 合併去重
+    const seen = new Set(candidates.map(c => c.code));
+    for (const c of branchLocked) if (!seen.has(c.code)) { candidates.push(c); seen.add(c.code); }
+  } catch (e) { alert('搜尋失敗:' + e.message); console.error(e); return; }
+
+  if (candidates.length === 0) { alert(`找不到 ${currentFaction} 樹相關卡`); return; }
+  _openCardPicker(candidates);
+}
+
+// picker overlay(輕量,複用 admin-shared 的 modal 顏色變數)
+function _openCardPicker(cards) {
+  // 已存在則先關
+  const existing = document.getElementById('tcardPickerOverlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'tcardPickerOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9000;display:flex;align-items:center;justify-content:center;padding:1rem;';
+
+  const panel = document.createElement('div');
+  panel.style.cssText = 'background:var(--bg-card);border:1px solid var(--border);border-radius:10px;width:560px;max-width:92vw;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;';
+  panel.innerHTML = `
+    <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:0.5rem">
+      <span style="font-family:'Cinzel',serif;color:var(--gold);flex:1">選擇天賦卡(${cards.length} 張)</span>
+      <input id="_tcardFilter" placeholder="搜尋名稱/代碼..." style="flex:1;padding:0.3rem 0.5rem;font-size:0.8125rem">
+      <button class="btn" onclick="document.getElementById('tcardPickerOverlay').remove()" style="padding:0.25rem 0.6rem">關閉</button>
+    </div>
+    <div id="_tcardList" style="flex:1;overflow-y:auto;padding:0.5rem"></div>
+  `;
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  const renderList = (q) => {
+    const ql = (q || '').toLowerCase();
+    const filtered = !ql ? cards : cards.filter(c =>
+      (c.code || '').toLowerCase().includes(ql) || (c.name_zh || '').toLowerCase().includes(ql) || (c.name_en || '').toLowerCase().includes(ql)
+    );
+    const list = document.getElementById('_tcardList');
+    list.innerHTML = filtered.map(c => {
+      const lock = c.talent_branch_lock ? `<span style="background:rgba(201,168,76,0.15);color:var(--gold);padding:1px 5px;border-radius:3px;font-size:0.6875rem;margin-left:4px">${c.talent_branch_lock}</span>` : '';
+      const perm = c.is_permanent ? '<span style="font-size:0.6875rem;color:var(--gold-dim)">⛓永久</span>' : '';
+      const extra = c.is_extra ? '<span style="font-size:0.6875rem;color:var(--oracle)">＋額外</span>' : '';
+      return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.5rem;border-bottom:1px solid var(--border);">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.875rem">${c.name_zh || '?'}${lock} ${perm} ${extra}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:0.6875rem;color:var(--text-tertiary)">${c.code} · ${c.card_type || '?'} · cost ${c.cost ?? 0}</div>
+        </div>
+        <button class="btn" onclick="_tcardPreview('${c.code}')" style="padding:0.2rem 0.5rem;font-size:0.75rem">預覽</button>
+        <button class="btn btn-primary" onclick="_tcardChoose('${c.code}')" style="padding:0.2rem 0.5rem;font-size:0.75rem">綁定</button>
+      </div>`;
+    }).join('');
+    if (filtered.length === 0) list.innerHTML = '<div style="padding:1rem;color:var(--text-tertiary);text-align:center">無相符卡片</div>';
+  };
+  renderList('');
+  document.getElementById('_tcardFilter').addEventListener('input', e => renderList(e.target.value));
+
+  // 暫存 candidates 給 _tcardPreview / _tcardChoose 用
+  window._tcardCandidates = cards;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  const escHandler = (e) => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escHandler); } };
+  document.addEventListener('keydown', escHandler);
+}
+
+function _tcardPreview(code) {
+  const c = (window._tcardCandidates || []).find(x => x.code === code);
+  if (!c) { alert('找不到該卡'); return; }
+  if (window.showCardPreviewModal) window.showCardPreviewModal(c);
+  else alert('預覽元件未載入');
+}
+
+function _tcardChoose(code) {
+  el('ne_card_code').value = code;
+  markNodeDirty();
+  const overlay = document.getElementById('tcardPickerOverlay');
+  if (overlay) overlay.remove();
 }
 
 // ══════════════════════════════════════════

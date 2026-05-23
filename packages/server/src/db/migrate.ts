@@ -3183,6 +3183,23 @@ WHERE v.move_pool = '[]'::jsonb OR v.move_pool IS NULL;
 `;
 
 // ============================================
+// MIGRATION_034:戰鬥風格卡兩層化(MOD-05)
+//   - spec_code:第二層專精卡綁定的專精(第一層 style 池 spec_code 留 NULL)
+//   - card_tier:1=第一層戰鬥熟練池(主屬性 50-60%)/ 2=第二層戰鬥專精收斂池(主 65-75% + 1-2 收斂非主)
+//   既有 64 張第一層卡 card_tier 預設 1、spec_code NULL
+// ============================================
+export const MIGRATION_034_SQL = `
+ALTER TABLE combat_style_cards ADD COLUMN IF NOT EXISTS spec_code VARCHAR(64);
+ALTER TABLE combat_style_cards ADD COLUMN IF NOT EXISTS card_tier INTEGER NOT NULL DEFAULT 1;
+
+ALTER TABLE combat_style_cards DROP CONSTRAINT IF EXISTS chk_csc_card_tier;
+ALTER TABLE combat_style_cards ADD CONSTRAINT chk_csc_card_tier CHECK (card_tier IN (1, 2)) NOT VALID;
+
+CREATE INDEX IF NOT EXISTS idx_csc_spec ON combat_style_cards(spec_code) WHERE spec_code IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_csc_tier ON combat_style_cards(card_tier);
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -3379,6 +3396,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_031', MIGRATION_031_SQL);
     await runOne('MIGRATION_032', MIGRATION_032_SQL);
     await runOne('MIGRATION_033', MIGRATION_033_SQL);
+    await runOne('MIGRATION_034', MIGRATION_034_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

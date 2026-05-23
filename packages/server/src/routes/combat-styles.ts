@@ -98,16 +98,17 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
         if (Array.isArray(item.style_cards)) {
           for (const sc of item.style_cards) {
             await client.query(`
-              INSERT INTO combat_style_cards (style_id, code, name_zh, name_en, check_attribute, narrative_attack_zh, narrative_attack_en, narrative_success_zh, narrative_success_en, narrative_fail_zh, narrative_fail_en)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+              INSERT INTO combat_style_cards (style_id, code, name_zh, name_en, check_attribute, narrative_attack_zh, narrative_attack_en, narrative_success_zh, narrative_success_en, narrative_fail_zh, narrative_fail_en, spec_code, card_tier)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
               ON CONFLICT (code) DO UPDATE SET
                 name_zh = EXCLUDED.name_zh, name_en = EXCLUDED.name_en,
                 check_attribute = EXCLUDED.check_attribute,
                 narrative_attack_zh = EXCLUDED.narrative_attack_zh, narrative_attack_en = EXCLUDED.narrative_attack_en,
                 narrative_success_zh = EXCLUDED.narrative_success_zh, narrative_success_en = EXCLUDED.narrative_success_en,
                 narrative_fail_zh = EXCLUDED.narrative_fail_zh, narrative_fail_en = EXCLUDED.narrative_fail_en,
+                spec_code = EXCLUDED.spec_code, card_tier = EXCLUDED.card_tier,
                 updated_at = NOW()
-            `, [styleId, sc.code, sc.name_zh, sc.name_en, sc.check_attribute || null, sc.narrative_attack_zh || null, sc.narrative_attack_en || null, sc.narrative_success_zh || null, sc.narrative_success_en || null, sc.narrative_fail_zh || null, sc.narrative_fail_en || null]);
+            `, [styleId, sc.code, sc.name_zh, sc.name_en, sc.check_attribute || null, sc.narrative_attack_zh || null, sc.narrative_attack_en || null, sc.narrative_success_zh || null, sc.narrative_success_en || null, sc.narrative_fail_zh || null, sc.narrative_fail_en || null, sc.spec_code || null, sc.card_tier || 1]);
           }
         }
 
@@ -367,14 +368,16 @@ export const combatStyleRoutes: FastifyPluginAsync = async (app) => {
           style_id, code, name_zh, name_en, check_attribute,
           narrative_attack_zh, narrative_attack_en,
           narrative_success_zh, narrative_success_en,
-          narrative_fail_zh, narrative_fail_en
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          narrative_fail_zh, narrative_fail_en,
+          spec_code, card_tier
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING *
       `, [
         styleId, code, b.name_zh, b.name_en, b.check_attribute || null,
         b.narrative_attack_zh || null, b.narrative_attack_en || null,
         b.narrative_success_zh || null, b.narrative_success_en || null,
         b.narrative_fail_zh || null, b.narrative_fail_en || null,
+        b.spec_code || null, b.card_tier || 1,
       ]);
 
       await client.query('COMMIT');

@@ -3151,6 +3151,38 @@ CREATE INDEX IF NOT EXISTS idx_attack_family_code ON monster_attack_cards(family
 `;
 
 // ============================================
+// MIGRATION_033：方式庫模型資料回填(冪等)
+//   - 既有招式卡分類 method_scope(variant-owned→signature / species-owned→family)+ family_code
+//   - 既有變體 move_pool 由現有擁有關係回填(species 共享招 + 該變體專屬招),保留現有招式池
+//   只回填空值(method_scope IS NULL / move_pool='[]'),重跑不覆蓋已調整過的資料
+// ============================================
+export const MIGRATION_033_SQL = `
+-- 1. 招式卡分類 + family_code(由擁有者反查家族)
+UPDATE monster_attack_cards ac SET
+  method_scope = COALESCE(ac.method_scope,
+    CASE WHEN ac.variant_id IS NOT NULL THEN 'signature'
+         WHEN ac.species_id IS NOT NULL THEN 'family' END),
+  family_code = COALESCE(ac.family_code, fam.code)
+FROM monster_families fam
+WHERE fam.id = COALESCE(
+  (SELECT sp.family_id FROM monster_species sp WHERE sp.id = ac.species_id),
+  (SELECT sp.family_id FROM monster_species sp JOIN monster_variants v ON v.species_id = sp.id WHERE v.id = ac.variant_id)
+)
+AND (ac.method_scope IS NULL OR ac.family_code IS NULL);
+
+-- 2. 變體 move_pool 回填:species 共享招(variant_id IS NULL)+ 該變體專屬招
+UPDATE monster_variants v SET move_pool = (
+  SELECT COALESCE(
+    jsonb_agg(jsonb_build_object('code', ac.code, 'weight', ac.weight) ORDER BY ac.sort_order, ac.code),
+    '[]'::jsonb)
+  FROM monster_attack_cards ac
+  WHERE (ac.species_id = v.species_id AND ac.variant_id IS NULL)
+     OR ac.variant_id = v.id
+)
+WHERE v.move_pool = '[]'::jsonb OR v.move_pool IS NULL;
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -3346,6 +3378,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_030', MIGRATION_030_SQL);
     await runOne('MIGRATION_031', MIGRATION_031_SQL);
     await runOne('MIGRATION_032', MIGRATION_032_SQL);
+    await runOne('MIGRATION_033', MIGRATION_033_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

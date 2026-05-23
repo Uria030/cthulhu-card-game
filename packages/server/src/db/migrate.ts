@@ -3123,6 +3123,34 @@ ALTER TABLE card_definitions ADD CONSTRAINT chk_talent_branch_lock_format CHECK 
 `;
 
 // ============================================
+// MIGRATION_032：MOD-03 招式卡改為「跨怪共用方式庫」模型
+//   - 招式卡可無主(純方式庫,以 code 為鍵)
+//   - monster_variants.move_pool 引用方式 code(跨怪沿用)
+//   - method_scope 三層:universal 通用 / family 家族 / signature 專屬(設計原則 26052301)
+//   - family_code 供方式庫依家族瀏覽沿用
+// ============================================
+export const MIGRATION_032_SQL = `
+-- 1. 放寬 owner 約束:招式卡可無主(純方式庫)
+ALTER TABLE monster_attack_cards DROP CONSTRAINT IF EXISTS chk_attack_card_owner;
+
+-- 2. 怪物變體以 move_pool 引用方式(跨怪沿用的關鍵),形如 [{"code":"atk_xxx","weight":10}]
+ALTER TABLE monster_variants ADD COLUMN IF NOT EXISTS move_pool JSONB NOT NULL DEFAULT '[]';
+
+-- 3. 方式三層分類 + 家族歸屬(供方式庫瀏覽/沿用篩選)
+ALTER TABLE monster_attack_cards ADD COLUMN IF NOT EXISTS method_scope VARCHAR(16);
+ALTER TABLE monster_attack_cards ADD COLUMN IF NOT EXISTS family_code VARCHAR(32);
+
+ALTER TABLE monster_attack_cards DROP CONSTRAINT IF EXISTS chk_attack_method_scope;
+ALTER TABLE monster_attack_cards ADD CONSTRAINT chk_attack_method_scope CHECK (
+  method_scope IS NULL OR method_scope IN ('universal','family','signature')
+) NOT VALID;
+
+-- 4. 方式庫常用查詢索引
+CREATE INDEX IF NOT EXISTS idx_attack_method_scope ON monster_attack_cards(method_scope) WHERE method_scope IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_attack_family_code ON monster_attack_cards(family_code) WHERE family_code IS NOT NULL;
+`;
+
+// ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
 const CHINESE_DIGITS_ARR = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -3317,6 +3345,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_029', MIGRATION_029_SQL);
     await runOne('MIGRATION_030', MIGRATION_030_SQL);
     await runOne('MIGRATION_031', MIGRATION_031_SQL);
+    await runOne('MIGRATION_032', MIGRATION_032_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

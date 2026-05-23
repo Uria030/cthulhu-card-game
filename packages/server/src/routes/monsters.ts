@@ -125,8 +125,8 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
           narrative_attack_zh, narrative_attack_en,
           narrative_hit_zh, narrative_hit_en,
           narrative_miss_zh, narrative_miss_en,
-          sort_order
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+          sort_order, method_scope, family_code
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
         RETURNING *
       `, [
         b.species_id || null, b.variant_id || null, b.code, b.name_zh, b.name_en,
@@ -137,15 +137,46 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
         b.narrative_attack_zh || null, b.narrative_attack_en || null,
         b.narrative_hit_zh || null, b.narrative_hit_en || null,
         b.narrative_miss_zh || null, b.narrative_miss_en || null,
-        b.sort_order || 0,
+        b.sort_order || 0, b.method_scope || null, b.family_code || null,
       ]);
       return reply.status(201).send({ success: true, data: result.rows[0] });
     } catch (error: any) {
       request.log.error(error, 'POST attack-card error');
       if (error.code === '23505') return reply.status(409).send({ success: false, error: 'Attack card code already exists' });
-      return reply.status(500).send({ success: false, error: 'Failed to create attack card' });
+      return reply.status(500).send({
+        success: false,
+        error: 'Failed to create attack card',
+        dbError: { code: error?.code, message: error?.message, detail: error?.detail, column: error?.column, constraint: error?.constraint },
+      });
     }
   });
+
+  // ── GET /api/admin/monsters/attack-cards/library ── 方式庫(供跨怪沿用查詢)
+  app.get<{ Querystring: { method_scope?: string; family_code?: string; defense_attribute?: string } }>(
+    '/api/admin/monsters/attack-cards/library',
+    async (request, reply) => {
+      const { method_scope, family_code, defense_attribute } = request.query;
+      const conds: string[] = [];
+      const params: any[] = [];
+      if (method_scope) { params.push(method_scope); conds.push(`method_scope = $${params.length}`); }
+      if (family_code) { params.push(family_code); conds.push(`family_code = $${params.length}`); }
+      if (defense_attribute) { params.push(defense_attribute); conds.push(`defense_attribute = $${params.length}`); }
+      const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+      try {
+        const result = await pool.query(
+          `SELECT id, code, name_zh, name_en, defense_attribute, damage_physical, damage_horror,
+                  damage_element, weight, method_scope, family_code, special_effect, inflicts_status
+           FROM monster_attack_cards ${where}
+           ORDER BY method_scope NULLS LAST, family_code NULLS LAST, code`,
+          params,
+        );
+        return reply.send({ success: true, data: result.rows });
+      } catch (error: any) {
+        request.log.error(error, 'GET attack-card library error');
+        return reply.status(500).send({ success: false, error: 'Failed to list method library' });
+      }
+    },
+  );
 
   // ── PUT /api/admin/monsters/attack-cards/:id ── 更新攻擊卡
   app.put<{ Params: { id: string }; Body: Record<string, any> }>('/api/admin/monsters/attack-cards/:id', async (request, reply) => {
@@ -160,7 +191,9 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
           narrative_attack_zh = $14, narrative_attack_en = $15,
           narrative_hit_zh = $16, narrative_hit_en = $17,
           narrative_miss_zh = $18, narrative_miss_en = $19,
-          sort_order = $20
+          sort_order = $20,
+          method_scope = COALESCE($22, method_scope),
+          family_code = COALESCE($23, family_code)
         WHERE id = $21 RETURNING *
       `, [
         b.species_id || null, b.variant_id || null, b.name_zh, b.name_en,
@@ -173,6 +206,7 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
         b.narrative_miss_zh || null, b.narrative_miss_en || null,
         b.sort_order || 0,
         id,
+        b.method_scope || null, b.family_code || null,
       ]);
       if (result.rows.length === 0) return reply.status(404).send({ success: false, error: 'Attack card not found' });
       return reply.send({ success: true, data: result.rows[0] });
@@ -582,10 +616,10 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
           ai_preference, ai_preference_param, ai_behavior_notes,
           is_undefeatable, phase_count, phase_rules, legendary_actions, environment_effects,
           description_zh, description_en, art_url, design_notes,
-          attack_card_count, sort_order, design_status
+          attack_card_count, sort_order, design_status, move_pool
         ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-          $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42
+          $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43
         ) RETURNING *
       `, [
         b.species_id, b.code, b.name_zh, b.name_en, tier,
@@ -610,6 +644,7 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
         b.environment_effects ? JSON.stringify(b.environment_effects) : null,
         b.description_zh || null, b.description_en || null, b.art_url || null, b.design_notes || null,
         b.attack_card_count || 0, b.sort_order || 0, b.design_status || 'draft',
+        b.move_pool ? JSON.stringify(b.move_pool) : '[]',
       ]);
 
       const newVariant = result.rows[0];
@@ -641,7 +676,11 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
       await client.query('ROLLBACK');
       request.log.error(error, 'POST variant error');
       if (error.code === '23505') return reply.status(409).send({ success: false, error: 'Variant code already exists' });
-      return reply.status(500).send({ success: false, error: 'Failed to create variant' });
+      return reply.status(500).send({
+        success: false,
+        error: 'Failed to create variant',
+        dbError: { code: error?.code, message: error?.message, detail: error?.detail, column: error?.column, constraint: error?.constraint },
+      });
     } finally {
       client.release();
     }
@@ -688,6 +727,7 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
           is_undefeatable = $30, phase_count = $31, phase_rules = $32, legendary_actions = $33, environment_effects = $34,
           description_zh = $35, description_en = $36, art_url = $37, design_notes = $38,
           attack_card_count = $39, sort_order = $40, design_status = $41,
+          move_pool = COALESCE($43::jsonb, move_pool),
           updated_at = NOW()
         WHERE id = $42 RETURNING *
       `, [
@@ -713,6 +753,7 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
         b.description_zh || null, b.description_en || null, b.art_url || null, b.design_notes || null,
         b.attack_card_count || 0, b.sort_order || 0, b.design_status || 'draft',
         id,
+        b.move_pool ? JSON.stringify(b.move_pool) : null,
       ]);
       if (result.rows.length === 0) return reply.status(404).send({ success: false, error: 'Variant not found' });
       return reply.send({ success: true, data: result.rows[0] });

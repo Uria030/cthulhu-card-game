@@ -4,6 +4,9 @@ import {
   createInMemoryMessageBus,
   createTurnLoop,
   resolveIntent,
+  activateMonsters,
+  spawnEnemy,
+  runFearChecks,
   CURRENT_MESSAGE_SCHEMA_VERSION,
 } from '@cthulhu/shared';
 import type {
@@ -77,6 +80,16 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'status_applied': return '🏷 施加「' + (p.status as string) + '」狀態';
     case 'search_deck': return '🔍 檢視牌庫頂 ' + (p.viewed as number) + ' 張,取走 ' + (p.taken as number) + ' 張';
     case 'effect_unsupported': return 'ℹ 部分卡面效果引擎尚未支援:' + ((p.codes as string[]) ?? []).join('、');
+    case 'fear_check': return '😨 恐懼檢定 vs ' + (p.enemy as string) + ':d20 ' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '穩住了' : '失敗') + ')';
+    case 'fear_damage': return '😱 ' + (p.narrative as string) + '(SAN -' + (p.amount as number) + ')';
+    case 'monster_attack': return '👹 ' + (p.enemy as string) + ' 使出【' + (p.move as string) + '】— 你的' + (p.defenseAttribute as string) + '防禦:' + (p.total as number) + ' vs DC ' + (p.dc as number);
+    case 'monster_attack_hit': return '💥 ' + (p.narrative as string) + '(HP -' + (p.physical as number) + (Number(p.horror) > 0 ? ' / SAN -' + (p.horror as number) : '') + ')';
+    case 'monster_attack_missed': return '💨 ' + (p.narrative as string);
+    case 'monster_move': return '👣 ' + (p.enemy as string) + ' 朝你逼近';
+    case 'monster_engage': return '⚠ ' + (p.enemy as string) + ':' + (p.narrative as string);
+    case 'attack_of_opportunity': return '🩸 藉機攻擊!' + (p.narrative as string) + '(HP -' + (p.physical as number) + ' / SAN -' + (p.horror as number) + ')';
+    case 'taunt': return '🗯 ' + (p.narrative as string);
+    case 'engagement_broken': return '🏃 ' + (p.narrative as string);
     default: return eff.type;
   }
 }
@@ -297,11 +310,44 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setInvestigator((i) => ({ ...i, actionPoints: 0 }));
     append('[短休息] 本回合直接進入神話階段');
   };
+  /**
+   * 神話階段:臨時城主(召喚)+ 怪物啟動(§10)。
+   * 臨時城主規則:場上無活怪且能量 ≥3 → 花 3 能量召喚召喚池最低位階一隻,
+   * 生在玩家相鄰地點。階段三由正式城主 AI(神話卡攤開選用)取代。
+   */
   const enterMythosPhase = () => {
     turnLoopRef.current?.advance();
-    setKeeperEnergy((e) => Math.max(0, e - 2));
     append('[階段切換] 進入神話階段');
-    setTimeout(() => append('[城主行動] 黑暗從牆角滲出。'), 1200);
+    if (setup.tutorial) {
+      setKeeperEnergy((e) => Math.max(0, e - 2));
+      setTimeout(() => append('[城主行動] 黑暗從牆角滲出。'), 1200);
+      return;
+    }
+    let sc = scenario;
+    let inv = investigator;
+    // 臨時城主:召喚
+    const aliveEnemies = sc.enemies.filter((e) => e.hp > 0);
+    if (aliveEnemies.length === 0 && keeperEnergy >= 3 && setup.summonPool.length > 0) {
+      const pick = setup.summonPool[0];
+      const here = sc.locations.find((l) => l.locationDefinitionId === inv.currentLocationId);
+      const spawnLoc = here?.connectedTo[0] ?? inv.currentLocationId ?? '';
+      const spawned = spawnEnemy(sc, pick.code, spawnLoc, setup.enemyStats, 1);
+      sc = spawned.scenario;
+      setKeeperEnergy((e) => Math.max(0, e - 3));
+      append('[城主行動] 雨幕的另一頭,有什麼東西被引了過來——【' + pick.name_zh + '】出現在 ' + (setup.locMeta[spawnLoc]?.name ?? spawnLoc) + '。');
+      // §7.6 怪物進入半徑 → 恐懼掃描
+      const fear = runFearChecks(inv, sc, setup.enemyStats);
+      inv = fear.investigator;
+      for (const eff of fear.effects) append('[結算] ' + describeEffect(eff, locMeta));
+    }
+    // §10 怪物啟動
+    const act = activateMonsters(sc, { [inv.investigatorId]: inv }, setup.enemyStats, setup.attackCards);
+    sc = act.scenario;
+    inv = act.investigators[inv.investigatorId] ?? inv;
+    for (const eff of act.effects) append('[神話階段] ' + describeEffect(eff, locMeta));
+    if (act.effects.length === 0) append('[神話階段] 雨聲之外,一片死寂。');
+    setScenario(sc);
+    setInvestigator(inv);
   };
   const endTurn = () => {
     turnLoopRef.current?.advance();
@@ -488,6 +534,18 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                       onClick={() => onLocationClick(loc.locationDefinitionId)}
                     >
                       {isCurr && <div className="player-token">P1</div>}
+                      {scenario.enemies
+                        .filter((e) => e.hp > 0 && e.locationId === loc.locationDefinitionId)
+                        .map((e, ei) => (
+                          <div
+                            key={e.instanceId}
+                            className="enemy-token"
+                            style={{ right: 8 + ei * 26 }}
+                            title={setup.enemyStats[e.enemyDefinitionId]?.name_zh ?? e.enemyDefinitionId}
+                          >
+                            👹
+                          </div>
+                        ))}
                       <div className="loc-name">{!unlocked && '🔒 '}{meta?.name ?? loc.locationDefinitionId}</div>
                       <div className="loc-illustration" />
                       <div className="loc-clues">
@@ -628,6 +686,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                 ))}
               {investigator.engagedWith.length > 0 && (
                 <button onClick={() => submitCheckIntent('evade')}>🌀 閃避</button>
+              )}
+              {enemyHere && !enemyHere.engagedWith.includes(investigator.investigatorId) && (
+                <button onClick={() => submitIntent('taunt', { enemyInstanceId: enemyHere.instanceId })}>🗯 嘲諷</button>
               )}
               <button onClick={enterMythosPhase}>結束調查員階段 →</button>
             </div>

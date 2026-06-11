@@ -1194,3 +1194,12 @@
   font: 400 11px "Noto Sans TC", sans-serif;
   color: var(--text-tertiary, #9a968c);
 }
+
+/* === 地圖怪物 token === */
+.enemy-token {
+  position: absolute;
+  top: 8px;
+  font-size: 20px;
+  filter: drop-shadow(0 0 6px rgba(248, 113, 113, 0.8));
+  z-index: 2;
+}

@@ -458,6 +458,44 @@ test('execute_card_action:不在場上駁回', () => {
   assertEq(r.result.outcome, 'rejected');
 });
 
+// ═══ G-02 批次③:交戰懲罰與脫離(§7.2)═══
+
+test('交戰中移動:吃 AoO + 雙向解除交戰(§7.2)', () => {
+  const ctx = makeCombatCtx({ roll: 10, engaged: true, enemyDamage: 2, visibility: 'day' });
+  ctx.scenario.unlockedLocations = ['loc-a', 'loc-b'];
+  const r = resolveIntent(makeIntent('move', { targetLocationId: 'loc-b' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  const aoo = r.result.effects?.find((e) => e.type === 'attack_of_opportunity');
+  assertEq(aoo !== undefined, true, '應觸發藉機攻擊');
+  assertEq(r.newState?.investigator?.hp, 5); // -2 物理
+  assertEq(r.newState?.investigator?.engagedWith.length, 0, '移動後解除交戰');
+  assertEq(r.newState?.scenario?.enemies[0].engagedWith.length, 0, '敵方也解除');
+  assertEq(r.newState?.investigator?.currentLocationId, 'loc-b');
+});
+
+test('交戰中調查:吃 AoO 但交戰維持(§7.2)', () => {
+  const ctx = makeCombatCtx({ roll: 15, engaged: true, enemyDamage: 2, visibility: 'day' });
+  const r = resolveIntent(makeIntent('investigate'), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.hp, 5);
+  assertEq(r.newState?.investigator?.engagedWith.length, 1, '調查不脫離交戰');
+});
+
+test('交戰中攻擊/閃避:不吃 AoO(§7.2 豁免)', () => {
+  const atk = resolveIntent(makeIntent('attack'), makeCombatCtx({ roll: 15, engaged: true, visibility: 'day' }));
+  assertEq(atk.result.effects?.some((e) => e.type === 'attack_of_opportunity'), false);
+  const evd = resolveIntent(makeIntent('evade'), makeCombatCtx({ roll: 15, engaged: true, visibility: 'day' }));
+  assertEq(evd.result.effects?.some((e) => e.type === 'attack_of_opportunity'), false);
+});
+
+test('taunt:拉同地點未交戰敵人入交戰(§7.3)', () => {
+  const ctx = makeCombatCtx({ roll: 10, engaged: false, visibility: 'day' });
+  const r = resolveIntent(makeIntent('taunt'), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.engagedWith.length, 1);
+  assertEq(r.newState?.scenario?.enemies[0].engagedWith.includes('inv-1'), true);
+});
+
 // ─── runner ─────────────────────────
 let passed = 0;
 let failed = 0;

@@ -33,6 +33,8 @@ import {
 } from './checks';
 import type { AttributeKey, CommitIcons } from './checks';
 import { executeCardEffects, passiveTestModifier } from './effectsExecutor';
+import { runFearChecks, applyAttackOfOpportunity } from './monsterActions';
+import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 
 // ─── 卡片實例資料(容器由 bootstrap cardIndex 餵入)──
 export interface CardData {
@@ -77,7 +79,9 @@ export interface RuleContext {
   /** 地點統計(調查難度 shroud;key = locationDefinitionId) */
   locationStats?: Record<string, { shroud?: number }>;
   /** 敵人定義統計(key = enemyDefinitionId,來自 bootstrap monsters) */
-  enemyStats?: Record<string, { dc?: number; damage_physical?: number; damage_horror?: number }>;
+  enemyStats?: EnemyDataLookup;
+  /** 怪物招式卡(key = mac code,來自 bootstrap monster_attack_cards) */
+  attackCards?: AttackCardLookup;
   /** 戰鬥風格卡池(key = style code,如 shooting;第一層公用池) */
   stylePools?: Record<string, StyleCardData[]>;
   /** 亂數來源(測試注入,預設 Math.random) */
@@ -150,25 +154,27 @@ export function resolveIntent(intent: IntentMessage, ctx: RuleContext): RuleReso
     return reject(intent, '不在調查員階段,當前階段:' + ctx.turn.phase, '等待進入調查員階段後再行動');
   }
 
+  let out: RuleResolveOutput;
   switch (intent.actionType) {
     case 'gain_resource':
-      return resolveGainResource(intent, ctx);
+      out = resolveGainResource(intent, ctx); break;
     case 'draw_card':
-      return resolveDrawCard(intent, ctx);
+      out = resolveDrawCard(intent, ctx); break;
     case 'move':
-      return resolveMove(intent, ctx);
+      out = resolveMove(intent, ctx); break;
     case 'investigate':
-      return resolveInvestigate(intent, ctx);
+      out = resolveInvestigate(intent, ctx); break;
     case 'attack':
-      return resolveAttack(intent, ctx);
+      out = resolveAttack(intent, ctx); break;
     case 'evade':
-      return resolveEvade(intent, ctx);
+      out = resolveEvade(intent, ctx); break;
     case 'play_card':
-      return resolvePlayCard(intent, ctx);
+      out = resolvePlayCard(intent, ctx); break;
     case 'execute_card_action':
-      return resolveExecuteCardAction(intent, ctx);
-    // 以下 stub,等後續批次展開
+      out = resolveExecuteCardAction(intent, ctx); break;
     case 'taunt':
+      out = resolveTaunt(intent, ctx); break;
+    // 以下 stub,等後續批次展開
     case 'consume':
     case 'commit_attribute_icon':
     case 'short_rest':
@@ -177,6 +183,59 @@ export function resolveIntent(intent: IntentMessage, ctx: RuleContext): RuleReso
     default:
       return reject(intent, '未知的動作類型:' + (intent as { actionType: string }).actionType);
   }
+  return finalizeEngagementPenalty(intent, ctx, out);
+}
+
+/**
+ * §7.2 交戰限制:交戰中只能攻擊和閃避,其他行動觸發藉機攻擊(物理+恐懼雙重)。
+ * 攻擊類豁免:attack / evade / 武器攻擊(execute_card_action 結果含 style_card_drawn)。
+ */
+function finalizeEngagementPenalty(
+  intent: IntentMessage,
+  ctx: RuleContext,
+  out: RuleResolveOutput,
+): RuleResolveOutput {
+  if (out.result.outcome !== 'accepted') return out;
+  if (ctx.investigator.engagedWith.length === 0) return out;
+  if (intent.actionType === 'attack' || intent.actionType === 'evade') return out;
+  if (
+    intent.actionType === 'execute_card_action' &&
+    (out.result.effects ?? []).some((e) => e.type === 'style_card_drawn')
+  ) {
+    return out;
+  }
+  let inv = out.newState?.investigator ?? ctx.investigator;
+  let sc = out.newState?.scenario ?? ctx.scenario;
+  // AoO 以「行動當下」的交戰清單結算(用 ctx 的清單,避免行動本身已改過狀態)
+  const aoo = applyAttackOfOpportunity(
+    { ...inv, engagedWith: ctx.investigator.engagedWith },
+    sc,
+    ctx.enemyStats ?? {},
+  );
+  inv = { ...aoo.investigator, engagedWith: inv.engagedWith };
+  const effects = [...(out.result.effects ?? []), ...aoo.effects];
+
+  // 移動離開 = 強行脫離:吃完 AoO 後雙向解除交戰(交戰必須同地點)
+  if (intent.actionType === 'move') {
+    const leftBehind = ctx.investigator.engagedWith;
+    inv = { ...inv, engagedWith: [] };
+    sc = {
+      ...sc,
+      enemies: sc.enemies.map((e) =>
+        leftBehind.includes(e.instanceId)
+          ? { ...e, engagedWith: e.engagedWith.filter((id) => id !== ctx.investigator.investigatorId) }
+          : e,
+      ),
+    };
+    effects.push({
+      type: 'engagement_broken',
+      params: { narrative: '你掙脫了糾纏,逃向另一頭。' },
+    });
+  }
+  return {
+    result: { ...out.result, effects },
+    newState: { ...out.newState, investigator: inv, scenario: sc },
+  };
 }
 
 // ─── 各行動結算 ──────────────────────
@@ -252,38 +311,61 @@ function resolveMove(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput
   if (ctx.investigator.actionPoints < cost) {
     return reject(intent, '行動點不足:移動到「' + targetId + '」需 ' + cost + ',剩 ' + ctx.investigator.actionPoints);
   }
-  // §7.2 交戰中執行非攻擊/閃避會觸發藉機攻擊 — G1 階段先 stub
-  if (ctx.investigator.engagedWith.length > 0) {
-    // 仍允許移動但提醒(完整藉機攻擊邏輯待 attack 結算實作)
-    return accept(
-      intent,
-      [
-        { type: 'spend_action_point', params: { amount: cost } },
-        { type: 'move', params: { from: ctx.investigator.currentLocationId, to: targetId } },
-        { type: 'attack_of_opportunity_warning', params: { engagedWith: ctx.investigator.engagedWith } },
-      ],
-      {
-        investigator: {
-          ...ctx.investigator,
-          actionPoints: ctx.investigator.actionPoints - cost,
-          currentLocationId: targetId,
-        },
-      }
-    );
+  // 移動本體(§7.2 交戰中移動的藉機攻擊由 finalizeEngagementPenalty 統一結算)
+  let newInv: InvestigatorState = {
+    ...ctx.investigator,
+    actionPoints: ctx.investigator.actionPoints - cost,
+    currentLocationId: targetId,
+  };
+  const effects: ResultEffect[] = [
+    { type: 'spend_action_point', params: { amount: cost } },
+    { type: 'move', params: { from: ctx.investigator.currentLocationId, to: targetId } },
+  ];
+  // §7.6/7.7 進入新位置 → 恐懼半徑掃描(每隻怪只觸發一次)
+  const fear = runFearChecks(newInv, ctx.scenario, ctx.enemyStats ?? {}, ctx.rng);
+  newInv = fear.investigator;
+  effects.push(...fear.effects);
+  return accept(intent, effects, { investigator: newInv });
+}
+
+/** 嘲諷 — §7.3:1 行動點,將同地點未與你交戰的敵人拉入交戰(無檢定) */
+function resolveTaunt(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
+  if (ctx.investigator.actionPoints < 1) {
+    return reject(intent, '行動點不足:嘲諷需 1,剩 ' + ctx.investigator.actionPoints);
   }
+  const requestedId = (intent.payload as { enemyInstanceId?: string }).enemyInstanceId;
+  const candidates = ctx.scenario.enemies.filter(
+    (e) =>
+      e.hp > 0 &&
+      e.locationId === ctx.investigator.currentLocationId &&
+      !e.engagedWith.includes(ctx.investigator.investigatorId),
+  );
+  const enemy = requestedId
+    ? candidates.find((e) => e.instanceId === requestedId)
+    : candidates[0];
+  if (!enemy) {
+    return reject(intent, '同地點沒有未與你交戰的敵人');
+  }
+  const newInv: InvestigatorState = {
+    ...ctx.investigator,
+    actionPoints: ctx.investigator.actionPoints - 1,
+    engagedWith: [...ctx.investigator.engagedWith, enemy.instanceId],
+  };
+  const newScenario: ScenarioState = {
+    ...ctx.scenario,
+    enemies: ctx.scenario.enemies.map((e) =>
+      e.instanceId === enemy.instanceId
+        ? { ...e, engagedWith: [...e.engagedWith, ctx.investigator.investigatorId] }
+        : e,
+    ),
+  };
   return accept(
     intent,
     [
-      { type: 'spend_action_point', params: { amount: cost } },
-      { type: 'move', params: { from: ctx.investigator.currentLocationId, to: targetId } },
+      { type: 'spend_action_point', params: { amount: 1 } },
+      { type: 'taunt', params: { narrative: '你大聲叫罵,牠的注意力轉向了你。' }, targetId: enemy.instanceId },
     ],
-    {
-      investigator: {
-        ...ctx.investigator,
-        actionPoints: ctx.investigator.actionPoints - cost,
-        currentLocationId: targetId,
-      },
-    }
+    { investigator: newInv, scenario: newScenario },
   );
 }
 

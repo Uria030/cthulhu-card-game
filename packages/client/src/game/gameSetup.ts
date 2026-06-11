@@ -12,6 +12,8 @@ import type {
   StageBootstrap,
   CardDataLookup,
   StyleCardData,
+  EnemyDataLookup,
+  AttackCardLookup,
 } from '@cthulhu/shared';
 
 export interface CardDisplay {
@@ -58,8 +60,12 @@ export interface GameSetup {
   introLog: string[];
   /** 引擎檢定輸入:地點調查難度(shroud) */
   locationStats: Record<string, { shroud?: number }>;
-  /** 引擎檢定輸入:怪物 DC / 傷害 */
-  enemyStats: Record<string, { dc?: number; damage_physical?: number; damage_horror?: number }>;
+  /** 引擎怪物資料(DC/傷害/恐懼/招式池/位階) */
+  enemyStats: EnemyDataLookup;
+  /** 怪物招式卡(key = mac code) */
+  attackCards: AttackCardLookup;
+  /** 臨時城主召喚池(primary 家族變體,依位階排序;階段三由城主 AI 取代) */
+  summonPool: Array<{ code: string; name_zh: string; tier: number }>;
   /** 引擎卡片資料(commit_icons/effects/cost/combat_style 等) */
   cardLookup: CardDataLookup;
   /** 戰鬥風格卡池(key = style code) */
@@ -176,6 +182,8 @@ export function makeTestSetup(): GameSetup {
     ],
     locationStats: {},
     enemyStats: {},
+    attackCards: {},
+    summonPool: [],
     cardLookup: {},
     stylePools: {},
   };
@@ -240,11 +248,40 @@ export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
   const enemyStats: GameSetup['enemyStats'] = {};
   for (const mv of bootstrap.monsters as Array<Record<string, any>>) {
     enemyStats[String(mv.code)] = {
+      name_zh: String(mv.name_zh ?? mv.code),
       dc: Number(mv.dc ?? 10),
       damage_physical: Number(mv.damage_physical ?? 1),
       damage_horror: Number(mv.damage_horror ?? 0),
+      fear_value: Number(mv.fear_value ?? 1),
+      fear_radius: Number(mv.fear_radius ?? 1),
+      fear_type: String(mv.fear_type ?? 'first_sight'),
+      tier: Number(mv.tier ?? 1),
+      attacks_per_round: Number(mv.attacks_per_round ?? 1),
+      movement_speed: Number(mv.movement_speed ?? 1),
+      ai_preference: String(mv.ai_preference ?? 'nearest'),
+      move_pool: Array.isArray(mv.move_pool) ? mv.move_pool : [],
+      hp_base: Number(mv.hp_base ?? 1),
+      hp_per_player: Number(mv.hp_per_player ?? 0),
     };
   }
+  const attackCards: GameSetup['attackCards'] = {};
+  for (const mac of bootstrap.monster_attack_cards as Array<Record<string, any>>) {
+    attackCards[String(mac.code)] = {
+      code: String(mac.code),
+      name_zh: String(mac.name_zh ?? mac.code),
+      defense_attribute: String(mac.defense_attribute ?? 'reflex'),
+      dc_override: mac.dc_override == null ? null : Number(mac.dc_override),
+      damage_physical: Number(mac.damage_physical ?? 0),
+      damage_horror: Number(mac.damage_horror ?? 0),
+    };
+  }
+  // 臨時城主召喚池:primary 家族變體,低位階優先(階段三換正式城主 AI)
+  const primaryFamily = (bootstrap.stage.monster_pool as Array<Record<string, any>> | undefined)
+    ?.find((p) => p.role === 'primary')?.family_code;
+  const summonPool: GameSetup['summonPool'] = (bootstrap.monsters as Array<Record<string, any>>)
+    .filter((mv) => !primaryFamily || mv.family_code === primaryFamily)
+    .map((mv) => ({ code: String(mv.code), name_zh: String(mv.name_zh ?? mv.code), tier: Number(mv.tier ?? 1) }))
+    .sort((a, b) => a.tier - b.tier);
   const cardLookup: GameSetup['cardLookup'] = {};
   for (const [instanceId, info] of Object.entries(built.cardIndex)) {
     const d = info.data;
@@ -287,6 +324,8 @@ export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
     ],
     locationStats,
     enemyStats,
+    attackCards,
+    summonPool,
     cardLookup,
     stylePools,
   };

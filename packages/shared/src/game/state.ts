@@ -53,10 +53,14 @@ export interface ScenarioState {
   enemies: EnemyInstance[];
   /** 場上標記(線索、毀滅、隱藏調查點等,規則書 §13) */
   tokens: TokenInstance[];
-  /** 議程進度(規則書 §1.5 多分支結算依據) */
+  /** 議程進度(當前議程卡上的毀滅標記數,規則書 §1.5) */
   agendaProgress: number;
-  /** 目標進度 */
+  /** 目標進度(累計線索,幕推進依據) */
   objectiveProgress: number;
+  /** 當前幕索引(0-based,對應 stage_act_cards card_order 序) */
+  actIndex?: number;
+  /** 當前議程索引(0-based) */
+  agendaIndex?: number;
   /** 混沌袋當前組成(規則書 §5,動態變動) */
   chaosBag: ChaosToken[];
   /** 當前回合數 */

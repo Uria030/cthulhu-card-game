@@ -1203,3 +1203,77 @@
   filter: drop-shadow(0 0 6px rgba(248, 113, 113, 0.8));
   z-index: 2;
 }
+
+/* === 結算畫面 === */
+.outcome-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 8, 14, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  animation: outcome-fade 1.2s ease;
+}
+
+@keyframes outcome-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.outcome-frame {
+  width: min(640px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  background: #15151f;
+  border-radius: 8px;
+  padding: 32px 36px;
+  text-align: center;
+  color: var(--text-primary, #E8E4D9);
+}
+
+.outcome-victory { border: 2px solid #C9A84C; box-shadow: 0 0 60px rgba(201, 168, 76, 0.25); }
+.outcome-defeat { border: 2px solid #7f1d1d; box-shadow: 0 0 60px rgba(127, 29, 29, 0.35); }
+
+.outcome-eyebrow {
+  font: 700 14px "Noto Serif TC", serif;
+  letter-spacing: 0.3em;
+  color: #C9A84C;
+}
+
+.outcome-defeat .outcome-eyebrow { color: #f87171; }
+
+.outcome-title {
+  font: 700 24px "Noto Serif TC", serif;
+  margin-top: 10px;
+}
+
+.outcome-narrative {
+  font: 400 15px/1.9 "Noto Serif TC", serif;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.outcome-flags {
+  font: 400 12px "Noto Sans TC", sans-serif;
+  color: var(--text-tertiary, #9a968c);
+}
+
+.outcome-actions {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.outcome-actions button {
+  background: rgba(201, 168, 76, 0.12);
+  border: 1px solid #C9A84C;
+  border-radius: 6px;
+  color: #C9A84C;
+  font: 600 14px "Noto Serif TC", serif;
+  padding: 8px 22px;
+  cursor: pointer;
+}
+
+.outcome-actions button:hover { background: rgba(201, 168, 76, 0.28); }

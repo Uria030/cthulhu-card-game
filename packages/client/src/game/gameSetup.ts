@@ -14,6 +14,9 @@ import type {
   StyleCardData,
   EnemyDataLookup,
   AttackCardLookup,
+  ActCardData,
+  AgendaCardData,
+  OutcomeData,
 } from '@cthulhu/shared';
 
 export interface CardDisplay {
@@ -70,6 +73,13 @@ export interface GameSetup {
   cardLookup: CardDataLookup;
   /** 戰鬥風格卡池(key = style code) */
   stylePools: Record<string, StyleCardData[]>;
+  /** 幕/議程原始資料(進度引擎用;display 用 actCards/agendaCards) */
+  actData: ActCardData[];
+  agendaData: AgendaCardData[];
+  /** 章節結局 */
+  outcomes: OutcomeData[];
+  /** 原始開局包(場景切換重建用;教學關卡為 null) */
+  bootstrap: StageBootstrap | null;
 }
 
 const VALID_RARITIES = new Set(['common', 'uncommon', 'rare', 'legendary']);
@@ -186,6 +196,10 @@ export function makeTestSetup(): GameSetup {
     summonPool: [],
     cardLookup: {},
     stylePools: {},
+    actData: [],
+    agendaData: [],
+    outcomes: [],
+    bootstrap: null,
   };
 }
 
@@ -328,5 +342,9 @@ export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
     summonPool,
     cardLookup,
     stylePools,
+    actData: (bootstrap.stage.act_cards ?? []) as unknown as ActCardData[],
+    agendaData: (bootstrap.stage.agenda_cards ?? []) as unknown as AgendaCardData[],
+    outcomes: (bootstrap.chapter?.outcomes ?? []) as unknown as OutcomeData[],
+    bootstrap,
   };
 }

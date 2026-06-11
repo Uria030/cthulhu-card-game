@@ -7,8 +7,15 @@ import {
   activateMonsters,
   spawnEnemy,
   runFearChecks,
+  progressTick,
+  addDoom,
+  evaluateOutcome,
+  applyOutcomeFlags,
+  allInvestigatorsDown,
+  buildGameFromBootstrap,
   CURRENT_MESSAGE_SCHEMA_VERSION,
 } from '@cthulhu/shared';
+import type { OutcomeData, ScenarioState, InvestigatorState } from '@cthulhu/shared';
 import type {
   IntentMessage,
   ResultMessage,
@@ -91,6 +98,12 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'taunt': return '🗯 ' + (p.narrative as string);
     case 'engagement_broken': return '🏃 ' + (p.narrative as string);
     case 'monster_dazed': return '💫 ' + (p.enemy as string) + ':' + (p.narrative as string);
+    case 'doom_added': return '☄ 毀滅標記 +' + (p.amount as number) + '(累計 ' + (p.total as number) + ')';
+    case 'act_advanced': return '📜 【幕推進:' + (p.name as string) + '】' + (p.narrative as string);
+    case 'agenda_advanced': return '🕯 【議程翻面:' + (p.name as string) + '】' + (p.narrative as string);
+    case 'flag_set': return '🚩 旗標「' + (p.flag_code as string) + '」= ' + String(p.value);
+    case 'enemy_spawned': return '🌊 ' + (p.enemy as string) + ' 出現在 ' + (locMeta[p.location as string]?.name ?? (p.location as string)) + '!';
+    case 'penalty_applied': return '⛈ ' + ((p.narrative as string) || (p.penalty as string));
     default: return eff.type;
   }
 }
@@ -180,6 +193,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [panel, setPanel] = useState<PanelType>(null);
   // 投入加值選擇(下一次檢定動作帶上,送出後清空)
   const [commitSelection, setCommitSelection] = useState<string[]>([]);
+  // 戰役旗標(幕翻面/結局寫入)與結算
+  const [flags, setFlags] = useState<Record<string, unknown>>({});
+  const [outcome, setOutcome] = useState<OutcomeData | null>(null);
   const [locationBarId, setLocationBarId] = useState<string | null>(null);
   const [logCollapsed, setLogCollapsed] = useState(true);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
@@ -192,6 +208,54 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [zoom, setZoom] = useState(1);
 
   const append = (s: string) => setLog((l) => [...l.slice(-50), s]);
+
+  /**
+   * 進度檢查:每次狀態變化後跑幕/議程推進,處理場景切換與結局。
+   * 回傳套用後的 (scenario, investigator);呼叫端負責 setState。
+   */
+  const applyProgress = (
+    sc: ScenarioState,
+    inv: InvestigatorState,
+  ): { sc: ScenarioState; inv: InvestigatorState } => {
+    if (setup.tutorial || setup.actData.length === 0) return { sc, inv };
+    const tick = progressTick(sc, flags, setup.actData, setup.agendaData, setup.enemyStats);
+    for (const eff of tick.effects) append('[劇情] ' + describeEffect(eff, locMeta));
+    let nextSc = tick.scenario;
+    let nextInv = inv;
+    let nextFlags = tick.flags;
+
+    // 幕翻面要求切換場景:用開局包重建新場景拓撲,保留進度與已生成敵人
+    if (tick.switchScenario != null && setup.bootstrap) {
+      const built2 = buildGameFromBootstrap(setup.bootstrap, { scenarioOrder: tick.switchScenario });
+      const sceneLocs = new Set(built2.scenario.locations.map((l) => l.locationDefinitionId));
+      nextSc = {
+        ...built2.scenario,
+        agendaProgress: nextSc.agendaProgress,
+        objectiveProgress: nextSc.objectiveProgress,
+        actIndex: nextSc.actIndex,
+        agendaIndex: nextSc.agendaIndex,
+        turnNumber: nextSc.turnNumber,
+        phase: nextSc.phase,
+        enemies: nextSc.enemies.filter((e) => sceneLocs.has(e.locationId)),
+      };
+      nextInv = {
+        ...nextInv,
+        currentLocationId: built2.investigator.currentLocationId,
+        engagedWith: [],
+      };
+      append('🌧 ──── 場景轉換 ──── 你追著線索踏進了那條傳聞中的巷子。');
+    }
+
+    if (tick.victory || tick.defeat) {
+      const finalOutcome = evaluateOutcome(setup.outcomes, nextFlags);
+      if (finalOutcome) {
+        nextFlags = applyOutcomeFlags(finalOutcome, nextFlags);
+        setOutcome(finalOutcome);
+      }
+    }
+    setFlags(nextFlags);
+    return { sc: nextSc, inv: nextInv };
+  };
 
   // 訂閱訊息匯流排
   useEffect(() => {
@@ -282,13 +346,19 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     };
     const out = resolveIntent(intent, ctx);
     bus.publish(out.result);
-    if (out.newState?.investigator) setInvestigator(out.newState.investigator);
-    if (out.newState?.scenario) setScenario(out.newState.scenario);
-    // 動作被接受後清空加值選擇(卡片已進棄牌堆)
-    if (out.result.outcome === 'accepted' && (intent.payload as { commitCardIds?: unknown }).commitCardIds) {
-      setCommitSelection([]);
+    if (out.result.outcome === 'accepted') {
+      // 進度檢查(幕推進/場景切換/結局)疊在引擎結算之上
+      const next = applyProgress(
+        out.newState?.scenario ?? scenario,
+        out.newState?.investigator ?? investigator,
+      );
+      setScenario(next.sc);
+      setInvestigator(next.inv);
+      if ((intent.payload as { commitCardIds?: unknown }).commitCardIds) {
+        setCommitSelection([]);
+      }
     }
-  }, [bus, investigator, scenario, turnNumber, phase, setup]);
+  }, [bus, investigator, scenario, turnNumber, phase, setup, flags]);
 
   /** 檢定類動作:自動帶上目前的加值選擇 */
   const submitCheckIntent = useCallback((
@@ -341,14 +411,29 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       inv = fear.investigator;
       for (const eff of fear.effects) append('[結算] ' + describeEffect(eff, locMeta));
     }
+    // 臨時城主:每神話階段放 1 毀滅(階段三由神話卡驅動取代)
+    const doomed = addDoom(sc, 1);
+    sc = doomed.scenario;
+    for (const eff of doomed.effects) append('[城主] ' + describeEffect(eff, locMeta));
     // §10 怪物啟動
     const act = activateMonsters(sc, { [inv.investigatorId]: inv }, setup.enemyStats, setup.attackCards);
     sc = act.scenario;
     inv = act.investigators[inv.investigatorId] ?? inv;
     for (const eff of act.effects) append('[神話階段] ' + describeEffect(eff, locMeta));
     if (act.effects.length === 0) append('[神話階段] 雨聲之外,一片死寂。');
-    setScenario(sc);
-    setInvestigator(inv);
+    // 全滅檢查(§9 瀕死接通前簡化:HP 或 SAN 歸零即倒下)
+    if (allInvestigatorsDown({ [inv.investigatorId]: inv })) {
+      const finalOutcome = evaluateOutcome(setup.outcomes, flags);
+      if (finalOutcome) {
+        setFlags(applyOutcomeFlags(finalOutcome, flags));
+        setOutcome(finalOutcome);
+      }
+      append('💀 你倒在雨裡,意識沉入黑暗……');
+    }
+    // 進度檢查(議程毀滅推進)
+    const next = applyProgress(sc, inv);
+    setScenario(next.sc);
+    setInvestigator(next.inv);
   };
   const endTurn = () => {
     turnLoopRef.current?.advance();
@@ -478,11 +563,18 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const locCount = scenario.locations.length;
   const gridCols = locCount <= 3 ? locCount : (locCount <= 9 ? 3 : 4);
 
-  // 議程 / 幕(目前都顯示第一張;推進邏輯屬規則補完階段)
-  const currentAgenda = setup.agendaCards[0] ?? null;
-  const currentAct = setup.actCards[0] ?? null;
-  const agendaMax = currentAgenda?.doomThreshold ?? 6;
-  const objectiveMax = currentAct?.progressMax ?? 12;
+  // 議程 / 幕:依進度索引取當前卡(超出 = 最後一張)
+  const agendaIdx = Math.min(scenario.agendaIndex ?? 0, Math.max(0, setup.agendaCards.length - 1));
+  const actIdx = Math.min(scenario.actIndex ?? 0, Math.max(0, setup.actCards.length - 1));
+  const currentAgenda = setup.agendaCards[agendaIdx] ?? null;
+  const currentAct = setup.actCards[actIdx] ?? null;
+  const currentAgendaData = setup.agendaData[agendaIdx] ?? null;
+  const currentActData = setup.actData[actIdx] ?? null;
+  const agendaMax = Number(currentAgendaData?.front_doom_threshold ?? currentAgenda?.doomThreshold ?? 6);
+  const actCondition = currentActData?.front_advance_condition as { type?: string; count?: number } | null;
+  const objectiveMax = actCondition?.type === 'clue_threshold'
+    ? Number(actCondition.count ?? 12)
+    : (currentAct?.progressMax ?? 12);
   const agendaPct = Math.min(100, (scenario.agendaProgress / agendaMax) * 100);
   const objectivePct = Math.min(100, (scenario.objectiveProgress / objectiveMax) * 100);
 
@@ -565,7 +657,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         {/* === 左上 UI 群組(Block 1 + Block 2)=== */}
         <div className="top-left-ui">
           <section className="block-container clickable-block keeper-info" onClick={() => openModal('keeper')}>
-            <div className="keeper-title">議程 1</div>
+            <div className="keeper-title">議程 {agendaIdx + 1}{currentAgenda?.name ? ' · ' + currentAgenda.name : ''}</div>
             <div className="keeper-badges">
               <div className="badge-energy">
                 <span className="badge-num">{keeperEnergy}</span>
@@ -579,7 +671,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           </section>
 
           <section className="block-container clickable-block current-act" onClick={() => openModal('act')}>
-            <div className="act-title">幕 1</div>
+            <div className="act-title">幕 {actIdx + 1}{currentAct?.name ? ' · ' + currentAct.name : ''}</div>
             <div className="act-details">
               <div className="phase-dots">
                 {PHASE_ORDER.map((p, i) => (
@@ -816,7 +908,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) closeAllOverlays(); }}>
           <div className="modal-frame modal-keeper">
             <button className="modal-close" onClick={closeAllOverlays}>✕</button>
-            <div className="modal-title">❖ 議程 1 · {currentAgenda?.name ?? '未知議程'} ❖</div>
+            <div className="modal-title">❖ 議程 {agendaIdx + 1} · {currentAgenda?.name ?? '未知議程'} ❖</div>
             <div className="modal-illustration">議程插畫</div>
             <hr className="modal-divider" />
             <div className="modal-narrative">
@@ -837,7 +929,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) closeAllOverlays(); }}>
           <div className="modal-frame modal-act">
             <button className="modal-close" onClick={closeAllOverlays}>✕</button>
-            <div className="modal-title">❖ 幕 1 · {currentAct?.name ?? '未知目標'} ❖</div>
+            <div className="modal-title">❖ 幕 {actIdx + 1} · {currentAct?.name ?? '未知目標'} ❖</div>
             <div className="modal-illustration">幕插畫</div>
             <hr className="modal-divider" />
             <div className="modal-narrative">
@@ -919,6 +1011,28 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                 <p style={{ marginTop: 12, color: 'var(--text-tertiary)', fontSize: 12 }}>(M-Rulebook 里程碑接入)</p>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* === 結算畫面(結局判定後覆蓋全場)=== */}
+      {outcome && (
+        <div className="outcome-backdrop">
+          <div className={'outcome-frame ' + (flags['outcome.victory'] === true ? 'outcome-victory' : 'outcome-defeat')}>
+            <div className="outcome-eyebrow">{flags['outcome.victory'] === true ? '✦ 結局 ' + outcome.outcome_code + ' · 倖存 ✦' : '✦ 結局 ' + outcome.outcome_code + ' · 沉淪 ✦'}</div>
+            <div className="outcome-title">{setup.title}</div>
+            <hr className="modal-divider" />
+            <div className="outcome-narrative">{outcome.narrative_text}</div>
+            <hr className="modal-divider" />
+            {(outcome.flag_sets ?? []).length > 0 && (
+              <div className="outcome-flags">
+                戰役記錄:{(outcome.flag_sets ?? []).map((f) => f.flag_code).join('、')}
+              </div>
+            )}
+            <div className="outcome-actions">
+              <button onClick={() => navigate('/lobby')}>回到大廳</button>
+              <button onClick={() => window.location.reload()}>再玩一次</button>
+            </div>
           </div>
         </div>
       )}

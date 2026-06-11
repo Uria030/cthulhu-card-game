@@ -12,3 +12,4 @@ export * from './bootstrap';
 export * from './checks';
 export * from './effectsExecutor';
 export * from './monsterActions';
+export * from './gameProgress';

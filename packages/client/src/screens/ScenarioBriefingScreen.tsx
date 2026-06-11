@@ -1,16 +1,27 @@
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import type { StageBootstrap } from '@cthulhu/shared';
+import { fetchBootstrap } from '../api';
 import './ScenarioBriefingScreen.css';
 
 /**
  * 劇情提要 — 出發板與戰鬥板之間的橋接畫面
  *
  * 顯示關卡的前置劇情敘事,讓玩家進入戰鬥前先建立氛圍。
- * 文字現階段寫死(三地點測試關卡 G1 教學),未來可從 scenario.preamble 動態注入。
+ * /scenario/test/briefing 用教學寫死文字;
+ * /scenario/:stageId/briefing 打 /api/play bootstrap(同時暖快取,進戰鬥板不重打)。
  *
  * 流程:出發板選關 → 本畫面 → 「進入關卡」→ 戰鬥板
  */
 
-const TEST_SCENARIO_BRIEFING = {
+interface BriefingContent {
+  title: string;
+  subtitle: string;
+  paragraphs: string[];
+  meta: string;
+}
+
+const TEST_SCENARIO_BRIEFING: BriefingContent = {
   title: '三地點測試關卡',
   subtitle: 'G1 教學 · 預計 30 分鐘 · 推薦 1 人',
   paragraphs: [
@@ -23,39 +34,115 @@ const TEST_SCENARIO_BRIEFING = {
   meta: '結算:通過 / 失敗 · 不產生戰役旗標 · 可重玩',
 };
 
+const DIFFICULTY_LABEL: Record<string, string> = {
+  easy: '輕鬆',
+  standard: '標準',
+  hard: '困難',
+  expert: '專家',
+};
+
+function briefingFromBootstrap(bootstrap: StageBootstrap): BriefingContent {
+  // 戰役封面敘事 + 關卡敘事都切段顯示(空行/換行都當段落界)
+  const text = [bootstrap.campaign?.cover_narrative, bootstrap.stage.narrative]
+    .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+    .join('\n');
+  const paragraphs = text
+    .split(/\r?\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const difficulty = DIFFICULTY_LABEL[String(bootstrap.campaign?.difficulty_tier ?? '')] ?? '標準';
+  const outcomeCount = bootstrap.chapter?.outcomes?.length ?? 0;
+  return {
+    title: bootstrap.stage.name_zh,
+    subtitle: `${bootstrap.campaign?.name_zh ?? ''} · ${bootstrap.chapter?.name_zh ?? ''} · 難度:${difficulty}`,
+    paragraphs: paragraphs.length > 0 ? paragraphs : ['(本關卡尚未填寫前置劇情。)'],
+    meta: outcomeCount > 1 ? `本章有 ${outcomeCount} 種結局 · 你的選擇將決定走向` : '',
+  };
+}
+
 export function ScenarioBriefingScreen() {
   const navigate = useNavigate();
+  const { stageId = 'test' } = useParams();
+  const isTest = stageId === 'test';
+
+  const [content, setContent] = useState<BriefingContent | null>(
+    isTest ? TEST_SCENARIO_BRIEFING : null,
+  );
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isTest) {
+      setContent(TEST_SCENARIO_BRIEFING);
+      setLoadError(null);
+      return;
+    }
+    let cancelled = false;
+    setContent(null);
+    setLoadError(null);
+    fetchBootstrap(stageId)
+      .then((b) => { if (!cancelled) setContent(briefingFromBootstrap(b)); })
+      .catch((e: unknown) => {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
+      });
+    return () => { cancelled = true; };
+  }, [stageId, isTest]);
 
   return (
     <div className="brief-root">
       <div className="brief-backdrop" aria-hidden />
       <div className="brief-paper">
-        <header className="brief-header">
-          <div className="brief-eyebrow">前置劇情</div>
-          <h1 className="brief-title">{TEST_SCENARIO_BRIEFING.title}</h1>
-          <p className="brief-subtitle">{TEST_SCENARIO_BRIEFING.subtitle}</p>
-        </header>
+        {loadError && (
+          <>
+            <header className="brief-header">
+              <div className="brief-eyebrow">前置劇情</div>
+              <h1 className="brief-title">載入失敗</h1>
+              <p className="brief-subtitle">{loadError}</p>
+            </header>
+            <footer className="brief-footer">
+              <button className="brief-back" onClick={() => navigate('/departure')}>
+                ← 返回出發板
+              </button>
+            </footer>
+          </>
+        )}
 
-        <hr className="brief-divider" />
+        {!loadError && !content && (
+          <header className="brief-header">
+            <div className="brief-eyebrow">前置劇情</div>
+            <h1 className="brief-title">翻開卷宗……</h1>
+          </header>
+        )}
 
-        <div className="brief-narrative">
-          {TEST_SCENARIO_BRIEFING.paragraphs.map((p, i) => (
-            <p key={i}>{p}</p>
-          ))}
-        </div>
+        {!loadError && content && (
+          <>
+            <header className="brief-header">
+              <div className="brief-eyebrow">前置劇情</div>
+              <h1 className="brief-title">{content.title}</h1>
+              <p className="brief-subtitle">{content.subtitle}</p>
+            </header>
 
-        <hr className="brief-divider" />
+            <hr className="brief-divider" />
 
-        <div className="brief-meta">{TEST_SCENARIO_BRIEFING.meta}</div>
+            <div className="brief-narrative">
+              {content.paragraphs.map((p, i) => (
+                <p key={i}>{p}</p>
+              ))}
+            </div>
 
-        <footer className="brief-footer">
-          <button className="brief-back" onClick={() => navigate('/departure')}>
-            ← 返回出發板
-          </button>
-          <button className="brief-enter" onClick={() => navigate('/scenario/test')}>
-            進入關卡 →
-          </button>
-        </footer>
+            <hr className="brief-divider" />
+
+            {content.meta && <div className="brief-meta">{content.meta}</div>}
+
+            <footer className="brief-footer">
+              <button className="brief-back" onClick={() => navigate('/departure')}>
+                ← 返回出發板
+              </button>
+              <button className="brief-enter" onClick={() => navigate(`/scenario/${stageId}`)}>
+                進入關卡 →
+              </button>
+            </footer>
+          </>
+        )}
       </div>
     </div>
   );

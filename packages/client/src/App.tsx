@@ -12,8 +12,9 @@ export function App() {
       <Route path="/" element={<SplashScreen />} />
       <Route path="/lobby" element={<LobbyScreen />} />
       <Route path="/departure" element={<DepartureBoardScreen />} />
-      <Route path="/scenario/test/briefing" element={<ScenarioBriefingScreen />} />
-      <Route path="/scenario/test" element={<TestScenarioScreen />} />
+      {/* :stageId = 'test'(教學寫死)或 stage UUID(DB 開局包) */}
+      <Route path="/scenario/:stageId/briefing" element={<ScenarioBriefingScreen />} />
+      <Route path="/scenario/:stageId" element={<TestScenarioScreen />} />
       <Route path="/admin/calibration" element={<CalibrationAdminPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

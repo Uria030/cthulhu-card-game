@@ -1,4 +1,7 @@
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { fetchPlayStages } from '../api';
+import type { PlayStageListItem } from '../api';
 import './DepartureBoardScreen.css';
 
 /**
@@ -6,19 +9,48 @@ import './DepartureBoardScreen.css';
  *
  * 視覺:大廳變暗為背景,前景浮出大型地圖紙(米黃舊紙質感,皺褶/咖啡漬/墨水痕跡),
  * 三類關卡以視覺位置區分:
- * - 主線章節:地圖中央一條主軸,沿線排列章節節點
- * - 預設小關卡:地圖周邊散布的小別針
- * - 隨機地城:地圖角落的「未知區域」標記
- *
- * G1 階段:只開放「三地點測試關卡」(預設小關卡型),其他標誌待後續里程碑開放。
+ * - 主線章節:地圖中央一條主軸,沿線排列章節節點(從 /api/play/stages 動態載入)
+ * - 預設小關卡:地圖周邊散布的小別針(教學關卡 + 未來支線)
+ * - 隨機地城:地圖角落的「未知區域」標記(G4 開放)
  */
+
+interface CampaignGroup {
+  campaignId: string;
+  campaignName: string;
+  stages: PlayStageListItem[];
+}
 
 export function DepartureBoardScreen() {
   const navigate = useNavigate();
+  const [stages, setStages] = useState<PlayStageListItem[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const enterTest = () => {
-    // 進入劇情提要頁(劇情提要本身就是「閱讀後決定是否進入」的橋接畫面)
-    navigate('/scenario/test/briefing');
+  useEffect(() => {
+    let cancelled = false;
+    fetchPlayStages()
+      .then((list) => { if (!cancelled) setStages(list); })
+      .catch((e: unknown) => {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // 依戰役分組,沿主軸排章節節點
+  const campaigns: CampaignGroup[] = useMemo(() => {
+    const groups = new Map<string, CampaignGroup>();
+    for (const s of stages ?? []) {
+      let g = groups.get(s.campaign_id);
+      if (!g) {
+        g = { campaignId: s.campaign_id, campaignName: s.campaign_name, stages: [] };
+        groups.set(s.campaign_id, g);
+      }
+      g.stages.push(s);
+    }
+    return [...groups.values()];
+  }, [stages]);
+
+  const enterStage = (stageId: string) => {
+    navigate(`/scenario/${stageId}/briefing`);
   };
 
   return (
@@ -39,28 +71,48 @@ export function DepartureBoardScreen() {
           <div className="map-stain stain-ink-1" aria-hidden />
           <div className="map-stain stain-ink-2" aria-hidden />
 
-          {/* 主線章節 — §4.2 中央主軸沿線排列章節節點 */}
-          <section className="map-mainline">
-            <h2 className="line-label">主線:印斯茅斯陰影</h2>
-            <div className="line-rail">
-              <div className="line-track" aria-hidden />
-              <div className="line-node disabled" title="第一章(G2 開放)">
-                <span className="node-glyph">①</span>
-                <span className="node-name">海岸來信</span>
-                <span className="node-tag">G2 開放</span>
+          {/* 主線章節 — §4.2 中央主軸沿線排列章節節點(DB 動態) */}
+          {stages === null && !loadError && (
+            <section className="map-mainline">
+              <h2 className="line-label">主線</h2>
+              <p className="line-loading">正在攤開地圖……</p>
+            </section>
+          )}
+
+          {loadError && (
+            <section className="map-mainline">
+              <h2 className="line-label">主線</h2>
+              <p className="line-loading">地圖載入失敗:{loadError}</p>
+            </section>
+          )}
+
+          {campaigns.map((camp) => (
+            <section className="map-mainline" key={camp.campaignId}>
+              <h2 className="line-label">主線:{camp.campaignName}</h2>
+              <div className="line-rail">
+                <div className="line-track" aria-hidden />
+                {camp.stages.map((s) => (
+                  <button
+                    key={s.id}
+                    className="line-node"
+                    title={s.chapter_name}
+                    onClick={() => enterStage(s.id)}
+                  >
+                    <span className="node-glyph">{'①②③④⑤⑥⑦⑧⑨⑩'[s.chapter_number - 1] ?? s.chapter_number}</span>
+                    <span className="node-name">{s.name_zh}</span>
+                    <span className="node-tag">{s.scenario_count} 場景</span>
+                  </button>
+                ))}
               </div>
-              <div className="line-node faded" title="第二章(尚未開啟)">
-                <span className="node-glyph">②</span>
-                <span className="node-name">迷霧客棧</span>
-                <span className="node-tag">未開啟</span>
-              </div>
-              <div className="line-node faded" title="第三章(尚未開啟)">
-                <span className="node-glyph">③</span>
-                <span className="node-name">深處的真相</span>
-                <span className="node-tag">未開啟</span>
-              </div>
-            </div>
-          </section>
+            </section>
+          ))}
+
+          {campaigns.length === 0 && stages !== null && !loadError && (
+            <section className="map-mainline">
+              <h2 className="line-label">主線</h2>
+              <p className="line-loading">(後台尚未發布任何主線關卡)</p>
+            </section>
+          )}
 
           {/* 預設小關卡 — §4.2 地圖周邊散布的小別針 */}
           <section className="map-side">
@@ -68,7 +120,7 @@ export function DepartureBoardScreen() {
             <div className="pin-area">
               <button
                 className="pin pin-active"
-                onClick={enterTest}
+                onClick={() => enterStage('test')}
                 title="點此進入"
               >
                 <span className="pin-head" aria-hidden>📍</span>
@@ -83,12 +135,7 @@ export function DepartureBoardScreen() {
 
               <div className="pin pin-disabled" title="尚未解鎖">
                 <span className="pin-head" aria-hidden>📌</span>
-                <span className="pin-tooltip">舊圖書館事件(G3 開放)</span>
-              </div>
-
-              <div className="pin pin-disabled" title="尚未解鎖">
-                <span className="pin-head" aria-hidden>📌</span>
-                <span className="pin-tooltip">墓園的腳步聲(G3 開放)</span>
+                <span className="pin-tooltip">支線關卡(後台發布後出現)</span>
               </div>
             </div>
           </section>
@@ -109,7 +156,7 @@ export function DepartureBoardScreen() {
             ← 回大廳
           </button>
           <span className="dep-tip">
-            G1 視覺骨架 — 只開放測試關卡入口;主線/隨機地城在 G2/G4 啟用
+            主線關卡由後台即時供應;隨機地城在 G4 啟用
           </span>
         </footer>
       </div>

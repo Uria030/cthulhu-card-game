@@ -32,7 +32,7 @@ function isUuid(s: unknown): boolean {
 // Helpers
 // ──────────────────────────────────────────────
 
-async function loadFullStage(stageId: string): Promise<any | null> {
+export async function loadFullStage(stageId: string): Promise<any | null> {
   const sRes = await pool.query('SELECT * FROM stages WHERE id = $1', [stageId]);
   if (sRes.rows.length === 0) return null;
   const stage = sRes.rows[0];

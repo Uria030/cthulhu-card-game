@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   createInMemoryMessageBus,
   createTurnLoop,
@@ -10,14 +10,15 @@ import type {
   IntentMessage,
   ResultMessage,
   NotificationMessage,
-  InvestigatorState,
-  ScenarioState,
   TurnState,
   TurnPhase,
   RuleContext,
   ResultEffect,
   EnemyInstance,
 } from '@cthulhu/shared';
+import { fetchBootstrap } from '../api';
+import { makeTestSetup, buildSetupFromBootstrap } from '../game/gameSetup';
+import type { GameSetup, LocationDisplay, CardDisplay } from '../game/gameSetup';
 import './TestScenarioScreen.css';
 
 /**
@@ -45,102 +46,14 @@ import './TestScenarioScreen.css';
  * 教學解鎖鏈邏輯保留(三地點漸進)— 是內容邏輯不是框架。
  */
 
-interface HandCard {
-  id: string;
-  name: string;
-  cost: number;
-  desc: string;
-  rarity: 'common' | 'uncommon' | 'rare' | 'legendary';
-}
-
-const HAND_CARD_DEFS: HandCard[] = [
-  { id: 'c1', name: '.45 手槍', cost: 2, desc: '武器(槍枝)— 攻擊 +2', rarity: 'uncommon' },
-  { id: 'c2', name: '懷錶', cost: 1, desc: '資產 — 重擲一次當前檢定', rarity: 'common' },
-  { id: 'c3', name: '街頭知識', cost: 1, desc: '技能 — 調查時 +2 感知', rarity: 'common' },
-  { id: 'c4', name: '不退讓', cost: 0, desc: '事件 — 反應:取消 1 點傷害', rarity: 'rare' },
-  { id: 'c5', name: '舊日筆記', cost: 1, desc: '資產(書籍)— 抽 2 張卡', rarity: 'common' },
-];
-
-const HAND_CARD_BY_ID: Record<string, HandCard> = Object.fromEntries(HAND_CARD_DEFS.map((c) => [c.id, c]));
-
-const LOCATION_META: Record<string, { name: string; desc: string; lockedDesc: string }> = {
-  alley: {
-    name: '昏暗小巷',
-    desc: '潮濕的鵝卵石,遠處模糊燈光。空氣裡有泥土與菸草味。',
-    lockedDesc: '',
-  },
-  bookshop: {
-    name: '舊書店',
-    desc: '霉味、未拆包裹、地下室低響。',
-    lockedDesc: '一道鏽蝕的鐵閘把書店與小巷隔開。你需要先在這裡找到線索,才能撬開它。',
-  },
-  backdoor: {
-    name: '霧中後門',
-    desc: '門縫透出冷氣,隱約有東西在另一側。',
-    lockedDesc: '濃霧與磚牆截斷了去路。先在書店裡看看那個包裹,你才會知道門後是什麼。',
-  },
-};
-
-function makeInitialInvestigator(): InvestigatorState {
-  return {
-    investigatorId: 'inv-1',
-    investigatorDefinitionId: 'def-范例調查員',
-    ownerPlayerId: 'p1',
-    attributes: {
-      strength: 4, agility: 3, constitution: 3, reflex: 3,
-      intellect: 3, willpower: 3, perception: 4, charisma: 3,
-    },
-    combatStyle: 'sidearm',
-    specializations: [],
-    deck: ['d1', 'd2', 'd3', 'd4', 'd5'],
-    hand: HAND_CARD_DEFS.map((c) => c.id),
-    discardPile: [],
-    removedPile: [],
-    assetsInPlay: [],
-    hp: 7, hpMax: 7, san: 7, sanMax: 7,
-    actionPoints: 3,
-    resources: 0,
-    currentLocationId: 'alley',
-    engagedWith: [],
-    triggeredHorrorChecks: [],
-    traumas: [],
-    secretTaskState: null,
-    permanentlyDead: false,
-    startingXp: 0,
-  };
-}
-
-function makeInitialScenario(): ScenarioState {
-  return {
-    scenarioId: 'test-3loc',
-    scenarioDefinitionId: 'test-three-locations',
-    campaignId: 'test',
-    locations: [
-      { locationDefinitionId: 'alley', visibility: 'night', connectedTo: ['bookshop'], isObstacle: false },
-      { locationDefinitionId: 'bookshop', visibility: 'night', connectedTo: ['alley', 'backdoor'], isObstacle: false },
-      { locationDefinitionId: 'backdoor', visibility: 'darkness', connectedTo: ['bookshop'], isObstacle: true },
-    ],
-    unlockedLocations: ['alley'],
-    enemies: [
-      { instanceId: 'e1', enemyDefinitionId: 'def-shadow-stalker', locationId: 'backdoor', hp: 3, engagedWith: [], modifiers: [] },
-    ],
-    tokens: [],
-    agendaProgress: 0,
-    objectiveProgress: 0,
-    chaosBag: [],
-    turnNumber: 1,
-    phase: 'short_rest_decision',
-  };
-}
-
-function describeEffect(eff: ResultEffect): string {
+function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDisplay>): string {
   const p = eff.params as Record<string, unknown>;
   switch (eff.type) {
     case 'spend_action_point': return '扣 ' + (p.amount as number) + ' 行動點';
     case 'gain_resource': return '獲得 ' + (p.amount as number) + ' 資源';
     case 'draw_card': return '抽 1 張卡 → 手牌';
     case 'deck_empty_horror': return '⚠ 牌庫空,改受 ' + (p.amount as number) + ' 點恐懼(§3.3)';
-    case 'move': return '移動 ' + (LOCATION_META[p.from as string]?.name || p.from) + ' → ' + (LOCATION_META[p.to as string]?.name || p.to);
+    case 'move': return '移動 ' + (locMeta[p.from as string]?.name || p.from) + ' → ' + (locMeta[p.to as string]?.name || p.to);
     case 'attack_of_opportunity_warning': return '⚠ 交戰中強行移動 — 應觸發藉機攻擊(§7.2)';
     case 'roll_d20': {
       const a = p.attribute as string;
@@ -169,8 +82,60 @@ const PHASE_ORDER: TurnPhase[] = ['short_rest_decision', 'investigator', 'mythos
 type ModalType = null | 'keeper' | 'act' | 'team';
 type PanelType = null | 'hand' | 'bag';
 
+/**
+ * 載入殼:/scenario/test 走教學寫死 setup;
+ * /scenario/:stageId(UUID)打 /api/play bootstrap → buildSetupFromBootstrap。
+ */
 export function TestScenarioScreen() {
+  const { stageId = 'test' } = useParams();
+  const [setup, setSetup] = useState<GameSetup | null>(() =>
+    stageId === 'test' ? makeTestSetup() : null,
+  );
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (stageId === 'test') {
+      setSetup(makeTestSetup());
+      setLoadError(null);
+      return;
+    }
+    let cancelled = false;
+    setSetup(null);
+    setLoadError(null);
+    fetchBootstrap(stageId)
+      .then((bootstrap) => {
+        if (!cancelled) setSetup(buildSetupFromBootstrap(bootstrap));
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
+      });
+    return () => { cancelled = true; };
+  }, [stageId]);
+
+  if (loadError) {
+    return (
+      <div className="bg-root">
+        <div className="board-loading">
+          <p>關卡資料載入失敗</p>
+          <p className="board-loading-detail">{loadError}</p>
+        </div>
+      </div>
+    );
+  }
+  if (!setup) {
+    return (
+      <div className="bg-root">
+        <div className="board-loading"><p>正在翻開關卡……</p></div>
+      </div>
+    );
+  }
+  return <BattleBoard key={setup.stageId} setup={setup} />;
+}
+
+function BattleBoard({ setup }: { setup: GameSetup }) {
   const navigate = useNavigate();
+  const locMeta = setup.locMeta;
+  const cardMeta = setup.cardMeta;
 
   const bus = useMemo(() => createInMemoryMessageBus(), []);
   const turnLoopRef = useRef<ReturnType<typeof createTurnLoop> | null>(null);
@@ -178,17 +143,12 @@ export function TestScenarioScreen() {
     turnLoopRef.current = createTurnLoop({ bus, source: 'engine' });
   }
 
-  const [investigator, setInvestigator] = useState<InvestigatorState>(makeInitialInvestigator);
-  const [scenario, setScenario] = useState<ScenarioState>(makeInitialScenario);
+  const [investigator, setInvestigator] = useState(setup.investigator);
+  const [scenario, setScenario] = useState(setup.scenario);
   const [phase, setPhase] = useState<TurnPhase>('short_rest_decision');
   const [turnNumber, setTurnNumber] = useState(1);
   const [keeperEnergy, setKeeperEnergy] = useState(8);
-  const [log, setLog] = useState<string[]>([
-    '──── 三地點教學關卡 開始 ────',
-    '寫死的調查員站在【昏暗小巷】。',
-    '本關目標:逐一解鎖三個地點,驗證調查、遭遇、戰鬥三個系統。',
-    '進入調查員階段後,先試試「調查」找出通往書店的線索。',
-  ]);
+  const [log, setLog] = useState<string[]>(setup.introLog);
 
   // 浮層狀態
   const [modal, setModal] = useState<ModalType>(null);
@@ -221,23 +181,25 @@ export function TestScenarioScreen() {
         if (m.rejection?.suggestion) append('   建議:' + m.rejection.suggestion);
       } else {
         const effects = m.effects ?? [];
-        for (const eff of effects) append('[結算] ' + describeEffect(eff));
+        for (const eff of effects) append('[結算] ' + describeEffect(eff, locMeta));
       }
     });
     return () => { unsubNotif(); unsubResult(); };
-  }, [bus]);
+  }, [bus, locMeta]);
 
-  // 解鎖鏈 + 教學流程(內容邏輯,框架照舊保留)
+  // 解鎖鏈 + 教學流程(只在教學關卡啟用;正式關卡地點預設全解鎖)
   useEffect(() => {
+    if (!setup.tutorial) return;
     const cluesAtAlley = scenario.tokens.filter((t) => t.locationId === 'alley' && t.tokenType === 'clue').reduce((s, t) => s + t.amount, 0);
     if (cluesAtAlley >= 1 && !scenario.unlockedLocations.includes('bookshop')) {
       setScenario((s) => ({ ...s, unlockedLocations: [...s.unlockedLocations, 'bookshop'] }));
       append('🗝 線索拼出書店後門的位置 — 【舊書店】已解鎖,可移動。');
     }
-  }, [scenario.tokens, scenario.unlockedLocations]);
+  }, [setup.tutorial, scenario.tokens, scenario.unlockedLocations]);
 
   const lastLocationRef = useRef<string | null>(investigator.currentLocationId);
   useEffect(() => {
+    if (!setup.tutorial) return;
     const loc = investigator.currentLocationId;
     if (loc !== lastLocationRef.current) {
       lastLocationRef.current = loc;
@@ -256,17 +218,18 @@ export function TestScenarioScreen() {
         }
       }
     }
-  }, [investigator.currentLocationId, scenario.enemies, scenario.unlockedLocations]);
+  }, [setup.tutorial, investigator.currentLocationId, scenario.enemies, scenario.unlockedLocations]);
 
   // 教學完成
   const tutorialDoneRef = useRef(false);
   useEffect(() => {
+    if (!setup.tutorial) return;
     const allEnemiesDown = scenario.enemies.every((e) => e.hp <= 0);
     if (allEnemiesDown && investigator.currentLocationId === 'backdoor' && !tutorialDoneRef.current) {
       tutorialDoneRef.current = true;
       append('🎉 [教學完成] 你擊敗了影潛者。三地點皆已驗證:調查 / 遭遇 / 戰鬥。');
     }
-  }, [scenario.enemies, investigator.currentLocationId]);
+  }, [setup.tutorial, scenario.enemies, investigator.currentLocationId]);
 
   // ─── 動作匯流(訊息協議閉環) ──────────────────
   const submitIntent = useCallback((
@@ -420,7 +383,7 @@ export function TestScenarioScreen() {
   };
 
   // ─── 衍生資料 ──────────────────────
-  const handCards = investigator.hand.map((id) => HAND_CARD_BY_ID[id]).filter((x): x is HandCard => !!x);
+  const handCards = investigator.hand.map((id) => cardMeta[id]).filter((x): x is CardDisplay => !!x);
   const enemyHere: EnemyInstance | undefined = scenario.enemies.find((e) => e.locationId === investigator.currentLocationId && e.hp > 0);
   const isLocationUnlocked = (id: string) => scenario.unlockedLocations.includes(id);
   const currentLocInstance = scenario.locations.find((l) => l.locationDefinitionId === investigator.currentLocationId);
@@ -430,9 +393,11 @@ export function TestScenarioScreen() {
   const locCount = scenario.locations.length;
   const gridCols = locCount <= 3 ? locCount : (locCount <= 9 ? 3 : 4);
 
-  // 議程 / 幕的進度
-  const agendaMax = 6;
-  const objectiveMax = 12;
+  // 議程 / 幕(目前都顯示第一張;推進邏輯屬規則補完階段)
+  const currentAgenda = setup.agendaCards[0] ?? null;
+  const currentAct = setup.actCards[0] ?? null;
+  const agendaMax = currentAgenda?.doomThreshold ?? 6;
+  const objectiveMax = currentAct?.progressMax ?? 12;
   const agendaPct = Math.min(100, (scenario.agendaProgress / agendaMax) * 100);
   const objectivePct = Math.min(100, (scenario.objectiveProgress / objectiveMax) * 100);
 
@@ -473,11 +438,11 @@ export function TestScenarioScreen() {
                 }}
               >
                 {scenario.locations.map((loc) => {
-                  const meta = LOCATION_META[loc.locationDefinitionId];
+                  const meta = locMeta[loc.locationDefinitionId];
                   const unlocked = isLocationUnlocked(loc.locationDefinitionId);
                   const isCurr = loc.locationDefinitionId === investigator.currentLocationId;
                   const cluesHere = scenario.tokens.filter((t) => t.locationId === loc.locationDefinitionId && t.tokenType === 'clue').reduce((s, t) => s + t.amount, 0);
-                  const maxClues = 2;
+                  const maxClues = Math.max(2, cluesHere);
                   return (
                     <div
                       key={loc.locationDefinitionId}
@@ -533,7 +498,7 @@ export function TestScenarioScreen() {
         <div className="block-3-quarter">
           <div className="quarter-avatar-area" onClick={() => openModal('team')}>
             <div className="quarter-avatar-bg" />
-            <div className="quarter-name-banner">范例調查員</div>
+            <div className="quarter-name-banner">{setup.investigatorName}</div>
           </div>
 
           <div className="arc-btn arc-btn-san" title={`理智 ${investigator.san}/${investigator.sanMax}`}>
@@ -592,7 +557,7 @@ export function TestScenarioScreen() {
               <button onClick={() => submitIntent('draw_card')}>抽卡</button>
               <button onClick={() => submitIntent('investigate')}>調查</button>
               {moveTargets.map((tid) => {
-                const meta = LOCATION_META[tid];
+                const meta = locMeta[tid];
                 const target = scenario.locations.find((l) => l.locationDefinitionId === tid);
                 const unlocked = isLocationUnlocked(tid);
                 const cost = target?.isObstacle ? 2 : 1;
@@ -622,7 +587,7 @@ export function TestScenarioScreen() {
       {/* === 地點 bar(從上滑下,5 秒 auto-close)=== */}
       {locationBarId && (() => {
         const loc = scenario.locations.find((l) => l.locationDefinitionId === locationBarId);
-        const meta = LOCATION_META[locationBarId];
+        const meta = locMeta[locationBarId];
         const cluesHere = scenario.tokens.filter((t) => t.locationId === locationBarId && t.tokenType === 'clue').reduce((s, t) => s + t.amount, 0);
         const unlocked = isLocationUnlocked(locationBarId);
         return (
@@ -630,9 +595,10 @@ export function TestScenarioScreen() {
             <div className="loc-bar-title">{meta?.name ?? locationBarId}</div>
             <div className="loc-bar-details">
               <span>狀態: {unlocked ? '已解鎖' : '🔒 未解鎖'}</span>
-              <span>線索: {cluesHere}/2 已收集</span>
+              <span>線索: {cluesHere} 點</span>
               <span>{loc?.isObstacle ? '⚠ 障礙物' : '可進入'}</span>
             </div>
+            {meta?.desc && <div className="loc-bar-desc">{meta.desc}</div>}
           </div>
         );
       })()}
@@ -690,11 +656,11 @@ export function TestScenarioScreen() {
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) closeAllOverlays(); }}>
           <div className="modal-frame modal-keeper">
             <button className="modal-close" onClick={closeAllOverlays}>✕</button>
-            <div className="modal-title">❖ 議程 1 · 毀滅的腳步 ❖</div>
+            <div className="modal-title">❖ 議程 1 · {currentAgenda?.name ?? '未知議程'} ❖</div>
             <div className="modal-illustration">議程插畫</div>
             <hr className="modal-divider" />
             <div className="modal-narrative">
-              「祭壇上的蠟燭一盞接一盞地熄滅。每熄滅一盞,空氣中就多一分窒息感。某種無形的東西正在這座城鎮中累積它的力量,而你們所剩的時間越來越少。」
+              {currentAgenda?.narrative ?? '(本關卡尚未設定議程敘事)'}
             </div>
             <hr className="modal-divider" />
             <div className="cond-title">推進條件:</div>
@@ -711,15 +677,15 @@ export function TestScenarioScreen() {
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) closeAllOverlays(); }}>
           <div className="modal-frame modal-act">
             <button className="modal-close" onClick={closeAllOverlays}>✕</button>
-            <div className="modal-title">❖ 幕 1 · 尋找線索 ❖</div>
+            <div className="modal-title">❖ 幕 1 · {currentAct?.name ?? '未知目標'} ❖</div>
             <div className="modal-illustration">幕插畫</div>
             <hr className="modal-divider" />
             <div className="modal-narrative">
-              「報紙上刊登了一則奇怪的訊息——關於這座城鎮的某段未公開歷史。某些線索散落在各個地點,等待有心人去拼湊出全貌。」
+              {currentAct?.narrative ?? '(本關卡尚未設定幕敘事)'}
             </div>
             <hr className="modal-divider" />
             <div className="cond-title">推進條件:</div>
-            <div className="cond-desc">收集 {objectiveMax} 個線索,即可推進至下一張幕。</div>
+            <div className="cond-desc">{currentAct?.conditionDesc || `收集 ${objectiveMax} 個線索,即可推進至下一張幕。`}</div>
             <div className="modal-progress-text">當前進度: {scenario.objectiveProgress} / {objectiveMax} 線索</div>
             <div className="modal-progress-bar"><div className="modal-progress-fill" style={{ width: `${objectivePct}%` }} /></div>
             <hr className="modal-divider" />
@@ -806,13 +772,13 @@ export function TestScenarioScreen() {
             <hr className="modal-divider" />
             <div className="team-container">
               {teamMembers.map((inv, idx) => {
-                const locName = LOCATION_META[inv.currentLocationId || '']?.name ?? '未知';
+                const locName = locMeta[inv.currentLocationId || '']?.name ?? '未知';
                 return (
                   <div key={inv.investigatorId} className={'team-card tc-' + (idx + 1)}>
                     <div className={'team-avatar ta-' + (idx + 1)} />
                     <div className="tc-info">
-                      <div className="tc-name">范例調查員</div>
-                      <div className={'tc-faction f' + (idx + 1)}>E 號令陣營 · 玩家 {idx + 1}</div>
+                      <div className="tc-name">{setup.investigatorName}</div>
+                      <div className={'tc-faction f' + (idx + 1)}>{setup.factionLabel} · 玩家 {idx + 1}</div>
                       <div className="tc-stats">
                         <span className="tc-hp">體力 {inv.hp}/{inv.hpMax}</span>
                         <span className="tc-san">理智 {inv.san}/{inv.sanMax}</span>

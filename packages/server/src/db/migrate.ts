@@ -3349,9 +3349,27 @@ async function seedInnsmouthCampaign(client: PoolClient) {
 export async function runMigrations() {
   const client = await pool.connect();
   const failures: { name: string; error: string; code?: string }[] = [];
+
+  // ── 防重跑追蹤(2026-06-11 P0 修復)──
+  // 原本每次部署重跑全部 migration;MIGRATION_011 含 DROP TABLE locations CASCADE,
+  // 導致每次部署清空地點表(連帶 tag_map/hidden_info)。追蹤表記錄已套用的
+  // migration,跑過即跳過;失敗者不記錄、下次部署重試。
+  // 紀律:已套用的 migration 內容不可再改(改了也不會重跑),schema 變更一律開新號。
+  await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
+    name        VARCHAR(64) PRIMARY KEY,
+    applied_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  const appliedRes = await client.query('SELECT name FROM schema_migrations');
+  const applied = new Set(appliedRes.rows.map((r: { name: string }) => r.name));
+
   async function runOne(name: string, sql: string) {
+    if (applied.has(name)) return;
     try {
       await client.query(sql);
+      await client.query(
+        'INSERT INTO schema_migrations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING',
+        [name],
+      );
     } catch (e: any) {
       failures.push({
         name,

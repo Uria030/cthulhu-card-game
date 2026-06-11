@@ -187,12 +187,27 @@ test('跨地點殘留交戰 → 防衛清理,怪物改為移動(交戰必同地�
 });
 
 // ─── spawnEnemy ─────────────────────────────
-test('spawnEnemy:依 hp_base + per_player 生成', () => {
+test('spawnEnemy:依 hp_base + per_player 生成,帶召喚失調標記', () => {
   const sc = makeScenario();
   const r = spawnEnemy(sc, 'ghoul', 'D', ENEMY_DATA, 1);
   assertEq(r.scenario.enemies.length, 1);
   assertEq(r.enemy.hp, 3);
   assertEq(r.enemy.locationId, 'D');
+  assertEq(r.enemy.modifiers.includes('summon_sickness'), true);
+});
+
+test('召喚失調:當回合不啟動,次回合恢復行動(Uria 裁定)', () => {
+  const sc = makeScenario();
+  const spawned = spawnEnemy(sc, 'ghoul', 'B', ENEMY_DATA, 1);
+  const inv = makeInv({ currentLocationId: 'A' });
+  // 第 1 次啟動:失調,不動
+  const r1 = activateMonsters(spawned.scenario, { 'inv-1': inv }, ENEMY_DATA, ATTACK_CARDS, rngRoll(15));
+  assertEq(r1.effects.some((e) => e.type === 'monster_dazed'), true);
+  assertEq(r1.scenario.enemies[0].locationId, 'B', '失調回合不移動');
+  assertEq(r1.scenario.enemies[0].modifiers.includes('summon_sickness'), false, '標記用掉即除');
+  // 第 2 次啟動:正常逼近
+  const r2 = activateMonsters(r1.scenario, { 'inv-1': inv }, ENEMY_DATA, ATTACK_CARDS, rngRoll(15));
+  assertEq(r2.scenario.enemies[0].locationId, 'A');
 });
 
 // ─── runner ─────────────────────────────────

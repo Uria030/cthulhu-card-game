@@ -90,6 +90,7 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'attack_of_opportunity': return '🩸 藉機攻擊!' + (p.narrative as string) + '(HP -' + (p.physical as number) + ' / SAN -' + (p.horror as number) + ')';
     case 'taunt': return '🗯 ' + (p.narrative as string);
     case 'engagement_broken': return '🏃 ' + (p.narrative as string);
+    case 'monster_dazed': return '💫 ' + (p.enemy as string) + ':' + (p.narrative as string);
     default: return eff.type;
   }
 }

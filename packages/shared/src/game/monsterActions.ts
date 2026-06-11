@@ -289,6 +289,27 @@ export function activateMonsters(
     if (!enemy || enemy.hp <= 0) continue;
     const data = enemyData[enemy.enemyDefinitionId] ?? {};
 
+    // 召喚失調(Uria 裁定 2026-06-11):剛被召喚的怪物本回合不啟動,標記用掉即除
+    if (enemy.modifiers.includes(SUMMON_SICKNESS)) {
+      sc = {
+        ...sc,
+        enemies: sc.enemies.map((e) =>
+          e.instanceId === enemy.instanceId
+            ? { ...e, modifiers: e.modifiers.filter((m) => m !== SUMMON_SICKNESS) }
+            : e,
+        ),
+      };
+      effects.push({
+        type: 'monster_dazed',
+        params: {
+          enemy: data.name_zh ?? enemy.enemyDefinitionId,
+          narrative: '牠剛被拽入這個世界,還在適應雨夜的空氣——本回合不會行動。',
+        },
+        targetId: enemy.instanceId,
+      });
+      continue;
+    }
+
     // 目標:單人 = 唯一活著的調查員(§10.5 偏好系統多人時展開)
     const target = Object.values(invs).find((i) => !i.permanentlyDead && (i.hp > 0 || i.san > 0));
     if (!target) break;
@@ -381,6 +402,9 @@ export function activateMonsters(
   return { scenario: sc, investigators: invs, effects };
 }
 
+/** 召喚失調標記(Uria 裁定:被召喚當回合不啟動) */
+export const SUMMON_SICKNESS = 'summon_sickness';
+
 // ─── 生成怪物(城主召喚/初始敵人共用;城主 AI 在階段三接上)──
 export function spawnEnemy(
   scenario: ScenarioState,
@@ -397,7 +421,7 @@ export function spawnEnemy(
     locationId: locationCode,
     hp,
     engagedWith: [],
-    modifiers: [],
+    modifiers: [SUMMON_SICKNESS],
   };
   return {
     scenario: { ...scenario, enemies: [...scenario.enemies, enemy] },

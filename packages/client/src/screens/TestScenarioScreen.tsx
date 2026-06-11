@@ -17,6 +17,7 @@ import type {
   EnemyInstance,
 } from '@cthulhu/shared';
 import { fetchBootstrap } from '../api';
+import { getSelectedInvestigator } from '../game/selectedInvestigator';
 import { makeTestSetup, buildSetupFromBootstrap } from '../game/gameSetup';
 import type { GameSetup, LocationDisplay, CardDisplay } from '../game/gameSetup';
 import './TestScenarioScreen.css';
@@ -102,7 +103,7 @@ export function TestScenarioScreen() {
     let cancelled = false;
     setSetup(null);
     setLoadError(null);
-    fetchBootstrap(stageId)
+    fetchBootstrap(stageId, getSelectedInvestigator()?.id)
       .then((bootstrap) => {
         if (!cancelled) setSetup(buildSetupFromBootstrap(bootstrap));
       })

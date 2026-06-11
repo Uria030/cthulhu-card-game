@@ -147,3 +147,148 @@
   letter-spacing: 0.05em;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }
+
+/* === 調查員選擇(椅子熱區觸發)=== */
+.lobby-investigator-chip {
+  background: rgba(201, 168, 76, 0.12);
+  border: 1px solid #C9A84C;
+  border-radius: 999px;
+  color: #C9A84C;
+  font: 600 13px "Noto Serif TC", serif;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.lobby-investigator-chip:hover {
+  background: rgba(201, 168, 76, 0.25);
+}
+
+.inv-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 13, 20, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+}
+
+.inv-picker-frame {
+  position: relative;
+  background: #15151f;
+  border: 1px solid #C9A84C;
+  border-radius: 8px;
+  padding: 24px 28px;
+  width: min(720px, 92vw);
+  max-height: 84vh;
+  overflow-y: auto;
+  color: #E8E4D9;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+.inv-picker-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #E8E4D9;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.inv-picker-title {
+  font: 700 20px "Noto Serif TC", serif;
+  color: #C9A84C;
+  text-align: center;
+  letter-spacing: 0.1em;
+}
+
+.inv-picker-sub {
+  font: 400 12px "Noto Sans TC", sans-serif;
+  color: #9a968c;
+  text-align: center;
+  margin: 8px 0 18px;
+}
+
+.inv-picker-loading,
+.inv-picker-error {
+  text-align: center;
+  font: 400 14px "Noto Serif TC", serif;
+  color: #9a968c;
+  padding: 24px 0;
+}
+
+.inv-picker-error { color: #f87171; }
+
+.inv-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.inv-card {
+  position: relative;
+  text-align: left;
+  background: #1d1d2a;
+  border: 1px solid #3a3a4c;
+  border-radius: 6px;
+  padding: 14px 16px;
+  color: #E8E4D9;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+  font-family: "Noto Serif TC", serif;
+}
+
+.inv-card:hover {
+  border-color: #C9A84C;
+  transform: translateY(-2px);
+}
+
+.inv-card-selected {
+  border-color: #C9A84C;
+  background: rgba(201, 168, 76, 0.08);
+}
+
+.inv-card-name {
+  font: 700 16px "Noto Serif TC", serif;
+}
+
+.inv-card-meta {
+  font: 400 12px "Noto Sans TC", sans-serif;
+  color: #C9A84C;
+  margin: 2px 0 8px;
+}
+
+.inv-card-ability {
+  font: 400 12px "Noto Sans TC", sans-serif;
+  color: #b8b4a8;
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.inv-card-attrs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.inv-attr {
+  font: 400 11px "Noto Sans TC", sans-serif;
+  color: #9a968c;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+
+.inv-card-badge {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font: 700 11px "Noto Sans TC", sans-serif;
+  color: #C9A84C;
+}

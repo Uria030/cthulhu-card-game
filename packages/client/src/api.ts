@@ -27,6 +27,27 @@ export interface PlayStageListItem {
   scenario_count: number;
 }
 
+export interface PlayInvestigator {
+  id: string;
+  code: string;
+  mbti_code: string;
+  faction_code: string;
+  name_zh: string;
+  name_en: string;
+  title_zh: string | null;
+  backstory: string | null;
+  ability_text_zh: string | null;
+  portrait_url: string | null;
+  attr_strength: number;
+  attr_agility: number;
+  attr_constitution: number;
+  attr_reflex: number;
+  attr_intellect: number;
+  attr_willpower: number;
+  attr_perception: number;
+  attr_charisma: number;
+}
+
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
   const body = await res.json().catch(() => null);
@@ -40,16 +61,23 @@ export function fetchPlayStages(): Promise<PlayStageListItem[]> {
   return getJson<PlayStageListItem[]>('/api/play/stages');
 }
 
+export function fetchPlayInvestigators(): Promise<PlayInvestigator[]> {
+  return getJson<PlayInvestigator[]>('/api/play/investigators');
+}
+
 // 開局包 promise cache:劇情提要頁先暖,進戰鬥板直接重用,不重打
+// key 含調查員 id(換人選 → 重新取開局包)
 const bootstrapCache = new Map<string, Promise<StageBootstrap>>();
 
-export function fetchBootstrap(stageId: string): Promise<StageBootstrap> {
-  let p = bootstrapCache.get(stageId);
+export function fetchBootstrap(stageId: string, investigatorId?: string): Promise<StageBootstrap> {
+  const key = `${stageId}|${investigatorId ?? ''}`;
+  let p = bootstrapCache.get(key);
   if (!p) {
-    p = getJson<StageBootstrap>(`/api/play/stages/${stageId}/bootstrap`);
+    const qs = investigatorId ? `?investigator=${encodeURIComponent(investigatorId)}` : '';
+    p = getJson<StageBootstrap>(`/api/play/stages/${stageId}/bootstrap${qs}`);
     // 失敗不留毒快取,下次重試
-    p.catch(() => bootstrapCache.delete(stageId));
-    bootstrapCache.set(stageId, p);
+    p.catch(() => bootstrapCache.delete(key));
+    bootstrapCache.set(key, p);
   }
   return p;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CalibrationProvider,
@@ -11,7 +11,24 @@ import {
 import '@cthulhu/calibration/styles';
 
 import hotspotsJson from '../data/surfaces/study-room/hotspots.json';
+import { fetchPlayInvestigators } from '../api';
+import type { PlayInvestigator } from '../api';
+import {
+  getSelectedInvestigator,
+  setSelectedInvestigator,
+} from '../game/selectedInvestigator';
 import './LobbyScreen.css';
+
+const ATTR_LABELS: Array<[keyof PlayInvestigator, string]> = [
+  ['attr_strength', '力量'],
+  ['attr_agility', '敏捷'],
+  ['attr_constitution', '體質'],
+  ['attr_reflex', '反應'],
+  ['attr_intellect', '智力'],
+  ['attr_willpower', '意志'],
+  ['attr_perception', '感知'],
+  ['attr_charisma', '魅力'],
+];
 
 // 熱區幾何中心(SVG 座標)
 function hotspotCentroid(hs: HotspotData): { cx: number; cy: number } {
@@ -68,6 +85,31 @@ const SURFACE = 'study-room';
 
 export function LobbyScreen() {
   const navigate = useNavigate();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [candidates, setCandidates] = useState<PlayInvestigator[] | null>(null);
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  const [selected, setSelected] = useState(getSelectedInvestigator());
+
+  // 開面板時才撈候選名單(設計完成的調查員)
+  useEffect(() => {
+    if (!pickerOpen || candidates !== null) return;
+    fetchPlayInvestigators()
+      .then(setCandidates)
+      .catch((e: unknown) => setPickerError(e instanceof Error ? e.message : String(e)));
+  }, [pickerOpen, candidates]);
+
+  const pickInvestigator = (inv: PlayInvestigator) => {
+    const sel = {
+      id: inv.id,
+      name_zh: inv.name_zh,
+      mbti_code: inv.mbti_code,
+      faction_code: inv.faction_code,
+    };
+    setSelectedInvestigator(sel);
+    setSelected(sel);
+    setPickerOpen(false);
+  };
+
   const { hotspots, viewBox } = useMemo(
     () =>
       parseHotspotsJson(hotspotsJson, {
@@ -99,7 +141,8 @@ export function LobbyScreen() {
         case 'seat.front':
         case 'seat.left':
         case 'seat.right':
-          console.info(`[lobby] 椅子 ${detail.label} — G2 開放(設定調查員/邀請隊友/召喚 AI)`);
+          // 椅子 = 設定調查員入口(邀請隊友/召喚 AI 仍在 G2)
+          setPickerOpen(true);
           break;
         default:
           console.warn('[lobby] 未處理熱區', detail.hotspotId);
@@ -141,10 +184,54 @@ export function LobbyScreen() {
           <button className="lobby-back" onClick={() => navigate('/')}>
             ← 回啟動畫面
           </button>
+          <button className="lobby-investigator-chip" onClick={() => setPickerOpen(true)}>
+            {selected ? `🕵 ${selected.name_zh}(${selected.mbti_code ?? ''})` : '🕵 點椅子選擇調查員'}
+          </button>
           <span className="lobby-tip">
-            G1 視覺骨架 — 整備七功能 / 椅子設定 / 邀請隊友 / 召喚 AI 在 G2 開放
+            整備七功能 / 邀請隊友 / 召喚 AI 在 G2 開放
           </span>
         </footer>
+
+        {pickerOpen && (
+          <div
+            className="inv-picker-backdrop"
+            onClick={(e) => { if (e.target === e.currentTarget) setPickerOpen(false); }}
+          >
+            <div className="inv-picker-frame">
+              <button className="inv-picker-close" onClick={() => setPickerOpen(false)}>✕</button>
+              <div className="inv-picker-title">❖ 選擇你的調查員 ❖</div>
+              <div className="inv-picker-sub">只列出設計完成的調查員;選定後出發板與關卡都會帶上這位。</div>
+
+              {pickerError && <div className="inv-picker-error">名單載入失敗:{pickerError}</div>}
+              {!pickerError && candidates === null && <div className="inv-picker-loading">翻閱人事檔案……</div>}
+              {candidates !== null && candidates.length === 0 && (
+                <div className="inv-picker-loading">(後台尚無設計完成的調查員)</div>
+              )}
+
+              <div className="inv-picker-grid">
+                {(candidates ?? []).map((inv) => (
+                  <button
+                    key={inv.id}
+                    className={'inv-card' + (selected?.id === inv.id ? ' inv-card-selected' : '')}
+                    onClick={() => pickInvestigator(inv)}
+                  >
+                    <div className="inv-card-name">{inv.name_zh}</div>
+                    <div className="inv-card-meta">{inv.mbti_code} · {inv.title_zh ?? inv.faction_code}</div>
+                    {inv.ability_text_zh && <div className="inv-card-ability">{inv.ability_text_zh}</div>}
+                    <div className="inv-card-attrs">
+                      {ATTR_LABELS.map(([key, label]) => (
+                        <span key={key} className="inv-attr">
+                          {label} {Number(inv[key] ?? 0)}
+                        </span>
+                      ))}
+                    </div>
+                    {selected?.id === inv.id && <div className="inv-card-badge">✓ 目前選用</div>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </CalibrationProvider>
     </div>
   );

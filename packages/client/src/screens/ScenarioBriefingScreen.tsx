@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { StageBootstrap } from '@cthulhu/shared';
 import { fetchBootstrap } from '../api';
+import { getSelectedInvestigator } from '../game/selectedInvestigator';
 import './ScenarioBriefingScreen.css';
 
 /**
@@ -79,7 +80,7 @@ export function ScenarioBriefingScreen() {
     let cancelled = false;
     setContent(null);
     setLoadError(null);
-    fetchBootstrap(stageId)
+    fetchBootstrap(stageId, getSelectedInvestigator()?.id)
       .then((b) => { if (!cancelled) setContent(briefingFromBootstrap(b)); })
       .catch((e: unknown) => {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));

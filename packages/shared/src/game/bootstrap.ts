@@ -117,6 +117,16 @@ export interface StageBootstrap {
   monsters: Array<Record<string, unknown>>;
   monster_attack_cards: Array<Record<string, unknown>>;
   investigator: BootstrapInvestigatorRow | null;
+  /** 戰鬥風格卡池(第一層,§8 攻擊抽卡用;依牌組武器風格 + 調查員熟練撈) */
+  combat_style_pools?: Array<{
+    code: string;
+    name_zh: string;
+    check_attribute: string;
+    style_code: string;
+    narrative_attack_zh?: string;
+    narrative_success_zh?: string;
+    narrative_fail_zh?: string;
+  }>;
 }
 
 // ─── 卡片實例查找表(state 只存實例 id,畫面靠這張表顯示卡面)──

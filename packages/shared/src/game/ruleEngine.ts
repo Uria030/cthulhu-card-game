@@ -32,6 +32,36 @@ import {
   visibilityModifier,
 } from './checks';
 import type { AttributeKey, CommitIcons } from './checks';
+import { executeCardEffects, passiveTestModifier } from './effectsExecutor';
+
+// ─── 卡片實例資料(容器由 bootstrap cardIndex 餵入)──
+export interface CardData {
+  commit_icons?: CommitIcons;
+  name_zh?: string;
+  card_type?: string;
+  cost?: number | null;
+  combat_style?: string | null;
+  attribute_modifiers?: Record<string, number>;
+  subtypes?: unknown[];
+  effects?: Array<{
+    trigger_type: string;
+    effect_code: string;
+    effect_params: Record<string, unknown> | null;
+    duration?: string | null;
+    description_zh?: string | null;
+  }>;
+}
+export type CardDataLookup = Record<string, CardData>;
+
+/** 戰鬥風格卡(§8:攻擊時抽 1 張決定檢定屬性) */
+export interface StyleCardData {
+  code: string;
+  name_zh: string;
+  check_attribute: string;
+  narrative_attack_zh?: string;
+  narrative_success_zh?: string;
+  narrative_fail_zh?: string;
+}
 
 // ─── 引擎輸入:當前狀態切片 ──────────────
 export interface RuleContext {
@@ -42,12 +72,14 @@ export interface RuleContext {
   turn: TurnState;
   /** 全部調查員(供多人查詢) */
   investigators: Record<string, InvestigatorState>;
-  /** 卡片實例資料查找(commit_icons 等;容器由 bootstrap cardIndex 餵入) */
-  cardLookup?: Record<string, { commit_icons?: CommitIcons }>;
+  /** 卡片實例資料查找(commit_icons/effects 等) */
+  cardLookup?: CardDataLookup;
   /** 地點統計(調查難度 shroud;key = locationDefinitionId) */
   locationStats?: Record<string, { shroud?: number }>;
   /** 敵人定義統計(key = enemyDefinitionId,來自 bootstrap monsters) */
   enemyStats?: Record<string, { dc?: number; damage_physical?: number; damage_horror?: number }>;
+  /** 戰鬥風格卡池(key = style code,如 shooting;第一層公用池) */
+  stylePools?: Record<string, StyleCardData[]>;
   /** 亂數來源(測試注入,預設 Math.random) */
   rng?: () => number;
 }
@@ -131,10 +163,12 @@ export function resolveIntent(intent: IntentMessage, ctx: RuleContext): RuleReso
       return resolveAttack(intent, ctx);
     case 'evade':
       return resolveEvade(intent, ctx);
-    // 以下 stub,等後續里程碑展開
     case 'play_card':
-    case 'taunt':
+      return resolvePlayCard(intent, ctx);
     case 'execute_card_action':
+      return resolveExecuteCardAction(intent, ctx);
+    // 以下 stub,等後續批次展開
+    case 'taunt':
     case 'consume':
     case 'commit_attribute_icon':
     case 'short_rest':
@@ -294,14 +328,16 @@ function resolveInvestigate(intent: IntentMessage, ctx: RuleContext): RuleResolv
       { tokenType: 'clue', locationId: ctx.investigator.currentLocationId || '', amount: 1 },
     ],
   };
+  const after = applyOnSuccessCommit(true, commit.committedIds, newInv, newScenario, ctx.cardLookup ?? {});
   return accept(
     intent,
     [
       ...baseEffects,
       { type: 'investigate_success', params: { narrative: '你在塵埃裡發現了一張被遺忘的紙條。', clueAmount: 1 }, targetId: ctx.investigator.currentLocationId || undefined },
       { type: 'gain_clue', params: { amount: 1 } },
+      ...after.effects,
     ],
-    { investigator: newInv, scenario: newScenario }
+    { investigator: after.investigator, scenario: after.scenario }
   );
 }
 
@@ -448,6 +484,219 @@ function resolveEvade(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
   return accept(intent, effects, { investigator: newInv, scenario: newScenario });
 }
 
+
+/**
+ * 打出卡片 — §6.1:1 行動點 + 支付卡片費用(資源)
+ * 事件卡:立即結算 action 觸發效果 → 棄牌堆
+ * 資產/武器/盟友:進場(assetsInPlay),passive 效果由檢定時聚合
+ * 技能卡:不可打出(用於加值 commit,ch3 §3.2)
+ */
+function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
+  if (ctx.investigator.actionPoints < 1) {
+    return reject(intent, '行動點不足:打出卡片需 1,剩 ' + ctx.investigator.actionPoints);
+  }
+  const cardId = (intent.payload as { cardInstanceId?: string }).cardInstanceId;
+  if (typeof cardId !== 'string' || !ctx.investigator.hand.includes(cardId)) {
+    return reject(intent, '該卡不在手牌中:' + String(cardId));
+  }
+  const data = ctx.cardLookup?.[cardId];
+  if (!data) {
+    return reject(intent, '查無卡片資料:' + cardId);
+  }
+  if (data.card_type === 'skill') {
+    return reject(intent, '技能卡不打出 — 在檢定時投入加值(ch3 §3.2)');
+  }
+  const cost = Number(data.cost ?? 0);
+  if (ctx.investigator.resources < cost) {
+    return reject(intent, '資源不足:「' + (data.name_zh ?? cardId) + '」需 ' + cost + ',剩 ' + ctx.investigator.resources);
+  }
+
+  let inv: InvestigatorState = {
+    ...ctx.investigator,
+    actionPoints: ctx.investigator.actionPoints - 1,
+    resources: ctx.investigator.resources - cost,
+    hand: ctx.investigator.hand.filter((id) => id !== cardId),
+  };
+  const baseEffects: ResultEffect[] = [
+    { type: 'spend_action_point', params: { amount: 1 } },
+    { type: 'play_card', params: { cardInstanceId: cardId, name: data.name_zh ?? '', cost } },
+  ];
+
+  if (data.card_type === 'event') {
+    // 事件卡:結算 action 效果 → 棄牌堆
+    const actionFx = (data.effects ?? []).filter((f) => f.trigger_type === 'action');
+    const exec = executeCardEffects(actionFx, inv, ctx.scenario, ctx.cardLookup ?? {});
+    inv = { ...exec.investigator, discardPile: [...exec.investigator.discardPile, cardId] };
+    const effects = [...baseEffects, ...exec.effects];
+    if (exec.unsupported.length > 0) {
+      effects.push({ type: 'effect_unsupported', params: { codes: exec.unsupported } });
+    }
+    return accept(intent, effects, { investigator: inv, scenario: exec.scenario });
+  }
+
+  // 資產/武器/盟友:進場
+  inv = { ...inv, assetsInPlay: [...inv.assetsInPlay, cardId] };
+  return accept(intent, [...baseEffects, { type: 'asset_enters_play', params: { cardInstanceId: cardId, name: data.name_zh ?? '' } }], { investigator: inv });
+}
+
+/**
+ * 執行卡片行動 — §6.1 use_card:場上資產的 action 效果,1 行動點
+ * 武器 attack 效果走 §8 風格卡抽取路徑;其餘走效果執行器。
+ * payload: { cardInstanceId, actionIndex?(同卡多段行動,預設 0), enemyInstanceId?, commitCardIds? }
+ */
+function resolveExecuteCardAction(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
+  if (ctx.investigator.actionPoints < 1) {
+    return reject(intent, '行動點不足:執行卡片行動需 1,剩 ' + ctx.investigator.actionPoints);
+  }
+  const p = intent.payload as { cardInstanceId?: string; actionIndex?: number };
+  const cardId = p.cardInstanceId;
+  if (typeof cardId !== 'string' || !ctx.investigator.assetsInPlay.includes(cardId)) {
+    return reject(intent, '該卡不在場上:' + String(cardId));
+  }
+  const data = ctx.cardLookup?.[cardId];
+  const actionFx = (data?.effects ?? []).filter((f) => f.trigger_type === 'action');
+  if (actionFx.length === 0) {
+    return reject(intent, '「' + (data?.name_zh ?? cardId) + '」沒有可執行的行動效果');
+  }
+  const idx = Math.min(Math.max(0, Number(p.actionIndex ?? 0)), actionFx.length - 1);
+  const fx = actionFx[idx];
+
+  if (fx.effect_code === 'attack') {
+    return performWeaponAttack(intent, ctx, cardId, fx);
+  }
+
+  const inv: InvestigatorState = { ...ctx.investigator, actionPoints: ctx.investigator.actionPoints - 1 };
+  const exec = executeCardEffects([fx], inv, ctx.scenario, ctx.cardLookup ?? {});
+  const effects: ResultEffect[] = [
+    { type: 'spend_action_point', params: { amount: 1 } },
+    { type: 'card_action', params: { cardInstanceId: cardId, name: data?.name_zh ?? '' } },
+    ...exec.effects,
+  ];
+  if (exec.unsupported.length > 0) {
+    effects.push({ type: 'effect_unsupported', params: { codes: exec.unsupported } });
+  }
+  return accept(intent, effects, { investigator: exec.investigator, scenario: exec.scenario });
+}
+
+/**
+ * 武器攻擊 — §8 戰鬥風格卡系統:
+ * 武器 combat_style 決定抽哪個風格池 → 抽 1 張風格卡指定檢定屬性 →
+ * d20 + 該屬性 + 武器 attribute_modifiers(僅對應屬性,§8)+ 場上被動 + commit + 光照
+ * 命中傷害 = 效果 params.damage(資料未填時 fallback 2)+ params.damage_bonus
+ */
+function performWeaponAttack(
+  intent: IntentMessage,
+  ctx: RuleContext,
+  weaponId: string,
+  fx: { effect_params: Record<string, unknown> | null },
+): RuleResolveOutput {
+  const weapon = ctx.cardLookup?.[weaponId];
+  const style = String(weapon?.combat_style ?? '');
+  const pool = ctx.stylePools?.[style] ?? [];
+  if (pool.length === 0) {
+    return reject(intent, '「' + (weapon?.name_zh ?? weaponId) + '」的風格池(' + style + ')為空,無法抽風格卡');
+  }
+  const requestedEnemy = (intent.payload as { enemyInstanceId?: string }).enemyInstanceId;
+  const enemy = requestedEnemy
+    ? ctx.scenario.enemies.find((e) => e.instanceId === requestedEnemy)
+    : ctx.scenario.enemies.find((e) => e.locationId === ctx.investigator.currentLocationId && e.hp > 0);
+  if (!enemy || enemy.hp <= 0) {
+    return reject(intent, '當前地點沒有可攻擊的目標');
+  }
+  if (enemy.locationId !== ctx.investigator.currentLocationId) {
+    return reject(intent, '目標不在你所在地點');
+  }
+
+  const rng = ctx.rng ?? Math.random;
+  const styleCard = pool[Math.floor(rng() * pool.length)];
+  const attr = styleCard.check_attribute as AttributeKey;
+  if (!(attr in ctx.investigator.attributes)) {
+    return reject(intent, '風格卡「' + styleCard.name_zh + '」檢定屬性不合法:' + styleCard.check_attribute);
+  }
+  const commit = takeCommit(intent, ctx, attr);
+  if (commit.error) return reject(intent, commit.error);
+
+  const here = ctx.scenario.locations.find(
+    (l) => l.locationDefinitionId === ctx.investigator.currentLocationId,
+  );
+  const situational = here ? visibilityModifier('attack', here.visibility) : 0;
+  // §8:武器修正只在對應屬性風格卡被抽到時生效 + 場上被動(瞄準鏡等)
+  const equipment =
+    Number(weapon?.attribute_modifiers?.[attr] ?? 0) +
+    passiveTestModifier(ctx.investigator, ctx.cardLookup ?? {}, attr);
+  const dc = ctx.enemyStats?.[enemy.enemyDefinitionId]?.dc ?? 10;
+  const check = resolveCheck(
+    dc,
+    { attribute: ctx.investigator.attributes[attr], equipment, commit: commit.value, situational },
+    ctx.rng,
+  );
+
+  let inv: InvestigatorState = {
+    ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
+    actionPoints: ctx.investigator.actionPoints - 1,
+  };
+  const baseEffects: ResultEffect[] = [
+    { type: 'spend_action_point', params: { amount: 1 } },
+    { type: 'style_card_drawn', params: { style, name: styleCard.name_zh, attribute: attr, narrative: styleCard.narrative_attack_zh ?? '' } },
+    ...commitEffects(commit),
+    { type: 'roll_d20', params: { roll: check.roll, attribute: attr, modifier: check.total - check.roll, total: check.total, dc, outcome: check.outcome === 'success' ? 'hit' : 'miss', natural20: check.natural20, natural1: check.natural1 }, targetId: enemy.instanceId },
+  ];
+
+  if (check.outcome !== 'success' || check.natural1) {
+    const miss = [...baseEffects, { type: 'attack_miss', params: { narrative: styleCard.narrative_fail_zh || '你的攻擊落空了。' }, targetId: enemy.instanceId }];
+    const after = applyOnSuccessCommit(false, commit.committedIds, inv, ctx.scenario, ctx.cardLookup ?? {});
+    return accept(intent, [...miss, ...after.effects], { investigator: after.investigator, scenario: after.scenario });
+  }
+
+  const params = (fx.effect_params ?? {}) as Record<string, any>;
+  // 武器卡面傷害(§7.5):params.damage 未填時 fallback 2(資料補齊中)
+  const base = Number(params.damage ?? 2) + Number(params.damage_bonus ?? 0);
+  const damage = check.natural20 ? base * 2 : base;
+  const newHp = enemy.hp - damage;
+  let sc: ScenarioState = {
+    ...ctx.scenario,
+    enemies: ctx.scenario.enemies.map((e) => (e.instanceId === enemy.instanceId ? { ...e, hp: newHp } : e)),
+  };
+  const effects: ResultEffect[] = [
+    ...baseEffects,
+    { type: 'attack_hit', params: { damage, critical: check.natural20, weapon: weapon?.name_zh ?? '', narrative: (check.natural20 ? '【爆擊】' : '') + (styleCard.narrative_success_zh || hpToNarrative(newHp, enemy.hp)) }, targetId: enemy.instanceId },
+  ];
+  if (newHp <= 0) {
+    effects.push({ type: 'enemy_defeated', params: { narrative: '牠倒下了,空氣裡只剩下血腥與沉默。' }, targetId: enemy.instanceId });
+  }
+  const after = applyOnSuccessCommit(true, commit.committedIds, inv, sc, ctx.cardLookup ?? {});
+  inv = after.investigator;
+  sc = after.scenario;
+  return accept(intent, [...effects, ...after.effects], { investigator: inv, scenario: sc });
+}
+
+/**
+ * 投入檢定的卡片 on_success 效果(ch3 §3.2 技能卡附贈):
+ * 檢定成功後,結算所有被 commit 卡片的 on_success 觸發效果(如:成功後抽 1 張)。
+ */
+function applyOnSuccessCommit(
+  success: boolean,
+  committedIds: string[],
+  investigator: InvestigatorState,
+  scenario: ScenarioState,
+  cardLookup: CardDataLookup,
+): { investigator: InvestigatorState; scenario: ScenarioState; effects: ResultEffect[] } {
+  if (!success || committedIds.length === 0) {
+    return { investigator, scenario, effects: [] };
+  }
+  let inv = investigator;
+  let sc = scenario;
+  const effects: ResultEffect[] = [];
+  for (const id of committedIds) {
+    const onSuccess = (cardLookup[id]?.effects ?? []).filter((f) => f.trigger_type === 'on_success');
+    if (onSuccess.length === 0) continue;
+    const exec = executeCardEffects(onSuccess, inv, sc, cardLookup);
+    inv = exec.investigator;
+    sc = exec.scenario;
+    effects.push(...exec.effects);
+  }
+  return { investigator: inv, scenario: sc, effects };
+}
 
 /** §7.8 隱藏資訊:敵人血量轉敘事性狀態(簡化:依絕對 hp 不依百分比)*/
 function hpToNarrative(newHp: number, prevHp: number): string {

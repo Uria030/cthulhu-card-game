@@ -346,6 +346,118 @@ test('evade:指定未交戰的敵人駁回', () => {
   assertEq(r.result.outcome, 'rejected');
 });
 
+// ═══ G-02 批次②:卡片結算(§6.1/ch3/§8)═══
+
+const WEAPON_LOOKUP: RuleContext['cardLookup'] = {
+  wpn: {
+    name_zh: '探長左輪', card_type: 'asset', cost: 2, combat_style: 'shooting',
+    attribute_modifiers: { perception: 1 },
+    effects: [{ trigger_type: 'action', effect_code: 'attack', effect_params: { damage: 2 }, duration: 'instant' }],
+  },
+  evt: {
+    name_zh: '霰彈', card_type: 'event', cost: 1,
+    effects: [{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { area: true, amount: 2 }, duration: 'instant' }],
+  },
+  skl: {
+    name_zh: '彈道解析', card_type: 'skill', cost: 0, commit_icons: { intellect: 2 },
+    effects: [{ trigger_type: 'on_success', effect_code: 'draw_card', effect_params: {}, duration: 'instant' }],
+  },
+  obs: {
+    name_zh: '探長觀察', card_type: 'skill', cost: 0, commit_icons: { perception: 2 },
+    effects: [{ trigger_type: 'on_success', effect_code: 'draw_card', effect_params: {}, duration: 'instant' }],
+  },
+};
+
+const SHOOTING_POOL: NonNullable<RuleContext['stylePools']> = {
+  shooting: [
+    { code: 'sc1', name_zh: '穩定射擊', check_attribute: 'perception', narrative_success_zh: '子彈正中目標。', narrative_fail_zh: '子彈擦過牆角。' },
+  ],
+};
+
+function makeCardCtx(opts: { roll: number; hand?: string[]; assets?: string[]; resources?: number; enemyDc?: number }): RuleContext {
+  const base = makeCombatCtx({ roll: opts.roll, enemyDc: opts.enemyDc ?? 10, visibility: 'day' });
+  base.investigator = {
+    ...base.investigator,
+    hand: opts.hand ?? [],
+    assetsInPlay: opts.assets ?? [],
+    resources: opts.resources ?? 5,
+    deck: ['d1', 'd2', 'd3', 'd4', 'd5', 'd6'],
+  };
+  base.investigators['inv-1'] = base.investigator;
+  base.cardLookup = WEAPON_LOOKUP;
+  base.stylePools = SHOOTING_POOL;
+  return base;
+}
+
+test('play_card:資產進場 + 扣費用(§6.1)', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['wpn'], resources: 3 });
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'wpn' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.assetsInPlay.includes('wpn'), true);
+  assertEq(r.newState?.investigator?.resources, 1);
+  assertEq(r.newState?.investigator?.actionPoints, 2);
+});
+
+test('play_card:資源不足駁回', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['wpn'], resources: 1 });
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'wpn' }), ctx);
+  assertEq(r.result.outcome, 'rejected');
+});
+
+test('play_card:技能卡不可打出(ch3 §3.2)', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['skl'] });
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'skl' }), ctx);
+  assertEq(r.result.outcome, 'rejected');
+});
+
+test('play_card:事件卡結算範圍傷害後進棄牌堆', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['evt'] });
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'evt' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.scenario?.enemies[0].hp, 1); // 3 - 2
+  assertEq(r.newState?.investigator?.discardPile.includes('evt'), true);
+});
+
+test('武器攻擊:風格卡指定屬性 + 武器修正生效(§8)', () => {
+  // roll 10 + 感知 3 + 武器修正 1 = 14 ≥ DC 14 → hit;傷害 2
+  const ctx = makeCardCtx({ roll: 10, assets: ['wpn'], enemyDc: 14 });
+  const r = resolveIntent(makeIntent('execute_card_action', { cardInstanceId: 'wpn' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  const drawn = r.result.effects?.find((e) => e.type === 'style_card_drawn');
+  assertEq((drawn?.params as { attribute: string }).attribute, 'perception');
+  const hit = r.result.effects?.find((e) => e.type === 'attack_hit');
+  assertEq((hit?.params as { damage: number }).damage, 2);
+  assertEq(r.newState?.scenario?.enemies[0].hp, 1);
+});
+
+test('武器攻擊:commit 卡 on_success 抽牌(ch3 §3.2)', () => {
+  // roll 8 + 感知 3 + 武器 1 + commit obs 2 = 14 ≥ 14 hit → on_success 抽 1
+  const ctx = makeCardCtx({ roll: 8, hand: ['obs'], assets: ['wpn'], enemyDc: 14 });
+  const r = resolveIntent(
+    makeIntent('execute_card_action', { cardInstanceId: 'wpn', commitCardIds: ['obs'] }),
+    ctx,
+  );
+  assertEq(r.result.outcome, 'accepted');
+  const hit = r.result.effects?.find((e) => e.type === 'attack_hit');
+  assertEq(hit !== undefined, true, '應命中');
+  // obs 進棄牌堆 + on_success 抽 1 張(d1 入手)
+  assertEq(r.newState?.investigator?.discardPile.includes('obs'), true);
+  assertEq(r.newState?.investigator?.hand.includes('d1'), true);
+});
+
+test('武器攻擊:風格池為空駁回', () => {
+  const ctx = makeCardCtx({ roll: 10, assets: ['wpn'] });
+  ctx.stylePools = {};
+  const r = resolveIntent(makeIntent('execute_card_action', { cardInstanceId: 'wpn' }), ctx);
+  assertEq(r.result.outcome, 'rejected');
+});
+
+test('execute_card_action:不在場上駁回', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['wpn'] });
+  const r = resolveIntent(makeIntent('execute_card_action', { cardInstanceId: 'wpn' }), ctx);
+  assertEq(r.result.outcome, 'rejected');
+});
+
 // ─── runner ─────────────────────────
 let passed = 0;
 let failed = 0;

@@ -249,6 +249,31 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
         }));
       }
 
+      // ── 戰鬥風格卡池(§8:攻擊時抽卡決定檢定屬性)──
+      // 範圍 = 牌組武器用到的風格 + 調查員主熟練;第一層(card_tier=1)公用池
+      const styleCodes = new Set<string>();
+      for (const entry of investigator?.starting_deck ?? []) {
+        const cs = entry.card?.combat_style;
+        if (cs) styleCodes.add(String(cs));
+      }
+      for (const p of investigator?.proficiency_ids ?? []) {
+        if (typeof p === 'string' && p) styleCodes.add(p);
+      }
+      const stylePools = styleCodes.size
+        ? (
+            await pool.query(
+              `SELECT csc.code, csc.name_zh, csc.check_attribute,
+                      csc.narrative_attack_zh, csc.narrative_success_zh, csc.narrative_fail_zh,
+                      cs.code AS style_code
+                 FROM combat_style_cards csc
+                 JOIN combat_styles cs ON cs.id = csc.style_id
+                WHERE cs.code = ANY($1) AND csc.card_tier = 1
+                ORDER BY cs.code, csc.sort_order`,
+              [[...styleCodes]],
+            )
+          ).rows
+        : [];
+
       return reply.send({
         success: true,
         data: {
@@ -261,6 +286,7 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
           monsters: monsterRes.rows,
           monster_attack_cards: attackCards,
           investigator,
+          combat_style_pools: stylePools,
         },
       });
     } catch (error) {

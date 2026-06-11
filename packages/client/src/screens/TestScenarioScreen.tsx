@@ -70,6 +70,13 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'commit_cards': return '🂠 投入 ' + ((p.cardInstanceIds as string[])?.length ?? 0) + ' 張手牌加值 +' + (p.bonus as number);
     case 'evade_success': return '🌀 ' + (p.narrative as string);
     case 'evade_fail': return '🌀 ' + (p.narrative as string) + '(受 ' + (p.damage as number) + ' 點傷害)';
+    case 'play_card': return '🃏 打出「' + (p.name as string) + '」(費用 ' + (p.cost as number) + ')';
+    case 'asset_enters_play': return '🛠 「' + (p.name as string) + '」進場';
+    case 'card_action': return '🛠 使用「' + (p.name as string) + '」';
+    case 'style_card_drawn': return '🎴 風格卡【' + (p.name as string) + '】— 本次檢定屬性:' + (p.attribute as string);
+    case 'status_applied': return '🏷 施加「' + (p.status as string) + '」狀態';
+    case 'search_deck': return '🔍 檢視牌庫頂 ' + (p.viewed as number) + ' 張,取走 ' + (p.taken as number) + ' 張';
+    case 'effect_unsupported': return 'ℹ 部分卡面效果引擎尚未支援:' + ((p.codes as string[]) ?? []).join('、');
     default: return eff.type;
   }
 }
@@ -157,6 +164,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // 浮層狀態
   const [modal, setModal] = useState<ModalType>(null);
   const [panel, setPanel] = useState<PanelType>(null);
+  // 投入加值選擇(下一次檢定動作帶上,送出後清空)
+  const [commitSelection, setCommitSelection] = useState<string[]>([]);
   const [locationBarId, setLocationBarId] = useState<string | null>(null);
   const [logCollapsed, setLogCollapsed] = useState(true);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
@@ -255,12 +264,31 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       locationStats: setup.locationStats,
       enemyStats: setup.enemyStats,
       cardLookup: setup.cardLookup,
+      stylePools: setup.stylePools,
     };
     const out = resolveIntent(intent, ctx);
     bus.publish(out.result);
     if (out.newState?.investigator) setInvestigator(out.newState.investigator);
     if (out.newState?.scenario) setScenario(out.newState.scenario);
-  }, [bus, investigator, scenario, turnNumber, phase]);
+    // 動作被接受後清空加值選擇(卡片已進棄牌堆)
+    if (out.result.outcome === 'accepted' && (intent.payload as { commitCardIds?: unknown }).commitCardIds) {
+      setCommitSelection([]);
+    }
+  }, [bus, investigator, scenario, turnNumber, phase, setup]);
+
+  /** 檢定類動作:自動帶上目前的加值選擇 */
+  const submitCheckIntent = useCallback((
+    actionType: IntentMessage['actionType'],
+    payload: Record<string, unknown> = {}
+  ) => {
+    submitIntent(actionType, commitSelection.length > 0 ? { ...payload, commitCardIds: commitSelection } : payload);
+  }, [submitIntent, commitSelection]);
+
+  const toggleCommit = (cardId: string) => {
+    setCommitSelection((sel) =>
+      sel.includes(cardId) ? sel.filter((id) => id !== cardId) : [...sel, cardId],
+    );
+  };
 
   // 階段控制
   const startInvestigatorPhase = () => { turnLoopRef.current?.advance(); append('[階段切換] 進入調查員階段(3 行動點)'); };
@@ -554,6 +582,11 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         <div className="phase-control">
           <div className="phase-info">
             T{turnNumber} · {PHASE_LABEL[phase]} · 行動點 {investigator.actionPoints}
+            {commitSelection.length > 0 && (
+              <span className="commit-chip" title="下一次檢定將投入這些手牌加值">
+                🂠 投入 {commitSelection.length} 張
+              </span>
+            )}
           </div>
           {phase === 'short_rest_decision' && (
             <div className="phase-buttons">
@@ -565,7 +598,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             <div className="phase-buttons">
               <button onClick={() => submitIntent('gain_resource')}>拿資源</button>
               <button onClick={() => submitIntent('draw_card')}>抽卡</button>
-              <button onClick={() => submitIntent('investigate')}>調查</button>
+              <button onClick={() => submitCheckIntent('investigate')}>調查</button>
               {moveTargets.map((tid) => {
                 const meta = locMeta[tid];
                 const target = scenario.locations.find((l) => l.locationDefinitionId === tid);
@@ -578,9 +611,23 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                 );
               })}
               {enemyHere && (
-                <button className="attack" onClick={() => submitIntent('attack', { enemyInstanceId: enemyHere.instanceId })}>
-                  ⚔ 攻擊
+                <button className="attack" onClick={() => submitCheckIntent('attack', { enemyInstanceId: enemyHere.instanceId })}>
+                  ⚔ 徒手攻擊
                 </button>
+              )}
+              {enemyHere && investigator.assetsInPlay
+                .filter((id) => (setup.cardLookup[id]?.effects ?? []).some((f) => f.trigger_type === 'action' && f.effect_code === 'attack'))
+                .map((id) => (
+                  <button
+                    key={id}
+                    className="attack"
+                    onClick={() => submitCheckIntent('execute_card_action', { cardInstanceId: id, enemyInstanceId: enemyHere.instanceId })}
+                  >
+                    ⚔ {setup.cardLookup[id]?.name_zh ?? '武器'}
+                  </button>
+                ))}
+              {investigator.engagedWith.length > 0 && (
+                <button onClick={() => submitCheckIntent('evade')}>🌀 閃避</button>
               )}
               <button onClick={enterMythosPhase}>結束調查員階段 →</button>
             </div>
@@ -613,25 +660,44 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         );
       })()}
 
-      {/* === 底部 Panel(手牌)=== */}
+      {/* === 底部 Panel(手牌:點卡 = 切換投入加值;「打出」= play_card)=== */}
       {panel === 'hand' && (
         <div className="bottom-panel active">
           <div className="panel-close" onClick={() => setPanel(null)}>[✕ 關閉]</div>
-          <div className="panel-title">手牌 ({handCards.length})</div>
+          <div className="panel-title">
+            手牌 ({handCards.length}) · 點卡片 = 投入下次檢定加值
+            {commitSelection.length > 0 && ` · 已選 ${commitSelection.length} 張`}
+          </div>
           <div className="mock-cards">
             {handCards.map((card, i) => {
               const center = (handCards.length - 1) / 2;
               const offset = i - center;
+              const data = setup.cardLookup[card.id];
+              const playable = data?.card_type && data.card_type !== 'skill';
+              const selected = commitSelection.includes(card.id);
               return (
                 <div
                   key={card.id}
-                  className={'mock-card rarity-' + card.rarity}
-                  style={{ transform: `rotate(${offset * 4}deg) translateY(${Math.abs(offset) * 4}px)` }}
+                  className={'mock-card rarity-' + card.rarity + (selected ? ' commit-selected' : '')}
+                  style={{ transform: `rotate(${offset * 4}deg) translateY(${Math.abs(offset) * 4 - (selected ? 14 : 0)}px)` }}
                   title={card.desc}
+                  onClick={() => toggleCommit(card.id)}
                 >
                   <div className="mc-cost">{card.cost}</div>
                   <div className="mc-name">{card.name}</div>
                   <div className="mc-desc">{card.desc}</div>
+                  {selected && <div className="mc-commit-badge">🂠 投入</div>}
+                  {playable && (
+                    <button
+                      className="mc-play-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        submitIntent('play_card', { cardInstanceId: card.id });
+                      }}
+                    >
+                      打出({data?.cost ?? 0} 資源)
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -640,23 +706,45 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         </div>
       )}
 
-      {/* === 底部 Panel(背包)=== */}
+      {/* === 底部 Panel(背包:場上資產 + 行動效果按鈕)=== */}
       {panel === 'bag' && (
         <div className="bottom-panel active">
           <div className="panel-close" onClick={() => setPanel(null)}>[✕ 關閉]</div>
-          <div className="panel-title">背包 — 場上資產 ({investigator.assetsInPlay.length})</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-              <div className="mock-slot">左手</div>
-              <div className="mock-slot">身軀</div>
-              <div className="mock-slot">右手</div>
-            </div>
-            <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-              <div className="mock-slot">配件</div>
-              <div className="mock-slot">盟友</div>
-              <div className="mock-slot">神祕</div>
-              <div className="mock-slot">神祕</div>
-            </div>
+          <div className="panel-title">場上資產 ({investigator.assetsInPlay.length}) · 資源 {investigator.resources}</div>
+          <div className="asset-list">
+            {investigator.assetsInPlay.map((id) => {
+              const data = setup.cardLookup[id];
+              const actions = (data?.effects ?? []).filter((f) => f.trigger_type === 'action');
+              const passives = (data?.effects ?? []).filter((f) => f.trigger_type === 'passive');
+              return (
+                <div key={id} className="asset-row">
+                  <div className="asset-name">{data?.name_zh ?? id}</div>
+                  {passives.length > 0 && (
+                    <div className="asset-passive">{passives.map((f) => f.description_zh ?? '被動效果').join(' / ')}</div>
+                  )}
+                  <div className="asset-actions">
+                    {actions.map((f, ai) => (
+                      <button
+                        key={ai}
+                        onClick={() => {
+                          setPanel(null);
+                          submitCheckIntent('execute_card_action', {
+                            cardInstanceId: id,
+                            actionIndex: ai,
+                            ...(enemyHere && f.effect_code === 'attack' ? { enemyInstanceId: enemyHere.instanceId } : {}),
+                          });
+                        }}
+                      >
+                        {f.effect_code === 'attack' ? '⚔ ' : '▶ '}
+                        {(f.description_zh ?? f.effect_code).slice(0, 28)}
+                      </button>
+                    ))}
+                    {actions.length === 0 && <span className="asset-no-action">(無主動行動)</span>}
+                  </div>
+                </div>
+              );
+            })}
+            {investigator.assetsInPlay.length === 0 && <div className="empty-note">尚無場上資產 — 從手牌「打出」卡片</div>}
           </div>
         </div>
       )}

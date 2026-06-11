@@ -1106,3 +1106,91 @@
   color: var(--text-secondary);
   max-width: 720px;
 }
+
+/* === 手牌投入加值 + 打出 === */
+.mock-card.commit-selected {
+  outline: 2px solid #C9A84C;
+  box-shadow: 0 0 14px rgba(201, 168, 76, 0.5);
+}
+
+.mc-commit-badge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font: 700 11px "Noto Sans TC", sans-serif;
+  color: #C9A84C;
+}
+
+.mc-play-btn {
+  margin-top: 6px;
+  width: 100%;
+  background: rgba(201, 168, 76, 0.15);
+  border: 1px solid #C9A84C;
+  border-radius: 4px;
+  color: #C9A84C;
+  font: 600 11px "Noto Sans TC", sans-serif;
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+.mc-play-btn:hover { background: rgba(201, 168, 76, 0.3); }
+
+.commit-chip {
+  margin-left: 10px;
+  padding: 1px 8px;
+  border: 1px solid #C9A84C;
+  border-radius: 999px;
+  color: #C9A84C;
+  font-size: 12px;
+}
+
+/* === 背包:場上資產列表 === */
+.asset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.asset-row {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.asset-name {
+  font: 700 14px "Noto Serif TC", serif;
+  color: #C9A84C;
+}
+
+.asset-passive {
+  font: 400 11px "Noto Sans TC", sans-serif;
+  color: var(--text-tertiary, #9a968c);
+  margin: 4px 0;
+}
+
+.asset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.asset-actions button {
+  background: rgba(201, 168, 76, 0.12);
+  border: 1px solid rgba(201, 168, 76, 0.6);
+  border-radius: 4px;
+  color: var(--text-primary, #E8E4D9);
+  font: 400 12px "Noto Sans TC", sans-serif;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.asset-actions button:hover { background: rgba(201, 168, 76, 0.28); }
+
+.asset-no-action {
+  font: 400 11px "Noto Sans TC", sans-serif;
+  color: var(--text-tertiary, #9a968c);
+}

@@ -10,7 +10,8 @@ import type {
   InvestigatorState,
   ScenarioState,
   StageBootstrap,
-  CommitIcons,
+  CardDataLookup,
+  StyleCardData,
 } from '@cthulhu/shared';
 
 export interface CardDisplay {
@@ -59,8 +60,10 @@ export interface GameSetup {
   locationStats: Record<string, { shroud?: number }>;
   /** 引擎檢定輸入:怪物 DC / 傷害 */
   enemyStats: Record<string, { dc?: number; damage_physical?: number; damage_horror?: number }>;
-  /** 引擎加值輸入:卡片實例 → commit_icons */
-  cardLookup: Record<string, { commit_icons?: CommitIcons }>;
+  /** 引擎卡片資料(commit_icons/effects/cost/combat_style 等) */
+  cardLookup: CardDataLookup;
+  /** 戰鬥風格卡池(key = style code) */
+  stylePools: Record<string, StyleCardData[]>;
 }
 
 const VALID_RARITIES = new Set(['common', 'uncommon', 'rare', 'legendary']);
@@ -174,6 +177,7 @@ export function makeTestSetup(): GameSetup {
     locationStats: {},
     enemyStats: {},
     cardLookup: {},
+    stylePools: {},
   };
 }
 
@@ -243,10 +247,25 @@ export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
   }
   const cardLookup: GameSetup['cardLookup'] = {};
   for (const [instanceId, info] of Object.entries(built.cardIndex)) {
-    const icons = info.data.commit_icons;
+    const d = info.data;
+    const icons = d.commit_icons;
     cardLookup[instanceId] = {
       commit_icons: icons && typeof icons === 'object' && !Array.isArray(icons) ? icons : {},
+      name_zh: info.name_zh,
+      card_type: info.card_type,
+      cost: info.cost,
+      combat_style: d.combat_style ?? null,
+      attribute_modifiers:
+        d.attribute_modifiers && typeof d.attribute_modifiers === 'object'
+          ? d.attribute_modifiers
+          : {},
+      subtypes: Array.isArray(d.subtypes) ? d.subtypes : [],
+      effects: Array.isArray(d.effects) ? d.effects : [],
     };
+  }
+  const stylePools: GameSetup['stylePools'] = {};
+  for (const sc of bootstrap.combat_style_pools ?? []) {
+    (stylePools[sc.style_code] = stylePools[sc.style_code] ?? []).push(sc);
   }
 
   return {
@@ -269,5 +288,6 @@ export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
     locationStats,
     enemyStats,
     cardLookup,
+    stylePools,
   };
 }

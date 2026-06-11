@@ -5,17 +5,21 @@ import {
   createTurnLoop,
   resolveIntent,
   activateMonsters,
-  spawnEnemy,
   runFearChecks,
   progressTick,
-  addDoom,
   evaluateOutcome,
   applyOutcomeFlags,
   allInvestigatorsDown,
   buildGameFromBootstrap,
+  initKeeperState,
+  snapshotSituation,
+  selectKeeperActivations,
+  executeMythosCard,
+  runAttachmentUpkeep,
+  isCardExecutable,
   CURRENT_MESSAGE_SCHEMA_VERSION,
 } from '@cthulhu/shared';
-import type { OutcomeData, ScenarioState, InvestigatorState } from '@cthulhu/shared';
+import type { OutcomeData, ScenarioState, InvestigatorState, KeeperState } from '@cthulhu/shared';
 import type {
   IntentMessage,
   ResultMessage,
@@ -98,7 +102,14 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'taunt': return '🗯 ' + (p.narrative as string);
     case 'engagement_broken': return '🏃 ' + (p.narrative as string);
     case 'monster_dazed': return '💫 ' + (p.enemy as string) + ':' + (p.narrative as string);
-    case 'doom_added': return '☄ 毀滅標記 +' + (p.amount as number) + '(累計 ' + (p.total as number) + ')';
+    case 'doom_added': return '☄ 毀滅標記 +' + (p.amount as number) + '(累計 ' + (p.total as number) + ')' + (p.source ? ' — ' + (p.source as string) + ' 的存在加速著終局' : '');
+    case 'keeper_card_activated': return '🃏 城主啟用【' + (p.name as string) + '】(' + (p.cost as number) + ' 點)— ' + (p.narrative as string);
+    case 'keeper_attachment': return '🕸 【' + (p.name as string) + '】的影響附著在這場雨上,揮之不去。';
+    case 'visibility_changed': return '🌑 ' + (locMeta[p.location as string]?.name ?? (p.location as string)) + ' 陷入' + (p.visibility === 'darkness' ? '黑暗' : (p.visibility as string)) + '。';
+    case 'attachment_upkeep': return '🕸 ' + (p.narrative as string);
+    case 'attachment_released': return '✨ 【' + (p.name as string) + '】' + (p.narrative as string);
+    case 'attachment_release_failed': return '🕸 【' + (p.name as string) + '】仍纏著你(意志 ' + (p.total as number) + ' vs DC ' + (p.dc as number) + ')';
+    case 'monster_phase_change': return '🔥 ' + (p.enemy as string) + ':' + (p.narrative as string);
     case 'act_advanced': return '📜 【幕推進:' + (p.name as string) + '】' + (p.narrative as string);
     case 'agenda_advanced': return '🕯 【議程翻面:' + (p.name as string) + '】' + (p.narrative as string);
     case 'flag_set': return '🚩 旗標「' + (p.flag_code as string) + '」= ' + String(p.value);
@@ -185,7 +196,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [scenario, setScenario] = useState(setup.scenario);
   const [phase, setPhase] = useState<TurnPhase>('short_rest_decision');
   const [turnNumber, setTurnNumber] = useState(1);
-  const [keeperEnergy, setKeeperEnergy] = useState(8);
+  // 城主運行時狀態(行動點/冷卻/使用次數;教學關卡不用)
+  const [keeperState, setKeeperState] = useState<KeeperState>(() => initKeeperState(setup.keeperProfile));
+  const [keeperEnergy, setKeeperEnergy] = useState(8); // 教學關卡舊顯示用
   const [log, setLog] = useState<string[]>(setup.introLog);
 
   // 浮層狀態
@@ -219,7 +232,17 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   ): { sc: ScenarioState; inv: InvestigatorState } => {
     if (setup.tutorial || setup.actData.length === 0) return { sc, inv };
     const tick = progressTick(sc, flags, setup.actData, setup.agendaData, setup.enemyStats);
-    for (const eff of tick.effects) append('[劇情] ' + describeEffect(eff, locMeta));
+    for (const eff of tick.effects) {
+      // 頭目登場三段式演出(劇本 Part3 §2.4:先聽聲 → 見人 → 揭真相)
+      const introLines = eff.type === 'enemy_spawned'
+        ? setup.bossIntro[String((eff.params as { code?: string }).code ?? '')]
+        : undefined;
+      if (introLines) {
+        for (const line of introLines) append('[劇情] ' + line);
+      } else {
+        append('[劇情] ' + describeEffect(eff, locMeta));
+      }
+    }
     let nextSc = tick.scenario;
     let nextInv = inv;
     let nextFlags = tick.flags;
@@ -382,9 +405,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     append('[短休息] 本回合直接進入神話階段');
   };
   /**
-   * 神話階段:臨時城主(召喚)+ 怪物啟動(§10)。
-   * 臨時城主規則:場上無活怪且能量 ≥3 → 花 3 能量召喚召喚池最低位階一隻,
-   * 生在玩家相鄰地點。階段三由正式城主 AI(神話卡攤開選用)取代。
+   * 神話階段 — 城主 AI v0(keeper_ai_regulation §2.2 sequence):
+   * ① 附著卡強制結算 ② 城主選用神話卡(行動點預算+戲劇曲線)③ 怪物啟動 ④ 進度/全滅檢查
    */
   const enterMythosPhase = () => {
     turnLoopRef.current?.advance();
@@ -396,32 +418,49 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     }
     let sc = scenario;
     let inv = investigator;
-    // 臨時城主:召喚
-    const aliveEnemies = sc.enemies.filter((e) => e.hp > 0);
-    if (aliveEnemies.length === 0 && keeperEnergy >= 3 && setup.summonPool.length > 0) {
-      const pick = setup.summonPool[0];
-      const here = sc.locations.find((l) => l.locationDefinitionId === inv.currentLocationId);
-      const spawnLoc = here?.connectedTo[0] ?? inv.currentLocationId ?? '';
-      const spawned = spawnEnemy(sc, pick.code, spawnLoc, setup.enemyStats, 1);
-      sc = spawned.scenario;
-      setKeeperEnergy((e) => Math.max(0, e - 3));
-      append('[城主行動] 雨幕的另一頭,有什麼東西被引了過來——【' + pick.name_zh + '】出現在 ' + (setup.locMeta[spawnLoc]?.name ?? spawnLoc) + '。');
-      // §7.6 怪物進入半徑 → 恐懼掃描
-      const fear = runFearChecks(inv, sc, setup.enemyStats);
-      inv = fear.investigator;
-      for (const eff of fear.effects) append('[結算] ' + describeEffect(eff, locMeta));
+
+    // ① 附著卡強制結算(瘋狂攫住棄牌/解除檢定等)
+    if ((sc.keeperAttachments ?? []).length > 0) {
+      const upkeep = runAttachmentUpkeep(sc.keeperAttachments ?? [], inv);
+      inv = upkeep.investigator;
+      sc = { ...sc, keeperAttachments: upkeep.attachments };
+      for (const eff of upkeep.effects) append('[附著] ' + describeEffect(eff, locMeta));
     }
-    // 臨時城主:每神話階段放 1 毀滅(階段三由神話卡驅動取代)
-    const doomed = addDoom(sc, 1);
-    sc = doomed.scenario;
-    for (const eff of doomed.effects) append('[城主] ' + describeEffect(eff, locMeta));
-    // §10 怪物啟動
+
+    // ② 城主選卡(open-hand,評分+戲劇曲線+避免單調)
+    const actCondition0 = setup.actData[0]?.front_advance_condition as { type?: string; count?: number } | null;
+    const bossCode = Object.keys(setup.bossIntro)[0];
+    const situation = snapshotSituation(
+      sc, inv,
+      actCondition0?.type === 'clue_threshold' ? Number(actCondition0.count ?? 0) : null,
+      bossCode ? Number(setup.enemyStats[bossCode]?.hp_base ?? 0) : null,
+    );
+    const selection = selectKeeperActivations(setup.mythosCards, situation, keeperState, setup.keeperProfile);
+    setKeeperState(selection.state);
+    for (const card of selection.activations) {
+      const exec = executeMythosCard(card, sc, inv, setup.enemyStats);
+      sc = exec.scenario;
+      inv = exec.investigator;
+      if (exec.attachments.length > 0) {
+        sc = { ...sc, keeperAttachments: [...(sc.keeperAttachments ?? []), ...exec.attachments] };
+      }
+      for (const eff of exec.effects) append('[城主] ' + describeEffect(eff, locMeta));
+      // 召喚後恐懼掃描(§7.6 怪物進入半徑)
+      if (exec.effects.some((e) => e.type === 'enemy_spawned')) {
+        const fear = runFearChecks(inv, sc, setup.enemyStats);
+        inv = fear.investigator;
+        for (const eff of fear.effects) append('[結算] ' + describeEffect(eff, locMeta));
+      }
+    }
+    if (selection.activations.length === 0) append('[城主] 雨聲之外,某種注視沉默地積蓄著。');
+
+    // ③ §10 怪物啟動(行為腳本層選招)
     const act = activateMonsters(sc, { [inv.investigatorId]: inv }, setup.enemyStats, setup.attackCards);
     sc = act.scenario;
     inv = act.investigators[inv.investigatorId] ?? inv;
     for (const eff of act.effects) append('[神話階段] ' + describeEffect(eff, locMeta));
-    if (act.effects.length === 0) append('[神話階段] 雨聲之外,一片死寂。');
-    // 全滅檢查(§9 瀕死接通前簡化:HP 或 SAN 歸零即倒下)
+
+    // ④ 全滅檢查(§9 瀕死接通前簡化)
     if (allInvestigatorsDown({ [inv.investigatorId]: inv })) {
       const finalOutcome = evaluateOutcome(setup.outcomes, flags);
       if (finalOutcome) {
@@ -660,8 +699,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             <div className="keeper-title">議程 {agendaIdx + 1}{currentAgenda?.name ? ' · ' + currentAgenda.name : ''}</div>
             <div className="keeper-badges">
               <div className="badge-energy">
-                <span className="badge-num">{keeperEnergy}</span>
-                <span className="badge-label">城主能量</span>
+                <span className="badge-num">{setup.tutorial ? keeperEnergy : keeperState.actionPoints}</span>
+                <span className="badge-label">{setup.tutorial ? '城主能量' : '城主行動點'}</span>
               </div>
               <div className="badge-doom">
                 <span className="badge-num">{scenario.agendaProgress}</span>
@@ -920,6 +959,34 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             <hr className="modal-divider" />
             <div className="modal-progress-text">當前進度: {scenario.agendaProgress} / {agendaMax} 毀滅標記</div>
             <div className="modal-progress-bar"><div className="modal-progress-fill" style={{ width: `${agendaPct}%` }} /></div>
+
+            {/* 城主威脅區:open-hand 武器庫全攤開(規範原則 1「看得到威脅,但擋不完」) */}
+            {!setup.tutorial && setup.mythosCards.length > 0 && (
+              <>
+                <hr className="modal-divider" />
+                <div className="cond-title">✦ 城主威脅區(神話卡武器庫)✦</div>
+                <div className="threat-grid">
+                  {setup.mythosCards.map((mc) => {
+                    const onCooldown = (keeperState.cooldowns[mc.id] ?? 0) > 0;
+                    const usedUp =
+                      (!mc.reusable && (keeperState.uses[mc.id] ?? 0) >= 1) ||
+                      (mc.max_uses_per_stage != null && (keeperState.uses[mc.id] ?? 0) >= mc.max_uses_per_stage);
+                    const dormant = !isCardExecutable(mc);
+                    const stateLabel = dormant ? '蟄伏' : usedUp ? '已用盡' : onCooldown ? `冷卻 ${keeperState.cooldowns[mc.id]}` : null;
+                    return (
+                      <div key={mc.id} className={'threat-card' + (dormant || usedUp || onCooldown ? ' threat-card-inactive' : '')}>
+                        <div className="threat-card-head">
+                          <span className="threat-card-name">{mc.name_zh}</span>
+                          <span className="threat-card-cost">{mc.action_cost} 點</span>
+                        </div>
+                        <div className="threat-card-meta">{mc.card_category} · {mc.intensity_tag}{stateLabel ? ' · ' + stateLabel : ''}</div>
+                        {mc.description_zh && <div className="threat-card-desc">{mc.description_zh}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

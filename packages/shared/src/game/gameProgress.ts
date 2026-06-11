@@ -130,6 +130,7 @@ export function progressTick(
             type: 'enemy_spawned',
             params: {
               enemy: enemyData[code]?.name_zh ?? code,
+              code,
               location: loc,
             },
             targetId: spawned.enemy.instanceId,

@@ -3199,6 +3199,16 @@ CREATE INDEX IF NOT EXISTS idx_csc_spec ON combat_style_cards(spec_code) WHERE s
 CREATE INDEX IF NOT EXISTS idx_csc_tier ON combat_style_cards(card_tier);
 `;
 
+// Migration 035: 怪物行為腳本(s14 補充文件 #2 §6.1:出招模式 + 行為腳本)
+// 註:神話卡 open-hand 欄位(reusable/cooldown 等)MIGRATION_029 已加,毋須重複
+export const MIGRATION_035_SQL = `
+ALTER TABLE monster_variants ADD COLUMN IF NOT EXISTS move_pattern VARCHAR(32) NOT NULL DEFAULT 'weighted';
+ALTER TABLE monster_variants DROP CONSTRAINT IF EXISTS chk_mv_move_pattern;
+ALTER TABLE monster_variants ADD CONSTRAINT chk_mv_move_pattern CHECK (move_pattern IN
+  ('pure_random','weighted','conditional','phase_based','scripted_chain','ritual_sequence')) NOT VALID;
+ALTER TABLE monster_variants ADD COLUMN IF NOT EXISTS behavior_script JSONB NOT NULL DEFAULT '{}'::jsonb;
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3415,6 +3425,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_032', MIGRATION_032_SQL);
     await runOne('MIGRATION_033', MIGRATION_033_SQL);
     await runOne('MIGRATION_034', MIGRATION_034_SQL);
+    await runOne('MIGRATION_035', MIGRATION_035_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

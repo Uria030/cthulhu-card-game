@@ -61,6 +61,13 @@ export interface ScenarioState {
   actIndex?: number;
   /** 當前議程索引(0-based) */
   agendaIndex?: number;
+  /** 城主持續附著卡(open-hand 神話卡 persistent 效果;keeper_ai_regulation §2.2) */
+  keeperAttachments?: Array<{
+    cardId: string;
+    name: string;
+    action_code: string;
+    action_params: Record<string, unknown>;
+  }>;
   /** 混沌袋當前組成(規則書 §5,動態變動) */
   chaosBag: ChaosToken[];
   /** 當前回合數 */

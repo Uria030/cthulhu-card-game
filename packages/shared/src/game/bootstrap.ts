@@ -127,6 +127,8 @@ export interface StageBootstrap {
     narrative_success_zh?: string;
     narrative_fail_zh?: string;
   }>;
+  /** 城主行動點設定(game_balance_settings keeper_action_points 群) */
+  keeper_settings?: Record<string, unknown>;
 }
 
 // ─── 卡片實例查找表(state 只存實例 id,畫面靠這張表顯示卡面)──

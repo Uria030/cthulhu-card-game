@@ -15,9 +15,20 @@
  * 瀕死系統(§9)未接:HP/SAN 夾 0,歸零先以敘事呈現,瀕死檢定後續批次。
  */
 import type { ResultEffect } from './messages';
-import type { InvestigatorState, ScenarioState, EnemyInstance, LocationInstance } from './state';
+import type { InvestigatorState, ScenarioState, EnemyInstance } from './state';
 import { resolveCheck } from './checks';
 import type { AttributeKey } from './checks';
+import {
+  locationDistance,
+  stepToward,
+  pickMoveByBehavior,
+  pickTargetByPreference,
+} from './monsterBehavior';
+import type { AttackCardData, AttackCardLookup, BehaviorScript } from './monsterBehavior';
+
+// 尋路工具與招式卡型別移居 monsterBehavior(避免循環引用),這裡 re-export 維持既有 import 路徑
+export { locationDistance, stepToward } from './monsterBehavior';
+export type { AttackCardData, AttackCardLookup } from './monsterBehavior';
 
 // ─── 資料形狀(bootstrap monsters / monster_attack_cards 餵入)───
 export interface EnemyData {
@@ -32,21 +43,19 @@ export interface EnemyData {
   attacks_per_round?: number;
   movement_speed?: number;
   ai_preference?: string;
+  ai_preference_param?: string;
   move_pool?: Array<{ code: string; weight?: number }>;
   hp_base?: number;
   hp_per_player?: number;
+  /** 行為腳本層(s14 補充文件 #2):出招模式 + 腳本 */
+  move_pattern?: string;
+  behavior_script?: BehaviorScript | null;
+  /** 功能標籤(agenda_pusher 存在即推毀滅等) */
+  keywords?: unknown[];
+  /** 家族代碼(召喚決策用) */
+  family_code?: string;
 }
 export type EnemyDataLookup = Record<string, EnemyData>;
-
-export interface AttackCardData {
-  code: string;
-  name_zh?: string;
-  defense_attribute?: string;
-  dc_override?: number | null;
-  damage_physical?: number;
-  damage_horror?: number;
-}
-export type AttackCardLookup = Record<string, AttackCardData>;
 
 const VALID_ATTRS = new Set([
   'strength', 'agility', 'constitution', 'reflex',
@@ -56,58 +65,6 @@ const VALID_ATTRS = new Set([
 function asAttr(value: unknown, fallback: AttributeKey): AttributeKey {
   const v = String(value ?? '');
   return (VALID_ATTRS.has(v) ? v : fallback) as AttributeKey;
-}
-
-// ─── 地點距離(§10.6 最短路徑,BFS 跳數)─────────
-export function locationDistance(
-  locations: LocationInstance[],
-  from: string,
-  to: string,
-): number {
-  if (from === to) return 0;
-  const adjacency = new Map(locations.map((l) => [l.locationDefinitionId, l.connectedTo]));
-  const seen = new Set([from]);
-  let frontier = [from];
-  let dist = 0;
-  while (frontier.length > 0) {
-    dist += 1;
-    const next: string[] = [];
-    for (const cur of frontier) {
-      for (const n of adjacency.get(cur) ?? []) {
-        if (seen.has(n)) continue;
-        if (n === to) return dist;
-        seen.add(n);
-        next.push(n);
-      }
-    }
-    frontier = next;
-  }
-  return Infinity;
-}
-
-/** §10.6:朝目標最短路徑走 1 格;多條等距隨機選一 */
-export function stepToward(
-  locations: LocationInstance[],
-  from: string,
-  to: string,
-  rng: () => number,
-): string {
-  if (from === to) return from;
-  const current = locations.find((l) => l.locationDefinitionId === from);
-  if (!current) return from;
-  let best: string[] = [];
-  let bestDist = Infinity;
-  for (const n of current.connectedTo) {
-    const d = locationDistance(locations, n, to);
-    if (d < bestDist) {
-      bestDist = d;
-      best = [n];
-    } else if (d === bestDist) {
-      best.push(n);
-    }
-  }
-  if (best.length === 0 || bestDist === Infinity) return from;
-  return best[Math.floor(rng() * best.length)];
 }
 
 // ─── 恐懼檢定(§7.6/7.7)───────────────────────
@@ -195,31 +152,14 @@ export function applyAttackOfOpportunity(
   return { investigator: inv, effects };
 }
 
-// ─── 怪物攻擊(玩家擲防禦,§10.1)─────────────────
-function weightedPickMove(
-  movePool: Array<{ code: string; weight?: number }>,
-  attackCards: AttackCardLookup,
-  rng: () => number,
-): AttackCardData | null {
-  const entries = movePool.filter((m) => attackCards[m.code]);
-  if (entries.length === 0) return null;
-  const total = entries.reduce((s, m) => s + Number(m.weight ?? 1), 0);
-  let pick = rng() * total;
-  for (const m of entries) {
-    pick -= Number(m.weight ?? 1);
-    if (pick <= 0) return attackCards[m.code];
-  }
-  return attackCards[entries[entries.length - 1].code];
-}
-
+// ─── 怪物攻擊(玩家擲防禦,§10.1;選招交給行為腳本層)──
 function monsterAttackOnce(
   enemy: EnemyInstance,
   data: EnemyData,
+  card: AttackCardData | null,
   investigator: InvestigatorState,
-  attackCards: AttackCardLookup,
   rng: () => number,
 ): { investigator: InvestigatorState; effects: ResultEffect[] } {
-  const card = data.move_pool?.length ? weightedPickMove(data.move_pool, attackCards, rng) : null;
   const defAttr = asAttr(card?.defense_attribute, 'reflex');
   const dc = Number(card?.dc_override ?? data.dc ?? 10);
   const phys = Number(card?.damage_physical ?? data.damage_physical ?? 1);
@@ -310,9 +250,26 @@ export function activateMonsters(
       continue;
     }
 
-    // 目標:單人 = 唯一活著的調查員(§10.5 偏好系統多人時展開)
-    const target = Object.values(invs).find((i) => !i.permanentlyDead && (i.hp > 0 || i.san > 0));
+    // 目標:依家族追擊偏好(§10.5 + s14 Part2 家族對應;單人 = 唯一目標)
+    const target = pickTargetByPreference(
+      data.ai_preference,
+      data.ai_preference_param,
+      enemy,
+      Object.values(invs),
+      sc.locations,
+      rng,
+    );
     if (!target) break;
+
+    // 議程型怪物:存在即推進毀滅(s14 功能分類「靠存在推進敗局倒數」)
+    if (Array.isArray(data.keywords) && data.keywords.includes('agenda_pusher')) {
+      sc = { ...sc, agendaProgress: sc.agendaProgress + 1 };
+      effects.push({
+        type: 'doom_added',
+        params: { amount: 1, total: sc.agendaProgress, source: data.name_zh ?? enemy.enemyDefinitionId },
+        targetId: enemy.instanceId,
+      });
+    }
 
     // 交戰必須同地點:殘留的跨地點交戰視為已脫離(防衛性清理)
     const staleIds = enemy.engagedWith.filter(
@@ -342,12 +299,46 @@ export function activateMonsters(
       .find((i) => i && i.hp > 0 && i.currentLocationId === liveEnemy.locationId);
 
     if (engagedTarget) {
-      // §10.3 已交戰 → 攻擊(§10.4 attacks_per_round)
+      // §10.3 已交戰 → 攻擊(§10.4 attacks_per_round);選招走行為腳本層
       const times = Math.max(1, Number(data.attacks_per_round ?? 1));
       let inv = engagedTarget;
       for (let i = 0; i < times; i += 1) {
         if (inv.hp <= 0) break;
-        const r = monsterAttackOnce(enemy, data, inv, attackCards, rng);
+        const current = sc.enemies.find((e) => e.instanceId === enemy.instanceId) ?? liveEnemy;
+        const pick = pickMoveByBehavior(
+          current,
+          String(data.move_pattern ?? 'weighted'),
+          data.behavior_script ?? null,
+          data.move_pool ?? [],
+          attackCards,
+          {
+            turnNumber: sc.turnNumber,
+            selfHp: current.hp,
+            selfMaxHp: Number(data.hp_base ?? current.hp),
+            target: inv,
+            rng,
+          },
+          i === 0, // 冷卻一回合 tick 一次,多段攻擊後續擊不重複遞減
+        );
+        // 寫回運行時標記(上一招/冷卻/階段)
+        sc = {
+          ...sc,
+          enemies: sc.enemies.map((e) =>
+            e.instanceId === enemy.instanceId ? { ...e, modifiers: pick.modifiers } : e,
+          ),
+        };
+        if (pick.phaseChanged) {
+          effects.push({
+            type: 'monster_phase_change',
+            params: {
+              enemy: data.name_zh ?? enemy.enemyDefinitionId,
+              phase: pick.phaseChanged,
+              narrative: '牠的氣息變了——某種更深的東西浮上表面。',
+            },
+            targetId: enemy.instanceId,
+          });
+        }
+        const r = monsterAttackOnce(enemy, data, pick.card, inv, rng);
         inv = r.investigator;
         effects.push(...r.effects);
       }

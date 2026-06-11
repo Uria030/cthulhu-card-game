@@ -17,7 +17,10 @@ import type {
   ActCardData,
   AgendaCardData,
   OutcomeData,
+  MythosCardData,
+  KeeperProfile,
 } from '@cthulhu/shared';
+import { defaultKeeperProfile } from '@cthulhu/shared';
 
 export interface CardDisplay {
   id: string;
@@ -76,6 +79,11 @@ export interface GameSetup {
   /** 幕/議程原始資料(進度引擎用;display 用 actCards/agendaCards) */
   actData: ActCardData[];
   agendaData: AgendaCardData[];
+  /** 城主 open-hand 武器庫 + 設定檔(風格即資料) */
+  mythosCards: MythosCardData[];
+  keeperProfile: KeeperProfile;
+  /** 頭目登場演出(劇本 Part3 §2.4 三段式;key = variant code) */
+  bossIntro: Record<string, string[]>;
   /** 章節結局 */
   outcomes: OutcomeData[];
   /** 原始開局包(場景切換重建用;教學關卡為 null) */
@@ -198,6 +206,9 @@ export function makeTestSetup(): GameSetup {
     stylePools: {},
     actData: [],
     agendaData: [],
+    mythosCards: [],
+    keeperProfile: defaultKeeperProfile(),
+    bossIntro: {},
     outcomes: [],
     bootstrap: null,
   };
@@ -273,9 +284,15 @@ export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
       attacks_per_round: Number(mv.attacks_per_round ?? 1),
       movement_speed: Number(mv.movement_speed ?? 1),
       ai_preference: String(mv.ai_preference ?? 'nearest'),
+      ai_preference_param: mv.ai_preference_param ? String(mv.ai_preference_param) : undefined,
       move_pool: Array.isArray(mv.move_pool) ? mv.move_pool : [],
       hp_base: Number(mv.hp_base ?? 1),
       hp_per_player: Number(mv.hp_per_player ?? 0),
+      family_code: mv.family_code ? String(mv.family_code) : undefined,
+      keywords: Array.isArray(mv.keywords) ? mv.keywords : [],
+      move_pattern: String(mv.move_pattern ?? 'weighted'),
+      behavior_script:
+        mv.behavior_script && typeof mv.behavior_script === 'object' ? mv.behavior_script : null,
     };
   }
   const attackCards: GameSetup['attackCards'] = {};
@@ -344,6 +361,16 @@ export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
     stylePools,
     actData: (bootstrap.stage.act_cards ?? []) as unknown as ActCardData[],
     agendaData: (bootstrap.stage.agenda_cards ?? []) as unknown as AgendaCardData[],
+    mythosCards: (bootstrap.mythos_cards ?? []) as unknown as MythosCardData[],
+    keeperProfile: defaultKeeperProfile(bootstrap.keeper_settings, 2),
+    // 劇本 Part3 §2.4 三段式登場(先聽聲 → 見人 → 揭真相);未來移入 DB 敘事欄位
+    bossIntro: {
+      G1_deep_one_slit_mouth: [
+        '沙啞、彷彿肺部積滿水的聲音,從雨幕的另一頭傳來——「我……漂亮嗎?」',
+        '一個穿著破舊風衣的身影,站在路燈的死角,一動不動。',
+        '她扯下口罩——那不是傷口。是兩側下顎正在劇烈翕張的魚鰓。【深潛者裂嘴女】現身了。',
+      ],
+    },
     outcomes: (bootstrap.chapter?.outcomes ?? []) as unknown as OutcomeData[],
     bootstrap,
   };

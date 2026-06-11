@@ -274,6 +274,15 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
           ).rows
         : [];
 
+      // ── 城主行動點設定(keeper_ai_regulation §2.1)──
+      const keeperSettings: Record<string, unknown> = {};
+      const kbRes = await pool.query(
+        `SELECT setting_key, value FROM game_balance_settings WHERE setting_group = 'keeper_action_points'`,
+      );
+      for (const row of kbRes.rows) {
+        keeperSettings[row.setting_key] = row.value?.value;
+      }
+
       return reply.send({
         success: true,
         data: {
@@ -287,6 +296,7 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
           monster_attack_cards: attackCards,
           investigator,
           combat_style_pools: stylePools,
+          keeper_settings: keeperSettings,
         },
       });
     } catch (error) {

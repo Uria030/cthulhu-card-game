@@ -728,6 +728,8 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
           description_zh = $35, description_en = $36, art_url = $37, design_notes = $38,
           attack_card_count = $39, sort_order = $40, design_status = $41,
           move_pool = COALESCE($43::jsonb, move_pool),
+          move_pattern = COALESCE($44, move_pattern),
+          behavior_script = COALESCE($45::jsonb, behavior_script),
           updated_at = NOW()
         WHERE id = $42 RETURNING *
       `, [
@@ -754,6 +756,8 @@ export const monsterRoutes: FastifyPluginAsync = async (app) => {
         b.attack_card_count || 0, b.sort_order || 0, b.design_status || 'draft',
         id,
         b.move_pool ? JSON.stringify(b.move_pool) : null,
+        b.move_pattern || null,
+        b.behavior_script ? JSON.stringify(b.behavior_script) : null,
       ]);
       if (result.rows.length === 0) return reply.status(404).send({ success: false, error: 'Variant not found' });
       return reply.send({ success: true, data: result.rows[0] });

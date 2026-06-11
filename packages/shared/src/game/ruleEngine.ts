@@ -35,6 +35,7 @@ import type { AttributeKey, CommitIcons } from './checks';
 import { executeCardEffects, passiveTestModifier } from './effectsExecutor';
 import { runFearChecks, applyAttackOfOpportunity } from './monsterActions';
 import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
+import { attachmentTestModifier } from './keeperAI';
 
 // ─── 卡片實例資料(容器由 bootstrap cardIndex 餵入)──
 export interface CardData {
@@ -385,7 +386,12 @@ function resolveInvestigate(intent: IntentMessage, ctx: RuleContext): RuleResolv
   const dc = ctx.locationStats?.[locId]?.shroud ?? 10;
   const check = resolveCheck(
     dc,
-    { attribute: ctx.investigator.attributes.perception, commit: commit.value },
+    {
+      attribute: ctx.investigator.attributes.perception,
+      commit: commit.value,
+      // 城主附著卡的全域檢定修正(海腥味瀰漫等)
+      situational: attachmentTestModifier(ctx.scenario.keeperAttachments, 'perception'),
+    },
     ctx.rng,
   );
   const success = check.outcome === 'success';
@@ -701,7 +707,9 @@ function performWeaponAttack(
   const here = ctx.scenario.locations.find(
     (l) => l.locationDefinitionId === ctx.investigator.currentLocationId,
   );
-  const situational = here ? visibilityModifier('attack', here.visibility) : 0;
+  const situational =
+    (here ? visibilityModifier('attack', here.visibility) : 0) +
+    attachmentTestModifier(ctx.scenario.keeperAttachments, attr);
   // §8:武器修正只在對應屬性風格卡被抽到時生效 + 場上被動(瞄準鏡等)
   const equipment =
     Number(weapon?.attribute_modifiers?.[attr] ?? 0) +

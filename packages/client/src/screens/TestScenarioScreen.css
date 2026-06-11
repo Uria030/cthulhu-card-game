@@ -1277,3 +1277,57 @@
 }
 
 .outcome-actions button:hover { background: rgba(201, 168, 76, 0.28); }
+
+/* === 城主威脅區(open-hand 武器庫)=== */
+.threat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+  max-height: 32vh;
+  overflow-y: auto;
+}
+
+.threat-card {
+  background: rgba(127, 29, 29, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  border-radius: 5px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.threat-card-inactive {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+
+.threat-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.threat-card-name {
+  font: 700 13px "Noto Serif TC", serif;
+  color: #f8b4b4;
+}
+
+.threat-card-cost {
+  font: 700 11px "Noto Sans TC", sans-serif;
+  color: #C9A84C;
+}
+
+.threat-card-meta {
+  font: 400 10px "Noto Sans TC", sans-serif;
+  color: var(--text-tertiary, #9a968c);
+  margin: 2px 0 4px;
+}
+
+.threat-card-desc {
+  font: 400 11px/1.5 "Noto Sans TC", sans-serif;
+  color: var(--text-secondary, #b8b4a8);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

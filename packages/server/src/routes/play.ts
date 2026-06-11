@@ -148,11 +148,12 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
         familyCodes.length
           ? pool.query(
               `SELECT mv.*, ms.code AS species_code, ms.name_zh AS species_name_zh,
-                      ms.family_code
+                      mf.code AS family_code
                  FROM monster_variants mv
                  JOIN monster_species ms ON ms.id = mv.species_id
-                WHERE ms.family_code = ANY($1)
-                ORDER BY ms.family_code, mv.tier, mv.sort_order`,
+                 JOIN monster_families mf ON mf.id = ms.family_id
+                WHERE mf.code = ANY($1)
+                ORDER BY mf.code, mv.tier, mv.sort_order`,
               [familyCodes],
             )
           : Promise.resolve({ rows: [] as any[] }),

@@ -6,7 +6,12 @@
  * 戰鬥板元件只認 GameSetup,不關心資料來源。
  */
 import { buildGameFromBootstrap } from '@cthulhu/shared';
-import type { InvestigatorState, ScenarioState, StageBootstrap } from '@cthulhu/shared';
+import type {
+  InvestigatorState,
+  ScenarioState,
+  StageBootstrap,
+  CommitIcons,
+} from '@cthulhu/shared';
 
 export interface CardDisplay {
   id: string;
@@ -50,6 +55,12 @@ export interface GameSetup {
   actCards: ActCardDisplay[];
   agendaCards: AgendaCardDisplay[];
   introLog: string[];
+  /** 引擎檢定輸入:地點調查難度(shroud) */
+  locationStats: Record<string, { shroud?: number }>;
+  /** 引擎檢定輸入:怪物 DC / 傷害 */
+  enemyStats: Record<string, { dc?: number; damage_physical?: number; damage_horror?: number }>;
+  /** 引擎加值輸入:卡片實例 → commit_icons */
+  cardLookup: Record<string, { commit_icons?: CommitIcons }>;
 }
 
 const VALID_RARITIES = new Set(['common', 'uncommon', 'rare', 'legendary']);
@@ -160,6 +171,9 @@ export function makeTestSetup(): GameSetup {
       '本關目標:逐一解鎖三個地點,驗證調查、遭遇、戰鬥三個系統。',
       '進入調查員階段後,先試試「調查」找出通往書店的線索。',
     ],
+    locationStats: {},
+    enemyStats: {},
+    cardLookup: {},
   };
 }
 
@@ -214,6 +228,27 @@ export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
     locMeta[built.investigator.currentLocationId ?? '']?.name ??
     built.investigator.currentLocationId ?? '';
 
+  // 引擎檢定輸入三張查找表
+  const locationStats: GameSetup['locationStats'] = {};
+  for (const loc of bootstrap.locations) {
+    locationStats[loc.code] = { shroud: Number(loc.shroud ?? 10) };
+  }
+  const enemyStats: GameSetup['enemyStats'] = {};
+  for (const mv of bootstrap.monsters as Array<Record<string, any>>) {
+    enemyStats[String(mv.code)] = {
+      dc: Number(mv.dc ?? 10),
+      damage_physical: Number(mv.damage_physical ?? 1),
+      damage_horror: Number(mv.damage_horror ?? 0),
+    };
+  }
+  const cardLookup: GameSetup['cardLookup'] = {};
+  for (const [instanceId, info] of Object.entries(built.cardIndex)) {
+    const icons = info.data.commit_icons;
+    cardLookup[instanceId] = {
+      commit_icons: icons && typeof icons === 'object' && !Array.isArray(icons) ? icons : {},
+    };
+  }
+
   return {
     stageId: bootstrap.stage.id,
     title: bootstrap.stage.name_zh,
@@ -231,5 +266,8 @@ export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
       `${inv?.name_zh ?? '調查員'} 站在【${spawnName}】。`,
       '調查各地點、收集線索,在議程推進前達成幕目標。',
     ],
+    locationStats,
+    enemyStats,
+    cardLookup,
   };
 }

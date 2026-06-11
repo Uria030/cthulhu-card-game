@@ -67,6 +67,9 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'attack_hit': return '⚔ 命中(' + (p.damage as number) + ' 點傷害)— ' + (p.narrative as string);
     case 'attack_miss': return '⚔ ' + (p.narrative as string);
     case 'enemy_defeated': return '☠ ' + (p.narrative as string);
+    case 'commit_cards': return '🂠 投入 ' + ((p.cardInstanceIds as string[])?.length ?? 0) + ' 張手牌加值 +' + (p.bonus as number);
+    case 'evade_success': return '🌀 ' + (p.narrative as string);
+    case 'evade_fail': return '🌀 ' + (p.narrative as string) + '(受 ' + (p.damage as number) + ' 點傷害)';
     default: return eff.type;
   }
 }
@@ -246,7 +249,13 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     };
     bus.publish(intent);
     const turn: TurnState = { turnNumber, phase, actionPointsSpent: {}, pendingLegendaryActions: [], triggeredReactions: [] };
-    const ctx: RuleContext = { scenario, investigator, turn, investigators: { [investigator.investigatorId]: investigator } };
+    const ctx: RuleContext = {
+      scenario, investigator, turn,
+      investigators: { [investigator.investigatorId]: investigator },
+      locationStats: setup.locationStats,
+      enemyStats: setup.enemyStats,
+      cardLookup: setup.cardLookup,
+    };
     const out = resolveIntent(intent, ctx);
     bus.publish(out.result);
     if (out.newState?.investigator) setInvestigator(out.newState.investigator);

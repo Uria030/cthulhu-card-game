@@ -9,3 +9,4 @@ export * from './messageBus';
 export * from './turnLoop';
 export * from './ruleEngine';
 export * from './bootstrap';
+export * from './checks';

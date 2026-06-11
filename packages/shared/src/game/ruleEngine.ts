@@ -26,6 +26,12 @@ import type {
   TurnState,
   LocationInstance,
 } from './state';
+import {
+  resolveCheck,
+  commitValueFor,
+  visibilityModifier,
+} from './checks';
+import type { AttributeKey, CommitIcons } from './checks';
 
 // ─── 引擎輸入:當前狀態切片 ──────────────
 export interface RuleContext {
@@ -36,6 +42,56 @@ export interface RuleContext {
   turn: TurnState;
   /** 全部調查員(供多人查詢) */
   investigators: Record<string, InvestigatorState>;
+  /** 卡片實例資料查找(commit_icons 等;容器由 bootstrap cardIndex 餵入) */
+  cardLookup?: Record<string, { commit_icons?: CommitIcons }>;
+  /** 地點統計(調查難度 shroud;key = locationDefinitionId) */
+  locationStats?: Record<string, { shroud?: number }>;
+  /** 敵人定義統計(key = enemyDefinitionId,來自 bootstrap monsters) */
+  enemyStats?: Record<string, { dc?: number; damage_physical?: number; damage_horror?: number }>;
+  /** 亂數來源(測試注入,預設 Math.random) */
+  rng?: () => number;
+}
+
+// ─── 加值 commit(§4.2 / ch3 §3):擲骰前投手牌圖示,卡進棄牌堆 ──
+interface CommitOutcome {
+  value: number;
+  committedIds: string[];
+  error?: string;
+}
+
+function takeCommit(intent: IntentMessage, ctx: RuleContext, attribute: AttributeKey): CommitOutcome {
+  const ids = (intent.payload as { commitCardIds?: unknown }).commitCardIds;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { value: 0, committedIds: [] };
+  }
+  const committedIds: string[] = [];
+  const iconSets: CommitIcons[] = [];
+  for (const id of ids) {
+    if (typeof id !== 'string' || !ctx.investigator.hand.includes(id)) {
+      return { value: 0, committedIds: [], error: '加值卡不在手牌中:' + String(id) };
+    }
+    committedIds.push(id);
+    iconSets.push(ctx.cardLookup?.[id]?.commit_icons ?? {});
+  }
+  return { value: commitValueFor(attribute, iconSets), committedIds };
+}
+
+/** commit 卡離手 → 棄牌堆(不花行動點,ch3 §3) */
+function applyCommitToInvestigator(inv: InvestigatorState, committedIds: string[]): InvestigatorState {
+  if (committedIds.length === 0) return inv;
+  return {
+    ...inv,
+    hand: inv.hand.filter((id) => !committedIds.includes(id)),
+    discardPile: [...inv.discardPile, ...committedIds],
+  };
+}
+
+function commitEffects(commit: CommitOutcome): ResultEffect[] {
+  if (commit.committedIds.length === 0) return [];
+  return [{
+    type: 'commit_cards',
+    params: { cardInstanceIds: commit.committedIds, bonus: commit.value },
+  }];
 }
 
 // ─── 引擎輸出:結算結果 + 新狀態切片 ──────
@@ -73,10 +129,11 @@ export function resolveIntent(intent: IntentMessage, ctx: RuleContext): RuleReso
       return resolveInvestigate(intent, ctx);
     case 'attack':
       return resolveAttack(intent, ctx);
+    case 'evade':
+      return resolveEvade(intent, ctx);
     // 以下 stub,等後續里程碑展開
     case 'play_card':
     case 'taunt':
-    case 'evade':
     case 'execute_card_action':
     case 'consume':
     case 'commit_attribute_icon':
@@ -197,23 +254,33 @@ function resolveMove(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput
 }
 
 /**
- * 調查 — §6.1 / §13(線索系統)
- * G1 階段簡化:扣 1 行動點,擲 d20 + 感知,DC 10 → 成功則找到 1 線索
- * 完整版需含隱藏調查點、感知檢定、難度由地點定義(後續展開)
+ * 調查 — §6.1 / §13(線索系統)+ §4 檢定管線
+ * 感知檢定,DC = 地點 shroud(locationStats 未提供時 fallback 10);支援加值 commit。
+ * 隱藏調查點(hidden_info 揭露)後續展開。
  */
 function resolveInvestigate(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
   if (ctx.investigator.actionPoints < 1) {
     return reject(intent, '行動點不足:調查需 1,剩 ' + ctx.investigator.actionPoints);
   }
-  const perception = ctx.investigator.attributes.perception;
-  const roll = rollD20();
-  const total = roll + perception;
-  const dc = 10;
-  const success = total >= dc;
-  const newInv: InvestigatorState = { ...ctx.investigator, actionPoints: ctx.investigator.actionPoints - 1 };
+  const commit = takeCommit(intent, ctx, 'perception');
+  if (commit.error) return reject(intent, commit.error);
+
+  const locId = ctx.investigator.currentLocationId || '';
+  const dc = ctx.locationStats?.[locId]?.shroud ?? 10;
+  const check = resolveCheck(
+    dc,
+    { attribute: ctx.investigator.attributes.perception, commit: commit.value },
+    ctx.rng,
+  );
+  const success = check.outcome === 'success';
+  const newInv: InvestigatorState = {
+    ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
+    actionPoints: ctx.investigator.actionPoints - 1,
+  };
   const baseEffects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
-    { type: 'roll_d20', params: { roll, attribute: 'perception', modifier: perception, total, dc, outcome: success ? 'success' : 'fail' } },
+    ...commitEffects(commit),
+    { type: 'roll_d20', params: { roll: check.roll, attribute: 'perception', modifier: check.total - check.roll, total: check.total, dc, outcome: success ? 'success' : 'fail' } },
   ];
   if (!success) {
     return accept(intent, [...baseEffects, { type: 'investigate_fail', params: { narrative: '你翻找了一圈,什麼線索都沒留下。' } }], { investigator: newInv });
@@ -260,6 +327,13 @@ function resolveAttack(intent: IntentMessage, ctx: RuleContext): RuleResolveOutp
   return performAttack(intent, ctx, targetEnemyId);
 }
 
+/**
+ * 攻擊結算 — §4 檢定管線 + §7.5 + §12.1 光照
+ * DC = 怪物 dc(enemyStats 未提供時 fallback 10);夜間/黑暗攻擊 -2;
+ * 自然 20 爆擊傷害 ×2;自然 1 無交戰隊友 → 純未命中(誤傷隊友屬多人,後續)。
+ * 基礎傷害 1(武器卡面傷害等 play_card 落地後接上,§7.5)。
+ * 屬性暫用力量(戰鬥風格卡抽取屬性在下一批接上,§8)。
+ */
 function performAttack(intent: IntentMessage, ctx: RuleContext, enemyInstanceId: string): RuleResolveOutput {
   const enemy = ctx.scenario.enemies.find((e) => e.instanceId === enemyInstanceId);
   if (!enemy || enemy.hp <= 0) {
@@ -268,27 +342,42 @@ function performAttack(intent: IntentMessage, ctx: RuleContext, enemyInstanceId:
   if (enemy.locationId !== ctx.investigator.currentLocationId) {
     return reject(intent, '目標不在你所在地點');
   }
-  const strength = ctx.investigator.attributes.strength;
-  const roll = rollD20();
-  const total = roll + strength;
-  const dc = 10;
-  const newInv: InvestigatorState = { ...ctx.investigator, actionPoints: ctx.investigator.actionPoints - 1 };
+  const commit = takeCommit(intent, ctx, 'strength');
+  if (commit.error) return reject(intent, commit.error);
+
+  const here = ctx.scenario.locations.find(
+    (l) => l.locationDefinitionId === ctx.investigator.currentLocationId,
+  );
+  const situational = here ? visibilityModifier('attack', here.visibility) : 0;
+  const dc = ctx.enemyStats?.[enemy.enemyDefinitionId]?.dc ?? 10;
+  const check = resolveCheck(
+    dc,
+    { attribute: ctx.investigator.attributes.strength, commit: commit.value, situational },
+    ctx.rng,
+  );
+  const newInv: InvestigatorState = {
+    ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
+    actionPoints: ctx.investigator.actionPoints - 1,
+  };
   const baseEffects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
-    { type: 'roll_d20', params: { roll, attribute: 'strength', modifier: strength, total, dc, outcome: total >= dc ? 'hit' : 'miss' }, targetId: enemyInstanceId },
+    ...commitEffects(commit),
+    { type: 'roll_d20', params: { roll: check.roll, attribute: 'strength', modifier: check.total - check.roll, total: check.total, dc, outcome: check.outcome === 'success' ? 'hit' : 'miss', natural20: check.natural20, natural1: check.natural1 }, targetId: enemyInstanceId },
   ];
-  if (total < dc) {
-    return accept(intent, [...baseEffects, { type: 'attack_miss', params: { narrative: '你的攻擊擦身而過,牠仍站在那裡。' }, targetId: enemyInstanceId }], { investigator: newInv });
+  // §7.5 自然 1:有交戰隊友時誤傷;單人無隊友 → 純未命中
+  if (check.outcome !== 'success' || check.natural1) {
+    return accept(intent, [...baseEffects, { type: 'attack_miss', params: { narrative: check.natural1 ? '你的攻擊完全落空,差點傷到自己。' : '你的攻擊擦身而過,牠仍站在那裡。' }, targetId: enemyInstanceId }], { investigator: newInv });
   }
-  // 命中:1 點傷害(簡化版)
-  const newHp = enemy.hp - 1;
+  // 命中:基礎 1 點;自然 20 爆擊 ×2(§7.5)
+  const damage = check.natural20 ? 2 : 1;
+  const newHp = enemy.hp - damage;
   const newScenario: ScenarioState = {
     ...ctx.scenario,
     enemies: ctx.scenario.enemies.map((e) => (e.instanceId === enemyInstanceId ? { ...e, hp: newHp } : e)),
   };
   const effects: ResultEffect[] = [
     ...baseEffects,
-    { type: 'attack_hit', params: { damage: 1, narrative: hpToNarrative(newHp, enemy.hp) }, targetId: enemyInstanceId },
+    { type: 'attack_hit', params: { damage, critical: check.natural20, narrative: (check.natural20 ? '【爆擊】' : '') + hpToNarrative(newHp, enemy.hp) }, targetId: enemyInstanceId },
   ];
   if (newHp <= 0) {
     effects.push({ type: 'enemy_defeated', params: { narrative: '牠倒下了,空氣裡只剩下血腥與沉默。' }, targetId: enemyInstanceId });
@@ -296,9 +385,69 @@ function performAttack(intent: IntentMessage, ctx: RuleContext, enemyInstanceId:
   return accept(intent, effects, { investigator: newInv, scenario: newScenario });
 }
 
-function rollD20(): number {
-  return 1 + Math.floor(Math.random() * 20);
+/**
+ * 閃避 — §7.4:成敗都脫離交戰;失敗受敵人物理傷害一次;成功敵人被絆倒。
+ * 反應檢定(支柱一 v0.3 §12.4:閃避屬反應屬性影響範圍);DC = 敵人 dc fallback 10;
+ * §12.1 黑暗中閃避 +2。
+ */
+function resolveEvade(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
+  if (ctx.investigator.actionPoints < 1) {
+    return reject(intent, '行動點不足:閃避需 1,剩 ' + ctx.investigator.actionPoints);
+  }
+  if (ctx.investigator.engagedWith.length === 0) {
+    return reject(intent, '你沒有與任何敵人交戰,無需閃避');
+  }
+  const commit = takeCommit(intent, ctx, 'reflex');
+  if (commit.error) return reject(intent, commit.error);
+
+  // 一次閃避結算一隻:payload 可指定,預設交戰清單第一隻(多敵交戰要逐隻閃避)
+  const requestedId = (intent.payload as { enemyInstanceId?: string }).enemyInstanceId;
+  const enemyId = requestedId ?? ctx.investigator.engagedWith[0];
+  if (!ctx.investigator.engagedWith.includes(enemyId)) {
+    return reject(intent, '你沒有與該敵人交戰:' + enemyId);
+  }
+  const enemy = ctx.scenario.enemies.find((e) => e.instanceId === enemyId);
+  const here = ctx.scenario.locations.find(
+    (l) => l.locationDefinitionId === ctx.investigator.currentLocationId,
+  );
+  const situational = here ? visibilityModifier('evade', here.visibility) : 0;
+  const dc = enemy ? ctx.enemyStats?.[enemy.enemyDefinitionId]?.dc ?? 10 : 10;
+  const check = resolveCheck(
+    dc,
+    { attribute: ctx.investigator.attributes.reflex, commit: commit.value, situational },
+    ctx.rng,
+  );
+  const success = check.outcome === 'success';
+  const damageTaken = success
+    ? 0
+    : (enemy ? ctx.enemyStats?.[enemy.enemyDefinitionId]?.damage_physical ?? 1 : 1);
+
+  // §7.4 成敗都脫離交戰 — 只脫離本次結算的這一隻,其他交戰維持
+  const newInv: InvestigatorState = {
+    ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
+    actionPoints: ctx.investigator.actionPoints - 1,
+    engagedWith: ctx.investigator.engagedWith.filter((id) => id !== enemyId),
+    hp: Math.max(0, ctx.investigator.hp - damageTaken),
+  };
+  const newScenario: ScenarioState = {
+    ...ctx.scenario,
+    enemies: ctx.scenario.enemies.map((e) =>
+      e.instanceId === enemyId
+        ? { ...e, engagedWith: e.engagedWith.filter((id) => id !== ctx.investigator.investigatorId) }
+        : e,
+    ),
+  };
+  const effects: ResultEffect[] = [
+    { type: 'spend_action_point', params: { amount: 1 } },
+    ...commitEffects(commit),
+    { type: 'roll_d20', params: { roll: check.roll, attribute: 'reflex', modifier: check.total - check.roll, total: check.total, dc, outcome: success ? 'success' : 'fail' } },
+    success
+      ? { type: 'evade_success', params: { narrative: '你側身一滾,牠撲空絆倒。你脫離了交戰。' }, targetId: enemyId }
+      : { type: 'evade_fail', params: { damage: damageTaken, narrative: '你掙脫了,但牠的爪子在你身上留下一道口子。' }, targetId: enemyId },
+  ];
+  return accept(intent, effects, { investigator: newInv, scenario: newScenario });
 }
+
 
 /** §7.8 隱藏資訊:敵人血量轉敘事性狀態(簡化:依絕對 hp 不依百分比)*/
 function hpToNarrative(newHp: number, prevHp: number): string {

@@ -109,6 +109,14 @@ test('戲劇曲線守門:鋪陳期擋 medium,高潮全開', () => {
   assertEq(scoreCard(AGENDA, situation({ dramaTier: 'climax' }), st, p) !== null, true);
 });
 
+test('戲劇曲線守門:鋪陳期連 small 召喚也不放(只准氛圍類)', () => {
+  const p = defaultKeeperProfile();
+  const st = funded(p);
+  assertEq(scoreCard(SUMMON, situation({ dramaTier: 'setup', aliveEnemies: 0 }), st, p), null);
+  assertEq(scoreCard(AMBIENT, situation({ dramaTier: 'setup' }), st, p) !== null, true);
+  assertEq(scoreCard(SUMMON, situation({ dramaTier: 'rising', aliveEnemies: 0 }), st, p) !== null, true);
+});
+
 test('無怪 → summon +3;蟄伏卡不可選;冷卻中不可選', () => {
   const p = defaultKeeperProfile();
   const st = funded(p);

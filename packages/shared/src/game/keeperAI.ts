@@ -150,13 +150,16 @@ export function scoreCard(
   if (!card.reusable && used >= 1) return null;
   if (card.max_uses_per_stage != null && used >= card.max_uses_per_stage) return null;
 
-  // 戲劇曲線守門(§4.2A):鋪陳期只放小強度;升壓期 small/medium;高潮全開
+  // 戲劇曲線守門(§4.2A):鋪陳期只放小強度「氛圍類」;升壓期 small/medium;高潮全開
   const intensity = String(card.intensity_tag ?? 'small');
-  if (situation.dramaTier === 'setup' && intensity !== 'small') return null;
+  const cat = String(card.card_category ?? 'general');
+  const AMBIENT_CATEGORIES = new Set(['general', 'environment', 'narrative', 'cancel']);
+  if (situation.dramaTier === 'setup' && (intensity !== 'small' || !AMBIENT_CATEGORIES.has(cat))) {
+    return null; // 鋪陳期不召喚、不施壓 — 「世界開始不對勁」靠氛圍卡
+  }
   if (situation.dramaTier === 'rising' && (intensity === 'large' || intensity === 'epic')) return null;
 
   let score = 0;
-  const cat = String(card.card_category ?? 'general');
 
   // 類別 × 局勢基礎分(§4.2)
   if (situation.aliveEnemies === 0 && cat === 'summon') score += 3;

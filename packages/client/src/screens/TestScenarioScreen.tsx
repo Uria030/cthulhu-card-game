@@ -442,7 +442,15 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       sc = exec.scenario;
       inv = exec.investigator;
       if (exec.attachments.length > 0) {
-        sc = { ...sc, keeperAttachments: [...(sc.keeperAttachments ?? []), ...exec.attachments] };
+        // 同卡再啟用 = 刷新不疊加(自我去重,s14 修飾關鍵字精神)
+        const newIds = new Set(exec.attachments.map((a) => a.cardId));
+        sc = {
+          ...sc,
+          keeperAttachments: [
+            ...(sc.keeperAttachments ?? []).filter((a) => !newIds.has(a.cardId)),
+            ...exec.attachments,
+          ],
+        };
       }
       for (const eff of exec.effects) append('[城主] ' + describeEffect(eff, locMeta));
       // 召喚後恐懼掃描(§7.6 怪物進入半徑)
@@ -478,6 +486,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     turnLoopRef.current?.advance();
     turnLoopRef.current?.advance();
     setInvestigator((i) => ({ ...i, actionPoints: 3 }));
+    // 場景回合數同步(戲劇曲線/行為腳本 turn_count 觸發都依賴它)
+    setScenario((s) => ({ ...s, turnNumber: s.turnNumber + 1 }));
     setKeeperEnergy((e) => Math.min(12, e + 1));
   };
 

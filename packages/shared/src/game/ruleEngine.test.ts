@@ -410,6 +410,20 @@ test('play_card:技能卡不可打出(ch3 §3.2)', () => {
   assertEq(r.result.outcome, 'rejected');
 });
 
+test('play_card:弱點卡不可打出(ch6 §9 強制顯現物)', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['wk'], resources: 5 });
+  ctx.cardLookup = { ...ctx.cardLookup, wk: { name_zh: '反追蹤', card_type: 'weakness', cost: 0, effects: [] } };
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'wk' }), ctx);
+  assertEq(r.result.outcome, 'rejected');
+});
+
+test('play_card:未知/缺漏 card_type 一律駁回(白名單制)', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['mys'], resources: 5 });
+  ctx.cardLookup = { ...ctx.cardLookup, mys: { name_zh: '形狀不明', cost: 0, effects: [] } };
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'mys' }), ctx);
+  assertEq(r.result.outcome, 'rejected');
+});
+
 test('play_card:事件卡結算範圍傷害後進棄牌堆', () => {
   const ctx = makeCardCtx({ roll: 10, hand: ['evt'] });
   const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'evt' }), ctx);

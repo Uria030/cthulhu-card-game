@@ -345,7 +345,9 @@ export function buildGameFromBootstrap(
         source,
         sourceId: String(src.id),
         name_zh: String(src.name_zh ?? ''),
-        card_type: src.card_type ? String(src.card_type) : undefined,
+        // 弱點列(investigator_weaknesses)沒有 card_type 欄位 → 補 'weakness'
+        // (否則會被當一般資產打出;2026-06-12 三 AI 模擬抓到的洞)
+        card_type: src.card_type ? String(src.card_type) : source === 'weakness' ? 'weakness' : undefined,
         cost: src.cost ?? null,
         data: src,
       };

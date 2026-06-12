@@ -241,6 +241,48 @@ test('AI 回合:防呆 — 駁回即停,不跟規則吵架', () => {
   assertEq(r.steps.length, 0, '沒行動點不該嘗試');
 });
 
+test('弱點卡與無類型卡都不進出牌候選(模擬抓洞回歸)', () => {
+  const lookup = {
+    ...CARDS,
+    wk_card: { name_zh: '反追蹤', card_type: 'weakness', cost: 0, effects: [] },
+    untyped: { name_zh: '形狀不明', cost: 0, effects: [] }, // card_type undefined(弱點列原始形狀)
+  };
+  const c = ctx({ cardLookup: lookup, investigator: makeInv({ hand: ['wk_card', 'untyped'], resources: 5 }) });
+  const candidates = enumerateCandidates(c, ELIAS, initInvestigatorAIState());
+  assert(!candidates.some((x) => x.actionType === 'play_card'), '弱點/無類型不該被打出');
+});
+
+test('卡片優先 + 存錢買刀(Uria 裁定:卡片價值永遠比單純動作高)', () => {
+  const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'B', hp: 4, engagedWith: [], modifiers: [] };
+  // 口袋空空 + 手上有 2 費武器 + 場上有威脅 → 第一優先是存錢(繼承武器折扣分)
+  const broke = ctx({
+    scenario: makeScenario({ enemies: [enemy] }),
+    investigator: makeInv({ hand: ['weapon'], resources: 0 }),
+  });
+  const savePick = planNextAction(broke, MARCUS, initInvestigatorAIState());
+  assertEq(savePick?.actionType, 'gain_resource', '沒錢先存錢(實際:' + savePick?.actionType + ')');
+  // 存夠了 → 打出武器壓過單純動作
+  const funded = ctx({
+    scenario: makeScenario({ enemies: [enemy] }),
+    investigator: makeInv({ hand: ['weapon'], resources: 2 }),
+  });
+  const playPick = planNextAction(funded, MARCUS, initInvestigatorAIState());
+  assertEq(playPick?.actionType, 'play_card', '買得起就亮刀(實際:' + playPick?.actionType + ')');
+});
+
+test('交戰低血時不站著存錢(Raviel BLOCK 回歸):閃避壓過存錢', () => {
+  const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 4, engagedWith: ['ai-1'], modifiers: [] };
+  const c = ctx({
+    scenario: makeScenario({ enemies: [enemy] }),
+    // 低血 + 被纏 + 手上有買不起的武器:存錢繼承分必須被掐掉
+    investigator: makeInv({ hp: 1, engagedWith: ['e1'], hand: ['weapon'], resources: 0 }),
+  });
+  for (const p of AI_INVESTIGATOR_ROSTER) {
+    const pick = planNextAction({ ...c, rng: () => 0.99 }, { ...p, temperature: 0 }, initInvestigatorAIState());
+    assertEq(pick?.actionType, 'evade', p.name_zh + ' 該逃命不該購物(實際:' + pick?.actionType + ')');
+  }
+});
+
 test('防踱步:剛離開的地點吃回頭罰', () => {
   const c = ctx();
   const state = { lastActionType: 'move', cameFromLocationId: 'B' };

@@ -393,11 +393,15 @@ export function enumerateCandidates(
   }
 
   // ── 出牌(資產鋪場/相關事件)──
+  // 設計裁定(Uria 2026-06-12):卡片的價值永遠比單純動作高 —
+  // 打得出的卡加固定優先分;打不起的好卡讓「拿資源」繼承折扣分(存錢買刀)。
+  const CARD_FIRST_BONUS = 1.0;
+  let bestUnaffordable = 0;
   for (const cardId of inv.hand) {
     const data = cardLookup[cardId];
-    if (!data || data.card_type === 'skill' || data.card_type === 'weakness') continue;
+    // 技能(投入用)/弱點(強制顯現物)/無類型(資料不明)都不打
+    if (!data || !data.card_type || data.card_type === 'skill' || data.card_type === 'weakness') continue;
     const cost = Number(data.cost ?? 0);
-    if (cost > inv.resources) continue;
     const fx = data.effects ?? [];
     let value = 0;
     let narrative = `打出「${data.name_zh ?? ''}」`;
@@ -406,7 +410,7 @@ export function enumerateCandidates(
       const armed = inv.assetsInPlay.some((id) =>
         (cardLookup[id]?.effects ?? []).some((f) => f.trigger_type === 'action' && f.effect_code === 'attack'),
       );
-      value = aliveEnemies.length > 0 && !armed ? 2.2 : 0.8;
+      value = aliveEnemies.length > 0 && !armed ? 2.4 : 0.8;
     } else if (data.card_type === 'event') {
       // 事件:效果碼相關性(打傷害要有目標/補給通用)
       const codes = new Set(fx.filter((f) => f.trigger_type === 'action').map((f) => f.effect_code));
@@ -419,10 +423,15 @@ export function enumerateCandidates(
       value = 1.2;
     }
     if (value <= 0) continue;
+    const score = (value + CARD_FIRST_BONUS) * profile.weights.cardPlayAffinity;
+    if (cost > inv.resources) {
+      bestUnaffordable = Math.max(bestUnaffordable, score);
+      continue;
+    }
     out.push({
       actionType: 'play_card',
       payload: { cardInstanceId: cardId },
-      score: value * profile.weights.cardPlayAffinity,
+      score,
       intentNarrative: narrative,
     });
   }
@@ -466,11 +475,11 @@ export function enumerateCandidates(
 
   // ── 補給(拿資源/抽卡)──
   {
-    const cheapestUnaffordable = inv.hand
-      .map((id) => cardLookup[id])
-      .filter((d) => d && d.card_type !== 'skill' && Number(d.cost ?? 0) > inv.resources)
-      .length;
-    const resourceValue = cheapestUnaffordable > 0 ? 0.9 : 0.4;
+    // 存錢買刀:打不起的最好那張卡,讓拿資源繼承 85% 折扣分
+    // (連續存兩回合就買得起 2-3 費武器;比漫無目的翻找有方向)
+    // 守則:交戰中或退守時不購物(Raviel BLOCK 回歸)— 先活下來,錢之後再存
+    const calm = engaged.length === 0 && !retreating;
+    const resourceValue = Math.max(0.4, calm ? bestUnaffordable * 0.85 : 0);
     out.push({ actionType: 'gain_resource', payload: {}, score: resourceValue, intentNarrative: '整理隨身物資' });
     if (inv.deck.length > 0) {
       const drawValue = inv.hand.length < 3 ? 1.0 : 0.35;

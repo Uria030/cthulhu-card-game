@@ -594,6 +594,14 @@ function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOu
   if (data.card_type === 'skill') {
     return reject(intent, '技能卡不打出 — 在檢定時投入加值(ch3 §3.2)');
   }
+  if (data.card_type === 'weakness') {
+    // 弱點是強制納入的顯現物(ch6 §9),不是可主動打出的資產
+    return reject(intent, '「' + (data.name_zh ?? cardId) + '」是個人弱點 — 它會自己找上你,不由你打出');
+  }
+  // 可打出類型白名單:未知/缺漏 card_type 一律不進場(資料不明就不裁決)
+  if (!['asset', 'event', 'ally'].includes(String(data.card_type ?? ''))) {
+    return reject(intent, '「' + (data.name_zh ?? cardId) + '」的卡片類型不明(' + String(data.card_type ?? '空') + '),引擎不受理');
+  }
   const cost = Number(data.cost ?? 0);
   if (ctx.investigator.resources < cost) {
     return reject(intent, '資源不足:「' + (data.name_zh ?? cardId) + '」需 ' + cost + ',剩 ' + ctx.investigator.resources);

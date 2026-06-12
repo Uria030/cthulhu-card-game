@@ -70,8 +70,13 @@ for (const [name, spec] of Object.entries(FILL)) {
     console.log(`✗ 找不到【${name}】`);
     continue;
   }
+  // 注意:detail 端點包裝鍵是 mythos_card(2026-06-12 事故根因:讀錯鍵 → PUT 全 NULL 洗掉敘述)
   const full = await adminGet(`/api/admin/keeper/mythos-cards/${hit.id}`);
-  const card = full.card ?? full.data ?? full;
+  const card = full.mythos_card;
+  if (!card?.id) {
+    console.log(`✗ 【${name}】detail 形狀異常,跳過(防再洗)`);
+    continue;
+  }
 
   // PUT 全欄位(端點非 COALESCE 欄位會被覆寫,必須帶回原值)
   const body = { ...card, ...spec.fields };

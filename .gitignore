@@ -18,3 +18,12 @@ g1-cred.txt
 .gemini-key
 GeminiKey.txt
 *.bak.hardcoded
+
+# 本機工作產物(不入庫:知識圖譜輸出、CLI 暫存、本機安裝的 skills)
+graphify-out/
+.agents/
+.chk.json
+.tmp-inventory.mjs
+skills-lock.json
+.claude/skills/
+packages/shared/src/game/_debug_ai.ts

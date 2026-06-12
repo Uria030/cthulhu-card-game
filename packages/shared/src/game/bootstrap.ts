@@ -160,6 +160,8 @@ export interface BuildOptions {
   openingHandSize?: number;
   /** 洗牌亂數來源(可注入做測試,預設 Math.random) */
   rng?: () => number;
+  /** 卡片實例 id 前綴(多調查員同場時防撞;預設空 = 'ci_N') */
+  cardInstancePrefix?: string;
 }
 
 // ─── 環境敘述 → 視野光照 ──────────────────────
@@ -229,6 +231,7 @@ export function buildGameFromBootstrap(
     playerCount = 1,
     openingHandSize = 5,
     rng = Math.random,
+    cardInstancePrefix = '',
   } = options;
 
   const scenarioRow =
@@ -336,7 +339,7 @@ export function buildGameFromBootstrap(
         ? 'signature'
         : 'weakness';
     for (let i = 0; i < (entry.quantity ?? 1); i += 1) {
-      const instanceId = `ci_${(cardSeq += 1)}`;
+      const instanceId = `${cardInstancePrefix}ci_${(cardSeq += 1)}`;
       cardIndex[instanceId] = {
         instanceId,
         source,

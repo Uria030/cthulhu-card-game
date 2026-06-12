@@ -185,11 +185,20 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
         : [];
 
       // ── 調查員 + 起始牌組(含卡片效果)──
+      // AI 名冊模板白名單:名冊調查員按設計名字留白、永不 is_completed,
+      // 名字與自由配點由遊戲本體名冊(shared/game/investigatorAI.ts AI_INVESTIGATOR_ROSTER,
+      // 單一事實源)疊上。只放行這四張,其餘指名仍要求 completed(review WARN 收斂邊界)。
+      const AI_ROSTER_TEMPLATE_IDS = [
+        'f6ddfe04-cd49-4775-99f2-5edc873e3799', // INTJ-1 私家偵探 伊萊亞斯·克雷恩
+        '36effa3a-5709-47fe-a710-8b6d436da2f5', // INTJ-2 靈媒 薇絲珀·格蕾
+        '1ad78b83-0b95-4337-9ae8-d935bc85db9f', // INTJ-3 密碼學家 艾達·韋克斯勒
+        '77fb726a-7c12-4197-af19-12262588f475', // INTJ-4 退役軍官 馬庫斯·韋恩萊特
+      ];
       const invId = request.query.investigator;
       const invRes = invId
         ? await pool.query(
-            'SELECT * FROM investigator_templates WHERE id = $1 AND is_completed = TRUE',
-            [invId],
+            'SELECT * FROM investigator_templates WHERE id = $1 AND (is_completed = TRUE OR id = ANY($2))',
+            [invId, AI_ROSTER_TEMPLATE_IDS],
           )
         : await pool.query(
             'SELECT * FROM investigator_templates WHERE is_completed = TRUE ORDER BY mbti_code LIMIT 1',

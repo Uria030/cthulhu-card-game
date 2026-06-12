@@ -515,6 +515,13 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
+/* AI 隊友標記:靠左上排,靛藍框與玩家(赭紅)區隔 */
+.player-token.ai-token {
+  right: auto;
+  left: -12px;
+  border-color: var(--player-2);
+}
+
 /* === Block 5 右側敘事 LOG(fixed 對齊 viewport)=== */
 .narrative-log {
   position: fixed;

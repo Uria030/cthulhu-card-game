@@ -19,8 +19,13 @@ import type {
   OutcomeData,
   MythosCardData,
   KeeperProfile,
+  InvestigatorAIProfile,
 } from '@cthulhu/shared';
-import { defaultKeeperProfile } from '@cthulhu/shared';
+import {
+  defaultKeeperProfile,
+  rosterProfileForTemplate,
+  materializeAIInvestigator,
+} from '@cthulhu/shared';
 
 export interface CardDisplay {
   id: string;
@@ -88,6 +93,8 @@ export interface GameSetup {
   outcomes: OutcomeData[];
   /** 原始開局包(場景切換重建用;教學關卡為 null) */
   bootstrap: StageBootstrap | null;
+  /** AI 隊友(調查員 AI v0:名冊個性 + 落地完成的調查員) */
+  aiMembers: Array<{ profile: InvestigatorAIProfile; investigator: InvestigatorState }>;
 }
 
 const VALID_RARITIES = new Set(['common', 'uncommon', 'rare', 'legendary']);
@@ -211,6 +218,7 @@ export function makeTestSetup(): GameSetup {
     bossIntro: {},
     outcomes: [],
     bootstrap: null,
+    aiMembers: [],
   };
 }
 
@@ -220,8 +228,26 @@ const FACTION_LABEL: Record<string, string> = {
   T: 'T 理性陣營', F: 'F 聖燼陣營', J: 'J 秩序陣營', P: 'P 流變陣營',
 };
 
-export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
+export function buildSetupFromBootstrap(
+  bootstrap: StageBootstrap,
+  aiBootstraps: StageBootstrap[] = [],
+): GameSetup {
   const built = buildGameFromBootstrap(bootstrap);
+
+  // ── AI 隊友落地:名冊(名字/自由配點/熟練)疊上模板 bootstrap ──
+  const aiMembers: GameSetup['aiMembers'] = [];
+  const aiCardIndexes: Array<Record<string, import('@cthulhu/shared').CardInstanceInfo>> = [];
+  for (const [i, aiB] of aiBootstraps.entries()) {
+    const templateId = aiB.investigator?.id;
+    const profile = templateId ? rosterProfileForTemplate(templateId) : null;
+    if (!profile) continue; // 不在名冊上的模板不落地(名字是 AI 的靈魂,沒名字不上場)
+    const aiBuilt = buildGameFromBootstrap(aiB, { cardInstancePrefix: `ai${i}_` });
+    aiMembers.push({
+      profile,
+      investigator: materializeAIInvestigator(aiBuilt.investigator, profile),
+    });
+    aiCardIndexes.push(aiBuilt.cardIndex);
+  }
 
   const locMeta: Record<string, LocationDisplay> = {};
   for (const loc of bootstrap.locations) {
@@ -233,14 +259,16 @@ export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
   }
 
   const cardMeta: Record<string, CardDisplay> = {};
-  for (const [instanceId, info] of Object.entries(built.cardIndex)) {
-    cardMeta[instanceId] = {
-      id: instanceId,
-      name: info.name_zh,
-      cost: Number(info.cost ?? 0),
-      desc: String(info.data.description_zh ?? info.data.ability_text_zh ?? ''),
-      rarity: toRarity(info.data.rarity),
-    };
+  for (const index of [built.cardIndex, ...aiCardIndexes]) {
+    for (const [instanceId, info] of Object.entries(index)) {
+      cardMeta[instanceId] = {
+        id: instanceId,
+        name: info.name_zh,
+        cost: Number(info.cost ?? 0),
+        desc: String(info.data.description_zh ?? info.data.ability_text_zh ?? ''),
+        rarity: toRarity(info.data.rarity),
+      };
+    }
   }
 
   const actCards: ActCardDisplay[] = (bootstrap.stage.act_cards ?? []).map((ac: any) => ({
@@ -314,26 +342,32 @@ export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
     .map((mv) => ({ code: String(mv.code), name_zh: String(mv.name_zh ?? mv.code), tier: Number(mv.tier ?? 1) }))
     .sort((a, b) => a.tier - b.tier);
   const cardLookup: GameSetup['cardLookup'] = {};
-  for (const [instanceId, info] of Object.entries(built.cardIndex)) {
-    const d = info.data;
-    const icons = d.commit_icons;
-    cardLookup[instanceId] = {
-      commit_icons: icons && typeof icons === 'object' && !Array.isArray(icons) ? icons : {},
-      name_zh: info.name_zh,
-      card_type: info.card_type,
-      cost: info.cost,
-      combat_style: d.combat_style ?? null,
-      attribute_modifiers:
-        d.attribute_modifiers && typeof d.attribute_modifiers === 'object'
-          ? d.attribute_modifiers
-          : {},
-      subtypes: Array.isArray(d.subtypes) ? d.subtypes : [],
-      effects: Array.isArray(d.effects) ? d.effects : [],
-    };
+  for (const index of [built.cardIndex, ...aiCardIndexes]) {
+    for (const [instanceId, info] of Object.entries(index)) {
+      const d = info.data;
+      const icons = d.commit_icons;
+      cardLookup[instanceId] = {
+        commit_icons: icons && typeof icons === 'object' && !Array.isArray(icons) ? icons : {},
+        name_zh: info.name_zh,
+        card_type: info.card_type,
+        cost: info.cost,
+        combat_style: d.combat_style ?? null,
+        attribute_modifiers:
+          d.attribute_modifiers && typeof d.attribute_modifiers === 'object'
+            ? d.attribute_modifiers
+            : {},
+        subtypes: Array.isArray(d.subtypes) ? d.subtypes : [],
+        effects: Array.isArray(d.effects) ? d.effects : [],
+      };
+    }
   }
+  // 風格池聯集:玩家 + 各 AI 隊友的牌組武器風格(同 code 以先到為準)
   const stylePools: GameSetup['stylePools'] = {};
-  for (const sc of bootstrap.combat_style_pools ?? []) {
-    (stylePools[sc.style_code] = stylePools[sc.style_code] ?? []).push(sc);
+  for (const src of [bootstrap, ...aiBootstraps]) {
+    for (const sc of src.combat_style_pools ?? []) {
+      const pool = (stylePools[sc.style_code] = stylePools[sc.style_code] ?? []);
+      if (!pool.some((existing) => existing.code === sc.code)) pool.push(sc);
+    }
   }
 
   return {
@@ -351,6 +385,10 @@ export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
     introLog: [
       `──── ${bootstrap.campaign?.name_zh ?? ''}:${bootstrap.stage.name_zh} ────`,
       `${inv?.name_zh ?? '調查員'} 站在【${spawnName}】。`,
+      ...aiMembers.flatMap((m) => [
+        `${m.profile.name_zh}(${m.profile.title_zh})與你同行。`,
+        `[${m.profile.name_zh}] ${m.profile.introLine}`,
+      ]),
       '調查各地點、收集線索,在議程推進前達成幕目標。',
     ],
     locationStats,
@@ -373,5 +411,6 @@ export function buildSetupFromBootstrap(bootstrap: StageBootstrap): GameSetup {
     },
     outcomes: (bootstrap.chapter?.outcomes ?? []) as unknown as OutcomeData[],
     bootstrap,
+    aiMembers,
   };
 }

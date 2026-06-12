@@ -17,9 +17,18 @@ import {
   executeMythosCard,
   runAttachmentUpkeep,
   isCardExecutable,
+  AI_INVESTIGATOR_ROSTER,
+  initInvestigatorAIState,
+  runInvestigatorAITurn,
   CURRENT_MESSAGE_SCHEMA_VERSION,
 } from '@cthulhu/shared';
-import type { OutcomeData, ScenarioState, InvestigatorState, KeeperState } from '@cthulhu/shared';
+import type {
+  OutcomeData,
+  ScenarioState,
+  InvestigatorState,
+  KeeperState,
+  InvestigatorAIState,
+} from '@cthulhu/shared';
 import type {
   IntentMessage,
   ResultMessage,
@@ -151,9 +160,17 @@ export function TestScenarioScreen() {
     let cancelled = false;
     setSetup(null);
     setLoadError(null);
-    fetchBootstrap(stageId, getSelectedInvestigator()?.id)
-      .then((bootstrap) => {
-        if (!cancelled) setSetup(buildSetupFromBootstrap(bootstrap));
+    const playerTemplateId = getSelectedInvestigator()?.id;
+    // AI 隊友(v0:一位):名冊上第一位不與玩家撞模板的成員
+    const aiProfile = AI_INVESTIGATOR_ROSTER.find((p) => p.templateId !== playerTemplateId) ?? null;
+    Promise.all([
+      fetchBootstrap(stageId, playerTemplateId),
+      aiProfile
+        ? fetchBootstrap(stageId, aiProfile.templateId).catch(() => null) // AI 拉不到 → 單人照常開局
+        : Promise.resolve(null),
+    ])
+      .then(([bootstrap, aiBootstrap]) => {
+        if (!cancelled) setSetup(buildSetupFromBootstrap(bootstrap, aiBootstrap ? [aiBootstrap] : []));
       })
       .catch((e: unknown) => {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
@@ -194,6 +211,11 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
 
   const [investigator, setInvestigator] = useState(setup.investigator);
   const [scenario, setScenario] = useState(setup.scenario);
+  // AI 隊友(調查員 AI v0):狀態與玩家平行,行動走同一條 resolveIntent 管線
+  const [aiMembers, setAiMembers] = useState<InvestigatorState[]>(
+    () => setup.aiMembers.map((m) => m.investigator),
+  );
+  const aiStatesRef = useRef<InvestigatorAIState[]>(setup.aiMembers.map(() => initInvestigatorAIState()));
   const [phase, setPhase] = useState<TurnPhase>('short_rest_decision');
   const [turnNumber, setTurnNumber] = useState(1);
   // 城主運行時狀態(行動點/冷卻/使用次數;教學關卡不用)
@@ -266,6 +288,12 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         currentLocationId: built2.investigator.currentLocationId,
         engagedWith: [],
       };
+      // AI 隊友跟著轉場(同出生點,解除交戰)
+      setAiMembers((ms) => ms.map((ai) => ({
+        ...ai,
+        currentLocationId: built2.investigator.currentLocationId,
+        engagedWith: [],
+      })));
       append('🌧 ──── 場景轉換 ──── 你追著線索踏進了那條傳聞中的巷子。');
     }
 
@@ -409,6 +437,52 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
    * ① 附著卡強制結算 ② 城主選用神話卡(行動點預算+戲劇曲線)③ 怪物啟動 ④ 進度/全滅檢查
    */
   const enterMythosPhase = () => {
+    let sc = scenario;
+    let inv = investigator;
+
+    // ⓪ AI 隊友行動(仍屬調查員階段;與真人同管線 resolveIntent,規則平等)
+    const updatedAIs = [...aiMembers];
+    if (!setup.tutorial) {
+      setup.aiMembers.forEach((m, idx) => {
+        const ai = updatedAIs[idx];
+        if (!ai) return;
+        if (ai.hp <= 0 || ai.san <= 0) {
+          append(`[${m.profile.name_zh}] 倒在原地,沒有回應。`);
+          return;
+        }
+        const allies: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
+        for (const [j, other] of updatedAIs.entries()) {
+          if (j !== idx && other) allies[other.investigatorId] = other;
+        }
+        const r = runInvestigatorAITurn(
+          {
+            scenario: sc,
+            investigator: ai,
+            allies,
+            turnNumber,
+            locationStats: setup.locationStats,
+            enemyStats: setup.enemyStats,
+            cardLookup: setup.cardLookup,
+            stylePools: setup.stylePools,
+          },
+          m.profile,
+          aiStatesRef.current[idx],
+        );
+        aiStatesRef.current[idx] = r.aiState;
+        sc = r.scenario;
+        updatedAIs[idx] = r.investigator;
+        for (const step of r.steps) {
+          if (step.outcome === 'rejected') continue; // AI 被駁回不上戰役紀錄(內部防呆)
+          append(`[${m.profile.name_zh}] ${step.intentNarrative}`);
+          for (const eff of step.effects) {
+            // 結算敘事以「你」書寫 — 隊友行動改以名字呈現
+            append('  └ ' + describeEffect(eff, locMeta).split('你').join(m.profile.name_zh));
+          }
+        }
+        if (r.steps.length === 0) append(`[${m.profile.name_zh}] 按兵不動,觀察著四周。`);
+      });
+    }
+
     turnLoopRef.current?.advance();
     append('[階段切換] 進入神話階段');
     if (setup.tutorial) {
@@ -416,8 +490,6 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       setTimeout(() => append('[城主行動] 黑暗從牆角滲出。'), 1200);
       return;
     }
-    let sc = scenario;
-    let inv = investigator;
 
     // ① 附著卡強制結算(瘋狂攫住棄牌/解除檢定等)
     if ((sc.keeperAttachments ?? []).length > 0) {
@@ -453,22 +525,42 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         };
       }
       for (const eff of exec.effects) append('[城主] ' + describeEffect(eff, locMeta));
-      // 召喚後恐懼掃描(§7.6 怪物進入半徑)
+      // 召喚後恐懼掃描(§7.6 怪物進入半徑;玩家與 AI 隊友都掃)
       if (exec.effects.some((e) => e.type === 'enemy_spawned')) {
         const fear = runFearChecks(inv, sc, setup.enemyStats);
         inv = fear.investigator;
         for (const eff of fear.effects) append('[結算] ' + describeEffect(eff, locMeta));
+        updatedAIs.forEach((ai, idx) => {
+          if (!ai || ai.hp <= 0 || ai.san <= 0) return;
+          const aiFear = runFearChecks(ai, sc, setup.enemyStats);
+          updatedAIs[idx] = aiFear.investigator;
+          const aiName = setup.aiMembers[idx]?.profile.name_zh ?? 'AI';
+          for (const eff of aiFear.effects) append('  └ ' + describeEffect(eff, locMeta).split('你').join(aiName));
+        });
       }
     }
     if (selection.activations.length === 0) append('[城主] 雨聲之外,某種注視沉默地積蓄著。');
 
-    // ③ §10 怪物啟動(行為腳本層選招)
-    const act = activateMonsters(sc, { [inv.investigatorId]: inv }, setup.enemyStats, setup.attackCards);
+    // ③ §10 怪物啟動(行為腳本層選招;目標含 AI 隊友 — 對怪物而言獵物平等)
+    const partyMap: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
+    for (const ai of updatedAIs) if (ai && ai.hp > 0 && ai.san > 0) partyMap[ai.investigatorId] = ai;
+    const act = activateMonsters(sc, partyMap, setup.enemyStats, setup.attackCards);
     sc = act.scenario;
     inv = act.investigators[inv.investigatorId] ?? inv;
+    updatedAIs.forEach((ai, idx) => {
+      if (!ai) return;
+      const after = act.investigators[ai.investigatorId];
+      if (after) {
+        updatedAIs[idx] = after;
+        if (after.hp <= 0 || after.san <= 0) {
+          append(`💀 ${setup.aiMembers[idx]?.profile.name_zh ?? 'AI'} 倒下了……`);
+        }
+      }
+    });
     for (const eff of act.effects) append('[神話階段] ' + describeEffect(eff, locMeta));
+    setAiMembers(updatedAIs);
 
-    // ④ 全滅檢查(§9 瀕死接通前簡化)
+    // ④ 全滅檢查(§9 瀕死接通前簡化:玩家倒下即終局;AI 倒地停止行動)
     if (allInvestigatorsDown({ [inv.investigatorId]: inv })) {
       const finalOutcome = evaluateOutcome(setup.outcomes, flags);
       if (finalOutcome) {
@@ -486,6 +578,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     turnLoopRef.current?.advance();
     turnLoopRef.current?.advance();
     setInvestigator((i) => ({ ...i, actionPoints: 3 }));
+    setAiMembers((ms) => ms.map((ai) => ({ ...ai, actionPoints: 3 })));
     // 場景回合數同步(戲劇曲線/行為腳本 turn_count 觸發都依賴它)
     setScenario((s) => ({ ...s, turnNumber: s.turnNumber + 1 }));
     setKeeperEnergy((e) => Math.min(12, e + 1));
@@ -627,8 +720,15 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const agendaPct = Math.min(100, (scenario.agendaProgress / agendaMax) * 100);
   const objectivePct = Math.min(100, (scenario.objectiveProgress / objectiveMax) * 100);
 
-  // 隊伍 modal:現階段單人 → [investigator]
-  const teamMembers = [investigator];
+  // 隊伍 modal:玩家 + AI 隊友
+  const teamMembers: Array<{ inv: InvestigatorState; name: string; label: string }> = [
+    { inv: investigator, name: setup.investigatorName, label: setup.factionLabel + ' · 玩家' },
+    ...aiMembers.map((ai, idx) => ({
+      inv: ai,
+      name: setup.aiMembers[idx]?.profile.name_zh ?? 'AI',
+      label: (setup.aiMembers[idx]?.profile.title_zh ?? '') + ' · AI 隊友',
+    })),
+  ];
 
   // phase dots:目前 4 階段(短休息/調查員/神話/結束)
   const phaseIdx = PHASE_ORDER.indexOf(phase);
@@ -676,6 +776,18 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                       onClick={() => onLocationClick(loc.locationDefinitionId)}
                     >
                       {isCurr && <div className="player-token">P1</div>}
+                      {aiMembers.map((ai, aiIdx) =>
+                        ai.hp > 0 && ai.san > 0 && ai.currentLocationId === loc.locationDefinitionId ? (
+                          <div
+                            key={ai.investigatorId}
+                            className="player-token ai-token"
+                            style={{ left: -12 + aiIdx * 26 }}
+                            title={setup.aiMembers[aiIdx]?.profile.name_zh}
+                          >
+                            {(setup.aiMembers[aiIdx]?.profile.name_zh ?? 'A').slice(0, 1)}
+                          </div>
+                        ) : null,
+                      )}
                       {scenario.enemies
                         .filter((e) => e.hp > 0 && e.locationId === loc.locationDefinitionId)
                         .map((e, ei) => (
@@ -1122,14 +1234,15 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             <div className="modal-title">❖ 調查員小隊狀況 ❖</div>
             <hr className="modal-divider" />
             <div className="team-container">
-              {teamMembers.map((inv, idx) => {
+              {teamMembers.map((member, idx) => {
+                const inv = member.inv;
                 const locName = locMeta[inv.currentLocationId || '']?.name ?? '未知';
                 return (
                   <div key={inv.investigatorId} className={'team-card tc-' + (idx + 1)}>
                     <div className={'team-avatar ta-' + (idx + 1)} />
                     <div className="tc-info">
-                      <div className="tc-name">{setup.investigatorName}</div>
-                      <div className={'tc-faction f' + (idx + 1)}>{setup.factionLabel} · 玩家 {idx + 1}</div>
+                      <div className="tc-name">{member.name}</div>
+                      <div className={'tc-faction f' + (idx + 1)}>{member.label}</div>
                       <div className="tc-stats">
                         <span className="tc-hp">體力 {inv.hp}/{inv.hpMax}</span>
                         <span className="tc-san">理智 {inv.san}/{inv.sanMax}</span>

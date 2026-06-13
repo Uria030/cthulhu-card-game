@@ -195,6 +195,26 @@ export function progressTick(
           ),
         };
         effects.push({ type: 'penalty_applied', params: { penalty: type, narrative: '牠的傷口開始癒合。' } });
+      } else if (type === 'enemy_regen_or_spawn') {
+        // AGENDA2 但書(Uria):怪在場 → 回血;不在場 → 生成在指定地點(裂嘴女不在場補位)
+        const code = String(pen.variant_code ?? '');
+        const present = sc.enemies.some((e) => e.enemyDefinitionId === code && e.hp > 0);
+        if (present) {
+          sc = {
+            ...sc,
+            enemies: sc.enemies.map((e) =>
+              e.enemyDefinitionId === code && e.hp > 0 ? { ...e, modifiers: [...e.modifiers, 'regen_boost'] } : e,
+            ),
+          };
+          effects.push({ type: 'penalty_applied', params: { penalty: 'enemy_regen', narrative: '牠的傷口開始癒合。' } });
+        } else {
+          const loc = String(pen.location_code ?? sc.locations[sc.locations.length - 1]?.locationDefinitionId ?? '');
+          if (code && loc) {
+            const spawned = spawnEnemy(sc, code, loc, enemyData, playerCount);
+            sc = spawned.scenario;
+            effects.push({ type: 'enemy_spawned', params: { enemy: enemyData[code]?.name_zh ?? code, code, location: loc }, targetId: spawned.enemy.instanceId });
+          }
+        }
       } else if (type === 'investigators_defeated') {
         defeat = true;
       } else {

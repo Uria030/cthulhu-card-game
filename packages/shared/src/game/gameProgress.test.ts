@@ -137,6 +137,24 @@ test('議程三翻面:defeat 訊號', () => {
   assertEq(r.defeat, true);
 });
 
+test('enemy_regen_or_spawn:裂嘴女在場→回血', () => {
+  const ags = [{ card_order: 1, name_zh: '潮汐', front_doom_threshold: 4, back_penalties: [{ type: 'enemy_regen_or_spawn', variant_code: 'boss', location_code: 'B' }] }];
+  const sc = makeScenario({ agendaProgress: 4, enemies: [{ instanceId: 'e1', enemyDefinitionId: 'boss', locationId: 'B', hp: 10, engagedWith: [], modifiers: [] }] });
+  const r = progressTick(sc, {}, [], ags, ENEMY_DATA);
+  assertEq(r.scenario.enemies[0].modifiers.includes('regen_boost'), true);
+  assertEq(r.scenario.enemies.length, 1, '在場不補生成');
+});
+
+test('enemy_regen_or_spawn:裂嘴女不在場→生成在指定地點', () => {
+  const ags = [{ card_order: 1, name_zh: '潮汐', front_doom_threshold: 4, back_penalties: [{ type: 'enemy_regen_or_spawn', variant_code: 'boss', location_code: 'B' }] }];
+  const sc = makeScenario({ agendaProgress: 4, enemies: [] }); // 不在場
+  const r = progressTick(sc, {}, [], ags, ENEMY_DATA);
+  assertEq(r.scenario.enemies.length, 1, '補位生成');
+  assertEq(r.scenario.enemies[0].enemyDefinitionId, 'boss');
+  assertEq(r.scenario.enemies[0].locationId, 'B');
+  assertEq(r.effects.some((e) => e.type === 'enemy_spawned'), true);
+});
+
 test('addDoom 累積', () => {
   const r = addDoom(makeScenario({ agendaProgress: 2 }), 1);
   assertEq(r.scenario.agendaProgress, 3);

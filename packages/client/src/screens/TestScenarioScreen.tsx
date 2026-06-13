@@ -20,6 +20,7 @@ import {
   initInvestigatorAIState,
   runInvestigatorAITurn,
   runTurnEndUpkeep,
+  runShortRest,
   syncDownedState,
   runDeathSave,
   isDowned,
@@ -140,6 +141,7 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'asset_expended': return '🫳 「' + (p.name as string) + '」耗盡,進入棄牌堆';
     case 'card_consumed': return '♻ 消費「' + (p.name as string) + '」';
     case 'assets_readied': return '🔄 整裝:' + (p.count as number) + ' 張卡轉正';
+    case 'short_rest': return '💤 ' + (p.narrative as string) + '(' + (p.reshuffled as number) + ' 張洗回牌庫)';
     case 'spell_cast': return '🔮 施放「' + (p.name as string) + '」— ' + (p.narrative as string) + '(造成 ' + (p.damage as number) + ' 點傷害)';
     case 'chaos_token_drawn': return '🌑 混沌袋:' + (p.sequence as string);
     case 'spell_strain': return ((p.delta as number) < 0 ? '😖' : '✨') + ' ' + (p.narrative as string) + '(SAN ' + ((p.delta as number) > 0 ? '+' : '') + (p.delta as number) + ')';
@@ -155,13 +157,12 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
 }
 
 const PHASE_LABEL: Record<TurnPhase, string> = {
-  short_rest_decision: '短休息決定',
   investigator: '調查員階段',
-  mythos: '神話階段',
+  mythos: '敵人階段',
   turn_end: '回合結束',
 };
 
-const PHASE_ORDER: TurnPhase[] = ['short_rest_decision', 'investigator', 'mythos', 'turn_end'];
+const PHASE_ORDER: TurnPhase[] = ['investigator', 'mythos', 'turn_end'];
 
 type ModalType = null | 'keeper' | 'act' | 'team';
 type PanelType = null | 'hand' | 'bag';
@@ -242,7 +243,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     () => setup.aiMembers.map((m) => m.investigator),
   );
   const aiStatesRef = useRef<InvestigatorAIState[]>(setup.aiMembers.map(() => initInvestigatorAIState()));
-  const [phase, setPhase] = useState<TurnPhase>('short_rest_decision');
+  const [phase, setPhase] = useState<TurnPhase>('investigator');
+  // 本回合玩家是否已選短休息(放棄行動;每回合開頭重置)
+  const [playerShortRested, setPlayerShortRested] = useState(false);
   const [turnNumber, setTurnNumber] = useState(1);
   // 城主運行時狀態(行動點/冷卻/使用次數;教學關卡不用)
   const [keeperState, setKeeperState] = useState<KeeperState>(() => initKeeperState(setup.keeperProfile));
@@ -463,20 +466,13 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   };
 
   // 階段控制
-  const startInvestigatorPhase = () => {
-    turnLoopRef.current?.advance();
-    append('[階段切換] 進入調查員階段(3 行動點)');
-    // 玩家瀕死:瀕死檢定取代正常行動(§9.3)
-    if (!setup.tutorial && isDowned(investigator)) {
-      const save = runDeathSave(investigator);
-      setInvestigator({ ...save.investigator, actionPoints: 0 });
-      for (const eff of save.effects) append('[瀕死] ' + describeEffect(eff, locMeta));
-    }
-  };
-  const takeShortRest = () => {
-    turnLoopRef.current?.setPhase('mythos', turnNumber);
-    setInvestigator((i) => ({ ...i, actionPoints: 0 }));
-    append('[短休息] 本回合直接進入神話階段');
+  // 短休息(ch2 §3.1):調查員階段開頭的個人決定 — 放棄本回合行動換重洗牌庫,
+  // 不跳過階段(其他調查員照常),做完仍要按「結束調查員階段」進敵人階段。
+  const takePlayerShortRest = () => {
+    const r = runShortRest(investigator);
+    setInvestigator(r.investigator);
+    setPlayerShortRested(true);
+    for (const eff of r.effects) append('[短休息] ' + describeEffect(eff, locMeta));
   };
   /**
    * 神話階段 — 城主 AI v0(keeper_ai_regulation §2.2 sequence):
@@ -490,17 +486,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     const updatedAIs = [...aiMembers];
     if (!setup.tutorial) {
       setup.aiMembers.forEach((m, idx) => {
-        let ai = updatedAIs[idx];
+        const ai = updatedAIs[idx];
         if (!ai || ai.dead || ai.permanentlyDead) return;
-        // 瀕死者:瀕死檢定取代正常行動(§9.3)
-        if (isDowned(ai)) {
-          const save = runDeathSave(ai);
-          updatedAIs[idx] = save.investigator;
-          for (const eff of save.effects) {
-            append(`[${m.profile.name_zh}] ` + describeEffect(eff, locMeta).split('你').join(m.profile.name_zh));
-          }
-          return; // 站起來也要等下回合才能行動
-        }
+        // 瀕死者:瀕死檢定已在回合開頭(endTurn 進新回合時)與玩家同步結算過,此處純跳過行動(§9.3)
+        if (isDowned(ai)) return;
         const allies: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
         for (const [j, other] of updatedAIs.entries()) {
           if (j !== idx && other) allies[other.investigatorId] = other;
@@ -544,7 +533,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     }
 
     turnLoopRef.current?.advance();
-    append('[階段切換] 進入神話階段');
+    append('[階段切換] 進入敵人階段');
     if (setup.tutorial) {
       setKeeperEnergy((e) => Math.max(0, e - 2));
       setTimeout(() => append('[城主行動] 黑暗從牆角滲出。'), 1200);
@@ -654,16 +643,35 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setInvestigator(next.inv);
   };
   const endTurn = () => {
+    // 敵人階段 → 回合結束 → 下一回合的調查員階段(三階段:advance ×2)
     turnLoopRef.current?.advance();
     turnLoopRef.current?.advance();
+    setPlayerShortRested(false); // 新回合開頭重置短休息決定
     // 回合結束階段(ch2 §2.4):每人抽 1 卡 + 1 資源 + 手牌上限 8(教學關卡跳過)
     if (!setup.tutorial) {
       setInvestigator((i) => {
         const up = runTurnEndUpkeep(i);
         for (const eff of up.effects) append('[回合結束] ' + describeEffect(eff, locMeta));
-        return { ...up.investigator, actionPoints: 3 };
+        let next = { ...up.investigator, actionPoints: 3 };
+        // 新回合調查員階段開頭:瀕死者做瀕死檢定取代行動(§9.3)
+        if (isDowned(next)) {
+          const save = runDeathSave(next);
+          next = { ...save.investigator, actionPoints: 0 };
+          for (const eff of save.effects) append('[瀕死] ' + describeEffect(eff, locMeta));
+        }
+        return next;
       });
-      setAiMembers((ms) => ms.map((ai) => ({ ...runTurnEndUpkeep(ai).investigator, actionPoints: 3 })));
+      // AI 隊友:回合結束補給 + 新回合開頭瀕死檢定(與玩家同一時點,§9.3 時序一致)
+      setAiMembers((ms) => ms.map((ai, idx) => {
+        let next = { ...runTurnEndUpkeep(ai).investigator, actionPoints: 3 };
+        if (isDowned(next)) {
+          const save = runDeathSave(next);
+          next = { ...save.investigator, actionPoints: 0 };
+          const name = setup.aiMembers[idx]?.profile.name_zh ?? 'AI';
+          for (const eff of save.effects) append(`[瀕死] ` + describeEffect(eff, locMeta).split('你').join(name));
+        }
+        return next;
+      }));
     } else {
       setInvestigator((i) => ({ ...i, actionPoints: 3 }));
       setAiMembers((ms) => ms.map((ai) => ({ ...ai, actionPoints: 3 })));
@@ -989,20 +997,23 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               </span>
             )}
           </div>
-          {phase === 'short_rest_decision' && (
-            <div className="phase-buttons">
-              <button onClick={startInvestigatorPhase}>不休息 → 3 行動點</button>
-              <button onClick={takeShortRest}>短休息 → 跳神話</button>
-            </div>
-          )}
           {phase === 'investigator' && isDowned(investigator) && (
             <div className="phase-buttons">
               <span className="commit-chip">🩸 瀕死中(穩定 {investigator.deathSaveSuccesses ?? 0}/3・惡化 {investigator.deathSaveFailures ?? 0}/3)— 等待隊友救援</span>
               <button onClick={enterMythosPhase}>結束調查員階段 →</button>
             </div>
           )}
-          {phase === 'investigator' && !isDowned(investigator) && !investigator.dead && (
+          {phase === 'investigator' && playerShortRested && !isDowned(investigator) && !investigator.dead && (
             <div className="phase-buttons">
+              <span className="commit-chip">💤 你已短休息(本回合放棄行動,牌庫已重洗)</span>
+              <button onClick={enterMythosPhase}>結束調查員階段 →</button>
+            </div>
+          )}
+          {phase === 'investigator' && !playerShortRested && !isDowned(investigator) && !investigator.dead && (
+            <div className="phase-buttons">
+              {!setup.tutorial && investigator.actionPoints === 3 && (
+                <button onClick={takePlayerShortRest} title="放棄本回合行動,將棄牌堆洗回牌庫">💤 短休息</button>
+              )}
               {aiMembers.map((ai, idx) =>
                 isDowned(ai) && ai.currentLocationId === investigator.currentLocationId ? (
                   <button
@@ -1055,7 +1066,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           )}
           {phase === 'mythos' && (
             <div className="phase-buttons">
-              <button onClick={endTurn}>結束神話階段 → 下回合</button>
+              <button onClick={endTurn}>結束敵人階段 → 下回合</button>
             </div>
           )}
         </div>

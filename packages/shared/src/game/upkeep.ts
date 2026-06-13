@@ -80,3 +80,35 @@ export function runTurnEndUpkeep(inv: InvestigatorState): UpkeepResult {
 
   return { investigator: next, effects };
 }
+
+// ─── 短休息(ch2 §3.1:個人決定,放棄本回合行動換重洗牌庫)─────
+/**
+ * 某位調查員選擇短休息:棄牌堆洗回牌庫、放棄本回合 3 行動點。
+ * (消耗品回收 / 陣營專屬短休息效果為後續批次;v0 先做重洗 + 放棄行動)
+ * 注意:短休息是「那一位」放棄行動,不跳過調查員階段——其他調查員照常行動。
+ */
+export function runShortRest(inv: InvestigatorState, rng: () => number = Math.random): UpkeepResult {
+  if (inv.permanentlyDead || inv.hp <= 0 || inv.san <= 0) {
+    return { investigator: inv, effects: [] };
+  }
+  // 棄牌堆洗回牌庫(Fisher–Yates)
+  const merged = [...inv.deck, ...inv.discardPile];
+  for (let i = merged.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rng() * (i + 1));
+    [merged[i], merged[j]] = [merged[j], merged[i]];
+  }
+  const next: InvestigatorState = {
+    ...inv,
+    deck: merged,
+    discardPile: [],
+    actionPoints: 0, // 犧牲整回合行動
+  };
+  return {
+    investigator: next,
+    effects: [{
+      type: 'short_rest',
+      params: { reshuffled: inv.discardPile.length, narrative: '你退到陰影裡喘口氣,把散落的牌重新收攏。' },
+      targetId: inv.investigatorId,
+    }],
+  };
+}

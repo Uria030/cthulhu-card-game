@@ -491,6 +491,9 @@ function resolveTaunt(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
   if (!enemy) {
     return reject(intent, '同地點沒有未與你交戰的敵人');
   }
+  // 單一持有者模型(Uria 拍板):嘲諷 = 把怪「改為」與你交戰,從前持有者手上轉走。
+  // 怪的 engagedWith 永遠 ≤1(唯一持有者)。
+  const prevHolders = enemy.engagedWith.filter((id) => id !== ctx.investigator.investigatorId);
   const newInv: InvestigatorState = {
     ...ctx.investigator,
     actionPoints: ctx.investigator.actionPoints - 1,
@@ -500,17 +503,23 @@ function resolveTaunt(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
     ...ctx.scenario,
     enemies: ctx.scenario.enemies.map((e) =>
       e.instanceId === enemy.instanceId
-        ? { ...e, engagedWith: [...e.engagedWith, ctx.investigator.investigatorId] }
+        ? { ...e, engagedWith: [ctx.investigator.investigatorId] } // 獨佔交戰
         : e,
     ),
   };
+  // 前持有者解除與這隻怪的交戰(透過 updatedAllies 回傳)
+  const updatedAllies: Record<string, InvestigatorState> = {};
+  for (const holderId of prevHolders) {
+    const holder = ctx.investigators[holderId];
+    if (holder) updatedAllies[holderId] = { ...holder, engagedWith: holder.engagedWith.filter((id) => id !== enemy.instanceId) };
+  }
   return accept(
     intent,
     [
       { type: 'spend_action_point', params: { amount: 1 } },
       { type: 'taunt', params: { narrative: '你大聲叫罵,牠的注意力轉向了你。' }, targetId: enemy.instanceId },
     ],
-    { investigator: newInv, scenario: newScenario },
+    { investigator: newInv, scenario: newScenario, ...(Object.keys(updatedAllies).length ? { updatedAllies } : {}) },
   );
 }
 

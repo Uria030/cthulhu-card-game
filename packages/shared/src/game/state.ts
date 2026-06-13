@@ -72,8 +72,8 @@ export interface ScenarioState {
   chaosBag: ChaosToken[];
   /** 當前回合數 */
   turnNumber: number;
-  /** 當前階段(對應第三章 §3 回合四階段) */
-  phase: 'short_rest_decision' | 'investigator' | 'mythos' | 'turn_end';
+  /** 當前階段(ch2 §2.1 三階段:investigator/mythos(敵人)/turn_end) */
+  phase: 'investigator' | 'mythos' | 'turn_end';
 }
 
 export interface LocationInstance {
@@ -191,7 +191,7 @@ export interface SecretTaskState {
 // ─── 回合層(純記憶體,不入存檔) ──────────────────
 export interface TurnState {
   turnNumber: number;
-  phase: 'short_rest_decision' | 'investigator' | 'mythos' | 'turn_end';
+  phase: 'investigator' | 'mythos' | 'turn_end';
   /** 本回合內已被使用的行動點(供前端顯示) */
   actionPointsSpent: Record<string, number>; // investigatorId → spent
   /** 城主待觸發的傳奇行動佇列(對應第三章 §9) */

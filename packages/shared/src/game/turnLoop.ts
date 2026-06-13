@@ -1,20 +1,20 @@
 /**
  * G-01 引擎核心 — 回合狀態機
  *
- * 依《遊戲本體企劃書》第三章 §3 回合四階段:
- *   階段 A:短休息決定(short_rest_decision)
- *   階段 B:調查員階段(investigator)— 玩家行動
- *   階段 C:神話階段(mythos)— 城主回合,規則書 §2.2
- *   階段 D:回合結束(turn_end)— 結算、棄牌至上限、進入下一回合
+ * 規則書 ch1 §8.1 + ch2 §2.1:一回合三個階段(短休息不是階段,是調查員階段開頭的個人決定):
+ *   階段 1:調查員階段(investigator)— 所有調查員同時/自由順序行動;
+ *           回合開始時每位各自決定是否短休息(短休息者放棄自己 3 行動點,階段照常)
+ *   階段 2:敵人階段(mythos,= 規則書「敵人階段」)— 城主控制怪物 + 翻神話卡 + 議程
+ *   階段 3:回合結束(turn_end)— 每人抽 1 卡 + 1 資源 + 橫置轉正 + 手牌上限 8
  *
  * 本檔只實作純狀態轉移邏輯,不執行業務邏輯(扣血、洗牌、城主行動由規則模組做)。
  * 階段切換時透過 messageBus 發 phase_changed notification 給容器與其他模組。
  */
 import type { MessageBus } from './messageBus';
 
-export type TurnPhase = 'short_rest_decision' | 'investigator' | 'mythos' | 'turn_end';
+export type TurnPhase = 'investigator' | 'mythos' | 'turn_end';
 
-const PHASE_ORDER: TurnPhase[] = ['short_rest_decision', 'investigator', 'mythos', 'turn_end'];
+const PHASE_ORDER: TurnPhase[] = ['investigator', 'mythos', 'turn_end'];
 
 export interface TurnLoopState {
   turnNumber: number;
@@ -24,7 +24,7 @@ export interface TurnLoopState {
 export interface TurnLoop {
   /** 當前狀態 */
   getState(): TurnLoopState;
-  /** 推進到下一階段(turn_end → 自動進入下一回合的 short_rest_decision) */
+  /** 推進到下一階段(turn_end → 自動進入下一回合的 investigator) */
   advance(): void;
   /** 強制設定階段(罕用,主要供斷點接續從特定階段恢復) */
   setPhase(phase: TurnPhase, turnNumber?: number): void;
@@ -45,7 +45,7 @@ export function createTurnLoop(options: TurnLoopOptions = {}): TurnLoop {
   const source = options.source ?? 'engine';
   const state: TurnLoopState = {
     turnNumber: options.initialState?.turnNumber ?? 1,
-    phase: options.initialState?.phase ?? 'short_rest_decision',
+    phase: options.initialState?.phase ?? 'investigator',
   };
 
   function emitPhaseChanged(prevPhase: TurnPhase, prevTurnNumber: number): void {
@@ -103,7 +103,7 @@ export function createTurnLoop(options: TurnLoopOptions = {}): TurnLoop {
         // 從 turn_end 進入下一回合
         emitTurnEnded(prevTurnNumber);
         state.turnNumber += 1;
-        state.phase = 'short_rest_decision';
+        state.phase = 'investigator';
         emitPhaseChanged(prevPhase, prevTurnNumber);
         emitTurnStarted();
       }
@@ -122,7 +122,7 @@ export function createTurnLoop(options: TurnLoopOptions = {}): TurnLoop {
       const prevTurnNumber = state.turnNumber;
       emitTurnEnded(prevTurnNumber);
       state.turnNumber += 1;
-      state.phase = 'short_rest_decision';
+      state.phase = 'investigator';
       emitPhaseChanged(prevPhase, prevTurnNumber);
       emitTurnStarted();
     },

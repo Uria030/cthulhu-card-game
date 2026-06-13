@@ -166,7 +166,7 @@ export function makeTestSetup(): GameSetup {
       objectiveProgress: 0,
       chaosBag: [],
       turnNumber: 1,
-      phase: 'short_rest_decision',
+      phase: 'investigator',
     },
     locMeta: {
       alley: {

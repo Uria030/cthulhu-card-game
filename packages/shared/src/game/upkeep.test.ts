@@ -1,7 +1,7 @@
 /**
  * G-05 回合經濟測試 — ch2 §2.4 + ch6 §3.1/§8
  */
-import { runTurnEndUpkeep, hpMaxFor, sanMaxFor, HAND_LIMIT, STARTING_RESOURCES } from './upkeep';
+import { runTurnEndUpkeep, runShortRest, hpMaxFor, sanMaxFor, HAND_LIMIT, STARTING_RESOURCES } from './upkeep';
 import type { InvestigatorState } from './state';
 
 type TestFn = () => void;
@@ -62,6 +62,15 @@ test('倒地者不結算補給(§9 瀕死不能行動)', () => {
   const r = runTurnEndUpkeep(makeInv({ hp: 0 }));
   assertEq(r.investigator.resources, 0);
   assertEq(r.effects.length, 0);
+});
+
+test('短休息:棄牌堆洗回牌庫 + 放棄行動(§3.1)', () => {
+  const r = runShortRest(makeInv({ deck: ['d1'], discardPile: ['x1', 'x2', 'x3'], hand: ['h1'], actionPoints: 3 }), () => 0);
+  assertEq(r.investigator.deck.length, 4, '1 + 3 洗回');
+  assertEq(r.investigator.discardPile.length, 0, '棄牌堆清空');
+  assertEq(r.investigator.actionPoints, 0, '放棄整回合行動');
+  assertEq(r.investigator.hand.length, 1, '手牌不動');
+  assertEq(r.effects[0].type, 'short_rest');
 });
 
 // ─── runner ─────────────────────────────────

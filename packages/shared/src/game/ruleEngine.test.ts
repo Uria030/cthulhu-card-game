@@ -660,6 +660,21 @@ test('taunt:拉同地點未交戰敵人入交戰(§7.3)', () => {
   assertEq(r.newState?.scenario?.enemies[0].engagedWith.includes('inv-1'), true);
 });
 
+test('taunt:單一持有者 — 從前持有者手上轉走(Uria 拍板)', () => {
+  const ctx = makeCombatCtx({ roll: 10, engaged: false, visibility: 'day' });
+  // 怪 e1 原本被隊友 inv-2 固定
+  ctx.scenario.enemies[0].engagedWith = ['inv-2'];
+  const ally = makeInv({ investigatorId: 'inv-2', engagedWith: ['e1'], currentLocationId: 'loc-a' });
+  ctx.investigators['inv-2'] = ally;
+  const r = resolveIntent(makeIntent('taunt', { enemyInstanceId: 'e1' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  // 怪改為只被 inv-1 固定(獨佔)
+  assertEq(r.newState?.scenario?.enemies[0].engagedWith.length, 1);
+  assertEq(r.newState?.scenario?.enemies[0].engagedWith[0], 'inv-1');
+  // 前持有者 inv-2 解除與這隻怪的交戰
+  assertEq(r.newState?.updatedAllies?.['inv-2']?.engagedWith.includes('e1'), false);
+});
+
 // ─── runner ─────────────────────────
 let passed = 0;
 let failed = 0;

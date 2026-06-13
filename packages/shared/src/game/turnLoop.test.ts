@@ -17,39 +17,36 @@ function assertEq<T>(actual: T, expected: T, msg?: string): void {
   }
 }
 
-// ─── 測試 1:預設從第 1 回合的 short_rest_decision 開始 ──
+// ─── 測試 1:預設從第 1 回合的 investigator 開始(三階段化)──
 test('預設初始狀態', () => {
   const loop = createTurnLoop();
   const state = loop.getState();
   assertEq(state.turnNumber, 1);
-  assertEq(state.phase, 'short_rest_decision');
+  assertEq(state.phase, 'investigator');
 });
 
-// ─── 測試 2:advance 依序推進四階段 ──────────────
-test('advance 推進四階段順序', () => {
+// ─── 測試 2:advance 依序推進三階段 ──────────────
+test('advance 推進三階段順序', () => {
   const loop = createTurnLoop();
   const phases: string[] = [loop.getState().phase];
   loop.advance();
   phases.push(loop.getState().phase);
   loop.advance();
   phases.push(loop.getState().phase);
-  loop.advance();
-  phases.push(loop.getState().phase);
 
-  assertEq(phases[0], 'short_rest_decision');
-  assertEq(phases[1], 'investigator');
-  assertEq(phases[2], 'mythos');
-  assertEq(phases[3], 'turn_end');
+  assertEq(phases[0], 'investigator');
+  assertEq(phases[1], 'mythos');
+  assertEq(phases[2], 'turn_end');
 });
 
 // ─── 測試 3:從 turn_end advance 進入下一回合 ──────
 test('turn_end 後自動跳下一回合', () => {
   const loop = createTurnLoop();
   loop.setPhase('turn_end', 3);
-  loop.advance(); // 進入第 4 回合的 short_rest_decision
+  loop.advance(); // 進入第 4 回合的 investigator
   const state = loop.getState();
   assertEq(state.turnNumber, 4);
-  assertEq(state.phase, 'short_rest_decision');
+  assertEq(state.phase, 'investigator');
 });
 
 // ─── 測試 4:bus 收到 phase_changed notification ──
@@ -59,13 +56,13 @@ test('phase_changed 通知正確發送', () => {
   bus.subscribe('notification', (m) => notifs.push(m));
 
   const loop = createTurnLoop({ bus });
-  loop.advance(); // short_rest_decision → investigator
+  loop.advance(); // investigator → mythos
 
   const phaseChangedNotifs = notifs.filter((n) => n.notificationType === 'phase_changed');
   assertEq(phaseChangedNotifs.length, 1);
   const p = phaseChangedNotifs[0].payload as { prevPhase: string; newPhase: string };
-  assertEq(p.prevPhase, 'short_rest_decision');
-  assertEq(p.newPhase, 'investigator');
+  assertEq(p.prevPhase, 'investigator');
+  assertEq(p.newPhase, 'mythos');
 });
 
 // ─── 測試 5:nextTurn 發 turn_ended + turn_started ──
@@ -83,6 +80,7 @@ test('nextTurn 發 turn_ended 與 turn_started 通知', () => {
   assertEq(types.includes('phase_changed'), true);
   assertEq(types.includes('turn_started'), true);
   assertEq(loop.getState().turnNumber, 6);
+  assertEq(loop.getState().phase, 'investigator');
 });
 
 // ─── 測試 6:setPhase 也發 phase_changed ────────

@@ -369,11 +369,12 @@ export function activateMonsters(
     }
     if (pos === target.currentLocationId) {
       // 進入交戰 + 恐懼檢定(§7.6 怪物進入你的地點)
+      // 單一持有者:怪只交戰這個目標(第一個交戰者固定怪物;此分支僅在怪未交戰時走)
       sc = {
         ...sc,
         enemies: sc.enemies.map((e) =>
           e.instanceId === enemy.instanceId
-            ? { ...e, engagedWith: [...e.engagedWith, target.investigatorId] }
+            ? { ...e, engagedWith: [target.investigatorId] }
             : e,
         ),
       };

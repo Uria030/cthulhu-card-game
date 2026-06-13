@@ -3,6 +3,7 @@
  */
 import { resolveIntent } from './ruleEngine';
 import type { RuleContext } from './ruleEngine';
+import { syncDownedState } from './dying';
 import type { IntentMessage } from './messages';
 import type { InvestigatorState, ScenarioState, TurnState } from './state';
 import { CURRENT_MESSAGE_SCHEMA_VERSION } from './messages';
@@ -79,6 +80,51 @@ test('永久死亡駁回', () => {
   const ctx = makeCtx({ permanentlyDead: true });
   const r = resolveIntent(makeIntent('gain_resource'), ctx);
   assertEq(r.result.outcome, 'rejected');
+});
+
+test('瀕死者不能行動(§9)', () => {
+  const ctx = makeCtx({ hp: 0, downed: true });
+  const r = resolveIntent(makeIntent('investigate'), ctx);
+  assertEq(r.result.outcome, 'rejected');
+});
+
+// ─── stabilize(§9.5)──────────────────
+test('穩定:1 行動點,同地點瀕死隊友 +1 成功(自動成功)', () => {
+  const ctx = makeCtx();
+  const ally = makeInv({ investigatorId: 'inv-2', hp: 0, downed: true, deathSaveSuccesses: 0 });
+  ctx.investigators['inv-2'] = ally;
+  const r = resolveIntent(makeIntent('stabilize', { targetInvestigatorId: 'inv-2' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.actionPoints, 2);
+  assertEq(r.newState?.updatedAllies?.['inv-2']?.deathSaveSuccesses, 1);
+});
+
+test('穩定:隊友不同地點/站著 → 駁回', () => {
+  const ctx = makeCtx();
+  ctx.investigators['inv-2'] = makeInv({ investigatorId: 'inv-2', hp: 0, downed: true, currentLocationId: 'loc-b' });
+  ctx.investigators['inv-3'] = makeInv({ investigatorId: 'inv-3' });
+  assertEq(resolveIntent(makeIntent('stabilize', { targetInvestigatorId: 'inv-2' }), ctx).result.outcome, 'rejected');
+  assertEq(resolveIntent(makeIntent('stabilize', { targetInvestigatorId: 'inv-3' }), ctx).result.outcome, 'rejected');
+});
+
+// ─── 倒地同步窗口回歸(review WARN 指定)──
+test('同步窗口:閃避失敗扣到 0 → 引擎結算後 sync 必須抓到倒地', () => {
+  // 反應 3 + roll 2 < DC 10 → 失敗受 1 傷;hp 1 → 0
+  const ctx = makeCombatCtx({ roll: 2, enemyDc: 10, visibility: 'day' });
+  ctx.investigator = { ...ctx.investigator, hp: 1, engagedWith: ['e1'] };
+  ctx.investigators['inv-1'] = ctx.investigator;
+  ctx.scenario = {
+    ...ctx.scenario,
+    enemies: ctx.scenario.enemies.map((e) => ({ ...e, engagedWith: ['inv-1'] })),
+  };
+  const r = resolveIntent(makeIntent('evade'), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  const after = r.newState!.investigator!;
+  assertEq(after.hp, 0, '失敗挨一下歸零');
+  assertEq(after.downed ?? false, false, '引擎本身不立旗標 — 同步是容器責任');
+  const sync = syncDownedState(after);
+  assertEq(sync.investigator.downed, true, 'sync 必須抓到倒地');
+  assertEq(sync.effects.some((e) => e.type === 'investigator_downed'), true);
 });
 
 // ─── gain_resource ───────────────────
@@ -422,6 +468,110 @@ test('play_card:未知/缺漏 card_type 一律駁回(白名單制)', () => {
   ctx.cardLookup = { ...ctx.cardLookup, mys: { name_zh: '形狀不明', cost: 0, effects: [] } };
   const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'mys' }), ctx);
   assertEq(r.result.outcome, 'rejected');
+});
+
+// ─── 使用次數(ch3 §10.1)──────────────
+test('彈藥:進場初始化 → 攻擊扣 1 → 耗盡進棄牌堆 → 再攻擊駁回', () => {
+  const ctx = makeCardCtx({ roll: 19, hand: ['gun'], resources: 5 });
+  ctx.cardLookup = {
+    ...ctx.cardLookup,
+    gun: {
+      name_zh: '老左輪', card_type: 'asset', cost: 1, combat_style: 'shooting',
+      ammo: 1, attribute_modifiers: { perception: 1 },
+      effects: [{ trigger_type: 'action', effect_code: 'attack', effect_params: { damage: 2 } }],
+    },
+  };
+  ctx.stylePools = { shooting: [{ code: 's1', name_zh: '速射', check_attribute: 'perception' }] };
+  // 進場
+  const played = resolveIntent(makeIntent('play_card', { cardInstanceId: 'gun' }), ctx);
+  assertEq(played.result.outcome, 'accepted');
+  assertEq(played.newState?.investigator?.assetState?.gun?.usesLeft, 1);
+  // 攻擊:扣 1 發 → 耗盡 → 棄牌堆
+  const inv2 = played.newState!.investigator!;
+  const ctx2: RuleContext = { ...ctx, investigator: inv2, investigators: { 'inv-1': inv2 } };
+  const shot = resolveIntent(makeIntent('execute_card_action', { cardInstanceId: 'gun', enemyInstanceId: 'e1' }), ctx2);
+  assertEq(shot.result.outcome, 'accepted');
+  assertEq(shot.result.effects?.some((e) => e.type === 'asset_expended'), true, '打空進棄牌堆');
+  const inv3 = shot.newState!.investigator!;
+  assertEq(inv3.assetsInPlay.includes('gun'), false);
+  assertEq(inv3.discardPile.includes('gun'), true);
+  // 再攻擊:卡已不在場上
+  const ctx3: RuleContext = { ...ctx, investigator: inv3, investigators: { 'inv-1': inv3 } };
+  assertEq(resolveIntent(makeIntent('execute_card_action', { cardInstanceId: 'gun' }), ctx3).result.outcome, 'rejected');
+});
+
+// ─── 消費(三合一第三用途,ch3 §2.2)─────
+test('消費:1 行動點 + 棄掉 → 觸發輔助效果;未配置消費的卡駁回', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['snack', 'plain'], resources: 0 });
+  ctx.cardLookup = {
+    ...ctx.cardLookup,
+    snack: { name_zh: '威士忌', card_type: 'event', cost: 1, consume_enabled: true, consume_effect: { effect_code: 'gain_resource', effect_params: { amount: 2 } }, effects: [] },
+    plain: { name_zh: '普通卡', card_type: 'event', cost: 1, effects: [] },
+  };
+  const r = resolveIntent(makeIntent('consume', { cardInstanceId: 'snack' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.resources, 2);
+  assertEq(r.newState?.investigator?.discardPile.includes('snack'), true);
+  assertEq(resolveIntent(makeIntent('consume', { cardInstanceId: 'plain' }), ctx).result.outcome, 'rejected');
+});
+
+// ─── 混沌袋施法軌(ch2 §5 + §8.4)──────
+function makeSpellCtx(opts: { chaos: Array<{ type: string; value: number | null }>; spellDefense?: number; markers?: Record<string, string> }): RuleContext {
+  const sc = makeScenario(['loc-a']);
+  sc.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'def-boss', locationId: 'loc-a', hp: 5, engagedWith: [], modifiers: [] }];
+  sc.chaosBag = opts.chaos.map((t, i) => ({ tokenId: 'ct' + i, type: t.type, value: t.value }));
+  const inv = makeInv({ currentLocationId: 'loc-a', actionPoints: 3, hand: ['spell'], san: 7, sanMax: 11, resources: 5 });
+  return {
+    scenario: sc, investigator: inv, turn: makeTurn(), investigators: { 'inv-1': inv },
+    enemyStats: { 'def-boss': { dc: 14, spell_defense: opts.spellDefense ?? 0 } },
+    cardLookup: {
+      spell: {
+        name_zh: '心靈刺擊', card_type: 'event', cost: 2, combat_style: 'arcane',
+        effects: [{ trigger_type: 'action', effect_code: 'deal_damage(single-target)', effect_params: { amount: 3 }, duration: 'instant' }],
+      },
+    },
+    chaosMarkerEffects: opts.markers ?? {},
+    rng: () => 0, // 抽袋取索引 0
+  };
+}
+
+test('施法:arcane 事件一定命中造成傷害 + 抽混沌袋(§8.4)', () => {
+  // 數字 0:無副作用(防禦 0,差值 ≤0 → 全免)
+  const ctx = makeSpellCtx({ chaos: [{ type: 'numeric', value: 0 }] });
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'spell' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  const enemy = r.newState?.scenario?.enemies[0];
+  assertEq(enemy?.hp, 2, '髒效果碼 deal_damage(single-target) 仍正確扣 3');
+  assertEq(r.result.effects?.some((e) => e.type === 'chaos_token_drawn'), true);
+});
+
+test('施法:觸手 → 場景效果 + SAN 反噬(§5.6)', () => {
+  const ctx = makeSpellCtx({ chaos: [{ type: 'tentacle', value: null }] });
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'spell' }), ctx);
+  assertEq(r.newState?.investigator?.san, 6, '觸手 SAN -1');
+  assertEq(r.result.effects?.some((e) => e.type === 'spell_strain'), true);
+});
+
+test('施法:遠古印記 → 副作用全免 + SAN +1(§5.6)', () => {
+  const ctx = makeSpellCtx({ chaos: [{ type: 'elder_sign', value: null }] });
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'spell' }), ctx);
+  assertEq(r.newState?.investigator?.san, 8, '遠古印記 SAN +1');
+});
+
+test('施法:石版(forbidden_knowledge)場景效果 SAN -2;法防高放大副作用', () => {
+  // 石版 value -2,法防 4 → 差值 6 → full_with_strain;場景效果發動
+  const ctx = makeSpellCtx({ chaos: [{ type: 'tablet', value: -2 }], spellDefense: 4, markers: { tablet: 'forbidden_knowledge' } });
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'spell' }), ctx);
+  // 場景效果 -2 SAN + full_with_strain 額外 -1 = 7 → 4
+  const sanEff = r.result.effects?.filter((e) => e.type === 'fear_damage' || e.type === 'spell_strain') ?? [];
+  assertEq(sanEff.length >= 1, true);
+  assertEq((r.newState?.investigator?.san ?? 99) < 7, true, 'SAN 有損失');
+});
+
+test('施法:bless 抽後移出袋(supp04)', () => {
+  const ctx = makeSpellCtx({ chaos: [{ type: 'bless', value: 1 }, { type: 'numeric', value: 0 }] });
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'spell' }), ctx);
+  assertEq(r.newState?.scenario?.chaosBag.some((t) => t.type === 'bless'), false, 'bless 已移出');
 });
 
 test('play_card:事件卡結算範圍傷害後進棄牌堆', () => {

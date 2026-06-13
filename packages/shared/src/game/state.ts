@@ -136,6 +136,11 @@ export interface InvestigatorState {
   removedPile: string[];
   /** 場上資產(武器、護身符、其他持續卡) */
   assetsInPlay: string[];
+  /**
+   * 場上資產的實例狀態(ch3 §10.1 使用次數 + ch2 §2.4 橫置/轉正)
+   * key = 卡片實例 id;usesLeft null = 無消耗(近戰/被動)
+   */
+  assetState?: Record<string, { usesLeft: number | null; exhausted: boolean }>;
   /** 當下血量、理智、行動點、資源 */
   hp: number;
   hpMax: number;
@@ -157,6 +162,14 @@ export interface InvestigatorState {
   permanentlyDead: boolean;
   /** 起始投入點數(對應卡片升級系統 v1) */
   startingXp: number;
+  /** 瀕死狀態(ch2 §9:HP 或 SAN 歸零;躺在原地、交戰維持、不能行動) */
+  downed?: boolean;
+  /** 瀕死檢定累積成功(3 次自行穩定站起,歸零項恢復 1) */
+  deathSaveSuccesses?: number;
+  /** 瀕死檢定累積失敗(3 次死亡,歸零項上限永久 -1) */
+  deathSaveFailures?: number;
+  /** 本場死亡(≠ 永久死亡;歸零項上限減至 0 才永久死亡) */
+  dead?: boolean;
 }
 
 export interface Trauma {

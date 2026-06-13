@@ -54,6 +54,8 @@ export interface EnemyData {
   keywords?: unknown[];
   /** 家族代碼(召喚決策用) */
   family_code?: string;
+  /** 法術防禦值(ch2 §5.3：0-9，決定施法副作用嚴重度；不影響法術傷害) */
+  spell_defense?: number;
 }
 export type EnemyDataLookup = Record<string, EnemyData>;
 

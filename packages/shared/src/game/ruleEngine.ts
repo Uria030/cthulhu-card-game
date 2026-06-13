@@ -30,12 +30,15 @@ import {
   resolveCheck,
   commitValueFor,
   visibilityModifier,
+  drawChaosToken,
+  resolveSpellSideEffect,
 } from './checks';
 import type { AttributeKey, CommitIcons } from './checks';
 import { executeCardEffects, passiveTestModifier } from './effectsExecutor';
-import { runFearChecks, applyAttackOfOpportunity } from './monsterActions';
+import { runFearChecks, applyAttackOfOpportunity, spawnEnemy } from './monsterActions';
 import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import { attachmentTestModifier } from './keeperAI';
+import { isDowned, applyStabilize } from './dying';
 
 // ─── 卡片實例資料(容器由 bootstrap cardIndex 餵入)──
 export interface CardData {
@@ -46,6 +49,13 @@ export interface CardData {
   combat_style?: string | null;
   attribute_modifiers?: Record<string, number>;
   subtypes?: unknown[];
+  /** 武器彈藥(ch3 §10.1:打完進棄牌堆;null = 近戰無限) */
+  ammo?: number | null;
+  /** 一般使用次數(消耗品/法術充能) */
+  uses?: number | null;
+  /** 三合一消費用途(ch3 §2.2;資料未配置時為 false/null) */
+  consume_enabled?: boolean;
+  consume_effect?: Record<string, unknown> | null;
   effects?: Array<{
     trigger_type: string;
     effect_code: string;
@@ -53,6 +63,14 @@ export interface CardData {
     duration?: string | null;
     description_zh?: string | null;
   }>;
+}
+
+/** 卡片的使用次數上限(武器 ammo 優先,其次一般 uses;null = 無消耗) */
+export function cardMaxUses(data: CardData | undefined): number | null {
+  if (!data) return null;
+  if (data.ammo != null) return Number(data.ammo);
+  if (data.uses != null) return Number(data.uses);
+  return null;
 }
 export type CardDataLookup = Record<string, CardData>;
 
@@ -85,6 +103,8 @@ export interface RuleContext {
   attackCards?: AttackCardLookup;
   /** 戰鬥風格卡池(key = style code,如 shooting;第一層公用池) */
   stylePools?: Record<string, StyleCardData[]>;
+  /** 混沌袋情境標記效果碼(stage.chaos_bag.scenario_markers[symbol].effect) */
+  chaosMarkerEffects?: Record<string, string>;
   /** 亂數來源(測試注入,預設 Math.random) */
   rng?: () => number;
 }
@@ -131,6 +151,41 @@ function commitEffects(commit: CommitOutcome): ResultEffect[] {
   }];
 }
 
+// ─── 使用次數(ch3 §10.1:彈藥/充能;耗盡進棄牌堆)──
+interface SpendUseOutcome {
+  investigator: InvestigatorState;
+  effects: ResultEffect[];
+  /** 次數不足,行動不可執行 */
+  rejected?: string;
+}
+
+function spendAssetUse(inv: InvestigatorState, cardId: string, data: CardData | undefined): SpendUseOutcome {
+  const max = cardMaxUses(data);
+  if (max == null) return { investigator: inv, effects: [] }; // 無消耗(近戰/被動)
+  const cur = inv.assetState?.[cardId] ?? { usesLeft: max, exhausted: false };
+  if ((cur.usesLeft ?? 0) <= 0) {
+    return { investigator: inv, effects: [], rejected: '「' + (data?.name_zh ?? cardId) + '」已耗盡。' };
+  }
+  const left = (cur.usesLeft ?? max) - 1;
+  let next: InvestigatorState = {
+    ...inv,
+    assetState: { ...(inv.assetState ?? {}), [cardId]: { ...cur, usesLeft: left } },
+  };
+  const effects: ResultEffect[] = [
+    { type: 'use_spent', params: { cardInstanceId: cardId, name: data?.name_zh ?? '', left } },
+  ];
+  if (left <= 0) {
+    // 耗盡 → 進棄牌堆(ch3 §10.1「子彈打完就沒了」,需再次打出才能繼續用)
+    next = {
+      ...next,
+      assetsInPlay: next.assetsInPlay.filter((id) => id !== cardId),
+      discardPile: [...next.discardPile, cardId],
+    };
+    effects.push({ type: 'asset_expended', params: { cardInstanceId: cardId, name: data?.name_zh ?? '' } });
+  }
+  return { investigator: next, effects };
+}
+
 // ─── 引擎輸出:結算結果 + 新狀態切片 ──────
 export interface RuleResolveOutput {
   /** 對應的 ResultMessage(供 publish 給訊息匯流排) */
@@ -140,6 +195,8 @@ export interface RuleResolveOutput {
     investigator?: InvestigatorState;
     scenario?: ScenarioState;
     turn?: TurnState;
+    /** 被本行動改動的其他調查員(穩定救援等;key = investigatorId) */
+    updatedAllies?: Record<string, InvestigatorState>;
   };
 }
 
@@ -148,6 +205,13 @@ export function resolveIntent(intent: IntentMessage, ctx: RuleContext): RuleReso
   // 防護:已永久死亡的調查員不可動
   if (ctx.investigator.permanentlyDead) {
     return reject(intent, '[角色名] 的旅程已經結束。他們的紀念照仍在大廳牆上。');
+  }
+  // §9:瀕死/死亡者不能執行任何行動(回合開始的瀕死檢定由容器結算)
+  if (ctx.investigator.dead) {
+    return reject(intent, '他們已經沒有回應了。');
+  }
+  if (isDowned(ctx.investigator)) {
+    return reject(intent, '瀕死中 — 只能等待瀕死檢定,或等隊友救援。', '隊友可花 1 行動點「穩定」或用治療拉起');
   }
 
   // 階段檢查:只有調查員階段可執行主動行動(§4.2)
@@ -175,8 +239,11 @@ export function resolveIntent(intent: IntentMessage, ctx: RuleContext): RuleReso
       out = resolveExecuteCardAction(intent, ctx); break;
     case 'taunt':
       out = resolveTaunt(intent, ctx); break;
-    // 以下 stub,等後續批次展開
+    case 'stabilize':
+      out = resolveStabilize(intent, ctx); break;
     case 'consume':
+      out = resolveConsume(intent, ctx); break;
+    // 以下 stub,等後續批次展開
     case 'commit_attribute_icon':
     case 'short_rest':
     case 'declare_intent':
@@ -327,6 +394,83 @@ function resolveMove(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput
   newInv = fear.investigator;
   effects.push(...fear.effects);
   return accept(intent, effects, { investigator: newInv });
+}
+
+/**
+ * 消費 — 三合一第三用途(ch3 §2.2/§4):1 行動點,從手牌直接棄掉,觸發輔助效果。
+ * 資料側 consume_enabled=true 且 consume_effect 配置時才可用(目前卡池尚未配置,
+ * 引擎先把管線鋪通,內容跟上即生效)。
+ * payload: { cardInstanceId }
+ */
+function resolveConsume(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
+  if (ctx.investigator.actionPoints < 1) {
+    return reject(intent, '行動點不足:消費需 1,剩 ' + ctx.investigator.actionPoints);
+  }
+  const cardId = (intent.payload as { cardInstanceId?: string }).cardInstanceId;
+  if (typeof cardId !== 'string' || !ctx.investigator.hand.includes(cardId)) {
+    return reject(intent, '該卡不在手牌中:' + String(cardId));
+  }
+  const data = ctx.cardLookup?.[cardId];
+  if (!data?.consume_enabled || !data.consume_effect) {
+    return reject(intent, '「' + (data?.name_zh ?? cardId) + '」沒有消費用途。');
+  }
+  const fx = data.consume_effect as { effect_code?: string; effect_params?: Record<string, unknown> | null };
+  if (!fx.effect_code) {
+    return reject(intent, '「' + (data.name_zh ?? cardId) + '」的消費效果資料不完整。');
+  }
+  let inv: InvestigatorState = {
+    ...ctx.investigator,
+    actionPoints: ctx.investigator.actionPoints - 1,
+    hand: ctx.investigator.hand.filter((id) => id !== cardId),
+    discardPile: [...ctx.investigator.discardPile, cardId],
+  };
+  const exec = executeCardEffects(
+    [{ trigger_type: 'on_consume', effect_code: String(fx.effect_code), effect_params: fx.effect_params ?? null }],
+    inv,
+    ctx.scenario,
+    ctx.cardLookup ?? {},
+  );
+  inv = exec.investigator;
+  const effects: ResultEffect[] = [
+    { type: 'spend_action_point', params: { amount: 1 } },
+    { type: 'card_consumed', params: { cardInstanceId: cardId, name: data.name_zh ?? '' } },
+    ...exec.effects,
+  ];
+  if (exec.unsupported.length > 0) {
+    effects.push({ type: 'effect_unsupported', params: { codes: exec.unsupported } });
+  }
+  return accept(intent, effects, { investigator: inv, scenario: exec.scenario });
+}
+
+/**
+ * 穩定 — §9.5:花 1 行動點,讓同地點瀕死隊友的瀕死檢定 +1 次成功(自動成功,無檢定)
+ * payload: { targetInvestigatorId }
+ */
+function resolveStabilize(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
+  if (ctx.investigator.actionPoints < 1) {
+    return reject(intent, '行動點不足:穩定需 1,剩 ' + ctx.investigator.actionPoints);
+  }
+  const targetId = (intent.payload as { targetInvestigatorId?: string }).targetInvestigatorId;
+  const target = targetId ? ctx.investigators[targetId] : undefined;
+  if (!target) {
+    return reject(intent, '找不到要穩定的隊友:' + String(targetId));
+  }
+  if (target.currentLocationId !== ctx.investigator.currentLocationId) {
+    return reject(intent, '隊友不在你所在地點,搆不到他。');
+  }
+  if (!isDowned(target)) {
+    return reject(intent, '對方還站著,不需要穩定。');
+  }
+  const stabilized = applyStabilize(target);
+  const newInv: InvestigatorState = {
+    ...ctx.investigator,
+    actionPoints: ctx.investigator.actionPoints - 1,
+  };
+  return accept(
+    intent,
+    [{ type: 'spend_action_point', params: { amount: 1 } }, ...stabilized.effects],
+    { investigator: newInv, updatedAllies: { [target.investigatorId]: stabilized.investigator } },
+  );
 }
 
 /** 嘲諷 — §7.3:1 行動點,將同地點未與你交戰的敵人拉入交戰(無檢定) */
@@ -623,16 +767,33 @@ function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOu
     const actionFx = (data.effects ?? []).filter((f) => f.trigger_type === 'action');
     const exec = executeCardEffects(actionFx, inv, ctx.scenario, ctx.cardLookup ?? {});
     inv = { ...exec.investigator, discardPile: [...exec.investigator.discardPile, cardId] };
+    let sc = exec.scenario;
     const effects = [...baseEffects, ...exec.effects];
     if (exec.unsupported.length > 0) {
       effects.push({ type: 'effect_unsupported', params: { codes: exec.unsupported } });
     }
-    return accept(intent, effects, { investigator: inv, scenario: exec.scenario });
+    // 施法軌(ch2 §8.4):arcane 事件結算後抽混沌袋定副作用(法術一定命中,代價在袋裡)
+    if (String(data.combat_style ?? '') === 'arcane') {
+      const targetDef = sc.enemies.find((e) => e.locationId === inv.currentLocationId)?.enemyDefinitionId ?? null;
+      effects.push({ type: 'spell_cast', params: { name: data.name_zh ?? '', damage: 0, narrative: '咒文離手 — 力量必中,代價未知。' } });
+      const chaos = applySpellChaos(ctx, inv, sc, targetDef);
+      inv = chaos.investigator;
+      sc = chaos.scenario;
+      effects.push(...chaos.effects);
+    }
+    return accept(intent, effects, { investigator: inv, scenario: sc });
   }
 
-  // 資產/武器/盟友:進場
-  inv = { ...inv, assetsInPlay: [...inv.assetsInPlay, cardId] };
-  return accept(intent, [...baseEffects, { type: 'asset_enters_play', params: { cardInstanceId: cardId, name: data.name_zh ?? '' } }], { investigator: inv });
+  // 資產/武器/盟友:進場(有使用次數的初始化彈藥/充能,ch3 §10.1)
+  const maxUses = cardMaxUses(data);
+  inv = {
+    ...inv,
+    assetsInPlay: [...inv.assetsInPlay, cardId],
+    ...(maxUses != null
+      ? { assetState: { ...(inv.assetState ?? {}), [cardId]: { usesLeft: maxUses, exhausted: false } } }
+      : {}),
+  };
+  return accept(intent, [...baseEffects, { type: 'asset_enters_play', params: { cardInstanceId: cardId, name: data.name_zh ?? '', uses: maxUses } }], { investigator: inv });
 }
 
 /**
@@ -661,11 +822,15 @@ function resolveExecuteCardAction(intent: IntentMessage, ctx: RuleContext): Rule
     return performWeaponAttack(intent, ctx, cardId, fx);
   }
 
-  const inv: InvestigatorState = { ...ctx.investigator, actionPoints: ctx.investigator.actionPoints - 1 };
+  // 一般卡片行動也吃使用次數(霰彈/充能類消耗品,ch3 §10.1)
+  const spend = spendAssetUse(ctx.investigator, cardId, data);
+  if (spend.rejected) return reject(intent, spend.rejected);
+  const inv: InvestigatorState = { ...spend.investigator, actionPoints: ctx.investigator.actionPoints - 1 };
   const exec = executeCardEffects([fx], inv, ctx.scenario, ctx.cardLookup ?? {});
   const effects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
     { type: 'card_action', params: { cardInstanceId: cardId, name: data?.name_zh ?? '' } },
+    ...spend.effects,
     ...exec.effects,
   ];
   if (exec.unsupported.length > 0) {
@@ -688,6 +853,10 @@ function performWeaponAttack(
 ): RuleResolveOutput {
   const weapon = ctx.cardLookup?.[weaponId];
   const style = String(weapon?.combat_style ?? '');
+  // 神秘攻擊例外(ch2 §8.4):施法不擲骰、不抽風格卡 — 一定命中,抽混沌袋定代價
+  if (style === 'arcane') {
+    return performSpellAttack(intent, ctx, weaponId, fx);
+  }
   const pool = ctx.stylePools?.[style] ?? [];
   if (pool.length === 0) {
     return reject(intent, '「' + (weapon?.name_zh ?? weaponId) + '」的風格池(' + style + ')為空,無法抽風格卡');
@@ -709,7 +878,11 @@ function performWeaponAttack(
   if (!(attr in ctx.investigator.attributes)) {
     return reject(intent, '風格卡「' + styleCard.name_zh + '」檢定屬性不合法:' + styleCard.check_attribute);
   }
-  const commit = takeCommit(intent, ctx, attr);
+  // 彈藥消耗(ch3 §10.1):攻擊先花 1 發,不夠不能打;打空進棄牌堆
+  const spend = spendAssetUse(ctx.investigator, weaponId, weapon);
+  if (spend.rejected) return reject(intent, spend.rejected, '再次打出同名武器,或改用其他手段');
+  const ctxAfterSpend: RuleContext = { ...ctx, investigator: spend.investigator };
+  const commit = takeCommit(intent, ctxAfterSpend, attr);
   if (commit.error) return reject(intent, commit.error);
 
   const here = ctx.scenario.locations.find(
@@ -730,11 +903,12 @@ function performWeaponAttack(
   );
 
   let inv: InvestigatorState = {
-    ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
+    ...applyCommitToInvestigator(spend.investigator, commit.committedIds),
     actionPoints: ctx.investigator.actionPoints - 1,
   };
   const baseEffects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
+    ...spend.effects,
     { type: 'style_card_drawn', params: { style, name: styleCard.name_zh, attribute: attr, narrative: styleCard.narrative_attack_zh ?? '' } },
     ...commitEffects(commit),
     { type: 'roll_d20', params: { roll: check.roll, attribute: attr, modifier: check.total - check.roll, total: check.total, dc, outcome: check.outcome === 'success' ? 'hit' : 'miss', natural20: check.natural20, natural1: check.natural1 }, targetId: enemy.instanceId },
@@ -766,6 +940,147 @@ function performWeaponAttack(
   inv = after.investigator;
   sc = after.scenario;
   return accept(intent, [...effects, ...after.effects], { investigator: inv, scenario: sc });
+}
+
+/**
+ * 法術攻擊(ch2 §5.8 完整結算流程):
+ * 宣告 → 費用(充能)→ 法術效果一定生效(卡面傷害)→ 抽混沌袋 →
+ * 與目標法術防禦值比較 → 依 §5.7 處理副作用 → 場景效果。
+ * 無擲骰、無風格卡、無爆擊 — 不確定性全在袋子裡。
+ */
+function performSpellAttack(
+  intent: IntentMessage,
+  ctx: RuleContext,
+  weaponId: string,
+  fx: { effect_params: Record<string, unknown> | null },
+): RuleResolveOutput {
+  const weapon = ctx.cardLookup?.[weaponId];
+  const requestedEnemy = (intent.payload as { enemyInstanceId?: string }).enemyInstanceId;
+  const enemy = requestedEnemy
+    ? ctx.scenario.enemies.find((e) => e.instanceId === requestedEnemy)
+    : ctx.scenario.enemies.find((e) => e.locationId === ctx.investigator.currentLocationId && e.hp > 0);
+  if (!enemy || enemy.hp <= 0) {
+    return reject(intent, '當前地點沒有可施法的目標');
+  }
+  if (enemy.locationId !== ctx.investigator.currentLocationId) {
+    return reject(intent, '目標不在你所在地點');
+  }
+  // 充能消耗
+  const spend = spendAssetUse(ctx.investigator, weaponId, weapon);
+  if (spend.rejected) return reject(intent, spend.rejected, '再次打出此法術,或改用其他手段');
+  let inv: InvestigatorState = { ...spend.investigator, actionPoints: ctx.investigator.actionPoints - 1 };
+
+  // 法術一定命中(§5.1):卡面傷害直接造成
+  const params = (fx.effect_params ?? {}) as Record<string, any>;
+  const damage = Number(params.damage ?? 2) + Number(params.damage_bonus ?? 0);
+  const newHp = enemy.hp - damage;
+  let sc: ScenarioState = {
+    ...ctx.scenario,
+    enemies: ctx.scenario.enemies.map((e) => (e.instanceId === enemy.instanceId ? { ...e, hp: newHp } : e)),
+  };
+  const effects: ResultEffect[] = [
+    { type: 'spend_action_point', params: { amount: 1 } },
+    ...spend.effects,
+    {
+      type: 'spell_cast',
+      params: { name: weapon?.name_zh ?? '', damage, narrative: '力量循著咒文離手 — 它必中,但代價未知。' },
+      targetId: enemy.instanceId,
+    },
+    { type: 'attack_hit', params: { damage, critical: false, weapon: weapon?.name_zh ?? '', narrative: hpToNarrative(newHp, enemy.hp) }, targetId: enemy.instanceId },
+  ];
+  if (newHp <= 0) {
+    effects.push({ type: 'enemy_defeated', params: { narrative: '牠在神秘的光焰中崩解。' }, targetId: enemy.instanceId });
+  }
+  // 混沌袋副作用
+  const chaos = applySpellChaos(ctx, inv, sc, enemy.enemyDefinitionId);
+  inv = chaos.investigator;
+  sc = chaos.scenario;
+  effects.push(...chaos.effects);
+  return accept(intent, effects, { investigator: inv, scenario: sc });
+}
+
+/**
+ * 混沌袋施法副作用結算(ch2 §5,雙軌檢定的第二軌)。
+ * 法術一定命中(傷害已在呼叫端結算);本函式抽袋、與法術防禦值比較、
+ * 施放副作用與固定場景效果。bless/curse 抽後移出袋(supp04,持久化)。
+ */
+function applySpellChaos(
+  ctx: RuleContext,
+  investigator: InvestigatorState,
+  scenario: ScenarioState,
+  targetEnemyDefId: string | null,
+): { investigator: InvestigatorState; scenario: ScenarioState; effects: ResultEffect[] } {
+  let inv = investigator;
+  let sc = scenario;
+  const effects: ResultEffect[] = [];
+  if (sc.chaosBag.length === 0) {
+    effects.push({ type: 'chaos_bag_empty', params: { narrative: '混沌袋空空如也 — 命運暫時沉默。' } });
+    return { investigator: inv, scenario: sc, effects };
+  }
+  const rng = ctx.rng ?? Math.random;
+  const draw = drawChaosToken(sc.chaosBag, rng);
+  // bless/curse 抽後移出袋(supp04)
+  if (draw.removedTokenIds.length > 0) {
+    sc = { ...sc, chaosBag: sc.chaosBag.filter((t) => !draw.removedTokenIds.includes(t.tokenId)) };
+  }
+  effects.push({
+    type: 'chaos_token_drawn',
+    params: {
+      sequence: draw.drawn.map((t) => t.type + (t.value != null ? `(${t.value})` : '')).join(' → '),
+      finalType: draw.finalToken.type,
+      value: draw.value,
+    },
+  });
+  const spellDefense = targetEnemyDefId
+    ? Number(ctx.enemyStats?.[targetEnemyDefId]?.spell_defense ?? 0)
+    : 0;
+  const side = resolveSpellSideEffect(draw, spellDefense);
+  // 施法者 SAN 變化(觸手 -1 / 遠古印記 +1 / 差值分級 ±)
+  if (side.casterSanDelta !== 0) {
+    inv = { ...inv, san: Math.max(0, Math.min(inv.sanMax, inv.san + side.casterSanDelta)) };
+    effects.push({
+      type: 'spell_strain',
+      params: {
+        delta: side.casterSanDelta,
+        tier: side.tier,
+        narrative: side.casterSanDelta < 0 ? '力量的反饋擦過心智的邊緣。' : '遠古印記的光短暫驅散了陰影。',
+      },
+    });
+  }
+  // 固定場景效果(§5.5 神話標記無視法術防禦;情境標記依 stage 配置碼)
+  if (side.sceneEffectFires) {
+    const here = inv.currentLocationId ?? '';
+    const tokenType = draw.finalToken.type;
+    const markerEffect = ctx.chaosMarkerEffects?.[tokenType];
+    if (tokenType === 'clue') {
+      sc = { ...sc, objectiveProgress: sc.objectiveProgress + 1, tokens: [...sc.tokens, { tokenType: 'clue', locationId: here, amount: 1 }] };
+      effects.push({ type: 'gain_clue', params: { amount: 1 } });
+    } else if (tokenType === 'doom') {
+      sc = { ...sc, agendaProgress: sc.agendaProgress + 1 };
+      effects.push({ type: 'doom_added', params: { amount: 1, total: sc.agendaProgress } });
+    } else if (tokenType === 'monster' || markerEffect === 'follower_response') {
+      const code = Object.entries(ctx.enemyStats ?? {}).find(([, d]) => Number(d.tier ?? 1) === 1)?.[0];
+      if (code) {
+        const spawned = spawnEnemy(sc, code, here, ctx.enemyStats ?? {}, 1);
+        sc = spawned.scenario;
+        effects.push({ type: 'enemy_spawned', params: { enemy: ctx.enemyStats?.[code]?.name_zh ?? code, code, location: here }, targetId: spawned.enemy.instanceId });
+      }
+    } else if (tokenType === 'headline') {
+      effects.push({ type: 'headline_drawn', params: { narrative: '雨夜的報童叫賣著不該存在的頭條……(遭遇系統接通後結算)' } });
+    } else if (markerEffect === 'forbidden_knowledge') {
+      inv = { ...inv, san: Math.max(0, inv.san - 2) };
+      effects.push({ type: 'fear_damage', params: { amount: 2, narrative: '你讀懂了不該讀懂的東西。' }, targetId: inv.investigatorId });
+    } else if (markerEffect === 'otherworld_infiltration') {
+      sc = { ...sc, tokens: [...sc.tokens, { tokenType: 'haunting', locationId: here, amount: 1 }] };
+      effects.push({ type: 'status_applied', params: { status: 'haunting', narrative: '異界的薄膜滲進了這個地點。' } });
+    } else {
+      effects.push({
+        type: 'chaos_scene_effect',
+        params: { code: markerEffect ?? tokenType, narrative: '場景效果(' + (markerEffect ?? tokenType) + ')待對應系統接通。' },
+      });
+    }
+  }
+  return { investigator: inv, scenario: sc, effects };
 }
 
 /**

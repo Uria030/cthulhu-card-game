@@ -44,7 +44,13 @@ export function executeCardEffects(
 
   for (const fx of cardEffects) {
     const p = (fx.effect_params ?? {}) as Record<string, any>;
-    switch (fx.effect_code) {
+    // 防禦性正規化:剝除效果碼尾端括號修飾(髒值 deal_damage(single-target) → deal_damage)
+    // 同步把括號內提示併入 params(single-target → 非 area)
+    const rawCode = String(fx.effect_code ?? '');
+    const paren = rawCode.match(/^([a-z_]+)\((.+)\)$/);
+    const code = paren ? paren[1] : rawCode;
+    if (paren && /area/.test(paren[2])) p.area = true;
+    switch (code) {
       case 'draw_card': {
         const amount = Number(p.amount ?? 1);
         for (let i = 0; i < amount; i += 1) {
@@ -69,12 +75,12 @@ export function executeCardEffects(
       case 'deal_damage': {
         const amount = Number(p.amount ?? 1);
         const here = inv.currentLocationId;
-        const targets = sc.enemies.filter(
-          (e) => e.hp > 0 && e.locationId === here && (p.area ? true : false),
-        );
-        // 非 area 的 deal_damage 需指定目標 — 首批只有 area(霰彈),非 area 回 unsupported
-        if (!p.area) {
-          unsupported.push('deal_damage(single-target)');
+        // area = 同地點全體;單體 = 優先與自己交戰的敵人,其次同地點第一隻(ch3 §5.3 enemy_one)
+        const candidates = sc.enemies.filter((e) => e.hp > 0 && e.locationId === here);
+        const engagedFirst = candidates.find((e) => inv.engagedWith.includes(e.instanceId));
+        const targets = p.area ? candidates : (engagedFirst ? [engagedFirst] : candidates.slice(0, 1));
+        if (targets.length === 0) {
+          out.push({ type: 'attack_miss', params: { narrative: '攻擊劃過空蕩的雨幕 — 這裡沒有目標。' } });
           break;
         }
         sc = {
@@ -84,7 +90,7 @@ export function executeCardEffects(
           ),
         };
         for (const t of targets) {
-          out.push({ type: 'attack_hit', params: { damage: amount, narrative: '範圍攻擊命中' }, targetId: t.instanceId });
+          out.push({ type: 'attack_hit', params: { damage: amount, narrative: p.area ? '範圍攻擊命中' : '直擊要害' }, targetId: t.instanceId });
           if (t.hp - amount <= 0) {
             out.push({ type: 'enemy_defeated', params: { narrative: '牠倒下了。' }, targetId: t.instanceId });
           }
@@ -148,8 +154,14 @@ export function executeCardEffects(
       case 'attack':
         // 武器攻擊走 ruleEngine 路徑
         break;
+      case 'remove_status': {
+        // 最小版(ch3 §6):移除自身所有負面附著(驅邪儀式等)— v0 以敘事表示,
+        // 狀態系統結算接通後改為實際移除層數
+        out.push({ type: 'status_cleansed', params: { narrative: '一道淨化掃過你的身體。' } });
+        break;
+      }
       default:
-        unsupported.push(fx.effect_code);
+        unsupported.push(code);
     }
   }
   return { investigator: inv, scenario: sc, effects: out, unsupported };

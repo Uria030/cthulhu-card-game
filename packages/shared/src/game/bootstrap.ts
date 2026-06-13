@@ -22,6 +22,7 @@ import type {
   TokenInstance,
   ChaosToken,
 } from './state';
+import { hpMaxFor, sanMaxFor, STARTING_RESOURCES, STARTING_HAND_SIZE } from './upkeep';
 
 // ─── 開局包型別(對齊 /api/play bootstrap 回傳,DB row 原樣 snake_case)──
 export interface BootstrapScenarioRow {
@@ -229,7 +230,7 @@ export function buildGameFromBootstrap(
   const {
     scenarioOrder = 1,
     playerCount = 1,
-    openingHandSize = 5,
+    openingHandSize = STARTING_HAND_SIZE,
     rng = Math.random,
     cardInstancePrefix = '',
   } = options;
@@ -361,9 +362,10 @@ export function buildGameFromBootstrap(
 
   const spawn = scenarioRow.investigator_spawn_location ?? scenarioRow.initial_location_codes[0];
 
-  // HP/SAN 基礎 7 對齊 investigator_value_config(hp_base/san_base)
-  const BASE_HP = 7;
-  const BASE_SAN = 7;
+  // HP/SAN 公式(ch6 §3.1):體質 × 2 + 5 / 意志 × 2 + 5(舊版寫死 7 是 bug,
+  // ISTP 體質 1 恰好算出 7 把它藏住了)
+  const BASE_HP = hpMaxFor(Number(inv.attr_constitution ?? 1));
+  const BASE_SAN = sanMaxFor(Number(inv.attr_willpower ?? 1));
 
   const investigator: InvestigatorState = {
     investigatorId: `pinv_${inv.code}`,
@@ -391,7 +393,7 @@ export function buildGameFromBootstrap(
     san: BASE_SAN,
     sanMax: BASE_SAN,
     actionPoints: 3,
-    resources: 0,
+    resources: STARTING_RESOURCES, // ch6 §8.2 起始 5
     currentLocationId: spawn,
     engagedWith: [],
     triggeredHorrorChecks: [],

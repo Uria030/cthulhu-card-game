@@ -84,6 +84,24 @@ test('幕一未達標不動', () => {
   assertEq(r.switchScenario, null);
 });
 
+test('線索消費:幕翻面扣除需求量(花費而非累積)', () => {
+  const sc = makeScenario({ objectiveProgress: 3 }); // 門檻 2,多 1 顆
+  const r = progressTick(sc, {}, ACTS, AGENDAS, ENEMY_DATA, 1);
+  assertEq(r.scenario.actIndex, 1);
+  assertEq(r.scenario.objectiveProgress, 1, '花掉 2 顆剩 1 顆');
+  assertEq(r.effects.some((e) => e.type === 'clues_spent'), true);
+});
+
+test('人數縮放:四人隊門檻 ×4(技術原則 4)', () => {
+  // 4 人 × 2 = 8;7 顆不夠
+  const notYet = progressTick(makeScenario({ objectiveProgress: 7 }), {}, ACTS, AGENDAS, ENEMY_DATA, 4);
+  assertEq(notYet.scenario.actIndex ?? 0, 0, '7 < 8 不翻面');
+  // 8 顆達標,翻面後歸 0
+  const ok = progressTick(makeScenario({ objectiveProgress: 8 }), {}, ACTS, AGENDAS, ENEMY_DATA, 4);
+  assertEq(ok.scenario.actIndex, 1);
+  assertEq(ok.scenario.objectiveProgress, 0);
+});
+
 test('幕二:擊敗 boss → 翻面 + 勝利旗標 + victory 訊號', () => {
   const sc = makeScenario({
     actIndex: 1,

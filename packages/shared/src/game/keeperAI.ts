@@ -249,6 +249,8 @@ export interface MythosExecutionResult {
   effects: ResultEffect[];
   /** 需要附著的持續效果(client 存入 scenario.keeperAttachments) */
   attachments: KeeperAttachment[];
+  /** 多人局:被本卡改動的其他調查員(key = investigatorId) */
+  updatedInvestigators?: Record<string, InvestigatorState>;
 }
 
 /** 召喚落點:nearest_to_clue → 有線索的地點;adjacent_to_player → 玩家相鄰;fallback 玩家相鄰 */
@@ -306,11 +308,25 @@ export function executeMythosCard(
   enemyData: EnemyDataLookup,
   rng: () => number = Math.random,
   playerCount = 1,
+  /** 多人局全隊(供 target_rule 選目標;未傳 = 單人,全部打 investigator) */
+  party?: Record<string, InvestigatorState>,
 ): MythosExecutionResult {
   let sc = scenario;
   let inv = investigator;
   const effects: ResultEffect[] = [];
   const attachments: KeeperAttachment[] = [];
+  const updatedInvestigators: Record<string, InvestigatorState> = {};
+  // 站立成員(倒地者不再追打 — 城主的目標是讓更多人倒下)
+  const standing = (): InvestigatorState[] => {
+    const pool = party ? Object.values(party) : [inv];
+    return pool
+      .map((p) => (p.investigatorId === inv.investigatorId ? inv : updatedInvestigators[p.investigatorId] ?? p))
+      .filter((p) => !p.dead && !p.permanentlyDead && p.hp > 0 && p.san > 0);
+  };
+  const applyTo = (target: InvestigatorState) => {
+    if (target.investigatorId === inv.investigatorId) inv = target;
+    else updatedInvestigators[target.investigatorId] = target;
+  };
 
   effects.push({
     type: 'keeper_card_activated',
@@ -352,11 +368,25 @@ export function executeMythosCard(
       }
       case 'horror_damage': {
         const amount = Number(p.amount ?? 1);
+        // 目標選擇:卡面 target_rule(lowest_san 等)在站立成員中挑;單人局即玩家
+        const pool = standing();
+        if (pool.length === 0) break;
+        const rule = String(p.target_rule ?? 'lowest_san');
+        const target =
+          rule === 'lowest_san'
+            ? pool.reduce((a, b) => (b.san < a.san ? b : a))
+            : rule === 'random'
+              ? pool[Math.floor(rng() * pool.length)]
+              : pool.find((x) => x.investigatorId === inv.investigatorId) ?? pool[0];
         // 紅線一護欄:資料可帶 cap_to_one_at_limit(恐懼將達上限改 1)
-        const wouldHitLimit = inv.san - amount <= 0;
+        const wouldHitLimit = target.san - amount <= 0;
         const dealt = p.cap_to_one_at_limit && wouldHitLimit ? 1 : amount;
-        inv = { ...inv, san: Math.max(0, inv.san - dealt) };
-        effects.push({ type: 'fear_damage', params: { amount: dealt, narrative: '冰冷的低語擠進你的腦縫。' } });
+        applyTo({ ...target, san: Math.max(0, target.san - dealt) });
+        effects.push({
+          type: 'fear_damage',
+          params: { amount: dealt, narrative: '冰冷的低語擠進腦縫。' },
+          targetId: target.investigatorId,
+        });
         break;
       }
       case 'set_visibility': {
@@ -390,7 +420,7 @@ export function executeMythosCard(
         effects.push({ type: 'effect_unsupported', params: { codes: [fx.action_code] } });
     }
   }
-  return { scenario: sc, investigator: inv, effects, attachments };
+  return { scenario: sc, investigator: inv, effects, attachments, updatedInvestigators };
 }
 
 // ─── 附著效果查詢(檢定管線引用)──────────────────

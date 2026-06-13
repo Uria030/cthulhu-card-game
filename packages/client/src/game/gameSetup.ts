@@ -95,6 +95,8 @@ export interface GameSetup {
   bootstrap: StageBootstrap | null;
   /** AI 隊友(調查員 AI v0:名冊個性 + 落地完成的調查員) */
   aiMembers: Array<{ profile: InvestigatorAIProfile; investigator: InvestigatorState }>;
+  /** 混沌袋情境標記效果碼(symbol → effect;施法軌場景效果用) */
+  chaosMarkerEffects: Record<string, string>;
 }
 
 const VALID_RARITIES = new Set(['common', 'uncommon', 'rare', 'legendary']);
@@ -219,6 +221,7 @@ export function makeTestSetup(): GameSetup {
     outcomes: [],
     bootstrap: null,
     aiMembers: [],
+    chaosMarkerEffects: {},
   };
 }
 
@@ -303,6 +306,7 @@ export function buildSetupFromBootstrap(
     enemyStats[String(mv.code)] = {
       name_zh: String(mv.name_zh ?? mv.code),
       dc: Number(mv.dc ?? 10),
+      spell_defense: Number(mv.spell_defense ?? 0),
       damage_physical: Number(mv.damage_physical ?? 1),
       damage_horror: Number(mv.damage_horror ?? 0),
       fear_value: Number(mv.fear_value ?? 1),
@@ -357,6 +361,10 @@ export function buildSetupFromBootstrap(
             ? d.attribute_modifiers
             : {},
         subtypes: Array.isArray(d.subtypes) ? d.subtypes : [],
+        ammo: d.ammo ?? null,
+        uses: d.uses ?? null,
+        consume_enabled: Boolean(d.consume_enabled),
+        consume_effect: d.consume_effect ?? null,
         effects: Array.isArray(d.effects) ? d.effects : [],
       };
     }
@@ -412,5 +420,11 @@ export function buildSetupFromBootstrap(
     outcomes: (bootstrap.chapter?.outcomes ?? []) as unknown as OutcomeData[],
     bootstrap,
     aiMembers,
+    chaosMarkerEffects: Object.fromEntries(
+      Object.entries(bootstrap.stage.chaos_bag?.scenario_markers ?? {}).map(([symbol, spec]) => [
+        symbol,
+        String((spec as { effect?: string })?.effect ?? ''),
+      ]),
+    ),
   };
 }

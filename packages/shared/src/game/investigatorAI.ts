@@ -26,6 +26,8 @@ import { resolveIntent } from './ruleEngine';
 import type { RuleContext, CardDataLookup, StyleCardData } from './ruleEngine';
 import type { EnemyDataLookup } from './monsterActions';
 import { attachmentTestModifier } from './keeperAI';
+import { hpMaxFor, sanMaxFor } from './upkeep';
+import { isDowned, isStanding } from './dying';
 
 // ─── 人格即資料:調查員 AI 設定檔 ─────────────────────
 export interface InvestigatorAIProfile {
@@ -170,11 +172,18 @@ export function materializeAIInvestigator(
     const k = key as AttributeKey;
     attributes[k] = Math.min(5, (attributes[k] ?? 1) + Number(add ?? 0));
   }
+  // 自由配點可能加在體質/意志 → 上限照公式重算(ch6 §3.1)
+  const hpMax = hpMaxFor(attributes.constitution);
+  const sanMax = sanMaxFor(attributes.willpower);
   return {
     ...built,
     investigatorId: `ai_${profile.rosterCode}`,
     ownerPlayerId: 'ai',
     attributes,
+    hpMax,
+    hp: hpMax,
+    sanMax,
+    san: sanMax,
     combatStyle: profile.combatStyle,
     specializations: [...profile.specializations],
   };
@@ -246,6 +255,8 @@ export interface InvestigatorAIContext {
   enemyStats: EnemyDataLookup;
   cardLookup: CardDataLookup;
   stylePools: Record<string, StyleCardData[]>;
+  /** 混沌袋情境標記效果碼(施法軌場景效果用;傳給 resolveIntent) */
+  chaosMarkerEffects?: Record<string, string>;
   rng: () => number;
 }
 
@@ -330,12 +341,14 @@ export function enumerateCandidates(
     const finishBonus = enemy.hp <= 2 ? 0.8 : 0; // 補刀:差一口氣的怪優先清掉
     const retreatMul = retreating ? 0.4 : 1;
 
-    // 武器攻擊(場上有 attack 行動效果的資產)
+    // 武器攻擊(場上有 attack 行動效果的資產;彈藥耗盡的略過)
     for (const weaponId of inv.assetsInPlay) {
       const hasAttack = (cardLookup[weaponId]?.effects ?? []).some(
         (f) => f.trigger_type === 'action' && f.effect_code === 'attack',
       );
       if (!hasAttack) continue;
+      const usesLeft = inv.assetState?.[weaponId]?.usesLeft;
+      if (usesLeft != null && usesLeft <= 0) continue;
       const expect = weaponExpectedModifier(inv, weaponId, cardLookup, stylePools);
       if (!expect) continue;
       const p = estimateSuccessChance(expect.modifier + vis, dc);
@@ -377,6 +390,20 @@ export function enumerateCandidates(
     });
   }
 
+  // ── 穩定救援(§9.5):同地點有瀕死隊友 → 最高優先級之一(見死不救不是選項)──
+  for (const ally of otherAllies) {
+    if (!isDowned(ally)) continue;
+    if (ally.currentLocationId === inv.currentLocationId) {
+      out.push({
+        actionType: 'stabilize',
+        payload: { targetInvestigatorId: ally.investigatorId },
+        // 基礎分高到壓過日常行動;守護型(馬庫斯)再往上疊
+        score: 2.5 + profile.weights.protectAllies * 1.5,
+        intentNarrative: '撲到倒下的隊友身邊壓住傷勢',
+      });
+    }
+  }
+
   // ── 嘲諷(把纏住隊友的怪拉到自己身上;鐵壁的本能)──
   if (!retreating) {
     for (const enemy of enemiesHere) {
@@ -405,15 +432,23 @@ export function enumerateCandidates(
     const fx = data.effects ?? [];
     let value = 0;
     let narrative = `打出「${data.name_zh ?? ''}」`;
+    const isArcaneSpell = String(data.combat_style ?? '') === 'arcane';
     if (fx.some((f) => f.trigger_type === 'action' && f.effect_code === 'attack')) {
       // 武器:場上沒武器且場上有威脅時鋪場價值高
       const armed = inv.assetsInPlay.some((id) =>
         (cardLookup[id]?.effects ?? []).some((f) => f.trigger_type === 'action' && f.effect_code === 'attack'),
       );
       value = aliveEnemies.length > 0 && !armed ? 2.4 : 0.8;
+    } else if (isArcaneSpell) {
+      // 施法事件(ch2 §8.4 神秘攻擊):一定命中、穿透抗性,但抽混沌袋有 SAN 風險。
+      // 有目標才打;戰意權重 × 命中保證(法術不擲骰),SAN 低時謹慎(玩火不玩命)。
+      const hasDamage = fx.some((f) => /deal_(damage|horror)/.test(String(f.effect_code)));
+      const sanPct = inv.sanMax > 0 ? (inv.san / inv.sanMax) * 100 : 0;
+      const sanCaution = sanPct < profile.sanRetreatPct + 15 ? 0.5 : 1;
+      value = hasDamage && enemiesHere.length > 0 ? profile.weights.combatFocus * 1.6 * sanCaution : 0;
     } else if (data.card_type === 'event') {
       // 事件:效果碼相關性(打傷害要有目標/補給通用)
-      const codes = new Set(fx.filter((f) => f.trigger_type === 'action').map((f) => f.effect_code));
+      const codes = new Set(fx.filter((f) => f.trigger_type === 'action').map((f) => String(f.effect_code).replace(/\(.*\)$/, '')));
       if (codes.has('deal_damage')) value = enemiesHere.length > 0 ? 1.8 : 0;
       else if (codes.has('discover_clue')) value = profile.weights.clueFocus * 0.6;
       else if (codes.has('draw_card') || codes.has('gain_resource') || codes.has('search_deck')) value = 1.0;
@@ -449,6 +484,11 @@ export function enumerateCandidates(
         (a) => a.currentLocationId === targetId && a.engagedWith.length > 0,
       );
       if (allyInDanger) value += profile.weights.protectAllies * 1.5;
+      // 救援:隊友在隔壁倒地 → 趕過去(比纏鬥支援更急)
+      const allyDownedThere = otherAllies.some(
+        (a) => isDowned(a) && a.currentLocationId === targetId,
+      );
+      if (allyDownedThere) value += 2.0 + profile.weights.protectAllies * 1.2;
       // 調查:隔壁更好查(shroud 更低)
       const hereShroud = locationStats[inv.currentLocationId ?? '']?.shroud ?? 10;
       const thereShroud = locationStats[targetId]?.shroud ?? 10;
@@ -529,6 +569,8 @@ export interface AITurnResult {
   scenario: ScenarioState;
   aiState: InvestigatorAIState;
   steps: AITurnStep[];
+  /** 本回合被 AI 改動的其他調查員(穩定救援;key = investigatorId) */
+  updatedAllies: Record<string, InvestigatorState>;
 }
 
 export function runInvestigatorAITurn(
@@ -540,12 +582,14 @@ export function runInvestigatorAITurn(
   let inv = ctx.investigator;
   let scenario = ctx.scenario;
   let state = aiState;
+  let allies = { ...ctx.allies };
   const steps: AITurnStep[] = [];
+  const updatedAllies: Record<string, InvestigatorState> = {};
 
   // 安全上限:行動點 3 + 障礙誤差;一次被駁回就停(防呆迴圈)
   for (let guard = 0; guard < 8 && inv.actionPoints > 0; guard += 1) {
-    if (inv.hp <= 0 || inv.san <= 0) break; // 瀕死不行動(§9 簡化)
-    const fullCtx: InvestigatorAIContext = { ...ctx, scenario, investigator: inv, rng };
+    if (!isStanding(inv)) break; // 瀕死/死亡不行動(§9)
+    const fullCtx: InvestigatorAIContext = { ...ctx, scenario, investigator: inv, allies, rng };
     const plan = planNextAction(fullCtx, profile, state);
     if (!plan) break;
 
@@ -571,11 +615,12 @@ export function runInvestigatorAITurn(
       scenario,
       investigator: inv,
       turn,
-      investigators: { ...ctx.allies, [inv.investigatorId]: inv },
+      investigators: { ...allies, [inv.investigatorId]: inv },
       cardLookup: ctx.cardLookup,
       locationStats: ctx.locationStats,
       enemyStats: ctx.enemyStats,
       stylePools: ctx.stylePools,
+      chaosMarkerEffects: ctx.chaosMarkerEffects,
       rng,
     };
     const resolved = resolveIntent(intent, ruleCtx);
@@ -592,6 +637,11 @@ export function runInvestigatorAITurn(
     const prevLocation = inv.currentLocationId;
     inv = resolved.newState?.investigator ?? inv;
     scenario = resolved.newState?.scenario ?? scenario;
+    // 穩定救援等改動到的隊友:更新本地視野 + 回傳給容器
+    for (const [id, ally] of Object.entries(resolved.newState?.updatedAllies ?? {})) {
+      allies[id] = ally;
+      updatedAllies[id] = ally;
+    }
     state = {
       lastActionType: plan.actionType,
       cameFromLocationId:
@@ -604,5 +654,5 @@ export function runInvestigatorAITurn(
       effects: resolved.result.effects ?? [],
     });
   }
-  return { investigator: inv, scenario, aiState: state, steps };
+  return { investigator: inv, scenario, aiState: state, steps, updatedAllies };
 }

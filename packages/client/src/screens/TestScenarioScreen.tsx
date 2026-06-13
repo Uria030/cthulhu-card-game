@@ -9,7 +9,6 @@ import {
   progressTick,
   evaluateOutcome,
   applyOutcomeFlags,
-  allInvestigatorsDown,
   buildGameFromBootstrap,
   initKeeperState,
   snapshotSituation,
@@ -20,6 +19,11 @@ import {
   AI_INVESTIGATOR_ROSTER,
   initInvestigatorAIState,
   runInvestigatorAITurn,
+  runTurnEndUpkeep,
+  syncDownedState,
+  runDeathSave,
+  isDowned,
+  allInvestigatorsDead,
   CURRENT_MESSAGE_SCHEMA_VERSION,
 } from '@cthulhu/shared';
 import type {
@@ -124,6 +128,28 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'flag_set': return '🚩 旗標「' + (p.flag_code as string) + '」= ' + String(p.value);
     case 'enemy_spawned': return '🌊 ' + (p.enemy as string) + ' 出現在 ' + (locMeta[p.location as string]?.name ?? (p.location as string)) + '!';
     case 'penalty_applied': return '⛈ ' + ((p.narrative as string) || (p.penalty as string));
+    case 'clues_spent': return '🔎 花費 ' + (p.amount as number) + ' 個線索拼出真相';
+    case 'investigator_downed': return '🩸 ' + (p.narrative as string) + '【瀕死】';
+    case 'investigator_revived': return '💚 ' + (p.narrative as string);
+    case 'death_save': return '🎲 瀕死檢定 d20=' + (p.roll as number) + ' → ' + (p.outcome === 'success' ? '穩住(' + (p.successes as number) + '/3)' : (p.outcome === 'critical_fail' ? '天 1!雙倍惡化' : '惡化') + '(' + (p.failures as number) + '/3)');
+    case 'death_save_stand': return '✊ ' + (p.narrative as string);
+    case 'investigator_died': return '💀 ' + (p.narrative as string);
+    case 'investigator_permanently_dead': return '⚰ ' + (p.narrative as string);
+    case 'stabilized': return '🤲 ' + (p.narrative as string) + '(穩定 ' + (p.successes as number) + '/3)';
+    case 'use_spent': return '🔻 「' + (p.name as string) + '」消耗 1(剩 ' + (p.left as number) + ')';
+    case 'asset_expended': return '🫳 「' + (p.name as string) + '」耗盡,進入棄牌堆';
+    case 'card_consumed': return '♻ 消費「' + (p.name as string) + '」';
+    case 'assets_readied': return '🔄 整裝:' + (p.count as number) + ' 張卡轉正';
+    case 'spell_cast': return '🔮 施放「' + (p.name as string) + '」— ' + (p.narrative as string) + '(造成 ' + (p.damage as number) + ' 點傷害)';
+    case 'chaos_token_drawn': return '🌑 混沌袋:' + (p.sequence as string);
+    case 'spell_strain': return ((p.delta as number) < 0 ? '😖' : '✨') + ' ' + (p.narrative as string) + '(SAN ' + ((p.delta as number) > 0 ? '+' : '') + (p.delta as number) + ')';
+    case 'chaos_scene_effect': return '🕳 場景效果:' + (p.narrative as string);
+    case 'chaos_bag_empty': return 'ℹ ' + (p.narrative as string);
+    case 'headline_drawn': return '📰 ' + (p.narrative as string);
+    case 'status_cleansed': return '🧼 ' + (p.narrative as string);
+    case 'upkeep_draw': return '🂠 整裝:抽 1 張牌';
+    case 'upkeep_income': return '🪙 整裝:獲得 ' + (p.amount as number) + ' 資源';
+    case 'hand_limit_discard': return '🂠 手牌超過上限,棄掉 ' + (p.count as number) + ' 張';
     default: return eff.type;
   }
 }
@@ -253,7 +279,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     inv: InvestigatorState,
   ): { sc: ScenarioState; inv: InvestigatorState } => {
     if (setup.tutorial || setup.actData.length === 0) return { sc, inv };
-    const tick = progressTick(sc, flags, setup.actData, setup.agendaData, setup.enemyStats);
+    // 人數縮放(ch1 技術原則 4):幕線索門檻 × 隊伍人數(玩家 + AI 隊友)
+    const partySize = 1 + setup.aiMembers.length;
+    const tick = progressTick(sc, flags, setup.actData, setup.agendaData, setup.enemyStats, partySize);
     for (const eff of tick.effects) {
       // 頭目登場三段式演出(劇本 Part3 §2.4:先聽聲 → 見人 → 揭真相)
       const introLines = eff.type === 'enemy_spawned'
@@ -394,14 +422,23 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       enemyStats: setup.enemyStats,
       cardLookup: setup.cardLookup,
       stylePools: setup.stylePools,
+      chaosMarkerEffects: setup.chaosMarkerEffects,
     };
     const out = resolveIntent(intent, ctx);
     bus.publish(out.result);
     if (out.result.outcome === 'accepted') {
+      // 倒地同步(閃避失敗/藉機攻擊可能把自己打趴)
+      const sync = syncDownedState(out.newState?.investigator ?? investigator);
+      for (const eff of sync.effects) append('[結算] ' + describeEffect(eff, locMeta));
+      // 穩定救援改動到的隊友
+      const allies = out.newState?.updatedAllies ?? {};
+      if (Object.keys(allies).length > 0) {
+        setAiMembers((ms) => ms.map((ai) => allies[ai.investigatorId] ?? ai));
+      }
       // 進度檢查(幕推進/場景切換/結局)疊在引擎結算之上
       const next = applyProgress(
         out.newState?.scenario ?? scenario,
-        out.newState?.investigator ?? investigator,
+        sync.investigator,
       );
       setScenario(next.sc);
       setInvestigator(next.inv);
@@ -426,7 +463,16 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   };
 
   // 階段控制
-  const startInvestigatorPhase = () => { turnLoopRef.current?.advance(); append('[階段切換] 進入調查員階段(3 行動點)'); };
+  const startInvestigatorPhase = () => {
+    turnLoopRef.current?.advance();
+    append('[階段切換] 進入調查員階段(3 行動點)');
+    // 玩家瀕死:瀕死檢定取代正常行動(§9.3)
+    if (!setup.tutorial && isDowned(investigator)) {
+      const save = runDeathSave(investigator);
+      setInvestigator({ ...save.investigator, actionPoints: 0 });
+      for (const eff of save.effects) append('[瀕死] ' + describeEffect(eff, locMeta));
+    }
+  };
   const takeShortRest = () => {
     turnLoopRef.current?.setPhase('mythos', turnNumber);
     setInvestigator((i) => ({ ...i, actionPoints: 0 }));
@@ -444,11 +490,16 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     const updatedAIs = [...aiMembers];
     if (!setup.tutorial) {
       setup.aiMembers.forEach((m, idx) => {
-        const ai = updatedAIs[idx];
-        if (!ai) return;
-        if (ai.hp <= 0 || ai.san <= 0) {
-          append(`[${m.profile.name_zh}] 倒在原地,沒有回應。`);
-          return;
+        let ai = updatedAIs[idx];
+        if (!ai || ai.dead || ai.permanentlyDead) return;
+        // 瀕死者:瀕死檢定取代正常行動(§9.3)
+        if (isDowned(ai)) {
+          const save = runDeathSave(ai);
+          updatedAIs[idx] = save.investigator;
+          for (const eff of save.effects) {
+            append(`[${m.profile.name_zh}] ` + describeEffect(eff, locMeta).split('你').join(m.profile.name_zh));
+          }
+          return; // 站起來也要等下回合才能行動
         }
         const allies: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
         for (const [j, other] of updatedAIs.entries()) {
@@ -471,6 +522,15 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         aiStatesRef.current[idx] = r.aiState;
         sc = r.scenario;
         updatedAIs[idx] = r.investigator;
+        // 穩定救援改動到的隊友(可能是玩家或其他 AI)
+        for (const [allyId, allyState] of Object.entries(r.updatedAllies)) {
+          if (allyId === inv.investigatorId) {
+            inv = allyState;
+          } else {
+            const j = updatedAIs.findIndex((x) => x?.investigatorId === allyId);
+            if (j >= 0) updatedAIs[j] = allyState;
+          }
+        }
         for (const step of r.steps) {
           if (step.outcome === 'rejected') continue; // AI 被駁回不上戰役紀錄(內部防呆)
           append(`[${m.profile.name_zh}] ${step.intentNarrative}`);
@@ -504,15 +564,23 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     const bossCode = Object.keys(setup.bossIntro)[0];
     const situation = snapshotSituation(
       sc, inv,
-      actCondition0?.type === 'clue_threshold' ? Number(actCondition0.count ?? 0) : null,
+      actCondition0?.type === 'clue_threshold'
+        ? Number(actCondition0.count ?? 0) * (1 + setup.aiMembers.length) // 與幕門檻同步人數縮放
+        : null,
       bossCode ? Number(setup.enemyStats[bossCode]?.hp_base ?? 0) : null,
     );
     const selection = selectKeeperActivations(setup.mythosCards, situation, keeperState, setup.keeperProfile);
     setKeeperState(selection.state);
     for (const card of selection.activations) {
-      const exec = executeMythosCard(card, sc, inv, setup.enemyStats);
+      const keeperParty: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
+      for (const ai of updatedAIs) if (ai) keeperParty[ai.investigatorId] = ai;
+      const exec = executeMythosCard(card, sc, inv, setup.enemyStats, undefined, 1 + setup.aiMembers.length, keeperParty);
       sc = exec.scenario;
       inv = exec.investigator;
+      for (const [id, after] of Object.entries(exec.updatedInvestigators ?? {})) {
+        const j = updatedAIs.findIndex((x) => x?.investigatorId === id);
+        if (j >= 0) updatedAIs[j] = after;
+      }
       if (exec.attachments.length > 0) {
         // 同卡再啟用 = 刷新不疊加(自我去重,s14 修飾關鍵字精神)
         const newIds = new Set(exec.attachments.map((a) => a.cardId));
@@ -550,24 +618,35 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     updatedAIs.forEach((ai, idx) => {
       if (!ai) return;
       const after = act.investigators[ai.investigatorId];
-      if (after) {
-        updatedAIs[idx] = after;
-        if (after.hp <= 0 || after.san <= 0) {
-          append(`💀 ${setup.aiMembers[idx]?.profile.name_zh ?? 'AI'} 倒下了……`);
-        }
-      }
+      if (after) updatedAIs[idx] = after;
     });
     for (const eff of act.effects) append('[神話階段] ' + describeEffect(eff, locMeta));
+
+    // 倒地狀態同步(§9:歸零 → 瀕死,不是直接出局)
+    {
+      const syncP = syncDownedState(inv);
+      inv = syncP.investigator;
+      for (const eff of syncP.effects) append('[結算] ' + describeEffect(eff, locMeta));
+      updatedAIs.forEach((ai, idx) => {
+        if (!ai) return;
+        const s = syncDownedState(ai);
+        updatedAIs[idx] = s.investigator;
+        const name = setup.aiMembers[idx]?.profile.name_zh ?? 'AI';
+        for (const eff of s.effects) append(`[結算] ` + describeEffect(eff, locMeta).split('你').join(name));
+      });
+    }
     setAiMembers(updatedAIs);
 
-    // ④ 全滅檢查(§9 瀕死接通前簡化:玩家倒下即終局;AI 倒地停止行動)
-    if (allInvestigatorsDown({ [inv.investigatorId]: inv })) {
+    // ④ 全滅檢查(§9:全員死亡才終局;倒地者還有瀕死檢定的機會)
+    const party: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
+    for (const ai of updatedAIs) if (ai) party[ai.investigatorId] = ai;
+    if (allInvestigatorsDead(party)) {
       const finalOutcome = evaluateOutcome(setup.outcomes, flags);
       if (finalOutcome) {
         setFlags(applyOutcomeFlags(finalOutcome, flags));
         setOutcome(finalOutcome);
       }
-      append('💀 你倒在雨裡,意識沉入黑暗……');
+      append('💀 雨聲蓋過了最後的呼吸。沒有人再站起來。');
     }
     // 進度檢查(議程毀滅推進)
     const next = applyProgress(sc, inv);
@@ -577,8 +656,18 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const endTurn = () => {
     turnLoopRef.current?.advance();
     turnLoopRef.current?.advance();
-    setInvestigator((i) => ({ ...i, actionPoints: 3 }));
-    setAiMembers((ms) => ms.map((ai) => ({ ...ai, actionPoints: 3 })));
+    // 回合結束階段(ch2 §2.4):每人抽 1 卡 + 1 資源 + 手牌上限 8(教學關卡跳過)
+    if (!setup.tutorial) {
+      setInvestigator((i) => {
+        const up = runTurnEndUpkeep(i);
+        for (const eff of up.effects) append('[回合結束] ' + describeEffect(eff, locMeta));
+        return { ...up.investigator, actionPoints: 3 };
+      });
+      setAiMembers((ms) => ms.map((ai) => ({ ...runTurnEndUpkeep(ai).investigator, actionPoints: 3 })));
+    } else {
+      setInvestigator((i) => ({ ...i, actionPoints: 3 }));
+      setAiMembers((ms) => ms.map((ai) => ({ ...ai, actionPoints: 3 })));
+    }
     // 場景回合數同步(戲劇曲線/行為腳本 turn_count 觸發都依賴它)
     setScenario((s) => ({ ...s, turnNumber: s.turnNumber + 1 }));
     setKeeperEnergy((e) => Math.min(12, e + 1));
@@ -715,7 +804,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const agendaMax = Number(currentAgendaData?.front_doom_threshold ?? currentAgenda?.doomThreshold ?? 6);
   const actCondition = currentActData?.front_advance_condition as { type?: string; count?: number } | null;
   const objectiveMax = actCondition?.type === 'clue_threshold'
-    ? Number(actCondition.count ?? 12)
+    ? Number(actCondition.count ?? 12) * (1 + setup.aiMembers.length) // 人數縮放
     : (currentAct?.progressMax ?? 12);
   const agendaPct = Math.min(100, (scenario.agendaProgress / agendaMax) * 100);
   const objectivePct = Math.min(100, (scenario.objectiveProgress / objectiveMax) * 100);
@@ -777,14 +866,14 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                     >
                       {isCurr && <div className="player-token">P1</div>}
                       {aiMembers.map((ai, aiIdx) =>
-                        ai.hp > 0 && ai.san > 0 && ai.currentLocationId === loc.locationDefinitionId ? (
+                        !ai.dead && !ai.permanentlyDead && ai.currentLocationId === loc.locationDefinitionId ? (
                           <div
                             key={ai.investigatorId}
                             className="player-token ai-token"
-                            style={{ left: -12 + aiIdx * 26 }}
-                            title={setup.aiMembers[aiIdx]?.profile.name_zh}
+                            style={{ left: -12 + aiIdx * 26, opacity: isDowned(ai) ? 0.45 : 1 }}
+                            title={(setup.aiMembers[aiIdx]?.profile.name_zh ?? '') + (isDowned(ai) ? '(瀕死)' : '')}
                           >
-                            {(setup.aiMembers[aiIdx]?.profile.name_zh ?? 'A').slice(0, 1)}
+                            {isDowned(ai) ? '🩸' : (setup.aiMembers[aiIdx]?.profile.name_zh ?? 'A').slice(0, 1)}
                           </div>
                         ) : null,
                       )}
@@ -906,8 +995,25 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               <button onClick={takeShortRest}>短休息 → 跳神話</button>
             </div>
           )}
-          {phase === 'investigator' && (
+          {phase === 'investigator' && isDowned(investigator) && (
             <div className="phase-buttons">
+              <span className="commit-chip">🩸 瀕死中(穩定 {investigator.deathSaveSuccesses ?? 0}/3・惡化 {investigator.deathSaveFailures ?? 0}/3)— 等待隊友救援</span>
+              <button onClick={enterMythosPhase}>結束調查員階段 →</button>
+            </div>
+          )}
+          {phase === 'investigator' && !isDowned(investigator) && !investigator.dead && (
+            <div className="phase-buttons">
+              {aiMembers.map((ai, idx) =>
+                isDowned(ai) && ai.currentLocationId === investigator.currentLocationId ? (
+                  <button
+                    key={'stab-' + ai.investigatorId}
+                    className="attack"
+                    onClick={() => submitIntent('stabilize', { targetInvestigatorId: ai.investigatorId })}
+                  >
+                    🤲 穩定 {setup.aiMembers[idx]?.profile.name_zh ?? '隊友'}
+                  </button>
+                ) : null,
+              )}
               <button onClick={() => submitIntent('gain_resource')}>拿資源</button>
               <button onClick={() => submitIntent('draw_card')}>抽卡</button>
               <button onClick={() => submitCheckIntent('investigate')}>調查</button>
@@ -1031,9 +1137,13 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               const data = setup.cardLookup[id];
               const actions = (data?.effects ?? []).filter((f) => f.trigger_type === 'action');
               const passives = (data?.effects ?? []).filter((f) => f.trigger_type === 'passive');
+              const usesLeft = investigator.assetState?.[id]?.usesLeft;
               return (
                 <div key={id} className="asset-row">
-                  <div className="asset-name">{data?.name_zh ?? id}</div>
+                  <div className="asset-name">
+                    {data?.name_zh ?? id}
+                    {usesLeft != null && <span> ・🔻{usesLeft}</span>}
+                  </div>
                   {passives.length > 0 && (
                     <div className="asset-passive">{passives.map((f) => f.description_zh ?? '被動效果').join(' / ')}</div>
                   )}
@@ -1246,6 +1356,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                       <div className="tc-stats">
                         <span className="tc-hp">體力 {inv.hp}/{inv.hpMax}</span>
                         <span className="tc-san">理智 {inv.san}/{inv.sanMax}</span>
+                        {inv.dead || inv.permanentlyDead ? <span>💀 死亡</span> : isDowned(inv) ? <span>🩸 瀕死 {(inv.deathSaveSuccesses ?? 0)}/3</span> : null}
                       </div>
                       <div className="tc-loc">所在地點: {locName}</div>
                     </div>

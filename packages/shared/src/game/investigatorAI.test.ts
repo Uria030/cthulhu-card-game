@@ -121,6 +121,9 @@ test('名冊落地:INTJ 基底 14 + 自由 4 = 18,單項上限 5,改掛 AI 席�
     assert(Object.values(done.attributes).every((v) => v <= 5), p.name_zh + ' 創角上限 5');
     assertEq(done.ownerPlayerId, 'ai');
     assertEq(done.combatStyle, p.combatStyle);
+    // HP/SAN 公式(ch6 §3.1)按配點後屬性重算
+    assertEq(done.hpMax, done.attributes.constitution * 2 + 5, p.name_zh + ' HP 公式');
+    assertEq(done.sanMax, done.attributes.willpower * 2 + 5, p.name_zh + ' SAN 公式');
   }
 });
 
@@ -281,6 +284,27 @@ test('交戰低血時不站著存錢(Raviel BLOCK 回歸):閃避壓過存錢', (
     const pick = planNextAction({ ...c, rng: () => 0.99 }, { ...p, temperature: 0 }, initInvestigatorAIState());
     assertEq(pick?.actionType, 'evade', p.name_zh + ' 該逃命不該購物(實際:' + pick?.actionType + ')');
   }
+});
+
+test('救援優先:同地點隊友瀕死 → 全員放下手邊事先穩定', () => {
+  const downedAlly = makeAlly({ currentLocationId: 'A', hp: 0, downed: true });
+  const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 4, engagedWith: [], modifiers: [] };
+  const c = ctx({
+    scenario: makeScenario({ enemies: [enemy] }),
+    allies: { 'p1-inv': downedAlly },
+  });
+  for (const p of AI_INVESTIGATOR_ROSTER) {
+    const pick = planNextAction({ ...c, rng: () => 0.99 }, { ...p, temperature: 0 }, initInvestigatorAIState());
+    assertEq(pick?.actionType, 'stabilize', p.name_zh + ' 該先救人(實際:' + pick?.actionType + ')');
+  }
+});
+
+test('救援移動:隊友在隔壁倒地 → 趕過去', () => {
+  const downedAlly = makeAlly({ currentLocationId: 'B', hp: 0, downed: true });
+  const c = ctx({ allies: { 'p1-inv': downedAlly } });
+  const pick = planNextAction({ ...c, rng: () => 0.99 }, { ...MARCUS, temperature: 0 }, initInvestigatorAIState());
+  assertEq(pick?.actionType, 'move', '馬庫斯該衝過去(實際:' + pick?.actionType + ')');
+  assertEq(pick?.payload.targetLocationId, 'B');
 });
 
 test('防踱步:剛離開的地點吃回頭罰', () => {

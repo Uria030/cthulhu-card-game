@@ -22,6 +22,7 @@ export type ActionType =
   | 'draw_card'
   | 'commit_attribute_icon'
   | 'short_rest'
+  | 'stabilize'
   | 'declare_intent';
 
 // ─── 訊息基本欄位(共用) ──────────────────────────

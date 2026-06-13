@@ -67,14 +67,30 @@ export function addDoom(scenario: ScenarioState, amount: number): { scenario: Sc
 }
 
 // ─── 幕推進條件求值 ───────────────────────────
+/**
+ * 幕線索門檻(原文「花費 N 線索」):需求隨人數縮放(ch1 技術原則 4「人數縮放內建」)。
+ * 回傳 null = 此條件不是線索門檻型。
+ */
+export function clueRequirementFor(
+  condition: Record<string, unknown> | null | undefined,
+  playerCount: number,
+): number | null {
+  if (!condition || typeof condition !== 'object') return null;
+  if (String(condition.type ?? '') !== 'clue_threshold') return null;
+  return Number(condition.count ?? Infinity) * Math.max(1, playerCount);
+}
+
 function actConditionMet(
   condition: Record<string, unknown> | null | undefined,
   scenario: ScenarioState,
+  playerCount: number,
 ): boolean {
   if (!condition || typeof condition !== 'object') return false;
   switch (String(condition.type ?? '')) {
-    case 'clue_threshold':
-      return scenario.objectiveProgress >= Number(condition.count ?? Infinity);
+    case 'clue_threshold': {
+      const required = clueRequirementFor(condition, playerCount) ?? Infinity;
+      return scenario.objectiveProgress >= required;
+    }
     case 'enemy_defeated': {
       const code = String(condition.variant_code ?? '');
       return scenario.enemies.some((e) => e.enemyDefinitionId === code && e.hp <= 0);
@@ -103,8 +119,14 @@ export function progressTick(
   // ── 幕推進(可連鎖,但常態一次一張)──
   const acts = [...actCards].sort((a, b) => a.card_order - b.card_order);
   let actIdx = sc.actIndex ?? 0;
-  while (actIdx < acts.length && actConditionMet(acts[actIdx].front_advance_condition, sc)) {
+  while (actIdx < acts.length && actConditionMet(acts[actIdx].front_advance_condition, sc, playerCount)) {
     const act = acts[actIdx];
+    // 線索消費(ch5 §2.3 推進條件「花費線索」):達標翻面時扣除需求量,線索是花掉不是累積
+    const spent = clueRequirementFor(act.front_advance_condition, playerCount);
+    if (spent != null && spent > 0) {
+      sc = { ...sc, objectiveProgress: Math.max(0, sc.objectiveProgress - spent) };
+      effects.push({ type: 'clues_spent', params: { amount: spent } });
+    }
     effects.push({
       type: 'act_advanced',
       params: { name: act.name_zh, narrative: act.back_narrative ?? '' },

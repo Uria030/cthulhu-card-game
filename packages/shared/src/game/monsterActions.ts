@@ -431,49 +431,55 @@ export function activateMonsters(
 
     if (engagedTarget) {
       // §10.3 已交戰 → 攻擊(§10.4 attacks_per_round);選招走行為腳本層
+      // §11.2 巨大 massive:與全地點交戰 → 對每位交戰調查員各攻擊一輪(非 massive 仍只打主目標)
+      const attackTargets = kw.includes('massive')
+        ? liveEnemy.engagedWith.map((id) => invs[id]).filter((i) => i && i.hp > 0 && i.currentLocationId === liveEnemy.locationId)
+        : [engagedTarget];
       const times = Math.max(1, Number(data.attacks_per_round ?? 1));
-      let inv = engagedTarget;
-      for (let i = 0; i < times; i += 1) {
-        if (inv.hp <= 0) break;
-        const current = sc.enemies.find((e) => e.instanceId === enemy.instanceId) ?? liveEnemy;
-        const pick = pickMoveByBehavior(
-          current,
-          String(data.move_pattern ?? 'weighted'),
-          data.behavior_script ?? null,
-          data.move_pool ?? [],
-          attackCards,
-          {
-            turnNumber: sc.turnNumber,
-            selfHp: current.hp,
-            selfMaxHp: Number(data.hp_base ?? current.hp),
-            target: inv,
-            rng,
-          },
-          i === 0, // 冷卻一回合 tick 一次,多段攻擊後續擊不重複遞減
-        );
-        // 寫回運行時標記(上一招/冷卻/階段)
-        sc = {
-          ...sc,
-          enemies: sc.enemies.map((e) =>
-            e.instanceId === enemy.instanceId ? { ...e, modifiers: pick.modifiers } : e,
-          ),
-        };
-        if (pick.phaseChanged) {
-          effects.push({
-            type: 'monster_phase_change',
-            params: {
-              enemy: data.name_zh ?? enemy.enemyDefinitionId,
-              phase: pick.phaseChanged,
-              narrative: '牠的氣息變了——某種更深的東西浮上表面。',
+      for (const t0 of attackTargets) {
+        let inv = invs[t0.investigatorId] ?? t0;
+        for (let i = 0; i < times; i += 1) {
+          if (inv.hp <= 0) break;
+          const current = sc.enemies.find((e) => e.instanceId === enemy.instanceId) ?? liveEnemy;
+          const pick = pickMoveByBehavior(
+            current,
+            String(data.move_pattern ?? 'weighted'),
+            data.behavior_script ?? null,
+            data.move_pool ?? [],
+            attackCards,
+            {
+              turnNumber: sc.turnNumber,
+              selfHp: current.hp,
+              selfMaxHp: Number(data.hp_base ?? current.hp),
+              target: inv,
+              rng,
             },
-            targetId: enemy.instanceId,
-          });
+            i === 0, // 冷卻一回合 tick 一次,多段攻擊後續擊不重複遞減
+          );
+          // 寫回運行時標記(上一招/冷卻/階段)
+          sc = {
+            ...sc,
+            enemies: sc.enemies.map((e) =>
+              e.instanceId === enemy.instanceId ? { ...e, modifiers: pick.modifiers } : e,
+            ),
+          };
+          if (pick.phaseChanged) {
+            effects.push({
+              type: 'monster_phase_change',
+              params: {
+                enemy: data.name_zh ?? enemy.enemyDefinitionId,
+                phase: pick.phaseChanged,
+                narrative: '牠的氣息變了——某種更深的東西浮上表面。',
+              },
+              targetId: enemy.instanceId,
+            });
+          }
+          const r = monsterAttackOnce(enemy, data, pick.card, inv, rng);
+          inv = r.investigator;
+          effects.push(...r.effects);
         }
-        const r = monsterAttackOnce(enemy, data, pick.card, inv, rng);
-        inv = r.investigator;
-        effects.push(...r.effects);
+        invs[inv.investigatorId] = inv;
       }
-      invs[inv.investigatorId] = inv;
       continue;
     }
 

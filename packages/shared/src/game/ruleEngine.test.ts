@@ -683,6 +683,19 @@ test('taunt:單一持有者 — 從前持有者手上轉走(Uria 拍板)', () =>
   assertEq(r.newState?.updatedAllies?.['inv-2']?.engagedWith.includes('e1'), false);
 });
 
+test('§11.2 massive:taunt 不覆寫單一持有者,保留其他交戰者(Uria 例外)', () => {
+  const ctx = makeCombatCtx({ roll: 10, engaged: false, visibility: 'day' });
+  ctx.enemyStats!['def-e1'] = { ...ctx.enemyStats!['def-e1'], keywords: ['massive'] };
+  ctx.scenario.enemies[0].engagedWith = ['inv-2'];
+  ctx.investigators['inv-2'] = makeInv({ investigatorId: 'inv-2', engagedWith: ['e1'], currentLocationId: 'loc-a' });
+  const r = resolveIntent(makeIntent('taunt', { enemyInstanceId: 'e1' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  const eng = r.newState?.scenario?.enemies[0].engagedWith ?? [];
+  assertEq(eng.includes('inv-2'), true, 'massive 保留原交戰者');
+  assertEq(eng.includes('inv-1'), true, 'taunter 加入交戰');
+  assertEq(r.newState?.updatedAllies?.['inv-2'], undefined, '不從 inv-2 手上轉走');
+});
+
 // ─── 隱藏調查點接線(§13 wiring)──────────
 function mkHP(over: Partial<HiddenPoint> = {}): HiddenPoint {
   return {

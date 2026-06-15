@@ -6,7 +6,7 @@ import {
   turnStartTick, turnEndTick, elementalDamageBonus,
   incomingPhysicalBonus, incomingHorrorBonus, physicalReduction, horrorReduction,
   outgoingMeleeReduction, attackHitModifier, moveCostBonus, stealthDamageBonus,
-  bonusActionPoints, canUseAssetAttack, canCastSpell, checkRollMode,
+  bonusActionPoints, canUseAssetAttack, canCastSpell, checkRollMode, normalizeStatusCode,
 } from './statusEffects';
 import type { InvestigatorState } from './state';
 
@@ -35,6 +35,23 @@ test('addStatus 堆疊累加', () => {
   let m = addStatus({}, 'poison', 2);
   m = addStatus(m, 'poison', 1);
   assertEq(getLayers(m, 'poison'), 3);
+});
+
+test('代碼別名正規化:burn/freeze/weaken/fragile → 規則書代碼', () => {
+  assertEq(normalizeStatusCode('burn'), 'burning');
+  assertEq(normalizeStatusCode('freeze'), 'frozen');
+  assertEq(normalizeStatusCode('weaken'), 'weakened');
+  assertEq(normalizeStatusCode('fragile'), 'vulnerable');
+  assertEq(normalizeStatusCode('poison'), 'poison', '無別名者原樣');
+});
+
+test('addStatus 收斂別名:burn 寫進 burning(否則 tick 對不上)', () => {
+  const m = addStatus({}, 'burn', 2);
+  assertEq(getLayers(m, 'burning'), 2);
+  assertEq(getLayers(m, 'burn'), 0, '不留變體鍵');
+  // turnStartTick 用 burning 結算 → 真的扣血
+  const r = turnStartTick(makeInv({ hp: 10, statusEffects: m }));
+  assertEq(r.investigator.hp, 8);
 });
 
 test('§6.5 施加燃燒移除潮濕', () => {

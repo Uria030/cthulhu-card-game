@@ -113,7 +113,8 @@ export function executeCardEffects(
       }
       case 'add_status': {
         const status = String(p.status ?? '');
-        const layers = Math.max(1, Number(p.layers ?? p.amount ?? 1));
+        // 真實卡面/鍛造詞綴用 stacks 指定層數(優先);layers/amount 為防禦性備援
+        const layers = Math.max(1, Number(p.stacks ?? p.layers ?? p.amount ?? 1));
         const toSelf = p.target === 'self';
         if (!status) { unsupported.push('add_status()'); break; }
         // 狀態效果系統(ch3 §6):寫入 statusEffects 層數(由 statusEffects.ts 結算)

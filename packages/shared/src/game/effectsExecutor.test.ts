@@ -47,6 +47,11 @@ test('add_status(預設對敵) → 寫入同地點敵人 statusEffects', () => {
   assertEq(r.scenario.enemies[0].statusEffects?.marked, 1);
 });
 
+test('add_status 讀 stacks 多層 + 別名收斂(真實卡面 {status:burn,stacks:3})', () => {
+  const r = executeCardEffects([fx('add_status', { status: 'burn', stacks: 3 })], makeInv(), makeScenario([makeEnemy()]), {});
+  assertEq(r.scenario.enemies[0].statusEffects?.burning, 3, 'stacks=3 + burn→burning');
+});
+
 test('add_status:無同地點敵人 → unsupported(不結算)', () => {
   const r = executeCardEffects([fx('add_status', { status: 'marked' })], makeInv(), makeScenario([]), {});
   assertEq(r.unsupported.some((u) => u.includes('add_status')), true);

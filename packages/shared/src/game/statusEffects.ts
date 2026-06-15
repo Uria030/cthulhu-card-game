@@ -23,6 +23,24 @@ const SPECIAL_DECREMENT = new Set(['empowered', 'weakened', 'stealth']);
 /** §6.2/§6.3 互抵對:標記 ↔ 隱蔽(施加一方時與另一方層數相抵) */
 const MUTUAL_OFFSET: Record<string, string> = { marked: 'stealth', stealth: 'marked' };
 
+/**
+ * 狀態代碼別名 → 規則書 canonical(§6)。
+ * 資料/卡面/鍛造詞綴用簡寫(burn/freeze/weaken/fragile),引擎統一收斂到規則書代碼,
+ * 否則 tick/query 對不上(真實多層卡面 burn 永遠不會結算 — Raviel BLOCK)。
+ */
+const STATUS_ALIASES: Record<string, string> = {
+  burn: 'burning',
+  freeze: 'frozen',
+  weaken: 'weakened',
+  fragile: 'vulnerable',
+  mark: 'marked',
+  doom: 'doom_status',
+};
+/** 把任意輸入代碼收斂到規則書 canonical 代碼 */
+export function normalizeStatusCode(code: string): string {
+  return STATUS_ALIASES[code] ?? code;
+}
+
 /** 15 個負面狀態代碼(remove_status 淨化所有負面用) */
 export const NEGATIVE_STATUSES = [
   'poison', 'bleed', 'burning', 'frozen', 'wet', 'madness', 'marked',
@@ -38,7 +56,8 @@ export function getLayers(map: StatusMap | undefined, code: string): number {
 /**
  * 施加狀態(可堆疊累加)。§6.5:施加燃燒會移除潮濕(燃燒 + 潮濕 → 燃燒移除潮濕)。
  */
-export function addStatus(map: StatusMap | undefined, code: string, layers = 1): StatusMap {
+export function addStatus(map: StatusMap | undefined, rawCode: string, layers = 1): StatusMap {
+  const code = normalizeStatusCode(rawCode);
   const next: StatusMap = { ...(map ?? {}) };
   const add = Math.max(1, layers);
   // §6.5 施加燃燒移除潮濕(單向)
@@ -64,7 +83,8 @@ export function addStatus(map: StatusMap | undefined, code: string, layers = 1):
 }
 
 /** 移除狀態(預設全移除;給 layers 則減指定層,歸零即刪) */
-export function removeStatus(map: StatusMap | undefined, code: string, layers?: number): StatusMap {
+export function removeStatus(map: StatusMap | undefined, rawCode: string, layers?: number): StatusMap {
+  const code = normalizeStatusCode(rawCode);
   const next: StatusMap = { ...(map ?? {}) };
   if (layers === undefined) {
     delete next[code];

@@ -39,6 +39,7 @@ import { runFearChecks, applyAttackOfOpportunity, spawnEnemy } from './monsterAc
 import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import { attachmentTestModifier } from './keeperAI';
 import { isDowned, applyStabilize } from './dying';
+import { revealOnEnter, revealOnGeneralSuccess, claimHiddenReward } from './hiddenInvestigation';
 
 // ─── 卡片實例資料(容器由 bootstrap cardIndex 餵入)──
 export interface CardData {
@@ -229,6 +230,8 @@ export function resolveIntent(intent: IntentMessage, ctx: RuleContext): RuleReso
       out = resolveMove(intent, ctx); break;
     case 'investigate':
       out = resolveInvestigate(intent, ctx); break;
+    case 'investigate_hidden':
+      out = resolveInvestigateHidden(intent, ctx); break;
     case 'attack':
       out = resolveAttack(intent, ctx); break;
     case 'evade':
@@ -393,7 +396,20 @@ function resolveMove(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput
   const fear = runFearChecks(newInv, ctx.scenario, ctx.enemyStats ?? {}, ctx.rng);
   newInv = fear.investigator;
   effects.push(...fear.effects);
-  return accept(intent, effects, { investigator: newInv });
+  // §13.2 進新地點:感知 ≥ 門檻的隱藏調查點自動揭露給該調查員
+  const reveal = revealOnEnter(ctx.scenario.hiddenPoints ?? [], newInv.investigatorId, targetId, newInv.attributes.perception);
+  let movedScenario: ScenarioState | undefined;
+  if (reveal.newlyRevealed.length > 0) {
+    movedScenario = { ...ctx.scenario, hiddenPoints: reveal.points };
+    for (const hp of reveal.newlyRevealed) {
+      effects.push({ type: 'hidden_point_revealed', params: { pointId: hp.id, title: hp.title, narrative: '你注意到不對勁——' + hp.title }, targetId });
+    }
+  }
+  return accept(
+    intent,
+    effects,
+    movedScenario ? { investigator: newInv, scenario: movedScenario } : { investigator: newInv },
+  );
 }
 
 /**
@@ -570,6 +586,14 @@ function resolveInvestigate(intent: IntentMessage, ctx: RuleContext): RuleResolv
     ],
   };
   const after = applyOnSuccessCommit(true, commit.committedIds, newInv, newScenario, ctx.cardLookup ?? {});
+  // §13.4 低感知碰運氣:一般調查成功時,觸發發現該地點一個尚未揭露的隱藏調查點
+  let invScenario = after.scenario;
+  const discoverEffects: ResultEffect[] = [];
+  const gen = revealOnGeneralSuccess(invScenario.hiddenPoints ?? [], newInv.investigatorId, locId);
+  if (gen.discovered) {
+    invScenario = { ...invScenario, hiddenPoints: gen.points };
+    discoverEffects.push({ type: 'hidden_point_revealed', params: { pointId: gen.discovered.id, title: gen.discovered.title, narrative: '搜查時,你瞥見了被刻意藏起的東西——' + gen.discovered.title }, targetId: locId });
+  }
   return accept(
     intent,
     [
@@ -577,8 +601,96 @@ function resolveInvestigate(intent: IntentMessage, ctx: RuleContext): RuleResolv
       { type: 'investigate_success', params: { narrative: '你在塵埃裡發現了一張被遺忘的紙條。', clueAmount: 1 }, targetId: ctx.investigator.currentLocationId || undefined },
       { type: 'gain_clue', params: { amount: 1 } },
       ...after.effects,
+      ...discoverEffects,
     ],
-    { investigator: after.investigator, scenario: after.scenario }
+    { investigator: after.investigator, scenario: invScenario }
+  );
+}
+
+/**
+ * §13.3 第三層:直接調查「已揭露」的隱藏調查點 → 成功領取豐厚獎勵。
+ * 分配規則(Uria 2026-06-13):每位調查員各領一次;限定品歸首位領取者(派旗標)。
+ * 獎勵實體由容器依 hidden_reward 效果結算(發卡/設旗標等),引擎只更新 claimedBy。
+ * 合法性檢查(不耗費用)先行,確認後才擲骰(§4.2 費用支付在合法性之後)。
+ * payload: { pointId, commitInstanceIds? }
+ */
+function resolveInvestigateHidden(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
+  const pointId = (intent.payload as { pointId?: string }).pointId;
+  if (typeof pointId !== 'string') {
+    return reject(intent, '缺少要調查的隱藏調查點');
+  }
+  const locId = ctx.investigator.currentLocationId || '';
+  const point = (ctx.scenario.hiddenPoints ?? []).find((p) => p.id === pointId);
+  if (!point) {
+    return reject(intent, '這裡沒有這個隱藏調查點');
+  }
+  if (point.locationId !== locId) {
+    return reject(intent, '你不在這個隱藏調查點所在的地點', '先移動到「' + point.locationId + '」');
+  }
+  if (!point.revealedTo.includes(ctx.investigator.investigatorId)) {
+    return reject(intent, '這裡還藏著什麼,但你還沒發現它', '先在這裡進行一般調查碰運氣,或讓高感知的隊友進場');
+  }
+  if (point.claimedBy.includes(ctx.investigator.investigatorId)) {
+    return reject(intent, '你已經徹底搜查過這個地方了');
+  }
+  if (ctx.investigator.actionPoints < 1) {
+    return reject(intent, '行動點不足:調查隱藏內容需 1,剩 ' + ctx.investigator.actionPoints);
+  }
+  const commit = takeCommit(intent, ctx, 'perception');
+  if (commit.error) return reject(intent, commit.error);
+
+  const dc = ctx.locationStats?.[locId]?.shroud ?? 10;
+  const check = resolveCheck(
+    dc,
+    {
+      attribute: ctx.investigator.attributes.perception,
+      commit: commit.value,
+      situational: attachmentTestModifier(ctx.scenario.keeperAttachments, 'perception'),
+    },
+    ctx.rng,
+  );
+  const success = check.outcome === 'success';
+  const newInv: InvestigatorState = {
+    ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
+    actionPoints: ctx.investigator.actionPoints - 1,
+  };
+  const baseEffects: ResultEffect[] = [
+    { type: 'spend_action_point', params: { amount: 1 } },
+    ...commitEffects(commit),
+    { type: 'roll_d20', params: { roll: check.roll, attribute: 'perception', modifier: check.total - check.roll, total: check.total, dc, outcome: success ? 'success' : 'fail' } },
+  ];
+  if (!success) {
+    return accept(
+      intent,
+      [...baseEffects, { type: 'hidden_investigate_fail', params: { narrative: '你翻遍了角落,卻一無所獲——它還在那裡,等著。', pointId } }],
+      { investigator: newInv },
+    );
+  }
+  const claim = claimHiddenReward(ctx.scenario.hiddenPoints ?? [], pointId, ctx.investigator.investigatorId);
+  // 前置合法性已過,正常情形 claim 必 ok;保險:claim 失敗時仍記費用,不發獎勵
+  if (!claim.ok) {
+    return accept(intent, baseEffects, { investigator: newInv });
+  }
+  const newScenario: ScenarioState = { ...ctx.scenario, hiddenPoints: claim.points };
+  return accept(
+    intent,
+    [
+      ...baseEffects,
+      {
+        type: 'hidden_reward',
+        params: {
+          pointId,
+          title: point.title,
+          narrative: point.description || '你的指尖觸到了某個不該存在的東西。',
+          rewardType: claim.rewardType ?? 'effect',
+          rewardParams: claim.rewardParams ?? {},
+          gotLimited: claim.gotLimited,
+          limitedFlag: claim.limitedFlag,
+        },
+        targetId: locId,
+      },
+    ],
+    { investigator: newInv, scenario: newScenario },
   );
 }
 

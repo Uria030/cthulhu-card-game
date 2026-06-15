@@ -14,6 +14,7 @@ export type ActionType =
   | 'attack'
   | 'move'
   | 'investigate'
+  | 'investigate_hidden'
   | 'taunt'
   | 'evade'
   | 'execute_card_action'

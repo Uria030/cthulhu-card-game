@@ -11,6 +11,7 @@
  *
  * 本檔只定義 type 骨架,不含業務邏輯。
  */
+import type { HiddenPoint } from './hiddenInvestigation';
 
 // ─── 戰役層 ──────────────────────────────────
 export interface CampaignState {
@@ -53,6 +54,8 @@ export interface ScenarioState {
   enemies: EnemyInstance[];
   /** 場上標記(線索、毀滅、隱藏調查點等,規則書 §13) */
   tokens: TokenInstance[];
+  /** 隱藏調查點(規則書 §13;bootstrap 從地點 hidden_info 載入,純資料層,動態揭露/領取) */
+  hiddenPoints?: HiddenPoint[];
   /** 議程進度(當前議程卡上的毀滅標記數,規則書 §1.5) */
   agendaProgress: number;
   /** 目標進度(累計線索,幕推進依據) */

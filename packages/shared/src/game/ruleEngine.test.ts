@@ -6,6 +6,7 @@ import type { RuleContext } from './ruleEngine';
 import { syncDownedState } from './dying';
 import type { IntentMessage } from './messages';
 import type { InvestigatorState, ScenarioState, TurnState } from './state';
+import type { HiddenPoint } from './hiddenInvestigation';
 import { CURRENT_MESSAGE_SCHEMA_VERSION } from './messages';
 
 type TestFn = () => void;
@@ -673,6 +674,76 @@ test('taunt:單一持有者 — 從前持有者手上轉走(Uria 拍板)', () =>
   assertEq(r.newState?.scenario?.enemies[0].engagedWith[0], 'inv-1');
   // 前持有者 inv-2 解除與這隻怪的交戰
   assertEq(r.newState?.updatedAllies?.['inv-2']?.engagedWith.includes('e1'), false);
+});
+
+// ─── 隱藏調查點接線(§13 wiring)──────────
+function mkHP(over: Partial<HiddenPoint> = {}): HiddenPoint {
+  return {
+    id: 'hp1', locationId: 'loc-a', title: '牆後的暗格', description: '一道幾乎看不見的縫隙。',
+    threshold: 2, revealedTo: [], claimedBy: [], limitedClaimedBy: null,
+    hasLimited: false, rewardType: 'effect', rewardParams: {},
+    ...over,
+  };
+}
+function ctxWithHidden(points: HiddenPoint[], invOverrides: Partial<InvestigatorState> = {}, rng?: () => number): RuleContext {
+  const base = makeCtx(invOverrides);
+  return { ...base, scenario: { ...base.scenario, hiddenPoints: points }, rng };
+}
+
+test('§13.2 移動進地點:感知 ≥ 門檻 → 自動揭露 + hidden_point_revealed', () => {
+  const ctx = ctxWithHidden([mkHP({ locationId: 'loc-b', threshold: 3 })], { currentLocationId: 'loc-a', actionPoints: 3 });
+  const r = resolveIntent(makeIntent('move', { targetLocationId: 'loc-b' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq((r.result.effects ?? []).some((e) => e.type === 'hidden_point_revealed'), true, '應揭露');
+  assertEq(r.newState?.scenario?.hiddenPoints?.[0].revealedTo.includes('inv-1'), true);
+});
+
+test('§13.2 移動進地點:感知不足 → 看不見,不更新 scenario', () => {
+  const ctx = ctxWithHidden([mkHP({ locationId: 'loc-b', threshold: 9 })], { currentLocationId: 'loc-a', actionPoints: 3 });
+  const r = resolveIntent(makeIntent('move', { targetLocationId: 'loc-b' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq((r.result.effects ?? []).some((e) => e.type === 'hidden_point_revealed'), false, '感知不足不揭露');
+});
+
+test('§13.4 一般調查成功 → 觸發發現未揭露隱藏點', () => {
+  const ctx = ctxWithHidden([mkHP({ locationId: 'loc-a', threshold: 9 })], { currentLocationId: 'loc-a', actionPoints: 3 }, () => 0.95);
+  const r = resolveIntent(makeIntent('investigate'), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq((r.result.effects ?? []).some((e) => e.type === 'hidden_point_revealed'), true, '一般調查成功應觸發發現');
+  assertEq(r.newState?.scenario?.hiddenPoints?.[0].revealedTo.includes('inv-1'), true);
+});
+
+test('§13.3 investigate_hidden:未揭露 → 駁回,不耗行動點', () => {
+  const ctx = ctxWithHidden([mkHP({ locationId: 'loc-a', revealedTo: [] })], { currentLocationId: 'loc-a', actionPoints: 3 });
+  const r = resolveIntent(makeIntent('investigate_hidden', { pointId: 'hp1' }), ctx);
+  assertEq(r.result.outcome, 'rejected');
+  assertEq(r.newState, undefined, '駁回不產生新狀態(未扣行動點)');
+});
+
+test('§13.3 investigate_hidden:已揭露 + 檢定成功 → hidden_reward + claimedBy 更新', () => {
+  const ctx = ctxWithHidden([mkHP({ locationId: 'loc-a', revealedTo: ['inv-1'] })], { currentLocationId: 'loc-a', actionPoints: 3 }, () => 0.95);
+  const r = resolveIntent(makeIntent('investigate_hidden', { pointId: 'hp1' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.actionPoints, 2);
+  assertEq((r.result.effects ?? []).some((e) => e.type === 'hidden_reward'), true);
+  assertEq(r.newState?.scenario?.hiddenPoints?.[0].claimedBy.includes('inv-1'), true);
+});
+
+test('§13.3 investigate_hidden:限定品首位拿旗標', () => {
+  const ctx = ctxWithHidden(
+    [mkHP({ locationId: 'loc-a', revealedTo: ['inv-1'], hasLimited: true, rewardParams: { limited_flag: 'story.diary' } })],
+    { currentLocationId: 'loc-a', actionPoints: 3 }, () => 0.95,
+  );
+  const r = resolveIntent(makeIntent('investigate_hidden', { pointId: 'hp1' }), ctx);
+  const reward = (r.result.effects ?? []).find((e) => e.type === 'hidden_reward');
+  assertEq(reward?.params.gotLimited, true);
+  assertEq(reward?.params.limitedFlag, 'story.diary');
+});
+
+test('§13.3 investigate_hidden:同一人重領 → 駁回', () => {
+  const ctx = ctxWithHidden([mkHP({ locationId: 'loc-a', revealedTo: ['inv-1'], claimedBy: ['inv-1'] })], { currentLocationId: 'loc-a', actionPoints: 3 }, () => 0.95);
+  const r = resolveIntent(makeIntent('investigate_hidden', { pointId: 'hp1' }), ctx);
+  assertEq(r.result.outcome, 'rejected');
 });
 
 // ─── runner ─────────────────────────

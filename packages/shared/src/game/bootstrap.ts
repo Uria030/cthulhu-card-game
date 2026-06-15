@@ -23,6 +23,8 @@ import type {
   ChaosToken,
 } from './state';
 import { hpMaxFor, sanMaxFor, STARTING_RESOURCES, STARTING_HAND_SIZE } from './upkeep';
+import { hiddenPointFromRow } from './hiddenInvestigation';
+import type { HiddenPoint } from './hiddenInvestigation';
 
 // ─── 開局包型別(對齊 /api/play bootstrap 回傳,DB row 原樣 snake_case)──
 export interface BootstrapScenarioRow {
@@ -293,6 +295,15 @@ export function buildGameFromBootstrap(
     }
   }
 
+  // ── 隱藏調查點:從地點 hidden_info 建 HiddenPoint[](規則書 §13)──
+  const hiddenPoints: HiddenPoint[] = [];
+  for (const code of scenarioRow.initial_location_codes) {
+    const loc = locByCode.get(code);
+    for (const row of (loc?.hidden_info ?? []) as Array<Record<string, unknown>>) {
+      hiddenPoints.push(hiddenPointFromRow(row as Record<string, any>, code));
+    }
+  }
+
   const scenario: ScenarioState = {
     scenarioId: scenarioRow.id,
     scenarioDefinitionId: scenarioRow.id,
@@ -302,6 +313,7 @@ export function buildGameFromBootstrap(
     unlockedLocations: scenarioRow.initial_location_codes,
     enemies,
     tokens,
+    hiddenPoints,
     agendaProgress: 0,
     objectiveProgress: 0,
     chaosBag: buildChaosBag(bootstrap.stage.chaos_bag),

@@ -94,13 +94,17 @@ export function resolveDeathKeywords(
     if (check.outcome === 'fail') {
       if (hasCrush) {
         const dmg = modifyIncomingDamage(next.statusEffects, Number(enemyData?.damage_physical ?? 1), 0).physical;
-        next = { ...next, hp: Math.max(0, next.hp - dmg) };
+        const ad = applyDamageWithAllies(next, dmg, 0); // §11 盟友先吸
+        next = ad.investigator;
         effects.push({ type: 'crush_damage', params: { amount: dmg, narrative: name + '崩塌的軀體壓了下來。' }, targetId: id });
+        effects.push(...ad.effects);
       }
       if (hasCurse) {
         const dmg = modifyIncomingDamage(next.statusEffects, 0, Number(enemyData?.damage_horror ?? 1)).horror;
-        next = { ...next, san: Math.max(0, next.san - dmg) };
+        const ad = applyDamageWithAllies(next, 0, dmg); // §11 盟友先吸
+        next = ad.investigator;
         effects.push({ type: 'curse_damage', params: { amount: dmg, narrative: name + '的死亡詛咒鑽進你的腦海。' }, targetId: id });
+        effects.push(...ad.effects);
       }
     } else {
       effects.push({ type: 'death_keyword_evaded', params: { narrative: '你及時退開了。' }, targetId: id });

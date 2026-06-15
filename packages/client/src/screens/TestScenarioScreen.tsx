@@ -313,7 +313,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     if (setup.tutorial || setup.actData.length === 0) return { sc, inv };
     // 人數縮放(ch1 技術原則 4):幕線索門檻 × 隊伍人數(玩家 + AI 隊友)
     const partySize = 1 + setup.aiMembers.length;
-    const tick = progressTick(sc, flags, setup.actData, setup.agendaData, setup.enemyStats, partySize);
+    // §14 escape 等任務需全員位置 → 組隊伍 map(玩家 + 現役 AI 隊友)
+    const party: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
+    for (const ai of aiMembers) if (ai) party[ai.investigatorId] = ai;
+    const tick = progressTick(sc, flags, setup.actData, setup.agendaData, setup.enemyStats, partySize, party);
     for (const eff of tick.effects) {
       // 頭目登場三段式演出(劇本 Part3 §2.4:先聽聲 → 見人 → 揭真相)
       const introLines = eff.type === 'enemy_spawned'

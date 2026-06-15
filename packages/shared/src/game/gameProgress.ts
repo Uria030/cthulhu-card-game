@@ -76,25 +76,58 @@ export function clueRequirementFor(
   playerCount: number,
 ): number | null {
   if (!condition || typeof condition !== 'object') return null;
-  if (String(condition.type ?? '') !== 'clue_threshold') return null;
+  const t = String(condition.type ?? '');
+  // 花費線索型:clue_threshold + §14 封印次元門(都「花掉」線索)
+  if (t !== 'clue_threshold' && t !== 'seal_gate') return null;
   return Number(condition.count ?? Infinity) * Math.max(1, playerCount);
 }
 
+/**
+ * §14.1 五大任務類型(+ 既有 clue_threshold/enemy_defeated)的幕推進/過關條件求值。
+ * escape 需要 investigators(全員到位);endurance 看回合數;defeat_titan 看巨頭擊殺。
+ */
 function actConditionMet(
   condition: Record<string, unknown> | null | undefined,
   scenario: ScenarioState,
   playerCount: number,
+  flags: CampaignFlags,
+  enemyData: EnemyDataLookup,
+  investigators?: Record<string, InvestigatorState>,
 ): boolean {
   if (!condition || typeof condition !== 'object') return false;
+  const scaled = (n: unknown) => Number(n ?? Infinity) * Math.max(1, playerCount);
   switch (String(condition.type ?? '')) {
-    case 'clue_threshold': {
-      const required = clueRequirementFor(condition, playerCount) ?? Infinity;
-      return scenario.objectiveProgress >= required;
-    }
+    case 'clue_threshold':
+      return scenario.objectiveProgress >= (clueRequirementFor(condition, playerCount) ?? Infinity);
     case 'enemy_defeated': {
       const code = String(condition.variant_code ?? '');
       return scenario.enemies.some((e) => e.enemyDefinitionId === code && e.hp <= 0);
     }
+    // ── §14.1 五大任務類型 ──
+    case 'seal_gate': {
+      // 封印次元門:花費線索(人數縮放)+ 通過檢定(以旗標表示,選填)
+      const sealed = !condition.required_flag || flags[String(condition.required_flag)] === true;
+      return sealed && scenario.objectiveProgress >= scaled(condition.count);
+    }
+    case 'defeat_titan': {
+      // 擊敗巨頭:指定 variant_code,或任一巨頭(tier ≥ 5)HP 歸 0
+      const code = condition.variant_code ? String(condition.variant_code) : null;
+      return scenario.enemies.some((e) => e.hp <= 0 && (code ? e.enemyDefinitionId === code : Number(enemyData[e.enemyDefinitionId]?.tier ?? 0) >= 5));
+    }
+    case 'uncover_truth': {
+      // 發覺真相:找到隱藏線索(旗標)或累積指定線索
+      const flagFound = condition.truth_flag ? flags[String(condition.truth_flag)] === true : false;
+      return flagFound || scenario.objectiveProgress >= scaled(condition.count);
+    }
+    case 'escape': {
+      // 逃脫:所有存活調查員到達指定地點
+      const loc = String(condition.location_code ?? '');
+      const alive = Object.values(investigators ?? {}).filter((i) => !i.permanentlyDead && !i.dead);
+      return alive.length > 0 && alive.every((i) => i.currentLocationId === loc);
+    }
+    case 'endurance':
+      // 撐到時間到:存活指定回合
+      return scenario.turnNumber >= Number(condition.turns ?? condition.count ?? Infinity);
     default:
       return false; // 未知條件型別:不自動推進(保守)
   }
@@ -108,6 +141,7 @@ export function progressTick(
   agendaCards: AgendaCardData[],
   enemyData: EnemyDataLookup,
   playerCount = 1,
+  investigators?: Record<string, InvestigatorState>,
 ): ProgressResult {
   let sc = scenario;
   let fl = { ...flags };
@@ -119,7 +153,7 @@ export function progressTick(
   // ── 幕推進(可連鎖,但常態一次一張)──
   const acts = [...actCards].sort((a, b) => a.card_order - b.card_order);
   let actIdx = sc.actIndex ?? 0;
-  while (actIdx < acts.length && actConditionMet(acts[actIdx].front_advance_condition, sc, playerCount)) {
+  while (actIdx < acts.length && actConditionMet(acts[actIdx].front_advance_condition, sc, playerCount, fl, enemyData, investigators)) {
     const act = acts[actIdx];
     // 線索消費(ch5 §2.3 推進條件「花費線索」):達標翻面時扣除需求量,線索是花掉不是累積
     const spent = clueRequirementFor(act.front_advance_condition, playerCount);

@@ -184,6 +184,100 @@ test('allInvestigatorsDown:HP 或 SAN 歸零視為倒下', () => {
   assertEq(allInvestigatorsDown({ a: inv(5, 5) }), false);
 });
 
+// ─── §14.1 五大任務類型 ─────────────────────
+function makeInv(over: Partial<InvestigatorState> = {}): InvestigatorState {
+  return {
+    investigatorId: 'i1', investigatorDefinitionId: 'd', ownerPlayerId: 'p',
+    attributes: { strength: 1, agility: 1, constitution: 1, reflex: 1, intellect: 1, willpower: 1, perception: 1, charisma: 1 },
+    combatStyle: '', specializations: [], deck: [], hand: [], discardPile: [], removedPile: [], assetsInPlay: [],
+    hp: 7, hpMax: 7, san: 7, sanMax: 7, actionPoints: 0, resources: 0, currentLocationId: 'A',
+    engagedWith: [], triggeredHorrorChecks: [], traumas: [], secretTaskState: null, permanentlyDead: false, startingXp: 0,
+    ...over,
+  };
+}
+
+const TITAN_DATA: EnemyDataLookup = {
+  ...ENEMY_DATA,
+  titan: { name_zh: '舊日支配者', dc: 18, hp_base: 60, tier: 5, fear_radius: 3, fear_value: 5 },
+};
+
+function actWith(cond: Record<string, unknown>): ActCardData[] {
+  return [{
+    card_order: 1, name_zh: '任務目標',
+    front_advance_condition: cond,
+    back_flag_sets: [{ flag_code: 'outcome.victory', value: true }],
+    back_map_operations: [], back_resolution_code: 'stage_complete',
+  }];
+}
+
+test('seal_gate:線索達標 + 旗標(通過儀式)兩者皆需 → 翻面並花線索', () => {
+  const acts = actWith({ type: 'seal_gate', count: 2, required_flag: 'ritual.sealed' });
+  // 只有線索不夠(缺旗標)
+  const notYet = progressTick(makeScenario({ objectiveProgress: 2 }), {}, acts, [], ENEMY_DATA, 1);
+  assertEq(notYet.scenario.actIndex ?? 0, 0, '缺旗標不推進');
+  // 線索 + 旗標 → 推進,並花掉 2 顆線索
+  const ok = progressTick(makeScenario({ objectiveProgress: 3 }), { 'ritual.sealed': true }, acts, [], ENEMY_DATA, 1);
+  assertEq(ok.scenario.actIndex, 1);
+  assertEq(ok.scenario.objectiveProgress, 1, '花掉 2 顆剩 1');
+  assertEq(ok.victory, true);
+});
+
+test('seal_gate:線索需求隨人數縮放(雙人 ×2)', () => {
+  const acts = actWith({ type: 'seal_gate', count: 2 }); // 無旗標需求
+  const notYet = progressTick(makeScenario({ objectiveProgress: 3 }), {}, acts, [], ENEMY_DATA, 2);
+  assertEq(notYet.scenario.actIndex ?? 0, 0, '雙人需 4 顆,3 不夠');
+  const ok = progressTick(makeScenario({ objectiveProgress: 4 }), {}, acts, [], ENEMY_DATA, 2);
+  assertEq(ok.scenario.actIndex, 1);
+});
+
+test('defeat_titan:巨頭(tier≥5)倒下 → 翻面;非巨頭不算', () => {
+  const acts = actWith({ type: 'defeat_titan' });
+  const titanDown = makeScenario({ enemies: [{ instanceId: 'e1', enemyDefinitionId: 'titan', locationId: 'B', hp: 0, engagedWith: [], modifiers: [] }] });
+  assertEq(progressTick(titanDown, {}, acts, [], TITAN_DATA, 1).scenario.actIndex, 1);
+  const bossDown = makeScenario({ enemies: [{ instanceId: 'e1', enemyDefinitionId: 'boss', locationId: 'B', hp: 0, engagedWith: [], modifiers: [] }] });
+  assertEq(progressTick(bossDown, {}, acts, [], TITAN_DATA, 1).scenario.actIndex ?? 0, 0, 'tier 3 boss 不是巨頭');
+});
+
+test('defeat_titan:指定 variant_code → 只認該隻', () => {
+  const acts = actWith({ type: 'defeat_titan', variant_code: 'titan' });
+  const sc = makeScenario({ enemies: [{ instanceId: 'e1', enemyDefinitionId: 'titan', locationId: 'B', hp: 0, engagedWith: [], modifiers: [] }] });
+  assertEq(progressTick(sc, {}, acts, [], TITAN_DATA, 1).scenario.actIndex, 1);
+});
+
+test('uncover_truth:真相旗標 → 翻面(不花線索)', () => {
+  const acts = actWith({ type: 'uncover_truth', truth_flag: 'truth.revealed', count: 3 });
+  const r = progressTick(makeScenario({ objectiveProgress: 0 }), { 'truth.revealed': true }, acts, [], ENEMY_DATA, 1);
+  assertEq(r.scenario.actIndex, 1, '旗標到位即翻面');
+  assertEq(r.scenario.objectiveProgress, 0, 'uncover_truth 不消費線索');
+});
+
+test('uncover_truth:無旗標但線索累積達標 → 翻面', () => {
+  const acts = actWith({ type: 'uncover_truth', truth_flag: 'truth.revealed', count: 3 });
+  const r = progressTick(makeScenario({ objectiveProgress: 3 }), {}, acts, [], ENEMY_DATA, 1);
+  assertEq(r.scenario.actIndex, 1);
+});
+
+test('escape:全員存活調查員抵達目標地點 → 翻面;有人未到不算', () => {
+  const acts = actWith({ type: 'escape', location_code: 'B' });
+  const allAtB = { i1: makeInv({ investigatorId: 'i1', currentLocationId: 'B' }), i2: makeInv({ investigatorId: 'i2', currentLocationId: 'B' }) };
+  assertEq(progressTick(makeScenario(), {}, acts, [], ENEMY_DATA, 2, allAtB).scenario.actIndex, 1);
+  const oneAtA = { i1: makeInv({ investigatorId: 'i1', currentLocationId: 'B' }), i2: makeInv({ investigatorId: 'i2', currentLocationId: 'A' }) };
+  assertEq(progressTick(makeScenario(), {}, acts, [], ENEMY_DATA, 2, oneAtA).scenario.actIndex ?? 0, 0, '一人沒到不算逃脫');
+});
+
+test('escape:已死亡調查員不納入「全員到位」判定', () => {
+  const acts = actWith({ type: 'escape', location_code: 'B' });
+  // i2 已永久死亡留在 A,只看存活的 i1 在 B → 逃脫成功
+  const party = { i1: makeInv({ investigatorId: 'i1', currentLocationId: 'B' }), i2: makeInv({ investigatorId: 'i2', currentLocationId: 'A', permanentlyDead: true }) };
+  assertEq(progressTick(makeScenario(), {}, acts, [], ENEMY_DATA, 2, party).scenario.actIndex, 1);
+});
+
+test('endurance:撐到指定回合 → 翻面;未到回合不算', () => {
+  const acts = actWith({ type: 'endurance', turns: 5 });
+  assertEq(progressTick(makeScenario({ turnNumber: 5 }), {}, acts, [], ENEMY_DATA, 1).scenario.actIndex, 1);
+  assertEq(progressTick(makeScenario({ turnNumber: 4 }), {}, acts, [], ENEMY_DATA, 1).scenario.actIndex ?? 0, 0, '第 4 回合還沒到');
+});
+
 // ─── runner ─────────────────────────────────
 let passed = 0;
 let failed = 0;

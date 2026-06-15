@@ -10,6 +10,7 @@
  */
 import type { ResultEffect } from './messages';
 import type { InvestigatorState } from './state';
+import { turnStartTick, turnEndTick } from './statusEffects';
 
 export const HAND_LIMIT = 8;
 export const STARTING_RESOURCES = 5;
@@ -44,19 +45,30 @@ export function runTurnEndUpkeep(inv: InvestigatorState): UpkeepResult {
     return { investigator: next, effects };
   }
 
-  // ① 抽 1 張卡(§3.3 空牌庫 → 1 恐懼,不重洗)
-  if (next.deck.length === 0) {
-    next = { ...next, san: Math.max(0, next.san - 1) };
-    effects.push({ type: 'deck_empty_horror', params: { amount: 1 } });
-  } else {
-    const drawn = next.deck[0];
-    next = { ...next, deck: next.deck.slice(1), hand: [...next.hand, drawn] };
-    effects.push({ type: 'upkeep_draw', params: { cardInstanceId: drawn }, targetId: next.investigatorId });
+  // ⓪ 狀態效果結算(ch3 §6):流血/毀滅扣血、疲勞封鎖經濟、所有非特殊狀態減 1 層
+  const st = turnEndTick(next);
+  next = st.investigator;
+  effects.push(...st.effects);
+  // 狀態傷害可能把人打到瀕死 → 不再結算經濟補給
+  if (next.hp <= 0 || next.san <= 0) {
+    return { investigator: next, effects };
   }
 
-  // ② 獲得 1 資源(ch6 §8.2 每回合自動收入)
-  next = { ...next, resources: next.resources + 1 };
-  effects.push({ type: 'upkeep_income', params: { amount: 1 } });
+  // ①② 抽 1 卡 + 獲得 1 資源(§6.2 疲勞 → 跳過抽牌與收入)
+  if (!st.blockEconomy) {
+    // ① 抽 1 張卡(§3.3 空牌庫 → 1 恐懼,不重洗)
+    if (next.deck.length === 0) {
+      next = { ...next, san: Math.max(0, next.san - 1) };
+      effects.push({ type: 'deck_empty_horror', params: { amount: 1 } });
+    } else {
+      const drawn = next.deck[0];
+      next = { ...next, deck: next.deck.slice(1), hand: [...next.hand, drawn] };
+      effects.push({ type: 'upkeep_draw', params: { cardInstanceId: drawn }, targetId: next.investigatorId });
+    }
+    // ② 獲得 1 資源(ch6 §8.2 每回合自動收入)
+    next = { ...next, resources: next.resources + 1 };
+    effects.push({ type: 'upkeep_income', params: { amount: 1 } });
+  }
 
   // ②b 橫置卡片轉正(ch2 §2.4)
   const exhaustedIds = Object.entries(next.assetState ?? {}).filter(([, s]) => s.exhausted).map(([id]) => id);
@@ -79,6 +91,17 @@ export function runTurnEndUpkeep(inv: InvestigatorState): UpkeepResult {
   }
 
   return { investigator: next, effects };
+}
+
+// ─── 回合開始階段(ch3 §6:燃燒/再生在回合開始結算)──────────
+/**
+ * 對單一調查員結算回合開始的狀態效果:燃燒扣 HP、再生回 HP(§6.2/§6.3)。
+ * 在新回合調查員階段開頭呼叫(瀕死檢定之前 — 燃燒可能把人打到瀕死)。
+ */
+export function runTurnStartUpkeep(inv: InvestigatorState): UpkeepResult {
+  if (inv.permanentlyDead) return { investigator: inv, effects: [] };
+  const st = turnStartTick(inv);
+  return { investigator: st.investigator, effects: st.effects };
 }
 
 // ─── 短休息(ch2 §3.1:個人決定,放棄本回合行動換重洗牌庫)─────

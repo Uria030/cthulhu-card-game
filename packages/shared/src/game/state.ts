@@ -100,6 +100,8 @@ export interface EnemyInstance {
   engagedWith: string[];
   /** 動態詞綴(規則書 §11) */
   modifiers: string[];
+  /** 狀態效果(ch3 §6;code → 層數;怪物身上的燃燒/冷凍/標記等) */
+  statusEffects?: Record<string, number>;
 }
 
 export interface TokenInstance {
@@ -175,6 +177,8 @@ export interface InvestigatorState {
   engagedWith: string[];
   /** 已觸發過恐懼檢定的怪物(避免重複觸發) */
   triggeredHorrorChecks: string[];
+  /** 狀態效果(ch3 §6;code → 層數;0/不存在 = 無。結算見 statusEffects.ts) */
+  statusEffects?: Record<string, number>;
   /** 創傷記錄(規則書支柱 4 第一層) */
   traumas: Trauma[];
   /** 個人秘密任務狀態(規則書 §1.4) */

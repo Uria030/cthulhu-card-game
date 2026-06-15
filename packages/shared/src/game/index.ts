@@ -20,3 +20,4 @@ export * from './upkeep';
 export * from './dying';
 export * from './encounters';
 export * from './hiddenInvestigation';
+export * from './statusEffects';

@@ -1,7 +1,7 @@
 /**
  * G-05 回合經濟測試 — ch2 §2.4 + ch6 §3.1/§8
  */
-import { runTurnEndUpkeep, runShortRest, hpMaxFor, sanMaxFor, HAND_LIMIT, STARTING_RESOURCES } from './upkeep';
+import { runTurnEndUpkeep, runTurnStartUpkeep, runShortRest, hpMaxFor, sanMaxFor, HAND_LIMIT, STARTING_RESOURCES } from './upkeep';
 import type { InvestigatorState } from './state';
 
 type TestFn = () => void;
@@ -71,6 +71,29 @@ test('短休息:棄牌堆洗回牌庫 + 放棄行動(§3.1)', () => {
   assertEq(r.investigator.actionPoints, 0, '放棄整回合行動');
   assertEq(r.investigator.hand.length, 1, '手牌不動');
   assertEq(r.effects[0].type, 'short_rest');
+});
+
+// ─── 狀態效果整合(ch3 §6 接進回合首尾)──
+test('回合結束:流血扣 HP + 狀態減 1 層,經濟照常', () => {
+  const r = runTurnEndUpkeep(makeInv({ hp: 9, statusEffects: { bleed: 2 } }));
+  assertEq(r.investigator.hp, 7, '流血 2 扣 HP');
+  assertEq(r.investigator.statusEffects?.bleed ?? 0, 1, '回合末減 1 層');
+  assertEq(r.investigator.resources, 1, '非疲勞 → 經濟照常');
+  assertEq(r.effects.some((e) => e.type === 'status_bleed'), true);
+});
+
+test('回合結束:疲勞封鎖抽牌與收入(§6.2)', () => {
+  const r = runTurnEndUpkeep(makeInv({ statusEffects: { fatigue: 2 } }));
+  assertEq(r.investigator.resources, 0, '疲勞 → 不獲資源');
+  assertEq(r.effects.some((e) => e.type === 'upkeep_draw'), false, '疲勞 → 不抽牌');
+  assertEq(r.investigator.statusEffects?.fatigue ?? 0, 1, '疲勞仍減 1 層');
+  assertEq(r.effects.some((e) => e.type === 'status_fatigue'), true);
+});
+
+test('回合開始:燃燒扣 HP(runTurnStartUpkeep)', () => {
+  const r = runTurnStartUpkeep(makeInv({ hp: 9, statusEffects: { burning: 3 } }));
+  assertEq(r.investigator.hp, 6);
+  assertEq(r.effects.some((e) => e.type === 'status_burning'), true);
 });
 
 // ─── runner ─────────────────────────────────

@@ -316,6 +316,10 @@ export function activateMonsters(
       for (const eff of tick.effects) effects.push({ ...eff, targetId: enemy.instanceId });
       if (tick.hp <= 0) {
         effects.push({ type: 'enemy_defeated', params: { narrative: '牠在持續效果中崩解了。' }, targetId: enemy.instanceId });
+        // §11.3 持續效果擊殺也觸發死亡詞綴(crush/curse,與致死手段無關;此處無擊殺者,全地點調查員結算)
+        const dk = resolveDeathKeywords(enemy, data, invs, rng);
+        for (const [id, updatedInv] of Object.entries(dk.investigators)) invs[id] = updatedInv;
+        effects.push(...dk.effects);
         continue;
       }
     }

@@ -52,6 +52,7 @@ export function resolveCheck(
   dc: number,
   mods: Partial<CheckModifiers>,
   rng: () => number = Math.random,
+  rollMode: 'advantage' | 'disadvantage' | 'normal' = 'normal',
 ): CheckResult {
   const breakdown: CheckModifiers = {
     attribute: mods.attribute ?? 0,
@@ -60,7 +61,12 @@ export function resolveCheck(
     commit: mods.commit ?? 0,
     situational: mods.situational ?? 0,
   };
-  const roll = rollD20(rng);
+  // §6 強化取好的 / 弱化取差的:擲兩顆取高/低(預設 normal 向後相容)
+  let roll = rollD20(rng);
+  if (rollMode !== 'normal') {
+    const roll2 = rollD20(rng);
+    roll = rollMode === 'advantage' ? Math.max(roll, roll2) : Math.min(roll, roll2);
+  }
   const total =
     roll +
     breakdown.attribute +

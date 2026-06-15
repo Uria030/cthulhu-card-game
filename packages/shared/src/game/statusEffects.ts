@@ -263,3 +263,15 @@ export function checkRollMode(map: StatusMap | undefined): 'advantage' | 'disadv
   if (weak) return 'disadvantage';
   return 'normal';
 }
+
+/**
+ * 玩家檢定點一站式套狀態:回傳本次擲骰模式 + 擲骰後的 statusEffects(強化/弱化各減 1 層)。
+ * 檢定點:`const cs = applyCheckStatus(inv.statusEffects)` → resolveCheck(.., cs.rollMode);
+ * newInv.statusEffects = cs.statusEffects。
+ */
+export function applyCheckStatus(map: StatusMap | undefined): {
+  rollMode: 'advantage' | 'disadvantage' | 'normal';
+  statusEffects: StatusMap;
+} {
+  return { rollMode: checkRollMode(map), statusEffects: decrementOnRoll(map) };
+}

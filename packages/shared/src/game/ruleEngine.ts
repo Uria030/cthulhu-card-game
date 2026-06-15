@@ -40,7 +40,7 @@ import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import { attachmentTestModifier } from './keeperAI';
 import { isDowned, applyStabilize } from './dying';
 import { revealOnEnter, revealOnGeneralSuccess, claimHiddenReward } from './hiddenInvestigation';
-import { modifyIncomingDamage } from './statusEffects';
+import { modifyIncomingDamage, applyCheckStatus, attackHitModifier } from './statusEffects';
 
 // ─── 卡片實例資料(容器由 bootstrap cardIndex 餵入)──
 export interface CardData {
@@ -556,6 +556,7 @@ function resolveInvestigate(intent: IntentMessage, ctx: RuleContext): RuleResolv
 
   const locId = ctx.investigator.currentLocationId || '';
   const dc = ctx.locationStats?.[locId]?.shroud ?? 10;
+  const cs = applyCheckStatus(ctx.investigator.statusEffects);
   const check = resolveCheck(
     dc,
     {
@@ -565,11 +566,13 @@ function resolveInvestigate(intent: IntentMessage, ctx: RuleContext): RuleResolv
       situational: attachmentTestModifier(ctx.scenario.keeperAttachments, 'perception'),
     },
     ctx.rng,
+    cs.rollMode,
   );
   const success = check.outcome === 'success';
   const newInv: InvestigatorState = {
     ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
     actionPoints: ctx.investigator.actionPoints - 1,
+    statusEffects: cs.statusEffects,
   };
   const baseEffects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
@@ -643,6 +646,7 @@ function resolveInvestigateHidden(intent: IntentMessage, ctx: RuleContext): Rule
   if (commit.error) return reject(intent, commit.error);
 
   const dc = ctx.locationStats?.[locId]?.shroud ?? 10;
+  const cs = applyCheckStatus(ctx.investigator.statusEffects);
   const check = resolveCheck(
     dc,
     {
@@ -651,11 +655,13 @@ function resolveInvestigateHidden(intent: IntentMessage, ctx: RuleContext): Rule
       situational: attachmentTestModifier(ctx.scenario.keeperAttachments, 'perception'),
     },
     ctx.rng,
+    cs.rollMode,
   );
   const success = check.outcome === 'success';
   const newInv: InvestigatorState = {
     ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
     actionPoints: ctx.investigator.actionPoints - 1,
+    statusEffects: cs.statusEffects,
   };
   const baseEffects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
@@ -717,6 +723,7 @@ function resolveSearch(intent: IntentMessage, ctx: RuleContext): RuleResolveOutp
   if (commit.error) return reject(intent, commit.error);
 
   const dc = ctx.locationStats?.[locId]?.shroud ?? 10;
+  const cs = applyCheckStatus(ctx.investigator.statusEffects);
   const check = resolveCheck(
     dc,
     {
@@ -725,11 +732,13 @@ function resolveSearch(intent: IntentMessage, ctx: RuleContext): RuleResolveOutp
       situational: attachmentTestModifier(ctx.scenario.keeperAttachments, 'perception'),
     },
     ctx.rng,
+    cs.rollMode,
   );
   const success = check.outcome === 'success';
   const baseInv: InvestigatorState = {
     ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
     actionPoints: ctx.investigator.actionPoints - 1,
+    statusEffects: cs.statusEffects,
   };
   const baseEffects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
@@ -808,16 +817,20 @@ function performAttack(intent: IntentMessage, ctx: RuleContext, enemyInstanceId:
   const here = ctx.scenario.locations.find(
     (l) => l.locationDefinitionId === ctx.investigator.currentLocationId,
   );
-  const situational = here ? visibilityModifier('attack', here.visibility) : 0;
+  const cs = applyCheckStatus(ctx.investigator.statusEffects);
+  const situational = (here ? visibilityModifier('attack', here.visibility) : 0)
+    + attackHitModifier(ctx.investigator.statusEffects); // §6.2 黑暗 -2
   const dc = ctx.enemyStats?.[enemy.enemyDefinitionId]?.dc ?? 10;
   const check = resolveCheck(
     dc,
     { attribute: ctx.investigator.attributes.strength, commit: commit.value, situational },
     ctx.rng,
+    cs.rollMode,
   );
   const newInv: InvestigatorState = {
     ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
     actionPoints: ctx.investigator.actionPoints - 1,
+    statusEffects: cs.statusEffects,
   };
   const baseEffects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
@@ -872,10 +885,12 @@ function resolveEvade(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
   );
   const situational = here ? visibilityModifier('evade', here.visibility) : 0;
   const dc = enemy ? ctx.enemyStats?.[enemy.enemyDefinitionId]?.dc ?? 10 : 10;
+  const cs = applyCheckStatus(ctx.investigator.statusEffects);
   const check = resolveCheck(
     dc,
     { attribute: ctx.investigator.attributes.reflex, commit: commit.value, situational },
     ctx.rng,
+    cs.rollMode,
   );
   const success = check.outcome === 'success';
   const rawDamage = success
@@ -888,6 +903,7 @@ function resolveEvade(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
   const newInv: InvestigatorState = {
     ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
     actionPoints: ctx.investigator.actionPoints - 1,
+    statusEffects: cs.statusEffects,
     engagedWith: ctx.investigator.engagedWith.filter((id) => id !== enemyId),
     hp: Math.max(0, ctx.investigator.hp - damageTaken),
   };
@@ -1084,21 +1100,25 @@ function performWeaponAttack(
   );
   const situational =
     (here ? visibilityModifier('attack', here.visibility) : 0) +
-    attachmentTestModifier(ctx.scenario.keeperAttachments, attr);
+    attachmentTestModifier(ctx.scenario.keeperAttachments, attr) +
+    attackHitModifier(spend.investigator.statusEffects); // §6.2 黑暗 -2
   // §8:武器修正只在對應屬性風格卡被抽到時生效 + 場上被動(瞄準鏡等)
   const equipment =
     Number(weapon?.attribute_modifiers?.[attr] ?? 0) +
     passiveTestModifier(ctx.investigator, ctx.cardLookup ?? {}, attr);
   const dc = ctx.enemyStats?.[enemy.enemyDefinitionId]?.dc ?? 10;
+  const cs = applyCheckStatus(spend.investigator.statusEffects);
   const check = resolveCheck(
     dc,
     { attribute: ctx.investigator.attributes[attr], equipment, commit: commit.value, situational },
     ctx.rng,
+    cs.rollMode,
   );
 
   let inv: InvestigatorState = {
     ...applyCommitToInvestigator(spend.investigator, commit.committedIds),
     actionPoints: ctx.investigator.actionPoints - 1,
+    statusEffects: cs.statusEffects,
   };
   const baseEffects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },

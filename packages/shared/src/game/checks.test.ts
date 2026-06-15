@@ -140,6 +140,21 @@ test('§5.6 觸手:全額 + SAN-1;遠古印記:全免 + SAN+1', () => {
   assertEq(e.casterSanDelta, 1);
 });
 
+// ─── §6 強化/弱化 取好取差(rollMode)──
+test('resolveCheck advantage:擲兩顆取較高(強化)', () => {
+  const seq = [(3 - 1) / 20, (19 - 1) / 20]; let i = 0;
+  const r = resolveCheck(10, { attribute: 0 }, () => seq[i++], 'advantage');
+  assertEq(r.roll, 19);
+});
+test('resolveCheck disadvantage:擲兩顆取較低(弱化)', () => {
+  const seq = [(19 - 1) / 20, (3 - 1) / 20]; let i = 0;
+  const r = resolveCheck(10, { attribute: 0 }, () => seq[i++], 'disadvantage');
+  assertEq(r.roll, 3);
+});
+test('resolveCheck normal 預設只擲一顆(向後相容)', () => {
+  assertEq(resolveCheck(10, { attribute: 0 }, rngForRoll(11)).roll, 11);
+});
+
 // ─── runner ─────────────────────────────────
 let passed = 0;
 let failed = 0;

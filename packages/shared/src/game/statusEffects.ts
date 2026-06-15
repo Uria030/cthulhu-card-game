@@ -210,6 +210,20 @@ export function physicalReduction(map: StatusMap | undefined): number {
 export function horrorReduction(map: StatusMap | undefined): number {
   return getLayers(map, 'ward');
 }
+/**
+ * 受到傷害時套用狀態修正:物理 = +中毒+脆弱+標記 −護甲;恐懼 = +發瘋+標記 −護盾。
+ * 各自不低於 0。傷害套用點(怪物攻擊/藉機攻擊/恐懼/閃避失敗)統一走這裡(§6.2/§6.3)。
+ */
+export function modifyIncomingDamage(
+  map: StatusMap | undefined,
+  physical: number,
+  horror: number,
+): { physical: number; horror: number } {
+  return {
+    physical: Math.max(0, physical + incomingPhysicalBonus(map) - physicalReduction(map)),
+    horror: Math.max(0, horror + incomingHorrorBonus(map) - horrorReduction(map)),
+  };
+}
 /** 造成的近戰傷害減免:無力(§6.2) */
 export function outgoingMeleeReduction(map: StatusMap | undefined): number {
   return getLayers(map, 'weakness_status');

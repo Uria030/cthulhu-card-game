@@ -4,7 +4,7 @@
 import {
   getLayers, addStatus, removeStatus, clearStealth, decrementOnRoll,
   turnStartTick, turnEndTick, elementalDamageBonus,
-  incomingPhysicalBonus, incomingHorrorBonus, physicalReduction, horrorReduction,
+  incomingPhysicalBonus, incomingHorrorBonus, physicalReduction, horrorReduction, modifyIncomingDamage,
   outgoingMeleeReduction, attackHitModifier, moveCostBonus, stealthDamageBonus,
   bonusActionPoints, canUseAssetAttack, canCastSpell, checkRollMode, normalizeStatusCode,
 } from './statusEffects';
@@ -145,6 +145,18 @@ test('傷害修正:物理加成=中毒+脆弱+標記;恐懼加成=發瘋+標記'
 test('傷害減免:護甲(物理)/ 護盾(恐懼)', () => {
   assertEq(physicalReduction({ armor: 3 }), 3);
   assertEq(horrorReduction({ ward: 2 }), 2);
+});
+
+test('modifyIncomingDamage:物理/恐懼加成減免合併,不低於 0', () => {
+  // 脆弱2+標記1 物理+3;護甲1 −1 → 5+3-1=7
+  let d = modifyIncomingDamage({ vulnerable: 2, marked: 1, armor: 1 }, 5, 0);
+  assertEq(d.physical, 7);
+  // 發瘋2+標記1 恐懼+3;護盾5 −5 → 2+3-5=0(夾 0)
+  d = modifyIncomingDamage({ madness: 2, marked: 1, ward: 5 }, 2, 2);
+  assertEq(d.horror, 0);
+  // 無狀態 → 原值
+  d = modifyIncomingDamage({}, 3, 1);
+  assertEq(d.physical, 3); assertEq(d.horror, 1);
 });
 
 test('其他 query:無力/黑暗/冷凍/隱蔽/加速', () => {

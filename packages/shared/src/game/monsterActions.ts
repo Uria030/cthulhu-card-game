@@ -18,6 +18,7 @@ import type { ResultEffect } from './messages';
 import type { InvestigatorState, ScenarioState, EnemyInstance } from './state';
 import { resolveCheck } from './checks';
 import type { AttributeKey } from './checks';
+import { modifyIncomingDamage } from './statusEffects';
 import {
   locationDistance,
   stepToward,
@@ -111,7 +112,8 @@ export function runFearChecks(
       targetId: enemy.instanceId,
     });
     if (check.outcome === 'fail') {
-      const fear = Number(data.fear_value ?? 1);
+      // 恐懼=恐懼傷害:套用發瘋/標記(+)、護盾(−)(§6.2/§6.3)
+      const { horror: fear } = modifyIncomingDamage(inv.statusEffects, 0, Number(data.fear_value ?? 1));
       inv = { ...inv, san: Math.max(0, inv.san - fear) };
       effects.push({
         type: 'fear_damage',
@@ -135,17 +137,17 @@ export function applyAttackOfOpportunity(
     const enemy = scenario.enemies.find((e) => e.instanceId === enemyId && e.hp > 0);
     if (!enemy) continue;
     const data = enemyData[enemy.enemyDefinitionId] ?? {};
-    const phys = Number(data.damage_physical ?? 1);
-    const horror = Number(data.damage_horror ?? 0);
+    // 受傷狀態修正(中毒/脆弱/標記 + / 護甲/護盾 −,§6)
+    const dmg = modifyIncomingDamage(inv.statusEffects, Number(data.damage_physical ?? 1), Number(data.damage_horror ?? 0));
     inv = {
       ...inv,
-      hp: Math.max(0, inv.hp - phys),
-      san: Math.max(0, inv.san - horror),
+      hp: Math.max(0, inv.hp - dmg.physical),
+      san: Math.max(0, inv.san - dmg.horror),
     };
     effects.push({
       type: 'attack_of_opportunity',
       params: {
-        physical: phys, horror,
+        physical: dmg.physical, horror: dmg.horror,
         narrative: '你轉身的瞬間,' + (data.name_zh ?? '牠') + '的攻擊落在你身上。',
       },
       targetId: enemyId,
@@ -183,14 +185,16 @@ function monsterAttackOnce(
   ];
   let inv = investigator;
   if (check.outcome === 'fail') {
+    // 受傷狀態修正(§6)
+    const dmg = modifyIncomingDamage(inv.statusEffects, phys, horror);
     inv = {
       ...inv,
-      hp: Math.max(0, inv.hp - phys),
-      san: Math.max(0, inv.san - horror),
+      hp: Math.max(0, inv.hp - dmg.physical),
+      san: Math.max(0, inv.san - dmg.horror),
     };
     effects.push({
       type: 'monster_attack_hit',
-      params: { physical: phys, horror, narrative: '你沒能躲開。' },
+      params: { physical: dmg.physical, horror: dmg.horror, narrative: '你沒能躲開。' },
       targetId: enemy.instanceId,
     });
   } else {

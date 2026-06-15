@@ -40,6 +40,7 @@ import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import { attachmentTestModifier } from './keeperAI';
 import { isDowned, applyStabilize } from './dying';
 import { revealOnEnter, revealOnGeneralSuccess, claimHiddenReward } from './hiddenInvestigation';
+import { modifyIncomingDamage } from './statusEffects';
 
 // ─── 卡片實例資料(容器由 bootstrap cardIndex 餵入)──
 export interface CardData {
@@ -877,9 +878,11 @@ function resolveEvade(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
     ctx.rng,
   );
   const success = check.outcome === 'success';
-  const damageTaken = success
+  const rawDamage = success
     ? 0
     : (enemy ? ctx.enemyStats?.[enemy.enemyDefinitionId]?.damage_physical ?? 1 : 1);
+  // 受傷狀態修正(脆弱/標記 + / 護甲 −,§6)
+  const damageTaken = modifyIncomingDamage(ctx.investigator.statusEffects, rawDamage, 0).physical;
 
   // §7.4 成敗都脫離交戰 — 只脫離本次結算的這一隻,其他交戰維持
   const newInv: InvestigatorState = {

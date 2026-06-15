@@ -474,8 +474,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       );
       setScenario(next.sc);
       setInvestigator(next.inv);
-      // §11 受傷且有可分配卡 → 跳傷害分配 Modal
-      const da = (out.result.effects ?? []).find((e) => e.type === 'damage_allocatable');
+      // §11 受傷且有可分配卡 → 跳傷害分配 Modal(只認玩家本人的傷害,排除隊友)
+      const da = (out.result.effects ?? []).find((e) => e.type === 'damage_allocatable' && e.targetId === investigator.investigatorId);
       if (da) {
         const dp = da.params as { physical?: number; horror?: number; targets?: AllocatableTarget[] };
         setDamageAlloc({ physical: Number(dp.physical ?? 0), horror: Number(dp.horror ?? 0), targets: dp.targets ?? [] });

@@ -9,6 +9,7 @@ import {
   activateMonsters,
   spawnEnemy,
   enemyDamageAfterDefense,
+  resolveDeathKeywords,
 } from './monsterActions';
 import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import type { InvestigatorState, ScenarioState } from './state';
@@ -220,6 +221,26 @@ test('enemyDamageAfterDefense:免疫歸 0 / 抗性減點 / arcane 鐵則穿透 /
   assertEq(enemyDamageAfterDefense({ immunities: ['thunder'] }, 'electric', 4), 0, 'electric 收斂 thunder');
   assertEq(enemyDamageAfterDefense({}, 'fire', 5), 5, '無防禦資料原傷');
   assertEq(enemyDamageAfterDefense(undefined, 'fire', 5), 5, 'undefined 原傷');
+});
+
+// ─── §11.3 死亡效果詞綴(壓垮/詛咒)──
+const deadEnemy = { instanceId: 'e1', enemyDefinitionId: 'mon', locationId: 'A', hp: 0, engagedWith: [], modifiers: [] };
+test('§11.3 crush:同地點隊友閃避失敗受物理傷害', () => {
+  const ally = makeInv({ investigatorId: 'a1', currentLocationId: 'A', hp: 10 });
+  const r = resolveDeathKeywords(deadEnemy, { keywords: ['crush'], dc: 10, damage_physical: 3 }, { a1: ally }, rngRoll(2));
+  assertEq(r.investigators.a1.hp, 7, 'crush 物理 3');
+  assertEq(r.effects.some((e) => e.type === 'crush_damage'), true);
+});
+test('§11.3 curse_on_death:閃避失敗受恐懼傷害', () => {
+  const ally = makeInv({ investigatorId: 'a1', currentLocationId: 'A', san: 9 });
+  const r = resolveDeathKeywords(deadEnemy, { keywords: ['curse_on_death'], dc: 10, damage_horror: 2 }, { a1: ally }, rngRoll(2));
+  assertEq(r.investigators.a1.san, 7);
+});
+test('§11.3 死亡詞綴:不同地點不結算 / 無詞綴空', () => {
+  const far = makeInv({ investigatorId: 'a2', currentLocationId: 'B' });
+  assertEq(Object.keys(resolveDeathKeywords(deadEnemy, { keywords: ['crush'], dc: 10 }, { a2: far }, rngRoll(2)).investigators).length, 0);
+  const here = makeInv({ investigatorId: 'a3', currentLocationId: 'A' });
+  assertEq(Object.keys(resolveDeathKeywords(deadEnemy, { keywords: [] }, { a3: here }, rngRoll(2)).investigators).length, 0);
 });
 
 // ─── runner ─────────────────────────────────

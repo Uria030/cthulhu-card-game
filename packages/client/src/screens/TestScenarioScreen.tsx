@@ -165,6 +165,10 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'status_fatigue': return '😪 ' + (p.narrative as string);
     case 'status_haste': return '⚡ ' + (p.narrative as string);
     case 'status_enemy_tick': return '🔥 ' + (p.narrative as string);
+    case 'crush_damage': return '🪨 ' + (p.narrative as string) + '(HP -' + (p.amount as number) + ')';
+    case 'curse_damage': return '👁 ' + (p.narrative as string) + '(SAN -' + (p.amount as number) + ')';
+    case 'death_keyword_evaded': return '🌀 ' + (p.narrative as string);
+    case 'monster_apathetic': return '😐 ' + (p.narrative as string);
     default: return eff.type;
   }
 }

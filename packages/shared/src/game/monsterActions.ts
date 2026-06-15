@@ -65,6 +65,51 @@ export interface EnemyData {
 export type EnemyDataLookup = Record<string, EnemyData>;
 
 /**
+ * §11.3 死亡效果詞綴:怪物被擊敗後,**同地點其他調查員**做閃避檢定(reflex vs 怪 DC),
+ * 失敗則 crush → 物理傷害 / curse_on_death → 恐懼傷害(各走 modifyIncomingDamage)。
+ * v0 簡化:不含擊殺者本人(其狀態在攻擊路徑已結算);回傳更新後的調查員(供 updatedAllies)+ 效果。
+ */
+export function resolveDeathKeywords(
+  defeated: EnemyInstance,
+  enemyData: EnemyData | undefined,
+  others: Record<string, InvestigatorState>,
+  rng: () => number = Math.random,
+): { investigators: Record<string, InvestigatorState>; effects: ResultEffect[] } {
+  const effects: ResultEffect[] = [];
+  const updated: Record<string, InvestigatorState> = {};
+  const keywords = (enemyData?.keywords ?? []).map((k) => String(k));
+  const hasCrush = keywords.includes('crush');
+  const hasCurse = keywords.includes('curse_on_death');
+  if (!hasCrush && !hasCurse) return { investigators: updated, effects };
+
+  const dc = Number(enemyData?.dc ?? 10);
+  const name = enemyData?.name_zh ?? defeated.enemyDefinitionId;
+  for (const id of Object.keys(others)) {
+    const inv = others[id];
+    if (!inv || inv.hp <= 0 || inv.currentLocationId !== defeated.locationId) continue;
+    const cs = applyCheckStatus(inv.statusEffects);
+    const check = resolveCheck(dc, { attribute: inv.attributes.reflex }, rng, cs.rollMode);
+    let next: InvestigatorState = { ...inv, statusEffects: cs.statusEffects };
+    if (check.outcome === 'fail') {
+      if (hasCrush) {
+        const dmg = modifyIncomingDamage(next.statusEffects, Number(enemyData?.damage_physical ?? 1), 0).physical;
+        next = { ...next, hp: Math.max(0, next.hp - dmg) };
+        effects.push({ type: 'crush_damage', params: { amount: dmg, narrative: name + '崩塌的軀體壓了下來。' }, targetId: id });
+      }
+      if (hasCurse) {
+        const dmg = modifyIncomingDamage(next.statusEffects, 0, Number(enemyData?.damage_horror ?? 1)).horror;
+        next = { ...next, san: Math.max(0, next.san - dmg) };
+        effects.push({ type: 'curse_damage', params: { amount: dmg, narrative: name + '的死亡詛咒鑽進你的腦海。' }, targetId: id });
+      }
+    } else {
+      effects.push({ type: 'death_keyword_evaded', params: { narrative: '你及時退開了。' }, targetId: id });
+    }
+    updated[id] = next;
+  }
+  return { investigators: updated, effects };
+}
+
+/**
  * §11.4 怪物防禦詞綴:免疫該元素 → 傷害歸 0;否則減免 resistance_values[元素] 點(夾 0)。
  * 神秘(arcane)鐵則:任何怪物都不抗/免疫,原樣穿透(設計原則,server validateNoArcane 已擋資料)。
  * resistance_values 為內容缺口時當 0(無減免),機制不壞。
@@ -257,6 +302,7 @@ export function activateMonsters(
     const enemy = sc.enemies.find((e) => e.instanceId === snapshot.instanceId);
     if (!enemy || enemy.hp <= 0) continue;
     const data = enemyData[enemy.enemyDefinitionId] ?? {};
+    const kw = (data.keywords ?? []).map((k) => String(k)); // §11 詞綴(純字串)
 
     // §6 怪物狀態結算(燃燒/流血/毀滅持續傷害 + 減層);死亡則不行動
     if (enemy.statusEffects && Object.keys(enemy.statusEffects).length > 0) {
@@ -391,8 +437,14 @@ export function activateMonsters(
       continue;
     }
 
-    // §10.3 未交戰 → 朝目標移動(movement_speed 格),到達 → 交戰
-    const speed = Math.max(1, Number(data.movement_speed ?? 1));
+    // §11.2 冷漠:不主動與調查員交戰 → 未交戰時不逼近
+    if (kw.includes('apathetic')) {
+      effects.push({ type: 'monster_apathetic', params: { enemy: data.name_zh ?? enemy.enemyDefinitionId, narrative: '牠對你毫無興趣,自顧自地存在著。' }, targetId: enemy.instanceId });
+      continue;
+    }
+
+    // §10.3 未交戰 → 朝目標移動(movement_speed 格;§11.1 快速 swift 移 2 格),到達 → 交戰
+    const speed = Math.max(kw.includes('swift') ? 2 : 1, Number(data.movement_speed ?? 1));
     let pos = enemy.locationId;
     for (let step = 0; step < speed && pos !== target.currentLocationId; step += 1) {
       pos = stepToward(sc.locations, pos, target.currentLocationId ?? pos, rng);

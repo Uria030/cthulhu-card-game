@@ -23,6 +23,7 @@ import type {
 import type {
   ScenarioState,
   InvestigatorState,
+  EnemyInstance,
   TurnState,
   LocationInstance,
 } from './state';
@@ -35,7 +36,7 @@ import {
 } from './checks';
 import type { AttributeKey, CommitIcons } from './checks';
 import { executeCardEffects, passiveTestModifier } from './effectsExecutor';
-import { runFearChecks, applyAttackOfOpportunity, spawnEnemy, enemyDamageAfterDefense } from './monsterActions';
+import { runFearChecks, applyAttackOfOpportunity, spawnEnemy, enemyDamageAfterDefense, resolveDeathKeywords } from './monsterActions';
 import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import { attachmentTestModifier } from './keeperAI';
 import { isDowned, applyStabilize } from './dying';
@@ -858,10 +859,14 @@ function performAttack(intent: IntentMessage, ctx: RuleContext, enemyInstanceId:
     ...baseEffects,
     { type: 'attack_hit', params: { damage, critical: check.natural20, narrative: (check.natural20 ? '【爆擊】' : '') + hpToNarrative(newHp, enemy.hp) }, targetId: enemyInstanceId },
   ];
+  let deathAllies: Record<string, InvestigatorState> = {};
   if (newHp <= 0) {
     effects.push({ type: 'enemy_defeated', params: { narrative: '牠倒下了,空氣裡只剩下血腥與沉默。' }, targetId: enemyInstanceId });
+    const dk = deathKeywordOutcome(enemy, ctx); // §11.3 壓垮/詛咒
+    effects.push(...dk.effects);
+    deathAllies = dk.updatedAllies;
   }
-  return accept(intent, effects, { investigator: newInv, scenario: newScenario });
+  return accept(intent, effects, { investigator: newInv, scenario: newScenario, updatedAllies: deathAllies });
 }
 
 /**
@@ -1167,13 +1172,17 @@ function performWeaponAttack(
     ...baseEffects,
     { type: 'attack_hit', params: { damage, critical: check.natural20, weapon: weapon?.name_zh ?? '', narrative: (check.natural20 ? '【爆擊】' : '') + (styleCard.narrative_success_zh || hpToNarrative(newHp, enemy.hp)) }, targetId: enemy.instanceId },
   ];
+  let deathAllies: Record<string, InvestigatorState> = {};
   if (newHp <= 0) {
     effects.push({ type: 'enemy_defeated', params: { narrative: '牠倒下了,空氣裡只剩下血腥與沉默。' }, targetId: enemy.instanceId });
+    const dk = deathKeywordOutcome(enemy, ctx); // §11.3 壓垮/詛咒
+    effects.push(...dk.effects);
+    deathAllies = dk.updatedAllies;
   }
   const after = applyOnSuccessCommit(true, commit.committedIds, inv, sc, ctx.cardLookup ?? {});
   inv = after.investigator;
   sc = after.scenario;
-  return accept(intent, [...effects, ...after.effects], { investigator: inv, scenario: sc });
+  return accept(intent, [...effects, ...after.effects], { investigator: inv, scenario: sc, updatedAllies: deathAllies });
 }
 
 /**
@@ -1222,15 +1231,19 @@ function performSpellAttack(
     },
     { type: 'attack_hit', params: { damage, critical: false, weapon: weapon?.name_zh ?? '', narrative: hpToNarrative(newHp, enemy.hp) }, targetId: enemy.instanceId },
   ];
+  let deathAllies: Record<string, InvestigatorState> = {};
   if (newHp <= 0) {
     effects.push({ type: 'enemy_defeated', params: { narrative: '牠在神秘的光焰中崩解。' }, targetId: enemy.instanceId });
+    const dk = deathKeywordOutcome(enemy, ctx); // §11.3 壓垮/詛咒(怪物詞綴與致死手段無關)
+    effects.push(...dk.effects);
+    deathAllies = dk.updatedAllies;
   }
   // 混沌袋副作用
   const chaos = applySpellChaos(ctx, inv, sc, enemy.enemyDefinitionId);
   inv = chaos.investigator;
   sc = chaos.scenario;
   effects.push(...chaos.effects);
-  return accept(intent, effects, { investigator: inv, scenario: sc });
+  return accept(intent, effects, { investigator: inv, scenario: sc, updatedAllies: deathAllies });
 }
 
 /**
@@ -1370,6 +1383,19 @@ function accept(
     },
     newState,
   };
+}
+
+/**
+ * §11.3 怪物死亡詞綴(crush/curse_on_death):對同地點「其他」調查員結算閃避受傷。
+ * 擊殺者本人狀態已在攻擊路徑結算,排除之;回傳效果 + updatedAllies。
+ */
+function deathKeywordOutcome(enemy: EnemyInstance, ctx: RuleContext): { effects: ResultEffect[]; updatedAllies: Record<string, InvestigatorState> } {
+  const others: Record<string, InvestigatorState> = {};
+  for (const [id, inv] of Object.entries(ctx.investigators)) {
+    if (id !== ctx.investigator.investigatorId) others[id] = inv;
+  }
+  const dk = resolveDeathKeywords(enemy, ctx.enemyStats?.[enemy.enemyDefinitionId], others, ctx.rng);
+  return { effects: dk.effects, updatedAllies: dk.investigators };
 }
 
 function reject(intent: IntentMessage, narrative: string, suggestion?: string): RuleResolveOutput {

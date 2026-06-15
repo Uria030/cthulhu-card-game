@@ -15,6 +15,7 @@ export type ActionType =
   | 'move'
   | 'investigate'
   | 'investigate_hidden'
+  | 'search'
   | 'taunt'
   | 'evade'
   | 'execute_card_action'

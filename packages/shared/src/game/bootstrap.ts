@@ -21,6 +21,7 @@ import type {
   EnemyInstance,
   TokenInstance,
   ChaosToken,
+  DiscoverableSlot,
 } from './state';
 import { hpMaxFor, sanMaxFor, STARTING_RESOURCES, STARTING_HAND_SIZE } from './upkeep';
 import { hiddenPointFromRow } from './hiddenInvestigation';
@@ -132,6 +133,8 @@ export interface StageBootstrap {
   }>;
   /** 城主行動點設定(game_balance_settings keeper_action_points 群) */
   keeper_settings?: Record<string, unknown>;
+  /** 可發現卡片資源的卡面(地點 discoverable_card_ids 指向的 card_definitions;支柱6+8 探索獲卡) */
+  discoverable_cards?: Array<Record<string, any>>;
 }
 
 // ─── 卡片實例查找表(state 只存實例 id,畫面靠這張表顯示卡面)──
@@ -367,6 +370,33 @@ export function buildGameFromBootstrap(
       allInstances.push(instanceId);
     }
   }
+
+  // ── 可發現卡片資源池:地點 discoverable_card_ids 預先實例化(支柱6 探索 + 支柱8 動態牌組)──
+  // 預先實例化並註冊進 cardIndex(→ cardLookup),搜尋成功時引擎只把 instance 移進牌組,容器零實例化邏輯。
+  const discData = new Map<string, Record<string, any>>(
+    (bootstrap.discoverable_cards ?? []).map((c) => [String(c.id), c]),
+  );
+  const discoverablePools: DiscoverableSlot[] = [];
+  for (const code of scenarioRow.initial_location_codes) {
+    const loc = locByCode.get(code);
+    const ids = (loc?.discoverable_card_ids ?? []) as string[];
+    ids.forEach((cardDefId, idx) => {
+      const src = discData.get(String(cardDefId));
+      if (!src) return; // 沒撈到卡面的 dangling id 略過(防呆)
+      const instanceId = `${cardInstancePrefix}ci_${(cardSeq += 1)}`;
+      cardIndex[instanceId] = {
+        instanceId,
+        source: 'card_definition',
+        sourceId: String(src.id),
+        name_zh: String(src.name_zh ?? ''),
+        card_type: src.card_type ? String(src.card_type) : undefined,
+        cost: src.cost ?? null,
+        data: src,
+      };
+      discoverablePools.push({ id: `${code}__disc__${idx}`, locationId: code, cardInstanceId: instanceId, takenBy: null });
+    });
+  }
+  scenario.discoverablePools = discoverablePools;
 
   const shuffled = shuffle(allInstances, rng);
   const hand = shuffled.slice(0, openingHandSize);

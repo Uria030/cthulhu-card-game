@@ -119,6 +119,27 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
+      // ── 可發現卡片資源(地點 discoverable_card_ids 指向的卡面;支柱6+8 探索獲卡)──
+      const discCardIds = [
+        ...new Set(locations.flatMap((l: any) => l.discoverable_card_ids || [])),
+      ].filter(Boolean);
+      const [discDefRes, discFxRes] = await Promise.all([
+        discCardIds.length
+          ? pool.query('SELECT * FROM card_definitions WHERE id = ANY($1)', [discCardIds])
+          : Promise.resolve({ rows: [] as any[] }),
+        discCardIds.length
+          ? pool.query(
+              `SELECT * FROM card_effects
+                WHERE card_def_id = ANY($1) ORDER BY card_def_id, sort_order`,
+              [discCardIds],
+            )
+          : Promise.resolve({ rows: [] as any[] }),
+      ]);
+      const discoverableCards = discDefRes.rows.map((c: any) => ({
+        ...c,
+        effects: discFxRes.rows.filter((e: any) => e.card_def_id === c.id),
+      }));
+
       // ── 三池完整卡面(loadFullStage 只帶名稱,這裡補全卡內容)──
       const mythosIds = (stage.mythos_pool || []).map((p: any) => p.mythos_card_id).filter(Boolean);
       const encounterIds = (stage.encounter_pool || []).map((p: any) => p.encounter_card_id).filter(Boolean);
@@ -306,6 +327,7 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
           investigator,
           combat_style_pools: stylePools,
           keeper_settings: keeperSettings,
+          discoverable_cards: discoverableCards,
         },
       });
     } catch (error) {

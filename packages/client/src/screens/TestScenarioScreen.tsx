@@ -152,6 +152,11 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'upkeep_draw': return '🂠 整裝:抽 1 張牌';
     case 'upkeep_income': return '🪙 整裝:獲得 ' + (p.amount as number) + ' 資源';
     case 'hand_limit_discard': return '🂠 手牌超過上限,棄掉 ' + (p.count as number) + ' 張';
+    case 'hidden_point_revealed': return '👁 ' + (p.narrative as string);
+    case 'hidden_investigate_fail': return '🔎 ' + (p.narrative as string);
+    case 'hidden_reward': return '🗝 ' + (p.narrative as string) + ((p.gotLimited as boolean) ? '(限定獎勵!)' : '');
+    case 'search_fail': return '🔍 ' + (p.narrative as string);
+    case 'discover_card': return '🎴 ' + (p.narrative as string);
     default: return eff.type;
   }
 }
@@ -1028,6 +1033,23 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               <button onClick={() => submitIntent('gain_resource')}>拿資源</button>
               <button onClick={() => submitIntent('draw_card')}>抽卡</button>
               <button onClick={() => submitCheckIntent('investigate')}>調查</button>
+              {(scenario.discoverablePools ?? []).some(
+                (s) => s.locationId === investigator.currentLocationId && s.takenBy === null,
+              ) && (
+                <button onClick={() => submitCheckIntent('search')}>🔍 搜尋</button>
+              )}
+              {(scenario.hiddenPoints ?? [])
+                .filter(
+                  (p) =>
+                    p.locationId === investigator.currentLocationId &&
+                    p.revealedTo.includes(investigator.investigatorId) &&
+                    !p.claimedBy.includes(investigator.investigatorId),
+                )
+                .map((p) => (
+                  <button key={p.id} onClick={() => submitCheckIntent('investigate_hidden', { pointId: p.id })}>
+                    🔎 調查隱藏內容:{p.title}
+                  </button>
+                ))}
               {moveTargets.map((tid) => {
                 const meta = locMeta[tid];
                 const target = scenario.locations.find((l) => l.locationDefinitionId === tid);

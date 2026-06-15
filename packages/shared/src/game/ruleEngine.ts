@@ -232,6 +232,8 @@ export function resolveIntent(intent: IntentMessage, ctx: RuleContext): RuleReso
       out = resolveInvestigate(intent, ctx); break;
     case 'investigate_hidden':
       out = resolveInvestigateHidden(intent, ctx); break;
+    case 'search':
+      out = resolveSearch(intent, ctx); break;
     case 'attack':
       out = resolveAttack(intent, ctx); break;
     case 'evade':
@@ -688,6 +690,74 @@ function resolveInvestigateHidden(intent: IntentMessage, ctx: RuleContext): Rule
           limitedFlag: claim.limitedFlag,
         },
         targetId: locId,
+      },
+    ],
+    { investigator: newInv, scenario: newScenario },
+  );
+}
+
+/**
+ * 搜尋 — 支柱6 探索 + 支柱8 動態牌組:對地點的可發現卡池做感知檢定,
+ * 成功從池中取一張(bootstrap 預先實例化)進棄牌堆(短休息洗牌時入庫)。
+ * 資源有限,全隊共享耗盡。合法性檢查(不耗費用)先行,確認後才擲骰。
+ * payload: { commitCardIds? }
+ */
+function resolveSearch(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
+  const locId = ctx.investigator.currentLocationId || '';
+  const pools = ctx.scenario.discoverablePools ?? [];
+  const slotIdx = pools.findIndex((s) => s.locationId === locId && s.takenBy === null);
+  if (slotIdx < 0) {
+    return reject(intent, '這個地點已經沒有可發現的東西了', '換個地點探索,或進行一般調查找線索');
+  }
+  if (ctx.investigator.actionPoints < 1) {
+    return reject(intent, '行動點不足:搜尋需 1,剩 ' + ctx.investigator.actionPoints);
+  }
+  const commit = takeCommit(intent, ctx, 'perception');
+  if (commit.error) return reject(intent, commit.error);
+
+  const dc = ctx.locationStats?.[locId]?.shroud ?? 10;
+  const check = resolveCheck(
+    dc,
+    {
+      attribute: ctx.investigator.attributes.perception,
+      commit: commit.value,
+      situational: attachmentTestModifier(ctx.scenario.keeperAttachments, 'perception'),
+    },
+    ctx.rng,
+  );
+  const success = check.outcome === 'success';
+  const baseInv: InvestigatorState = {
+    ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
+    actionPoints: ctx.investigator.actionPoints - 1,
+  };
+  const baseEffects: ResultEffect[] = [
+    { type: 'spend_action_point', params: { amount: 1 } },
+    ...commitEffects(commit),
+    { type: 'roll_d20', params: { roll: check.roll, attribute: 'perception', modifier: check.total - check.roll, total: check.total, dc, outcome: success ? 'success' : 'fail' } },
+  ];
+  if (!success) {
+    return accept(
+      intent,
+      [...baseEffects, { type: 'search_fail', params: { narrative: '你仔細搜了一遍,沒找到有用的東西。' } }],
+      { investigator: baseInv },
+    );
+  }
+  // 成功:取池中第一張(預製)進棄牌堆,標記該槽位已被拿
+  const slot = pools[slotIdx];
+  const cardName = ctx.cardLookup?.[slot.cardInstanceId]?.name_zh ?? '一件物資';
+  const newInv: InvestigatorState = { ...baseInv, discardPile: [...baseInv.discardPile, slot.cardInstanceId] };
+  const newScenario: ScenarioState = {
+    ...ctx.scenario,
+    discoverablePools: pools.map((s, i) => (i === slotIdx ? { ...s, takenBy: ctx.investigator.investigatorId } : s)),
+  };
+  return accept(
+    intent,
+    [
+      ...baseEffects,
+      {
+        type: 'discover_card',
+        params: { cardInstanceId: slot.cardInstanceId, name: cardName, narrative: '你找到了「' + cardName + '」,把它收進了行囊。', toPile: 'discard' },
+        targetId: ctx.investigator.investigatorId,
       },
     ],
     { investigator: newInv, scenario: newScenario },

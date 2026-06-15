@@ -56,6 +56,8 @@ export interface ScenarioState {
   tokens: TokenInstance[];
   /** 隱藏調查點(規則書 §13;bootstrap 從地點 hidden_info 載入,純資料層,動態揭露/領取) */
   hiddenPoints?: HiddenPoint[];
+  /** 可發現卡片資源池(支柱6 探索 + 支柱8 動態牌組;bootstrap 從地點 discoverable_card_ids 預實例化) */
+  discoverablePools?: DiscoverableSlot[];
   /** 議程進度(當前議程卡上的毀滅標記數,規則書 §1.5) */
   agendaProgress: number;
   /** 目標進度(累計線索,幕推進依據) */
@@ -104,6 +106,22 @@ export interface TokenInstance {
   tokenType: 'clue' | 'doom' | 'hidden_investigation_point' | 'haunting' | 'bless' | 'curse';
   locationId: string;
   amount: number;
+}
+
+/**
+ * 可發現卡片資源槽(支柱6 探索 + 支柱8 動態牌組)。
+ * bootstrap 從地點 discoverable_card_ids 預先實例化(instance id 已註冊進 cardIndex/cardLookup),
+ * 擱在池中;搜尋成功時把 cardInstanceId 移進牌組。資源有限,全隊共享耗盡。
+ */
+export interface DiscoverableSlot {
+  /** 槽位唯一 id(bootstrap 產:`${locationCode}__disc__${index}`) */
+  id: string;
+  /** 所在地點 code */
+  locationId: string;
+  /** 預先實例化好的卡片 instance id;搜尋成功移進牌組(棄牌堆) */
+  cardInstanceId: string;
+  /** 被誰拿走(null = 還在池中) */
+  takenBy: string | null;
 }
 
 export interface ChaosToken {

@@ -746,6 +746,53 @@ test('§13.3 investigate_hidden:同一人重領 → 駁回', () => {
   assertEq(r.result.outcome, 'rejected');
 });
 
+// ─── 搜尋/探索獲卡(支柱6+8 wiring)──────────
+function ctxWithPools(slots: ScenarioState['discoverablePools'], invOverrides: Partial<InvestigatorState> = {}, rng?: () => number): RuleContext {
+  const base = makeCtx(invOverrides);
+  return { ...base, scenario: { ...base.scenario, discoverablePools: slots }, rng };
+}
+
+test('搜尋:地點無可發現資源 → 駁回,不耗行動點', () => {
+  const ctx = ctxWithPools([], { currentLocationId: 'loc-a', actionPoints: 3 });
+  const r = resolveIntent(makeIntent('search'), ctx);
+  assertEq(r.result.outcome, 'rejected');
+  assertEq(r.newState, undefined);
+});
+
+test('搜尋:成功 → discover_card + 卡進棄牌堆 + 槽位標記已拿', () => {
+  const ctx = ctxWithPools(
+    [{ id: 'loc-a__disc__0', locationId: 'loc-a', cardInstanceId: 'disc1', takenBy: null }],
+    { currentLocationId: 'loc-a', actionPoints: 3, discardPile: [] }, () => 0.95,
+  );
+  const r = resolveIntent(makeIntent('search'), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.actionPoints, 2);
+  assertEq((r.result.effects ?? []).some((e) => e.type === 'discover_card'), true);
+  assertEq(r.newState?.investigator?.discardPile.includes('disc1'), true);
+  assertEq(r.newState?.scenario?.discoverablePools?.[0].takenBy, 'inv-1');
+});
+
+test('搜尋:失敗 → search_fail,不獲卡(仍耗行動點)', () => {
+  const ctx = ctxWithPools(
+    [{ id: 'loc-a__disc__0', locationId: 'loc-a', cardInstanceId: 'disc1', takenBy: null }],
+    { currentLocationId: 'loc-a', actionPoints: 3, discardPile: [] }, () => 0,
+  );
+  const r = resolveIntent(makeIntent('search'), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.actionPoints, 2);
+  assertEq((r.result.effects ?? []).some((e) => e.type === 'search_fail'), true);
+  assertEq(r.newState?.investigator?.discardPile.includes('disc1'), false);
+});
+
+test('搜尋:該地點資源已耗盡(takenBy 已設) → 駁回', () => {
+  const ctx = ctxWithPools(
+    [{ id: 'loc-a__disc__0', locationId: 'loc-a', cardInstanceId: 'disc1', takenBy: 'inv-9' }],
+    { currentLocationId: 'loc-a', actionPoints: 3 },
+  );
+  const r = resolveIntent(makeIntent('search'), ctx);
+  assertEq(r.result.outcome, 'rejected');
+});
+
 // ─── runner ─────────────────────────
 let passed = 0;
 let failed = 0;

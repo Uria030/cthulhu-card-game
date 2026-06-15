@@ -503,7 +503,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       horror: Math.min(damageAlloc.horror, target.horrorCapacity),
     }]);
     for (const eff of r.effects) append('[傷害分配] ' + describeEffect(eff, locMeta));
-    setInvestigator(r.investigator);
+    // 分配回血可能把玩家拉出瀕死 → 重新同步瀕死狀態(§9.5)
+    const sync = syncDownedState(r.investigator);
+    for (const eff of sync.effects) append('[結算] ' + describeEffect(eff, locMeta));
+    setInvestigator(sync.investigator);
     setDamageAlloc(null);
   }, [damageAlloc, investigator, locMeta]);
 

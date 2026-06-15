@@ -1,7 +1,7 @@
 /**
- * G-08 盟友傷害分配測試 — ch3 §11(v0 自動吸收)
+ * G-08 盟友傷害分配測試 — ch3 §11(Modal 玩家選擇)
  */
-import { allocateIncomingDamage, applyDamageWithAllies } from './ally';
+import { allocatableTargets, applyIncomingDamageToPlayer, applyDamageAllocation } from './ally';
 import type { AllyState, InvestigatorState } from './state';
 
 type TestFn = () => void;
@@ -23,38 +23,44 @@ function makeInv(over: Partial<InvestigatorState> = {}): InvestigatorState {
   };
 }
 
-test('物理:最高HP盟友吸,吸滿陣亡 overflow 給調查員', () => {
-  const r = allocateIncomingDamage([mk({ hp: 3, san: 2 })], 5, 0);
-  assertEq(r.toInvestigator.physical, 2, '5-3 overflow');
-  assertEq(r.allies.length, 0, 'HP 0 → 離場');
+test('allocatableTargets:列場上盟友的吸收上限(=HP/SAN)', () => {
+  const t = allocatableTargets(makeInv({ allies: [mk({ hp: 3, san: 1 })] }));
+  assertEq(t.length, 1);
+  assertEq(t[0].physicalCapacity, 3);
+  assertEq(t[0].horrorCapacity, 1);
+});
+
+test('applyIncomingDamageToPlayer:結在玩家 + 有盟友且非direct → emit damage_allocatable', () => {
+  const r = applyIncomingDamageToPlayer(makeInv({ allies: [mk()] }), 5, 0);
+  assertEq(r.investigator.hp, 5, '先全部結在玩家(10-5)');
+  assertEq(r.effects.some((e) => e.type === 'damage_allocatable'), true);
+});
+
+test('applyIncomingDamageToPlayer:direct → 不可分配,無 modal', () => {
+  const r = applyIncomingDamageToPlayer(makeInv({ allies: [mk()] }), 5, 0, { direct: true });
+  assertEq(r.effects.some((e) => e.type === 'damage_allocatable'), false, 'direct 不跳 Modal');
+});
+
+test('applyIncomingDamageToPlayer:無可分配卡 → 不 emit', () => {
+  const r = applyIncomingDamageToPlayer(makeInv({ allies: [] }), 5, 0);
+  assertEq(r.effects.length, 0);
+});
+
+test('applyDamageAllocation:把傷害移到盟友 → 玩家回血、盟友扣血', () => {
+  // 玩家已受 5 傷(hp 5),選把 3 分給盟友
+  const inv = makeInv({ hp: 5, allies: [mk({ hp: 3, san: 1 })] });
+  const r = applyDamageAllocation(inv, [{ cardInstanceId: 'a1', physical: 3 }]);
+  assertEq(r.investigator.hp, 8, '回血 3(5+3,不超上限)');
+  assertEq(r.investigator.allies?.length, 0, '盟友 HP 0 → 離場');
   assertEq(r.effects.some((e) => e.type === 'ally_soak'), true);
   assertEq(r.effects.some((e) => e.type === 'ally_defeated'), true);
 });
 
-test('恐懼:最高SAN盟友吸,未歸0留場', () => {
-  const r = allocateIncomingDamage([mk({ hp: 2, san: 3 })], 0, 2);
-  assertEq(r.allies[0]?.san, 1);
-  assertEq(r.toInvestigator.horror, 0);
-  assertEq(r.allies.length, 1, '兩池都>0 留場');
-});
-
-test('多盟友:物理找最高HP那個', () => {
-  const r = allocateIncomingDamage([mk({ cardInstanceId: 'x', hp: 1, san: 3 }), mk({ cardInstanceId: 'y', hp: 4, san: 3 })], 2, 0);
-  const y = r.allies.find((a) => a.cardInstanceId === 'y');
-  assertEq(y?.hp, 2, '最高HP的 y 吸 2');
-  assertEq(r.allies.find((a) => a.cardInstanceId === 'x')?.hp, 1, 'x 不受影響');
-});
-
-test('無盟友:原樣給調查員', () => {
-  const r = allocateIncomingDamage([], 4, 2);
-  assertEq(r.toInvestigator.physical, 4);
-  assertEq(r.toInvestigator.horror, 2);
-});
-
-test('applyDamageWithAllies:盟友吸後調查員只受 overflow', () => {
-  const r = applyDamageWithAllies(makeInv({ allies: [mk({ hp: 3, san: 2 })] }), 5, 0);
-  assertEq(r.investigator.hp, 8, '盟友吸3,調查員受 overflow 2');
-  assertEq(r.investigator.allies?.length, 0, '盟友陣亡離場');
+test('applyDamageAllocation:分配量夾在盟友剩餘上限', () => {
+  const inv = makeInv({ hp: 0, allies: [mk({ hp: 2, san: 2 })] });
+  const r = applyDamageAllocation(inv, [{ cardInstanceId: 'a1', physical: 9 }]); // 想分 9 但盟友只 2 HP
+  assertEq(r.investigator.hp, 2, '只回血 2(夾盟友上限)');
+  assertEq(r.investigator.allies?.length, 0, '盟友 HP 0 → 離場');
 });
 
 // ─── runner ─────────────────────────

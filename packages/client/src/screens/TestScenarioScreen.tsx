@@ -45,6 +45,8 @@ import type {
   ResultEffect,
   EnemyInstance,
 } from '@cthulhu/shared';
+import { applyDamageAllocation } from '@cthulhu/shared';
+import type { AllocatableTarget } from '@cthulhu/shared';
 import { fetchBootstrap } from '../api';
 import { getSelectedInvestigator } from '../game/selectedInvestigator';
 import { makeTestSetup, buildSetupFromBootstrap } from '../game/gameSetup';
@@ -279,6 +281,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
 
   // 浮層狀態
   const [modal, setModal] = useState<ModalType>(null);
+  // §11 傷害分配 Modal:受傷且場上有可分配卡時跳出讓玩家分配
+  const [damageAlloc, setDamageAlloc] = useState<{ physical: number; horror: number; targets: AllocatableTarget[] } | null>(null);
   const [panel, setPanel] = useState<PanelType>(null);
   // 投入加值選擇(下一次檢定動作帶上,送出後清空)
   const [commitSelection, setCommitSelection] = useState<string[]>([]);
@@ -470,6 +474,12 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       );
       setScenario(next.sc);
       setInvestigator(next.inv);
+      // §11 受傷且有可分配卡 → 跳傷害分配 Modal
+      const da = (out.result.effects ?? []).find((e) => e.type === 'damage_allocatable');
+      if (da) {
+        const dp = da.params as { physical?: number; horror?: number; targets?: AllocatableTarget[] };
+        setDamageAlloc({ physical: Number(dp.physical ?? 0), horror: Number(dp.horror ?? 0), targets: dp.targets ?? [] });
+      }
       if ((intent.payload as { commitCardIds?: unknown }).commitCardIds) {
         setCommitSelection([]);
       }
@@ -483,6 +493,19 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   ) => {
     submitIntent(actionType, commitSelection.length > 0 ? { ...payload, commitCardIds: commitSelection } : payload);
   }, [submitIntent, commitSelection]);
+
+  // §11 把這次傷害分配給選定的卡(目前 v0 = 盟友;一鍵讓它擋下能擋的部分)
+  const allocateDamageTo = useCallback((target: AllocatableTarget) => {
+    if (!damageAlloc) return;
+    const r = applyDamageAllocation(investigator, [{
+      cardInstanceId: target.cardInstanceId,
+      physical: Math.min(damageAlloc.physical, target.physicalCapacity),
+      horror: Math.min(damageAlloc.horror, target.horrorCapacity),
+    }]);
+    for (const eff of r.effects) append('[傷害分配] ' + describeEffect(eff, locMeta));
+    setInvestigator(r.investigator);
+    setDamageAlloc(null);
+  }, [damageAlloc, investigator, locMeta]);
 
   const toggleCommit = (cardId: string) => {
     setCommitSelection((sel) =>
@@ -635,6 +658,12 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       if (after) updatedAIs[idx] = after;
     });
     for (const eff of act.effects) append('[神話階段] ' + describeEffect(eff, locMeta));
+    // §11 玩家受傷且有可分配卡 → 跳傷害分配 Modal(神話階段批次結算後)
+    const mythosDa = act.effects.find((e) => e.type === 'damage_allocatable' && e.targetId === inv.investigatorId);
+    if (mythosDa) {
+      const dp = mythosDa.params as { physical?: number; horror?: number; targets?: AllocatableTarget[] };
+      setDamageAlloc({ physical: Number(dp.physical ?? 0), horror: Number(dp.horror ?? 0), targets: dp.targets ?? [] });
+    }
 
     // 倒地狀態同步(§9:歸零 → 瀕死,不是直接出局)
     {
@@ -1246,6 +1275,29 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       )}
 
       {/* === Modal 議程 === */}
+      {damageAlloc && (
+        <div className="modal-backdrop active">
+          <div className="modal-frame">
+            <div className="modal-title">🩹 傷害分配（§11）</div>
+            <div className="modal-narrative">
+              這一擊造成
+              {damageAlloc.physical > 0 ? ` ${damageAlloc.physical} 物理` : ''}
+              {damageAlloc.physical > 0 && damageAlloc.horror > 0 ? ' /' : ''}
+              {damageAlloc.horror > 0 ? ` ${damageAlloc.horror} 恐懼` : ''}
+              。要讓誰替你擋下?
+            </div>
+            <hr className="modal-divider" />
+            <div className="action-row">
+              {damageAlloc.targets.map((t) => (
+                <button key={t.cardInstanceId} onClick={() => allocateDamageTo(t)}>
+                  🤝 {t.name}（可擋 HP {t.physicalCapacity} / SAN {t.horrorCapacity}）
+                </button>
+              ))}
+              <button onClick={() => setDamageAlloc(null)}>🧍 我自己扛</button>
+            </div>
+          </div>
+        </div>
+      )}
       {modal === 'keeper' && (
         <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) closeAllOverlays(); }}>
           <div className="modal-frame modal-keeper">

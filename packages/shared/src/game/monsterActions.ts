@@ -19,7 +19,7 @@ import type { InvestigatorState, ScenarioState, EnemyInstance } from './state';
 import { resolveCheck } from './checks';
 import type { AttributeKey } from './checks';
 import { modifyIncomingDamage, applyCheckStatus, tickEnemyStatus, normalizeElement } from './statusEffects';
-import { applyDamageWithAllies } from './ally';
+import { applyIncomingDamageToPlayer } from './ally';
 import {
   locationDistance,
   stepToward,
@@ -94,14 +94,14 @@ export function resolveDeathKeywords(
     if (check.outcome === 'fail') {
       if (hasCrush) {
         const dmg = modifyIncomingDamage(next.statusEffects, Number(enemyData?.damage_physical ?? 1), 0).physical;
-        const ad = applyDamageWithAllies(next, dmg, 0); // §11 盟友先吸
+        const ad = applyIncomingDamageToPlayer(next, dmg, 0); // §11 盟友先吸
         next = ad.investigator;
         effects.push({ type: 'crush_damage', params: { amount: dmg, narrative: name + '崩塌的軀體壓了下來。' }, targetId: id });
         effects.push(...ad.effects);
       }
       if (hasCurse) {
         const dmg = modifyIncomingDamage(next.statusEffects, 0, Number(enemyData?.damage_horror ?? 1)).horror;
-        const ad = applyDamageWithAllies(next, 0, dmg); // §11 盟友先吸
+        const ad = applyIncomingDamageToPlayer(next, 0, dmg); // §11 盟友先吸
         next = ad.investigator;
         effects.push({ type: 'curse_damage', params: { amount: dmg, narrative: name + '的死亡詛咒鑽進你的腦海。' }, targetId: id });
         effects.push(...ad.effects);
@@ -220,7 +220,7 @@ export function runFearChecks(
     if (check.outcome === 'fail') {
       // 恐懼=恐懼傷害:套用發瘋/標記(+)、護盾(−)(§6.2/§6.3)
       const { horror: fear } = modifyIncomingDamage(inv.statusEffects, 0, Number(data.fear_value ?? 1));
-      const ad = applyDamageWithAllies(inv, 0, fear); // §11 盟友(精神支柱)先吸
+      const ad = applyIncomingDamageToPlayer(inv, 0, fear); // §11 盟友(精神支柱)先吸
       inv = ad.investigator;
       effects.push({
         type: 'fear_damage',
@@ -247,7 +247,7 @@ export function applyAttackOfOpportunity(
     const data = enemyData[enemy.enemyDefinitionId] ?? {};
     // 受傷狀態修正(中毒/脆弱/標記 + / 護甲/護盾 −,§6)
     const dmg = modifyIncomingDamage(inv.statusEffects, Number(data.damage_physical ?? 1), Number(data.damage_horror ?? 0));
-    const ad = applyDamageWithAllies(inv, dmg.physical, dmg.horror); // §11 盟友先吸
+    const ad = applyIncomingDamageToPlayer(inv, dmg.physical, dmg.horror); // §11 盟友先吸
     inv = ad.investigator;
     effects.push({
       type: 'attack_of_opportunity',
@@ -295,7 +295,7 @@ function monsterAttackOnce(
   if (check.outcome === 'fail') {
     // 受傷狀態修正(§6)
     const dmg = modifyIncomingDamage(inv.statusEffects, phys, horror);
-    const ad = applyDamageWithAllies(inv, dmg.physical, dmg.horror); // §11 盟友先吸
+    const ad = applyIncomingDamageToPlayer(inv, dmg.physical, dmg.horror); // §11 盟友先吸
     inv = ad.investigator;
     effects.push({
       type: 'monster_attack_hit',

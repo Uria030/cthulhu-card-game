@@ -1,82 +1,114 @@
 /**
- * G-08 引擎核心 — 盟友傷害分配(ch3 §11)
+ * G-08 引擎核心 — 盟友 + 傷害分配(ch3 §10.5 / §11)
  *
- * 規格:調查員受到傷害/恐懼時,可分配到場上盟友卡(direct 強制本人、area 全場)。
- * **v0 簡化(Uria 待覆核)**:沒有互動層之前,改「盟友自動吸收」——
- * 物理由最高 HP 的盟友(肉盾)吸、恐懼由最高 SAN 的盟友(精神支柱)吸,封頂後 overflow 給調查員。
- * 真正的「玩家選擇分配多少/分給誰」需演出/互動層(Phase 2);direct/area 待資料補欄位。
+ * §11 傷害分配(Uria 拍板):調查員受傷時,若場上有可分配的卡(盟友/裝備/其他),
+ * **跳傷害分配 Modal 讓玩家自己調**。引擎做法(神話階段批次結算,不阻塞):
+ * 1. 傷害先全部結在調查員身上;
+ * 2. 若非 direct 且有「可分配目標」→ emit `damage_allocatable`(供 client 開 Modal);
+ * 3. 玩家在 Modal 選好 → 送 `allocate_damage` intent → `applyDamageAllocation` 把傷害從調查員
+ *    移到選定的卡(調查員回血、卡扣血)。
+ *
+ * **接口保留**:direct(強制本人,不可分配)、area(全場卡)等 §11.2 關鍵字先讀,
+ * 資料庫上架對應欄位後即生效(目前怪物攻擊資料無 direct/area 欄位)。
+ * v0 可分配目標 = 盟友(有獨立 HP/SAN);裝備/其他卡的吸收待那些卡的吸收能力資料上架。
  */
 import type { AllyState, InvestigatorState } from './state';
 import type { ResultEffect } from './messages';
 
-export interface AllocateResult {
-  allies: AllyState[];
-  /** 吸收後仍打到調查員的傷害 */
-  toInvestigator: { physical: number; horror: number };
-  effects: ResultEffect[];
+/** 可分配傷害的目標(供 Modal 列出);v0 = 場上盟友 */
+export interface AllocatableTarget {
+  cardInstanceId: string;
+  name: string;
+  /** 可吸收的物理上限(= 剩餘 HP) */
+  physicalCapacity: number;
+  /** 可吸收的恐懼上限(= 剩餘 SAN) */
+  horrorCapacity: number;
+}
+
+export function allocatableTargets(inv: InvestigatorState): AllocatableTarget[] {
+  return (inv.allies ?? [])
+    .filter((a) => a.hp > 0 || a.san > 0)
+    .map((a) => ({ cardInstanceId: a.cardInstanceId, name: a.name, physicalCapacity: a.hp, horrorCapacity: a.san }));
+}
+
+export interface IncomingDamageOpts {
+  /** §11.2 直擊:強制扣調查員本人,不可分配 */
+  direct?: boolean;
 }
 
 /**
- * 把一次傷害(已過狀態修正)分配到盟友,回傳吸收後剩給調查員的量 + 更新後盟友(陣亡者移除)。
- * v0:單一最佳盟友吸收(物理→最高HP / 恐懼→最高SAN);任一池歸 0 → 盟友離場。
+ * 對調查員套用一次傷害(已過狀態修正):全部結在調查員身上;
+ * 若非 direct 且有可分配目標 → emit `damage_allocatable`(client 開 Modal 重分配)。
  */
-export function allocateIncomingDamage(
-  allies: AllyState[] | undefined,
+export function applyIncomingDamageToPlayer(
+  inv: InvestigatorState,
   physical: number,
   horror: number,
-): AllocateResult {
-  const list = (allies ?? []).map((a) => ({ ...a }));
+  opts: IncomingDamageOpts = {},
+): { investigator: InvestigatorState; effects: ResultEffect[] } {
+  const phys = Math.max(0, physical);
+  const hor = Math.max(0, horror);
+  const investigator: InvestigatorState = {
+    ...inv,
+    hp: Math.max(0, inv.hp - phys),
+    san: Math.max(0, inv.san - hor),
+  };
   const effects: ResultEffect[] = [];
-  let phys = Math.max(0, physical);
-  let hor = Math.max(0, horror);
-  if (list.length === 0) {
-    return { allies: list, toInvestigator: { physical: phys, horror: hor }, effects };
+  const targets = opts.direct ? [] : allocatableTargets(inv);
+  if ((phys > 0 || hor > 0) && targets.length > 0) {
+    effects.push({
+      type: 'damage_allocatable',
+      params: { physical: phys, horror: hor, targets, narrative: '有人能替你分擔這一擊 — 要分給誰?' },
+      targetId: inv.investigatorId,
+    });
   }
+  return { investigator, effects };
+}
 
-  // 物理 → 最高 HP 的盟友(肉盾)吸,overflow 給調查員
-  if (phys > 0) {
-    const tank = list.filter((a) => a.hp > 0).sort((a, b) => b.hp - a.hp)[0];
-    if (tank) {
-      const soak = Math.min(phys, tank.hp);
-      tank.hp -= soak;
-      phys -= soak;
-      effects.push({ type: 'ally_soak', params: { ally: tank.name, amount: soak, kind: 'physical', narrative: '「' + tank.name + '」替你擋下攻擊(HP -' + soak + ')。' } });
+export interface DamageAllocation {
+  cardInstanceId: string;
+  physical?: number;
+  horror?: number;
+}
+
+/**
+ * §11 套用玩家在 Modal 選的分配:把傷害從調查員移到選定盟友(調查員回血、盟友扣血)。
+ * 每筆分配上限 = 盟友剩餘 HP/SAN 與調查員「本回合已受傷量」的較小值(由 client 控,引擎再夾一次)。
+ * 任一池歸 0 → 盟友離場。
+ */
+export function applyDamageAllocation(
+  inv: InvestigatorState,
+  allocations: DamageAllocation[],
+): { investigator: InvestigatorState; effects: ResultEffect[] } {
+  const allies = (inv.allies ?? []).map((a) => ({ ...a }));
+  const effects: ResultEffect[] = [];
+  let healHp = 0;
+  let healSan = 0;
+  for (const alloc of allocations) {
+    const ally = allies.find((a) => a.cardInstanceId === alloc.cardInstanceId);
+    if (!ally) continue;
+    const p = Math.min(Math.max(0, alloc.physical ?? 0), ally.hp);
+    const h = Math.min(Math.max(0, alloc.horror ?? 0), ally.san);
+    if (p > 0) { ally.hp -= p; healHp += p; }
+    if (h > 0) { ally.san -= h; healSan += h; }
+    if (p > 0 || h > 0) {
+      effects.push({ type: 'ally_soak', params: { ally: ally.name, physical: p, horror: h, narrative: '「' + ally.name + '」替你擋下了(HP -' + p + ' / SAN -' + h + ')。' }, targetId: inv.investigatorId });
     }
   }
-  // 恐懼 → 最高 SAN 的盟友(精神支柱)吸
-  if (hor > 0) {
-    const pillar = list.filter((a) => a.san > 0).sort((a, b) => b.san - a.san)[0];
-    if (pillar) {
-      const soak = Math.min(hor, pillar.san);
-      pillar.san -= soak;
-      hor -= soak;
-      effects.push({ type: 'ally_soak', params: { ally: pillar.name, amount: soak, kind: 'horror', narrative: '「' + pillar.name + '」為你穩住心神(SAN -' + soak + ')。' } });
-    }
-  }
-
-  // 任一池歸 0 → 盟友離場(§10.5)
+  // 分配出去的量 = 調查員回血(夾在上限內)
   const survivors: AllyState[] = [];
-  for (const a of list) {
+  for (const a of allies) {
     if (a.hp <= 0 || a.san <= 0) {
       effects.push({ type: 'ally_defeated', params: { ally: a.name, narrative: '「' + a.name + '」再也撐不住,倒了下去。' } });
     } else {
       survivors.push(a);
     }
   }
-  return { allies: survivors, toInvestigator: { physical: phys, horror: hor }, effects };
-}
-
-/**
- * 對單一調查員套用一次傷害(已過狀態修正):盟友先吸,剩餘打調查員。
- * 回傳更新後調查員(allies + hp/san)+ 盟友吸收/陣亡效果(主傷害效果由呼叫端另推,顯示總量)。
- */
-export function applyDamageWithAllies(inv: InvestigatorState, physical: number, horror: number): { investigator: InvestigatorState; effects: ResultEffect[] } {
-  const alloc = allocateIncomingDamage(inv.allies, physical, horror);
   const investigator: InvestigatorState = {
     ...inv,
-    allies: alloc.allies,
-    hp: Math.max(0, inv.hp - alloc.toInvestigator.physical),
-    san: Math.max(0, inv.san - alloc.toInvestigator.horror),
+    allies: survivors,
+    hp: Math.min(inv.hpMax, inv.hp + healHp),
+    san: Math.min(inv.sanMax, inv.san + healSan),
   };
-  return { investigator, effects: alloc.effects };
+  return { investigator, effects };
 }

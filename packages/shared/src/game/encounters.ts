@@ -15,7 +15,7 @@ import type { ResultEffect } from './messages';
 import type { ScenarioState, InvestigatorState } from './state';
 import { resolveCheck } from './checks';
 import { modifyIncomingDamage, applyCheckStatus } from './statusEffects';
-import { applyDamageWithAllies } from './ally';
+import { applyIncomingDamageToPlayer } from './ally';
 import type { AttributeKey } from './checks';
 import { spawnEnemy } from './monsterActions';
 import type { EnemyDataLookup } from './monsterActions';
@@ -100,7 +100,7 @@ function applyEncounterEffects(
       case 'deal_horror':
       case 'san_damage': {
         const dmg = modifyIncomingDamage(inv.statusEffects, 0, amount).horror; // §6 發瘋/標記 + / 護盾 −
-        const ad = applyDamageWithAllies(inv, 0, dmg); // §11 盟友先吸
+        const ad = applyIncomingDamageToPlayer(inv, 0, dmg); // §11 盟友先吸
         inv = ad.investigator;
         effects.push({ type: 'fear_damage', params: { amount: dmg, narrative: '某種東西擦過了你的神智。' }, targetId: inv.investigatorId });
         effects.push(...ad.effects);
@@ -109,7 +109,7 @@ function applyEncounterEffects(
       case 'deal_damage':
       case 'hp_damage': {
         const dmg = modifyIncomingDamage(inv.statusEffects, amount, 0).physical; // §6 脆弱/標記 + / 護甲 −
-        const ad = applyDamageWithAllies(inv, dmg, 0); // §11 盟友先吸
+        const ad = applyIncomingDamageToPlayer(inv, dmg, 0); // §11 盟友先吸
         inv = ad.investigator;
         effects.push({ type: 'encounter_damage', params: { amount: dmg, narrative: '你受了傷。' }, targetId: inv.investigatorId });
         effects.push(...ad.effects);

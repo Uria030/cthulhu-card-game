@@ -233,12 +233,11 @@ test('§11.3 crush:同地點隊友閃避失敗受物理傷害', () => {
   assertEq(r.investigators.a1.hp, 7, 'crush 物理 3');
   assertEq(r.effects.some((e) => e.type === 'crush_damage'), true);
 });
-test('§11.3+§11 crush 傷害走盟友分配:盟友先吸,調查員無傷', () => {
+test('§11.3 crush 傷害結在調查員 + 有盟友 → 標記可分配(玩家 Modal 再分)', () => {
   const ally = makeInv({ investigatorId: 'a1', currentLocationId: 'A', hp: 10, allies: [{ cardInstanceId: 'al', name: '盾', hp: 5, hpMax: 5, san: 1, sanMax: 1, attack: 0, exhausted: false }] });
   const r = resolveDeathKeywords(deadEnemy, { keywords: ['crush'], dc: 10, damage_physical: 3 }, { a1: ally }, rngRoll(2));
-  assertEq(r.investigators.a1.hp, 10, '盟友擋下,調查員無傷');
-  assertEq(r.investigators.a1.allies?.[0]?.hp, 2, '盟友 5-3');
-  assertEq(r.effects.some((e) => e.type === 'ally_soak'), true);
+  assertEq(r.investigators.a1.hp, 7, 'crush 3 先結在調查員');
+  assertEq(r.effects.some((e) => e.type === 'damage_allocatable'), true, '有盟友 → 可分配');
 });
 
 test('§11.3 curse_on_death:閃避失敗受恐懼傷害', () => {

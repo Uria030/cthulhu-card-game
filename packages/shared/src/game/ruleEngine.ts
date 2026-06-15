@@ -795,8 +795,13 @@ function resolveSearch(intent: IntentMessage, ctx: RuleContext): RuleResolveOutp
  * 1 行動點(調查員指揮);吃怪物物理抗性;擊殺觸發死亡詞綴。payload: { enemyInstanceId? }
  */
 function resolveAllyAttack(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
-  const ally = ctx.investigator.ally;
-  if (!ally) return reject(intent, '你沒有盟友可以指揮');
+  const allies = ctx.investigator.allies ?? [];
+  if (allies.length === 0) return reject(intent, '你沒有盟友可以指揮');
+  const requestedAllyId = (intent.payload as { allyInstanceId?: string }).allyInstanceId;
+  const ally = requestedAllyId
+    ? allies.find((a) => a.cardInstanceId === requestedAllyId)
+    : allies.find((a) => !a.exhausted && a.attack > 0);
+  if (!ally) return reject(intent, '沒有可出手的盟友(都橫置了或不擅戰鬥)', '回合結束盟友會轉正');
   if (ally.exhausted) return reject(intent, '「' + ally.name + '」這回合已經行動過了(橫置)', '回合結束會轉正');
   if (ally.attack <= 0) return reject(intent, '「' + ally.name + '」不擅長戰鬥(攻擊力 0)');
   if (ctx.investigator.actionPoints < 1) {
@@ -818,7 +823,7 @@ function resolveAllyAttack(intent: IntentMessage, ctx: RuleContext): RuleResolve
   const newInv: InvestigatorState = {
     ...ctx.investigator,
     actionPoints: ctx.investigator.actionPoints - 1,
-    ally: { ...ally, exhausted: true },
+    allies: allies.map((a) => (a.cardInstanceId === ally.cardInstanceId ? { ...a, exhausted: true } : a)),
   };
   let sc: ScenarioState = {
     ...ctx.scenario,
@@ -1007,6 +1012,17 @@ function resolveEvade(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
  * 資產/武器/盟友:進場(assetsInPlay),passive 效果由檢定時聚合
  * 技能卡:不可打出(用於加值 commit,ch3 §3.2)
  */
+/** §10.5 盟友欄容量:基準 1 + 場上帶「盟友欄+1」(effect_code: ally_slot)的卡加總 */
+function allyCapacity(inv: InvestigatorState, cardLookup: CardDataLookup): number {
+  let cap = 1;
+  for (const id of inv.assetsInPlay) {
+    for (const e of cardLookup[id]?.effects ?? []) {
+      if (e.effect_code === 'ally_slot') cap += Number((e.effect_params as { amount?: number } | null)?.amount ?? 1);
+    }
+  }
+  return cap;
+}
+
 function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
   if (ctx.investigator.actionPoints < 1) {
     return reject(intent, '行動點不足:打出卡片需 1,剩 ' + ctx.investigator.actionPoints);
@@ -1034,9 +1050,12 @@ function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOu
   if (String(data.combat_style ?? '') === 'arcane' && !canCastSpell(ctx.investigator.statusEffects)) {
     return reject(intent, '你被沈默了 — 無法施放「' + (data.name_zh ?? cardId) + '」(§6.2)', '沈默會在回合末減 1 層');
   }
-  // §10.5 盟友每人限 1 位(不耗費用先檢查)
-  if (data.card_type === 'ally' && ctx.investigator.ally) {
-    return reject(intent, '你已經有一位盟友了(每人限 1 位,§10.5)', '盟友陣亡或離場後才能再帶一位');
+  // §10.5 盟友欄容量(基準 1 + 卡片「盟友欄+1」;不耗費用先檢查)
+  if (data.card_type === 'ally') {
+    const cap = allyCapacity(ctx.investigator, ctx.cardLookup ?? {});
+    if ((ctx.investigator.allies?.length ?? 0) >= cap) {
+      return reject(intent, '盟友欄滿了(上限 ' + cap + ' 位,§10.5)', '盟友陣亡/離場,或先打出提升盟友欄的卡');
+    }
   }
   const cost = Number(data.cost ?? 0);
   if (ctx.investigator.resources < cost) {
@@ -1080,17 +1099,15 @@ function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOu
   if (data.card_type === 'ally') {
     const ahp = Number(data.ally_hp ?? 1);
     const asan = Number(data.ally_san ?? 1);
-    inv = {
-      ...inv,
-      ally: {
-        cardInstanceId: cardId,
-        name: data.name_zh ?? '盟友',
-        hp: ahp, hpMax: ahp, san: asan, sanMax: asan,
-        attack: Math.max(0, Number(data.damage ?? 0)),
-        exhausted: false,
-      },
+    const newAlly = {
+      cardInstanceId: cardId,
+      name: data.name_zh ?? '盟友',
+      hp: ahp, hpMax: ahp, san: asan, sanMax: asan,
+      attack: Math.max(0, Number(data.damage ?? 0)),
+      exhausted: false,
     };
-    return accept(intent, [...baseEffects, { type: 'ally_enters_play', params: { cardInstanceId: cardId, name: data.name_zh ?? '盟友', hp: ahp, san: asan, attack: Number(data.damage ?? 0), narrative: '「' + (data.name_zh ?? '盟友') + '」站到了你身邊。' } }], { investigator: inv });
+    inv = { ...inv, allies: [...(inv.allies ?? []), newAlly] };
+    return accept(intent, [...baseEffects, { type: 'ally_enters_play', params: { cardInstanceId: cardId, name: newAlly.name, hp: ahp, san: asan, attack: newAlly.attack, narrative: '「' + newAlly.name + '」站到了你身邊。' } }], { investigator: inv });
   }
 
   // 資產/武器:進場(有使用次數的初始化彈藥/充能,ch3 §10.1)

@@ -174,7 +174,7 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'haunting_revive': return '👻 ' + (p.narrative as string);
     case 'ally_enters_play': return '🤝 ' + (p.narrative as string) + '(HP ' + (p.hp as number) + '/SAN ' + (p.san as number) + '/攻 ' + (p.attack as number) + ')';
     case 'ally_attack': return '🤝 ' + (p.narrative as string) + '(' + (p.damage as number) + ' 點)';
-    case 'ally_readied': return '🤝 「' + (p.ally as string) + '」回復行動';
+    case 'ally_readied': return '🤝 盟友轉正(' + (p.count as number) + ' 位回復行動)';
     default: return eff.type;
   }
 }

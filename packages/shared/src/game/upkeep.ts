@@ -40,6 +40,13 @@ export function runTurnEndUpkeep(inv: InvestigatorState): UpkeepResult {
   let next = inv;
   const effects: ResultEffect[] = [];
 
+  // §10.5 盟友橫置轉正(獨立單位,不受調查員瀕死影響 → 在守門之前結算)
+  const allies0 = next.allies;
+  if (allies0?.some((a) => a.exhausted)) {
+    next = { ...next, allies: allies0.map((a) => (a.exhausted ? { ...a, exhausted: false } : a)) };
+    effects.push({ type: 'ally_readied', params: { count: allies0.length } });
+  }
+
   // 倒地/死亡者不結算補給(§9 瀕死狀態不能執行任何行動)
   if (next.permanentlyDead || next.hp <= 0 || next.san <= 0) {
     return { investigator: next, effects };
@@ -77,12 +84,6 @@ export function runTurnEndUpkeep(inv: InvestigatorState): UpkeepResult {
     for (const id of exhaustedIds) readied[id] = { ...readied[id], exhausted: false };
     next = { ...next, assetState: readied };
     effects.push({ type: 'assets_readied', params: { count: exhaustedIds.length } });
-  }
-  // §10.5 盟友橫置轉正
-  if (next.ally?.exhausted) {
-    const readiedAlly = { ...next.ally, exhausted: false };
-    next = { ...next, ally: readiedAlly };
-    effects.push({ type: 'ally_readied', params: { ally: readiedAlly.name } });
   }
 
   // ③ 手牌上限 8,棄至上限(v0:棄最舊)

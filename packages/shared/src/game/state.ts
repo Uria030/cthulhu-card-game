@@ -181,8 +181,8 @@ export interface InvestigatorState {
   triggeredHorrorChecks: string[];
   /** 狀態效果(ch3 §6;code → 層數;0/不存在 = 無。結算見 statusEffects.ts) */
   statusEffects?: Record<string, number>;
-  /** 場上盟友(ch3 §10.5;每位調查員最多 1 位;獨立 HP/SAN,可分配傷害) */
-  ally?: AllyState;
+  /** 場上盟友(ch3 §10.5;獨立 HP/SAN,可分配傷害)。數量上限 = 盟友欄(基準 1 + 卡片「盟友欄+1」) */
+  allies?: AllyState[];
   /** 創傷記錄(規則書支柱 4 第一層) */
   traumas: Trauma[];
   /** 個人秘密任務狀態(規則書 §1.4) */
@@ -202,7 +202,8 @@ export interface InvestigatorState {
 }
 
 /**
- * 盟友卡狀態(ch3 §10.5):獨立 HP/SAN、攻擊力 1-3(橫置自動命中)、每人限 1。
+ * 盟友卡狀態(ch3 §10.5):獨立 HP/SAN、攻擊力 1-3(橫置自動命中)。
+ * 攜帶數量 = 盟友欄(基準 1,可由帶「盟友欄+1」effect 的卡提升)。
  * 傷害分配(ch3 §11)可把調查員受到的傷害/恐懼分到盟友(direct 除外)。
  */
 export interface AllyState {

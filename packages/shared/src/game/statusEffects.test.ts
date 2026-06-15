@@ -3,7 +3,7 @@
  */
 import {
   getLayers, addStatus, removeStatus, clearStealth, decrementOnRoll,
-  turnStartTick, turnEndTick, elementalDamageBonus,
+  turnStartTick, turnEndTick, tickEnemyStatus, elementalDamageBonus,
   incomingPhysicalBonus, incomingHorrorBonus, physicalReduction, horrorReduction, modifyIncomingDamage,
   modifyOutgoingDamage, isMeleeStyle,
   outgoingMeleeReduction, attackHitModifier, moveCostBonus, stealthDamageBonus,
@@ -126,6 +126,14 @@ test('decrementOnRoll:強化/弱化擲骰後各減 1', () => {
 
 test('clearStealth:移動/攻擊後全移除', () => {
   assertEq(getLayers(clearStealth({ stealth: 3 }), 'stealth'), 0);
+});
+
+test('tickEnemyStatus:燃燒/流血/毀滅扣怪 HP + 非特殊減層', () => {
+  const r = tickEnemyStatus(10, { burning: 3, bleed: 1, empowered: 2 });
+  assertEq(r.damage, 4, '3+1 持續傷害');
+  assertEq(r.hp, 6);
+  assertEq(r.statusEffects.burning, 2, '燃燒減 1');
+  assertEq(r.statusEffects.empowered, 2, '強化特殊不減');
 });
 
 // ─── 元素互動(§6.5)──

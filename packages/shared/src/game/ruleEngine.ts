@@ -40,7 +40,7 @@ import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import { attachmentTestModifier } from './keeperAI';
 import { isDowned, applyStabilize } from './dying';
 import { revealOnEnter, revealOnGeneralSuccess, claimHiddenReward } from './hiddenInvestigation';
-import { modifyIncomingDamage, modifyOutgoingDamage, applyCheckStatus, attackHitModifier, clearStealth, isMeleeStyle } from './statusEffects';
+import { modifyIncomingDamage, modifyOutgoingDamage, applyCheckStatus, attackHitModifier, clearStealth, isMeleeStyle, moveCostBonus, canUseAssetAttack, canCastSpell } from './statusEffects';
 
 // ─── 卡片實例資料(容器由 bootstrap cardIndex 餵入)──
 export interface CardData {
@@ -383,7 +383,7 @@ function resolveMove(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput
   if (ctx.scenario.unlockedLocations.length > 0 && !ctx.scenario.unlockedLocations.includes(targetId)) {
     return reject(intent, '「' + targetId + '」這條路還沒打開', '完成當前地點的目標即可解鎖');
   }
-  const cost = target.isObstacle ? 2 : 1;
+  const cost = (target.isObstacle ? 2 : 1) + moveCostBonus(ctx.investigator.statusEffects); // §6.2 冷凍 +1
   if (ctx.investigator.actionPoints < cost) {
     return reject(intent, '行動點不足:移動到「' + targetId + '」需 ' + cost + ',剩 ' + ctx.investigator.actionPoints);
   }
@@ -392,6 +392,7 @@ function resolveMove(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput
     ...ctx.investigator,
     actionPoints: ctx.investigator.actionPoints - cost,
     currentLocationId: targetId,
+    statusEffects: clearStealth(ctx.investigator.statusEffects), // §6.3 移動後移除隱蔽
   };
   const effects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: cost } },
@@ -959,6 +960,10 @@ function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOu
   if (!['asset', 'event', 'ally'].includes(String(data.card_type ?? ''))) {
     return reject(intent, '「' + (data.name_zh ?? cardId) + '」的卡片類型不明(' + String(data.card_type ?? '空') + '),引擎不受理');
   }
+  // §6.2 沈默:無法施放神秘(arcane)卡
+  if (String(data.combat_style ?? '') === 'arcane' && !canCastSpell(ctx.investigator.statusEffects)) {
+    return reject(intent, '你被沈默了 — 無法施放「' + (data.name_zh ?? cardId) + '」(§6.2)', '沈默會在回合末減 1 層');
+  }
   const cost = Number(data.cost ?? 0);
   if (ctx.investigator.resources < cost) {
     return reject(intent, '資源不足:「' + (data.name_zh ?? cardId) + '」需 ' + cost + ',剩 ' + ctx.investigator.resources);
@@ -1032,6 +1037,9 @@ function resolveExecuteCardAction(intent: IntentMessage, ctx: RuleContext): Rule
   const fx = actionFx[idx];
 
   if (fx.effect_code === 'attack') {
+    if (!canUseAssetAttack(ctx.investigator.statusEffects)) {
+      return reject(intent, '你被繳械了 — 無法用資產進行攻擊(§6.2)', '繳械會在回合末減 1 層');
+    }
     return performWeaponAttack(intent, ctx, cardId, fx);
   }
 
@@ -1068,6 +1076,9 @@ function performWeaponAttack(
   const style = String(weapon?.combat_style ?? '');
   // 神秘攻擊例外(ch2 §8.4):施法不擲骰、不抽風格卡 — 一定命中,抽混沌袋定代價
   if (style === 'arcane') {
+    if (!canCastSpell(ctx.investigator.statusEffects)) {
+      return reject(intent, '你被沈默了 — 無法施法(§6.2)', '沈默會在回合末減 1 層');
+    }
     return performSpellAttack(intent, ctx, weaponId, fx);
   }
   const pool = ctx.stylePools?.[style] ?? [];

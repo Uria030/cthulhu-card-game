@@ -10,7 +10,7 @@
  */
 import type { ResultEffect } from './messages';
 import type { InvestigatorState } from './state';
-import { turnStartTick, turnEndTick } from './statusEffects';
+import { turnStartTick, turnEndTick, bonusActionPoints } from './statusEffects';
 
 export const HAND_LIMIT = 8;
 export const STARTING_RESOURCES = 5;
@@ -101,7 +101,15 @@ export function runTurnEndUpkeep(inv: InvestigatorState): UpkeepResult {
 export function runTurnStartUpkeep(inv: InvestigatorState): UpkeepResult {
   if (inv.permanentlyDead) return { investigator: inv, effects: [] };
   const st = turnStartTick(inv);
-  return { investigator: st.investigator, effects: st.effects };
+  let next = st.investigator;
+  const effects: ResultEffect[] = [...st.effects];
+  // §6.3 加速:回合開始額外行動點(在 client 設好本回合 3 點之後呼叫,疊加)
+  const haste = bonusActionPoints(next.statusEffects);
+  if (haste > 0) {
+    next = { ...next, actionPoints: next.actionPoints + haste };
+    effects.push({ type: 'status_haste', params: { amount: haste, narrative: '腎上腺素湧現,你動作快了起來(行動點 +' + haste + ')。' }, targetId: next.investigatorId });
+  }
+  return { investigator: next, effects };
 }
 
 // ─── 短休息(ch2 §3.1:個人決定,放棄本回合行動換重洗牌庫)─────

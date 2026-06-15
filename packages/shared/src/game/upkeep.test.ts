@@ -96,6 +96,12 @@ test('回合開始:燃燒扣 HP(runTurnStartUpkeep)', () => {
   assertEq(r.effects.some((e) => e.type === 'status_burning'), true);
 });
 
+test('回合開始:加速 +行動點(§6.3)', () => {
+  const r = runTurnStartUpkeep(makeInv({ actionPoints: 3, statusEffects: { haste: 2 } }));
+  assertEq(r.investigator.actionPoints, 5);
+  assertEq(r.effects.some((e) => e.type === 'status_haste'), true);
+});
+
 // ─── runner ─────────────────────────────────
 let passed = 0;
 let failed = 0;

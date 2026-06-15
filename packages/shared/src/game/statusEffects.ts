@@ -175,6 +175,31 @@ export function turnEndTick(inv: InvestigatorState): TurnEndStatusResult {
   return { investigator: { ...inv, hp, statusEffects: nextMap }, effects, blockEconomy };
 }
 
+/**
+ * 怪物(敵方階段)狀態結算:燃燒/流血/毀滅狀態扣 HP,然後非特殊狀態減 1 層。
+ * 怪物無 hpMax/SAN,再生暫不套用;回傳新 hp + statusEffects + 傷害 + 效果。
+ */
+export function tickEnemyStatus(hp: number, map: StatusMap | undefined): {
+  hp: number;
+  statusEffects: StatusMap;
+  damage: number;
+  effects: ResultEffect[];
+} {
+  const damage = getLayers(map, 'burning') + getLayers(map, 'bleed') + getLayers(map, 'doom_status');
+  const effects: ResultEffect[] = [];
+  if (damage > 0) {
+    effects.push({ type: 'status_enemy_tick', params: { amount: damage, narrative: '持續效果啃噬著牠(HP -' + damage + ')。' } });
+  }
+  const next: StatusMap = { ...(map ?? {}) };
+  for (const code of Object.keys(next)) {
+    if (SPECIAL_DECREMENT.has(code)) continue;
+    const remaining = getLayers(next, code) - 1;
+    if (remaining > 0) next[code] = remaining;
+    else delete next[code];
+  }
+  return { hp: Math.max(0, hp - damage), statusEffects: next, damage, effects };
+}
+
 // ─── 元素互動(§6.5)──────────────────────────────
 const FIRE = new Set(['fire', '火']);
 const LIGHTNING = new Set(['lightning', 'electric', '雷', '電']);

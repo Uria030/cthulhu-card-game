@@ -179,6 +179,13 @@ test('移動:障礙物地點 2 行動點', () => {
   assertEq(r.newState?.investigator?.actionPoints, 1);
 });
 
+test('移動:冷凍 +1 行動點花費(§6.2)', () => {
+  const ctx = makeCtx({ currentLocationId: 'loc-a', actionPoints: 3, statusEffects: { frozen: 1 } });
+  const r = resolveIntent(makeIntent('move', { targetLocationId: 'loc-b' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.actionPoints, 1, '基礎 1 + 冷凍 1 = 花費 2');
+});
+
 test('移動:非相鄰駁回', () => {
   const ctx = makeCtx({ currentLocationId: 'loc-a' });
   const r = resolveIntent(makeIntent('move', { targetLocationId: 'loc-c' }), ctx);

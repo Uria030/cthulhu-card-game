@@ -20,6 +20,7 @@ import {
   initInvestigatorAIState,
   runInvestigatorAITurn,
   runTurnEndUpkeep,
+  runTurnStartUpkeep,
   runShortRest,
   syncDownedState,
   runDeathSave,
@@ -157,6 +158,13 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'hidden_reward': return '🗝 ' + (p.narrative as string) + ((p.gotLimited as boolean) ? '(限定獎勵!)' : '');
     case 'search_fail': return '🔍 ' + (p.narrative as string);
     case 'discover_card': return '🎴 ' + (p.narrative as string);
+    case 'status_burning': return '🔥 ' + (p.narrative as string);
+    case 'status_regen': return '💚 ' + (p.narrative as string);
+    case 'status_bleed': return '🩸 ' + (p.narrative as string);
+    case 'status_doom': return '☄ ' + (p.narrative as string);
+    case 'status_fatigue': return '😪 ' + (p.narrative as string);
+    case 'status_haste': return '⚡ ' + (p.narrative as string);
+    case 'status_enemy_tick': return '🔥 ' + (p.narrative as string);
     default: return eff.type;
   }
 }
@@ -658,6 +666,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         const up = runTurnEndUpkeep(i);
         for (const eff of up.effects) append('[回合結束] ' + describeEffect(eff, locMeta));
         let next = { ...up.investigator, actionPoints: 3 };
+        // 新回合開始:狀態結算(燃燒/再生/加速,§6;燃燒可能打到瀕死)
+        const start = runTurnStartUpkeep(next);
+        for (const eff of start.effects) append('[回合開始] ' + describeEffect(eff, locMeta));
+        next = syncDownedState(start.investigator).investigator;
         // 新回合調查員階段開頭:瀕死者做瀕死檢定取代行動(§9.3)
         if (isDowned(next)) {
           const save = runDeathSave(next);
@@ -666,14 +678,17 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         }
         return next;
       });
-      // AI 隊友:回合結束補給 + 新回合開頭瀕死檢定(與玩家同一時點,§9.3 時序一致)
+      // AI 隊友:回合結束補給 + 回合開始狀態 + 瀕死檢定(與玩家同一時點,§9.3 時序一致)
       setAiMembers((ms) => ms.map((ai, idx) => {
+        const aiName = setup.aiMembers[idx]?.profile.name_zh ?? 'AI';
         let next = { ...runTurnEndUpkeep(ai).investigator, actionPoints: 3 };
+        const start = runTurnStartUpkeep(next);
+        for (const eff of start.effects) append('[回合開始] ' + describeEffect(eff, locMeta).split('你').join(aiName));
+        next = syncDownedState(start.investigator).investigator;
         if (isDowned(next)) {
           const save = runDeathSave(next);
           next = { ...save.investigator, actionPoints: 0 };
-          const name = setup.aiMembers[idx]?.profile.name_zh ?? 'AI';
-          for (const eff of save.effects) append(`[瀕死] ` + describeEffect(eff, locMeta).split('你').join(name));
+          for (const eff of save.effects) append(`[瀕死] ` + describeEffect(eff, locMeta).split('你').join(aiName));
         }
         return next;
       }));

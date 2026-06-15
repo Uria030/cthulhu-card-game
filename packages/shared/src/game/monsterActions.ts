@@ -18,7 +18,7 @@ import type { ResultEffect } from './messages';
 import type { InvestigatorState, ScenarioState, EnemyInstance } from './state';
 import { resolveCheck } from './checks';
 import type { AttributeKey } from './checks';
-import { modifyIncomingDamage } from './statusEffects';
+import { modifyIncomingDamage, applyCheckStatus, tickEnemyStatus } from './statusEffects';
 import {
   locationDistance,
   stepToward,
@@ -100,8 +100,10 @@ export function runFearChecks(
     if (dist > radius) continue;
 
     const dc = Number(data.dc ?? 10);
-    const check = resolveCheck(dc, { attribute: inv.attributes.willpower }, rng);
-    inv = { ...inv, triggeredHorrorChecks: [...inv.triggeredHorrorChecks, enemy.instanceId] };
+    // §6 強化取好/弱化取差 + 擲骰後減層(玩家防禦擲骰)
+    const cs = applyCheckStatus(inv.statusEffects);
+    const check = resolveCheck(dc, { attribute: inv.attributes.willpower }, rng, cs.rollMode);
+    inv = { ...inv, triggeredHorrorChecks: [...inv.triggeredHorrorChecks, enemy.instanceId], statusEffects: cs.statusEffects };
     effects.push({
       type: 'fear_check',
       params: {
@@ -169,7 +171,9 @@ function monsterAttackOnce(
   const phys = Number(card?.damage_physical ?? data.damage_physical ?? 1);
   const horror = Number(card?.damage_horror ?? data.damage_horror ?? 0);
 
-  const check = resolveCheck(dc, { attribute: investigator.attributes[defAttr] }, rng);
+  // §6 強化取好/弱化取差 + 擲骰後減層(玩家防禦擲骰)
+  const cs = applyCheckStatus(investigator.statusEffects);
+  const check = resolveCheck(dc, { attribute: investigator.attributes[defAttr] }, rng, cs.rollMode);
   const effects: ResultEffect[] = [
     {
       type: 'monster_attack',
@@ -183,7 +187,7 @@ function monsterAttackOnce(
       targetId: enemy.instanceId,
     },
   ];
-  let inv = investigator;
+  let inv = { ...investigator, statusEffects: cs.statusEffects };
   if (check.outcome === 'fail') {
     // 受傷狀態修正(§6)
     const dmg = modifyIncomingDamage(inv.statusEffects, phys, horror);
@@ -234,6 +238,22 @@ export function activateMonsters(
     const enemy = sc.enemies.find((e) => e.instanceId === snapshot.instanceId);
     if (!enemy || enemy.hp <= 0) continue;
     const data = enemyData[enemy.enemyDefinitionId] ?? {};
+
+    // §6 怪物狀態結算(燃燒/流血/毀滅持續傷害 + 減層);死亡則不行動
+    if (enemy.statusEffects && Object.keys(enemy.statusEffects).length > 0) {
+      const tick = tickEnemyStatus(enemy.hp, enemy.statusEffects);
+      sc = {
+        ...sc,
+        enemies: sc.enemies.map((e) =>
+          e.instanceId === enemy.instanceId ? { ...e, hp: tick.hp, statusEffects: tick.statusEffects } : e,
+        ),
+      };
+      for (const eff of tick.effects) effects.push({ ...eff, targetId: enemy.instanceId });
+      if (tick.hp <= 0) {
+        effects.push({ type: 'enemy_defeated', params: { narrative: '牠在持續效果中崩解了。' }, targetId: enemy.instanceId });
+        continue;
+      }
+    }
 
     // 召喚失調(Uria 裁定 2026-06-11):剛被召喚的怪物本回合不啟動,標記用掉即除
     if (enemy.modifiers.includes(SUMMON_SICKNESS)) {

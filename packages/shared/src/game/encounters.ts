@@ -14,6 +14,7 @@
 import type { ResultEffect } from './messages';
 import type { ScenarioState, InvestigatorState } from './state';
 import { resolveCheck } from './checks';
+import { modifyIncomingDamage, applyCheckStatus } from './statusEffects';
 import type { AttributeKey } from './checks';
 import { spawnEnemy } from './monsterActions';
 import type { EnemyDataLookup } from './monsterActions';
@@ -96,15 +97,19 @@ function applyEncounterEffects(
     const amount = Number(fx.amount ?? 1);
     switch (code) {
       case 'deal_horror':
-      case 'san_damage':
-        inv = { ...inv, san: Math.max(0, inv.san - amount) };
-        effects.push({ type: 'fear_damage', params: { amount, narrative: '某種東西擦過了你的神智。' }, targetId: inv.investigatorId });
+      case 'san_damage': {
+        const dmg = modifyIncomingDamage(inv.statusEffects, 0, amount).horror; // §6 發瘋/標記 + / 護盾 −
+        inv = { ...inv, san: Math.max(0, inv.san - dmg) };
+        effects.push({ type: 'fear_damage', params: { amount: dmg, narrative: '某種東西擦過了你的神智。' }, targetId: inv.investigatorId });
         break;
+      }
       case 'deal_damage':
-      case 'hp_damage':
-        inv = { ...inv, hp: Math.max(0, inv.hp - amount) };
-        effects.push({ type: 'encounter_damage', params: { amount, narrative: '你受了傷。' }, targetId: inv.investigatorId });
+      case 'hp_damage': {
+        const dmg = modifyIncomingDamage(inv.statusEffects, amount, 0).physical; // §6 脆弱/標記 + / 護甲 −
+        inv = { ...inv, hp: Math.max(0, inv.hp - dmg) };
+        effects.push({ type: 'encounter_damage', params: { amount: dmg, narrative: '你受了傷。' }, targetId: inv.investigatorId });
         break;
+      }
       case 'place_doom':
         sc = { ...sc, agendaProgress: sc.agendaProgress + amount };
         effects.push({ type: 'doom_added', params: { amount, total: sc.agendaProgress } });
@@ -154,7 +159,9 @@ export function resolveEncounterOption(
     const attr = String(option.check_attribute) as AttributeKey;
     const attrVal = VALID_ATTRS.has(attr) ? investigator.attributes[attr] : 0;
     const dc = Number(option.check_dc ?? 10);
-    const check = resolveCheck(dc, { attribute: attrVal }, rng);
+    // §6 強化取好/弱化取差 + 擲骰後減層
+    const cs = applyCheckStatus(investigator.statusEffects);
+    const check = resolveCheck(dc, { attribute: attrVal }, rng, cs.rollMode);
     const success = check.outcome === 'success';
     effects.push({
       type: 'encounter_check',
@@ -162,7 +169,7 @@ export function resolveEncounterOption(
     });
     const narrative = success ? option.success_narrative_zh : option.failure_narrative_zh;
     if (narrative) effects.push({ type: 'encounter_narrative', params: { narrative } });
-    const applied = applyEncounterEffects(success ? option.success_effects : option.failure_effects, investigator, scenario, enemyData);
+    const applied = applyEncounterEffects(success ? option.success_effects : option.failure_effects, { ...investigator, statusEffects: cs.statusEffects }, scenario, enemyData);
     return { investigator: applied.investigator, scenario: applied.scenario, effects: [...effects, ...applied.effects] };
   }
 

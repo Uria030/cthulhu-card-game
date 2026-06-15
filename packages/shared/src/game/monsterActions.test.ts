@@ -8,6 +8,7 @@ import {
   applyAttackOfOpportunity,
   activateMonsters,
   spawnEnemy,
+  enemyDamageAfterDefense,
 } from './monsterActions';
 import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import type { InvestigatorState, ScenarioState } from './state';
@@ -208,6 +209,17 @@ test('召喚失調:當回合不啟動,次回合恢復行動(Uria 裁定)', () =>
   // 第 2 次啟動:正常逼近
   const r2 = activateMonsters(r1.scenario, { 'inv-1': inv }, ENEMY_DATA, ATTACK_CARDS, rngRoll(15));
   assertEq(r2.scenario.enemies[0].locationId, 'A');
+});
+
+// ─── §11.4 防禦詞綴(抗性/免疫)──
+test('enemyDamageAfterDefense:免疫歸 0 / 抗性減點 / arcane 鐵則穿透 / 無資料原傷', () => {
+  assertEq(enemyDamageAfterDefense({ immunities: ['fire'] }, 'fire', 5), 0, '火免疫');
+  assertEq(enemyDamageAfterDefense({ resistance_values: { physical: 2 } }, 'physical', 5), 3, '物抗 2');
+  assertEq(enemyDamageAfterDefense({ resistance_values: { physical: 9 } }, 'physical', 5), 0, '抗性超量夾 0');
+  assertEq(enemyDamageAfterDefense({ immunities: ['arcane'], resistance_values: { arcane: 9 } }, 'arcane', 5), 5, '神秘鐵則穿透');
+  assertEq(enemyDamageAfterDefense({ immunities: ['thunder'] }, 'electric', 4), 0, 'electric 收斂 thunder');
+  assertEq(enemyDamageAfterDefense({}, 'fire', 5), 5, '無防禦資料原傷');
+  assertEq(enemyDamageAfterDefense(undefined, 'fire', 5), 5, 'undefined 原傷');
 });
 
 // ─── runner ─────────────────────────────────

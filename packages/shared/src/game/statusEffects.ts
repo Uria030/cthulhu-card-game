@@ -201,20 +201,29 @@ export function tickEnemyStatus(hp: number, map: StatusMap | undefined): {
 }
 
 // ─── 元素互動(§6.5)──────────────────────────────
-const FIRE = new Set(['fire', '火']);
-const LIGHTNING = new Set(['lightning', 'electric', '雷', '電']);
-const ICE = new Set(['ice', 'cold', 'frost', '冰']);
+/**
+ * 元素代碼正規化到本專案正名(怪物量產規範 §1.5):physical / fire / ice / thunder / arcane。
+ * 資料不一致(鍛造用 electric、雷用「雷」)統一收斂,否則元素增傷/抗性對不上。
+ */
+const ELEMENT_ALIASES: Record<string, string> = {
+  electric: 'thunder', lightning: 'thunder', '雷': 'thunder', '電': 'thunder',
+  cold: 'ice', frost: 'ice', '冰': 'ice',
+  '火': 'fire', '物理': 'physical', '神秘': 'arcane', arcane_mystic: 'arcane',
+};
+export function normalizeElement(element: string | undefined | null): string {
+  const raw = String(element ?? '');
+  return ELEMENT_ALIASES[raw] ?? ELEMENT_ALIASES[raw.toLowerCase()] ?? raw.toLowerCase();
+}
 
 /**
  * 元素對「帶對應狀態的目標」的增傷(§6.5):
- * 火 vs 燃燒、雷 vs 潮濕、冰 vs 冷凍,各 +該狀態層數。
+ * 火 vs 燃燒、雷(thunder)vs 潮濕、冰 vs 冷凍,各 +該狀態層數。
  */
 export function elementalDamageBonus(map: StatusMap | undefined, element: string | undefined | null): number {
-  if (!element) return 0;
-  const e = String(element).toLowerCase();
-  if (FIRE.has(e) || FIRE.has(element)) return getLayers(map, 'burning');
-  if (LIGHTNING.has(e) || LIGHTNING.has(element)) return getLayers(map, 'wet');
-  if (ICE.has(e) || ICE.has(element)) return getLayers(map, 'frozen');
+  const el = normalizeElement(element);
+  if (el === 'fire') return getLayers(map, 'burning');
+  if (el === 'thunder') return getLayers(map, 'wet');
+  if (el === 'ice') return getLayers(map, 'frozen');
   return 0;
 }
 

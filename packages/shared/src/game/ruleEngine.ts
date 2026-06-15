@@ -35,7 +35,7 @@ import {
 } from './checks';
 import type { AttributeKey, CommitIcons } from './checks';
 import { executeCardEffects, passiveTestModifier } from './effectsExecutor';
-import { runFearChecks, applyAttackOfOpportunity, spawnEnemy } from './monsterActions';
+import { runFearChecks, applyAttackOfOpportunity, spawnEnemy, enemyDamageAfterDefense } from './monsterActions';
 import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import { attachmentTestModifier } from './keeperAI';
 import { isDowned, applyStabilize } from './dying';
@@ -846,7 +846,9 @@ function performAttack(intent: IntentMessage, ctx: RuleContext, enemyInstanceId:
   }
   // 命中:基礎 1 點;自然 20 爆擊 ×2(§7.5)+ 狀態修正(隱蔽傷害/無力近戰;徒手=物理近戰)
   const critBase = check.natural20 ? 2 : 1;
-  const damage = modifyOutgoingDamage(cs.statusEffects, enemy.statusEffects, critBase, 'physical', true);
+  const rawDamage = modifyOutgoingDamage(cs.statusEffects, enemy.statusEffects, critBase, 'physical', true);
+  // §11.4 怪物物理抗性/免疫
+  const damage = enemyDamageAfterDefense(ctx.enemyStats?.[enemy.enemyDefinitionId], 'physical', rawDamage);
   const newHp = enemy.hp - damage;
   const newScenario: ScenarioState = {
     ...ctx.scenario,
@@ -1153,7 +1155,9 @@ function performWeaponAttack(
   const base = Number(params.damage ?? 2) + Number(params.damage_bonus ?? 0);
   const critBase = check.natural20 ? base * 2 : base;
   // 狀態修正:元素增傷(對敵狀態)/ 隱蔽傷害 / 無力近戰(§6.5/§6.3/§6.2)
-  const damage = modifyOutgoingDamage(cs.statusEffects, enemy.statusEffects, critBase, weapon?.damage_element, isMeleeStyle(style));
+  const rawDamage = modifyOutgoingDamage(cs.statusEffects, enemy.statusEffects, critBase, weapon?.damage_element, isMeleeStyle(style));
+  // §11.4 怪物元素抗性/免疫(依武器元素;arcane 鐵則無抗性)
+  const damage = enemyDamageAfterDefense(ctx.enemyStats?.[enemy.enemyDefinitionId], weapon?.damage_element, rawDamage);
   const newHp = enemy.hp - damage;
   let sc: ScenarioState = {
     ...ctx.scenario,

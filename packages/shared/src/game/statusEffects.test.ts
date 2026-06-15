@@ -7,7 +7,7 @@ import {
   incomingPhysicalBonus, incomingHorrorBonus, physicalReduction, horrorReduction, modifyIncomingDamage,
   modifyOutgoingDamage, isMeleeStyle,
   outgoingMeleeReduction, attackHitModifier, moveCostBonus, stealthDamageBonus,
-  bonusActionPoints, canUseAssetAttack, canCastSpell, checkRollMode, normalizeStatusCode,
+  bonusActionPoints, canUseAssetAttack, canCastSpell, checkRollMode, normalizeStatusCode, normalizeElement,
 } from './statusEffects';
 import type { InvestigatorState } from './state';
 
@@ -137,9 +137,19 @@ test('tickEnemyStatus:燃燒/流血/毀滅扣怪 HP + 非特殊減層', () => {
 });
 
 // ─── 元素互動(§6.5)──
-test('elementalDamageBonus:火 vs 燃燒 / 雷 vs 潮濕 / 冰 vs 冷凍', () => {
+test('normalizeElement:electric/lightning/雷 → thunder(專案正名 §1.5)', () => {
+  assertEq(normalizeElement('electric'), 'thunder');
+  assertEq(normalizeElement('lightning'), 'thunder');
+  assertEq(normalizeElement('雷'), 'thunder');
+  assertEq(normalizeElement('cold'), 'ice');
+  assertEq(normalizeElement('fire'), 'fire');
+  assertEq(normalizeElement('thunder'), 'thunder');
+});
+
+test('elementalDamageBonus:火 vs 燃燒 / 雷 vs 潮濕 / 冰 vs 冷凍(thunder 正名)', () => {
   assertEq(elementalDamageBonus({ burning: 2 }, 'fire'), 2);
-  assertEq(elementalDamageBonus({ wet: 3 }, 'lightning'), 3);
+  assertEq(elementalDamageBonus({ wet: 3 }, 'thunder'), 3, '正名 thunder');
+  assertEq(elementalDamageBonus({ wet: 3 }, 'electric'), 3, 'electric 收斂到 thunder');
   assertEq(elementalDamageBonus({ frozen: 1 }, 'ice'), 1);
   assertEq(elementalDamageBonus({ burning: 2 }, 'physical'), 0, '不對應元素無增傷');
   assertEq(elementalDamageBonus({ wet: 3 }, '雷'), 3, '中文元素名也認');

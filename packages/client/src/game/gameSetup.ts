@@ -322,6 +322,9 @@ export function buildSetupFromBootstrap(
       hp_per_player: Number(mv.hp_per_player ?? 0),
       family_code: mv.family_code ? String(mv.family_code) : undefined,
       keywords: Array.isArray(mv.keywords) ? mv.keywords : [],
+      immunities: Array.isArray(mv.immunities) ? mv.immunities.map(String) : [],
+      resistances: Array.isArray(mv.resistances) ? mv.resistances.map(String) : [],
+      resistance_values: mv.resistance_values && typeof mv.resistance_values === 'object' ? mv.resistance_values : {},
       move_pattern: String(mv.move_pattern ?? 'weighted'),
       behavior_script:
         mv.behavior_script && typeof mv.behavior_script === 'object' ? mv.behavior_script : null,

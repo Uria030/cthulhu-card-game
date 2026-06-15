@@ -18,7 +18,7 @@ import type { ResultEffect } from './messages';
 import type { InvestigatorState, ScenarioState, EnemyInstance } from './state';
 import { resolveCheck } from './checks';
 import type { AttributeKey } from './checks';
-import { modifyIncomingDamage, applyCheckStatus, tickEnemyStatus } from './statusEffects';
+import { modifyIncomingDamage, applyCheckStatus, tickEnemyStatus, normalizeElement } from './statusEffects';
 import {
   locationDistance,
   stepToward,
@@ -57,8 +57,27 @@ export interface EnemyData {
   family_code?: string;
   /** 法術防禦值(ch2 §5.3：0-9，決定施法副作用嚴重度；不影響法術傷害) */
   spell_defense?: number;
+  /** §11.4 防禦詞綴:免疫元素(歸 0)/ 抗性元素清單 / 各元素抗性減免點數 */
+  immunities?: string[];
+  resistances?: string[];
+  resistance_values?: Record<string, number>;
 }
 export type EnemyDataLookup = Record<string, EnemyData>;
+
+/**
+ * §11.4 怪物防禦詞綴:免疫該元素 → 傷害歸 0;否則減免 resistance_values[元素] 點(夾 0)。
+ * 神秘(arcane)鐵則:任何怪物都不抗/免疫,原樣穿透(設計原則,server validateNoArcane 已擋資料)。
+ * resistance_values 為內容缺口時當 0(無減免),機制不壞。
+ */
+export function enemyDamageAfterDefense(enemy: EnemyData | undefined, element: string | undefined | null, damage: number): number {
+  if (!enemy) return damage;
+  const el = normalizeElement(element);
+  if (el === 'arcane') return damage;
+  const immunities = (enemy.immunities ?? []).map((e) => normalizeElement(String(e)));
+  if (immunities.includes(el)) return 0;
+  const val = Number((enemy.resistance_values ?? {})[el] ?? 0);
+  return Math.max(0, damage - val);
+}
 
 const VALID_ATTRS = new Set([
   'strength', 'agility', 'constitution', 'reflex',

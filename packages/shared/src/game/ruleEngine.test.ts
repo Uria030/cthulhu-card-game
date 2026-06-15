@@ -813,6 +813,39 @@ test('搜尋:該地點資源已耗盡(takenBy 已設) → 駁回', () => {
   assertEq(r.result.outcome, 'rejected');
 });
 
+// ─── §10.5 盟友卡 ──────────────────────
+test('盟友:打出 → 獨立 HP/SAN/攻擊力進場', () => {
+  const ctx = makeCtx({ hand: ['ally1'], resources: 5 });
+  ctx.cardLookup = { ally1: { card_type: 'ally', name_zh: '老兵', ally_hp: 3, ally_san: 1, damage: 2, cost: 2 } };
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'ally1' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.ally?.hp, 3);
+  assertEq(r.newState?.investigator?.ally?.sanMax, 1);
+  assertEq(r.newState?.investigator?.ally?.attack, 2);
+});
+
+test('盟友:每人限 1 位 → 第二位駁回', () => {
+  const ctx = makeCtx({ hand: ['ally2'], resources: 5, ally: { cardInstanceId: 'a0', name: '舊友', hp: 2, hpMax: 2, san: 2, sanMax: 2, attack: 1, exhausted: false } });
+  ctx.cardLookup = { ally2: { card_type: 'ally', name_zh: '新人', ally_hp: 3, ally_san: 1, cost: 2 } };
+  assertEq(resolveIntent(makeIntent('play_card', { cardInstanceId: 'ally2' }), ctx).result.outcome, 'rejected');
+});
+
+test('盟友攻擊:橫置自動命中,扣怪 HP + 盟友橫置', () => {
+  const ctx = makeCtx({ currentLocationId: 'loc-a', actionPoints: 3, ally: { cardInstanceId: 'a1', name: '老兵', hp: 3, hpMax: 3, san: 1, sanMax: 1, attack: 2, exhausted: false } });
+  ctx.scenario.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'def-e1', locationId: 'loc-a', hp: 5, engagedWith: [], modifiers: [] }];
+  const r = resolveIntent(makeIntent('ally_attack'), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.scenario?.enemies[0].hp, 3, '5 - 攻擊力 2');
+  assertEq(r.newState?.investigator?.ally?.exhausted, true, '橫置');
+  assertEq((r.result.effects ?? []).some((e) => e.type === 'ally_attack'), true);
+});
+
+test('盟友攻擊:已橫置 → 駁回', () => {
+  const ctx = makeCtx({ currentLocationId: 'loc-a', ally: { cardInstanceId: 'a1', name: '老兵', hp: 3, hpMax: 3, san: 1, sanMax: 1, attack: 2, exhausted: true } });
+  ctx.scenario.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'def-e1', locationId: 'loc-a', hp: 5, engagedWith: [], modifiers: [] }];
+  assertEq(resolveIntent(makeIntent('ally_attack'), ctx).result.outcome, 'rejected');
+});
+
 // ─── runner ─────────────────────────
 let passed = 0;
 let failed = 0;

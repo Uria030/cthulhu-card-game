@@ -360,6 +360,9 @@ export function buildSetupFromBootstrap(
         cost: info.cost,
         combat_style: d.combat_style ?? null,
         damage_element: d.damage_element ?? null,
+        ally_hp: d.ally_hp ?? null,
+        ally_san: d.ally_san ?? null,
+        damage: d.damage ?? null,
         attribute_modifiers:
           d.attribute_modifiers && typeof d.attribute_modifiers === 'object'
             ? d.attribute_modifiers

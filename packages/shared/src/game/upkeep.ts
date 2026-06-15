@@ -78,6 +78,12 @@ export function runTurnEndUpkeep(inv: InvestigatorState): UpkeepResult {
     next = { ...next, assetState: readied };
     effects.push({ type: 'assets_readied', params: { count: exhaustedIds.length } });
   }
+  // §10.5 盟友橫置轉正
+  if (next.ally?.exhausted) {
+    const readiedAlly = { ...next.ally, exhausted: false };
+    next = { ...next, ally: readiedAlly };
+    effects.push({ type: 'ally_readied', params: { ally: readiedAlly.name } });
+  }
 
   // ③ 手牌上限 8,棄至上限(v0:棄最舊)
   if (next.hand.length > HAND_LIMIT) {

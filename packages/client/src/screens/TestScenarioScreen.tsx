@@ -1102,6 +1102,17 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                     ⚔ {setup.cardLookup[id]?.name_zh ?? '武器'}
                   </button>
                 ))}
+              {enemyHere && (investigator.allies ?? [])
+                .filter((a) => !a.exhausted && a.attack > 0)
+                .map((a) => (
+                  <button
+                    key={a.cardInstanceId}
+                    className="attack"
+                    onClick={() => submitIntent('ally_attack', { allyInstanceId: a.cardInstanceId, enemyInstanceId: enemyHere.instanceId })}
+                  >
+                    🤝 {a.name}攻擊（{a.attack}）
+                  </button>
+                ))}
               {investigator.engagedWith.length > 0 && (
                 <button onClick={() => submitCheckIntent('evade')}>🌀 閃避</button>
               )}

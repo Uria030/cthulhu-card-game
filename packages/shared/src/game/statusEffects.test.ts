@@ -43,6 +43,21 @@ test('§6.5 施加燃燒移除潮濕', () => {
   assertEq(getLayers(m, 'wet'), 0, '潮濕應被燃燒移除');
 });
 
+test('§6.2/§6.3 標記↔隱蔽互抵:層數相抵', () => {
+  // 隱蔽 2 + 施標記 3 → 標記 1、隱蔽 0
+  let m = addStatus({ stealth: 2 }, 'marked', 3);
+  assertEq(getLayers(m, 'marked'), 1);
+  assertEq(getLayers(m, 'stealth'), 0);
+  // 標記 3 + 施隱蔽 1 → 標記 2、隱蔽 0
+  m = addStatus({ marked: 3 }, 'stealth', 1);
+  assertEq(getLayers(m, 'marked'), 2);
+  assertEq(getLayers(m, 'stealth'), 0);
+  // 等量 → 兩者皆清
+  m = addStatus({ stealth: 2 }, 'marked', 2);
+  assertEq(getLayers(m, 'marked'), 0);
+  assertEq(getLayers(m, 'stealth'), 0);
+});
+
 test('removeStatus:減 N 與全移除', () => {
   assertEq(getLayers(removeStatus({ bleed: 3 }, 'bleed', 1), 'bleed'), 2);
   assertEq(getLayers(removeStatus({ bleed: 3 }, 'bleed'), 'bleed'), 0);

@@ -14,6 +14,7 @@
 import type { ResultEffect } from './messages';
 import type { InvestigatorState, ScenarioState } from './state';
 import type { CardDataLookup } from './ruleEngine';
+import { addStatus, removeStatus, NEGATIVE_STATUSES } from './statusEffects';
 
 export interface CardEffectRow {
   trigger_type: string;
@@ -112,22 +113,28 @@ export function executeCardEffects(
       }
       case 'add_status': {
         const status = String(p.status ?? '');
-        const targetEnemy = sc.enemies.find(
-          (e) => e.hp > 0 && e.locationId === inv.currentLocationId,
-        );
-        // 首批:對敵狀態(標記等)→ 記入 modifiers;對己狀態(證物堆疊)後續批次
-        if (status && targetEnemy) {
-          sc = {
-            ...sc,
-            enemies: sc.enemies.map((e) =>
-              e.instanceId === targetEnemy.instanceId
-                ? { ...e, modifiers: [...e.modifiers, status] }
-                : e,
-            ),
-          };
-          out.push({ type: 'status_applied', params: { status }, targetId: targetEnemy.instanceId });
+        const layers = Math.max(1, Number(p.layers ?? p.amount ?? 1));
+        const toSelf = p.target === 'self';
+        if (!status) { unsupported.push('add_status()'); break; }
+        // 狀態效果系統(ch3 §6):寫入 statusEffects 層數(由 statusEffects.ts 結算)
+        if (toSelf) {
+          inv = { ...inv, statusEffects: addStatus(inv.statusEffects, status, layers) };
+          out.push({ type: 'status_applied', params: { status, layers, target: 'self' }, targetId: inv.investigatorId });
         } else {
-          unsupported.push('add_status(self/' + status + ')');
+          const targetEnemy = sc.enemies.find((e) => e.hp > 0 && e.locationId === inv.currentLocationId);
+          if (targetEnemy) {
+            sc = {
+              ...sc,
+              enemies: sc.enemies.map((e) =>
+                e.instanceId === targetEnemy.instanceId
+                  ? { ...e, statusEffects: addStatus(e.statusEffects, status, layers) }
+                  : e,
+              ),
+            };
+            out.push({ type: 'status_applied', params: { status, layers }, targetId: targetEnemy.instanceId });
+          } else {
+            unsupported.push('add_status(' + status + ')');
+          }
         }
         break;
       }
@@ -155,9 +162,16 @@ export function executeCardEffects(
         // 武器攻擊走 ruleEngine 路徑
         break;
       case 'remove_status': {
-        // 最小版(ch3 §6):移除自身所有負面附著(驅邪儀式等)— v0 以敘事表示,
-        // 狀態系統結算接通後改為實際移除層數
-        out.push({ type: 'status_cleansed', params: { narrative: '一道淨化掃過你的身體。' } });
+        // ch3 §6:移除自身狀態。指定 status → 移除該狀態;否則淨化所有負面(驅邪儀式等)
+        const specific = String(p.status ?? '');
+        let map = inv.statusEffects ?? {};
+        if (specific) {
+          map = removeStatus(map, specific);
+        } else {
+          for (const code of NEGATIVE_STATUSES) map = removeStatus(map, code);
+        }
+        inv = { ...inv, statusEffects: map };
+        out.push({ type: 'status_cleansed', params: { status: specific || 'all_negative', narrative: '一道淨化掃過你的身體。' }, targetId: inv.investigatorId });
         break;
       }
       default:

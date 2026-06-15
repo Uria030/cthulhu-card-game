@@ -20,6 +20,16 @@ export type StatusMap = Record<string, number>;
 //  - stealth:移動或攻擊後全部移除(clearStealth)
 const SPECIAL_DECREMENT = new Set(['empowered', 'weakened', 'stealth']);
 
+/** §6.2/§6.3 互抵對:標記 ↔ 隱蔽(施加一方時與另一方層數相抵) */
+const MUTUAL_OFFSET: Record<string, string> = { marked: 'stealth', stealth: 'marked' };
+
+/** 15 個負面狀態代碼(remove_status 淨化所有負面用) */
+export const NEGATIVE_STATUSES = [
+  'poison', 'bleed', 'burning', 'frozen', 'wet', 'madness', 'marked',
+  'vulnerable', 'weakness_status', 'weakened', 'doom_status',
+  'darkness', 'disarm', 'fatigue', 'silence',
+] as const;
+
 // ─── 基本操作 ──────────────────────────────────
 export function getLayers(map: StatusMap | undefined, code: string): number {
   return Math.max(0, Number(map?.[code] ?? 0));
@@ -30,10 +40,26 @@ export function getLayers(map: StatusMap | undefined, code: string): number {
  */
 export function addStatus(map: StatusMap | undefined, code: string, layers = 1): StatusMap {
   const next: StatusMap = { ...(map ?? {}) };
-  next[code] = getLayers(next, code) + Math.max(1, layers);
+  const add = Math.max(1, layers);
+  // §6.5 施加燃燒移除潮濕(單向)
   if (code === 'burning' && getLayers(next, 'wet') > 0) {
     delete next.wet;
   }
+  // §6.2/§6.3 標記 ↔ 隱蔽 互抵(雙向層數相抵)
+  const opp = MUTUAL_OFFSET[code];
+  if (opp && getLayers(next, opp) > 0) {
+    const oppLayers = getLayers(next, opp);
+    if (add > oppLayers) {
+      delete next[opp];
+      next[code] = getLayers(next, code) + (add - oppLayers);
+    } else if (add === oppLayers) {
+      delete next[opp];
+    } else {
+      next[opp] = oppLayers - add;
+    }
+    return next;
+  }
+  next[code] = getLayers(next, code) + add;
   return next;
 }
 

@@ -40,7 +40,7 @@ import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import { attachmentTestModifier } from './keeperAI';
 import { isDowned, applyStabilize } from './dying';
 import { revealOnEnter, revealOnGeneralSuccess, claimHiddenReward } from './hiddenInvestigation';
-import { modifyIncomingDamage, applyCheckStatus, attackHitModifier } from './statusEffects';
+import { modifyIncomingDamage, modifyOutgoingDamage, applyCheckStatus, attackHitModifier, clearStealth, isMeleeStyle } from './statusEffects';
 
 // ─── 卡片實例資料(容器由 bootstrap cardIndex 餵入)──
 export interface CardData {
@@ -49,6 +49,8 @@ export interface CardData {
   card_type?: string;
   cost?: number | null;
   combat_style?: string | null;
+  /** 武器傷害元素(§6.5 元素增傷;空 = 物理) */
+  damage_element?: string | null;
   attribute_modifiers?: Record<string, number>;
   subtypes?: unknown[];
   /** 武器彈藥(ch3 §10.1:打完進棄牌堆;null = 近戰無限) */
@@ -830,7 +832,7 @@ function performAttack(intent: IntentMessage, ctx: RuleContext, enemyInstanceId:
   const newInv: InvestigatorState = {
     ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
     actionPoints: ctx.investigator.actionPoints - 1,
-    statusEffects: cs.statusEffects,
+    statusEffects: clearStealth(cs.statusEffects), // §6.3 攻擊後移除隱蔽(加成在傷害計算用清除前的值)
   };
   const baseEffects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
@@ -841,8 +843,9 @@ function performAttack(intent: IntentMessage, ctx: RuleContext, enemyInstanceId:
   if (check.outcome !== 'success' || check.natural1) {
     return accept(intent, [...baseEffects, { type: 'attack_miss', params: { narrative: check.natural1 ? '你的攻擊完全落空,差點傷到自己。' : '你的攻擊擦身而過,牠仍站在那裡。' }, targetId: enemyInstanceId }], { investigator: newInv });
   }
-  // 命中:基礎 1 點;自然 20 爆擊 ×2(§7.5)
-  const damage = check.natural20 ? 2 : 1;
+  // 命中:基礎 1 點;自然 20 爆擊 ×2(§7.5)+ 狀態修正(隱蔽傷害/無力近戰;徒手=物理近戰)
+  const critBase = check.natural20 ? 2 : 1;
+  const damage = modifyOutgoingDamage(cs.statusEffects, enemy.statusEffects, critBase, 'physical', true);
   const newHp = enemy.hp - damage;
   const newScenario: ScenarioState = {
     ...ctx.scenario,
@@ -1118,7 +1121,7 @@ function performWeaponAttack(
   let inv: InvestigatorState = {
     ...applyCommitToInvestigator(spend.investigator, commit.committedIds),
     actionPoints: ctx.investigator.actionPoints - 1,
-    statusEffects: cs.statusEffects,
+    statusEffects: clearStealth(cs.statusEffects), // §6.3 攻擊後移除隱蔽
   };
   const baseEffects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
@@ -1137,7 +1140,9 @@ function performWeaponAttack(
   const params = (fx.effect_params ?? {}) as Record<string, any>;
   // 武器卡面傷害(§7.5):params.damage 未填時 fallback 2(資料補齊中)
   const base = Number(params.damage ?? 2) + Number(params.damage_bonus ?? 0);
-  const damage = check.natural20 ? base * 2 : base;
+  const critBase = check.natural20 ? base * 2 : base;
+  // 狀態修正:元素增傷(對敵狀態)/ 隱蔽傷害 / 無力近戰(§6.5/§6.3/§6.2)
+  const damage = modifyOutgoingDamage(cs.statusEffects, enemy.statusEffects, critBase, weapon?.damage_element, isMeleeStyle(style));
   const newHp = enemy.hp - damage;
   let sc: ScenarioState = {
     ...ctx.scenario,

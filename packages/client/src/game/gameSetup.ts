@@ -356,6 +356,7 @@ export function buildSetupFromBootstrap(
         card_type: info.card_type,
         cost: info.cost,
         combat_style: d.combat_style ?? null,
+        damage_element: d.damage_element ?? null,
         attribute_modifiers:
           d.attribute_modifiers && typeof d.attribute_modifiers === 'object'
             ? d.attribute_modifiers

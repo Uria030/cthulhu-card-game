@@ -228,6 +228,28 @@ export function modifyIncomingDamage(
 export function outgoingMeleeReduction(map: StatusMap | undefined): number {
   return getLayers(map, 'weakness_status');
 }
+
+/** 遠程/非近戰戰鬥風格(無力「造成的近戰傷害−X」不套用) */
+const RANGED_STYLES = new Set(['shooting', 'archery', 'firearm', 'arcane']);
+export function isMeleeStyle(style: string | undefined | null): boolean {
+  return !RANGED_STYLES.has(String(style ?? ''));
+}
+
+/**
+ * 玩家造成傷害的狀態修正:+元素增傷(對帶狀態的敵人,§6.5)+隱蔽傷害(§6.3);
+ * 近戰再 −無力(§6.2)。命中至少造成 1。
+ */
+export function modifyOutgoingDamage(
+  selfMap: StatusMap | undefined,
+  enemyMap: StatusMap | undefined,
+  baseDamage: number,
+  element: string | undefined | null,
+  isMelee: boolean,
+): number {
+  let d = baseDamage + elementalDamageBonus(enemyMap, element) + stealthDamageBonus(selfMap);
+  if (isMelee) d -= outgoingMeleeReduction(selfMap);
+  return Math.max(1, d);
+}
 /** 攻擊命中檢定修正:黑暗 -2(§6.2 開關型) */
 export function attackHitModifier(map: StatusMap | undefined): number {
   return getLayers(map, 'darkness') > 0 ? -2 : 0;

@@ -5,6 +5,7 @@ import {
   getLayers, addStatus, removeStatus, clearStealth, decrementOnRoll,
   turnStartTick, turnEndTick, elementalDamageBonus,
   incomingPhysicalBonus, incomingHorrorBonus, physicalReduction, horrorReduction, modifyIncomingDamage,
+  modifyOutgoingDamage, isMeleeStyle,
   outgoingMeleeReduction, attackHitModifier, moveCostBonus, stealthDamageBonus,
   bonusActionPoints, canUseAssetAttack, canCastSpell, checkRollMode, normalizeStatusCode,
 } from './statusEffects';
@@ -157,6 +158,27 @@ test('modifyIncomingDamage:物理/恐懼加成減免合併,不低於 0', () => {
   // 無狀態 → 原值
   d = modifyIncomingDamage({}, 3, 1);
   assertEq(d.physical, 3); assertEq(d.horror, 1);
+});
+
+test('isMeleeStyle:遠程風格不算近戰', () => {
+  assertEq(isMeleeStyle('shooting'), false);
+  assertEq(isMeleeStyle('archery'), false);
+  assertEq(isMeleeStyle('arcane'), false);
+  assertEq(isMeleeStyle('blade'), true);
+  assertEq(isMeleeStyle(''), true);
+});
+
+test('modifyOutgoingDamage:元素增傷+隱蔽傷害,近戰再扣無力,命中至少 1', () => {
+  // 對潮濕敵人用雷:base2 + wet2 + 無狀態 = 4
+  assertEq(modifyOutgoingDamage({}, { wet: 2 }, 2, 'lightning', true), 4);
+  // 隱蔽3 加傷:base1 + stealth3 = 4(遠程不扣無力)
+  assertEq(modifyOutgoingDamage({ stealth: 3 }, {}, 1, 'physical', false), 4);
+  // 無力2 近戰扣:base3 − 2 = 1
+  assertEq(modifyOutgoingDamage({ weakness_status: 2 }, {}, 3, 'physical', true), 1);
+  // 無力把傷害壓到 0 以下 → 命中至少 1
+  assertEq(modifyOutgoingDamage({ weakness_status: 9 }, {}, 2, 'physical', true), 1);
+  // 無力是近戰專屬:遠程不扣
+  assertEq(modifyOutgoingDamage({ weakness_status: 9 }, {}, 5, 'physical', false), 5);
 });
 
 test('其他 query:無力/黑暗/冷凍/隱蔽/加速', () => {

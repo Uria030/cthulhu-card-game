@@ -42,6 +42,7 @@ import { attachmentTestModifier } from './keeperAI';
 import { isDowned, applyStabilize } from './dying';
 import { revealOnEnter, revealOnGeneralSuccess, claimHiddenReward } from './hiddenInvestigation';
 import { modifyIncomingDamage, modifyOutgoingDamage, applyCheckStatus, attackHitModifier, clearStealth, isMeleeStyle, moveCostBonus, canUseAssetAttack, canCastSpell } from './statusEffects';
+import { allocateIncomingDamage } from './ally';
 
 // ─── 卡片實例資料(容器由 bootstrap cardIndex 餵入)──
 export interface CardData {
@@ -977,14 +978,16 @@ function resolveEvade(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
     : (enemy ? ctx.enemyStats?.[enemy.enemyDefinitionId]?.damage_physical ?? 1 : 1);
   // 受傷狀態修正(脆弱/標記 + / 護甲 −,§6)
   const damageTaken = modifyIncomingDamage(ctx.investigator.statusEffects, rawDamage, 0).physical;
+  const evadeAlloc = allocateIncomingDamage(ctx.investigator.allies, damageTaken, 0); // §11 盟友先吸
 
   // §7.4 成敗都脫離交戰 — 只脫離本次結算的這一隻,其他交戰維持
   const newInv: InvestigatorState = {
     ...applyCommitToInvestigator(ctx.investigator, commit.committedIds),
     actionPoints: ctx.investigator.actionPoints - 1,
     statusEffects: cs.statusEffects,
+    allies: evadeAlloc.allies,
     engagedWith: ctx.investigator.engagedWith.filter((id) => id !== enemyId),
-    hp: Math.max(0, ctx.investigator.hp - damageTaken),
+    hp: Math.max(0, ctx.investigator.hp - evadeAlloc.toInvestigator.physical),
   };
   const newScenario: ScenarioState = {
     ...ctx.scenario,
@@ -1001,6 +1004,7 @@ function resolveEvade(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
     success
       ? { type: 'evade_success', params: { narrative: '你側身一滾,牠撲空絆倒。你脫離了交戰。' }, targetId: enemyId }
       : { type: 'evade_fail', params: { damage: damageTaken, narrative: '你掙脫了,但牠的爪子在你身上留下一道口子。' }, targetId: enemyId },
+    ...evadeAlloc.effects,
   ];
   return accept(intent, effects, { investigator: newInv, scenario: newScenario });
 }

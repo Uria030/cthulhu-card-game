@@ -19,6 +19,7 @@ import type { InvestigatorState, ScenarioState, EnemyInstance } from './state';
 import { resolveCheck } from './checks';
 import type { AttributeKey } from './checks';
 import { modifyIncomingDamage, applyCheckStatus, tickEnemyStatus, normalizeElement } from './statusEffects';
+import { applyDamageWithAllies } from './ally';
 import {
   locationDistance,
   stepToward,
@@ -215,12 +216,14 @@ export function runFearChecks(
     if (check.outcome === 'fail') {
       // 恐懼=恐懼傷害:套用發瘋/標記(+)、護盾(−)(§6.2/§6.3)
       const { horror: fear } = modifyIncomingDamage(inv.statusEffects, 0, Number(data.fear_value ?? 1));
-      inv = { ...inv, san: Math.max(0, inv.san - fear) };
+      const ad = applyDamageWithAllies(inv, 0, fear); // §11 盟友(精神支柱)先吸
+      inv = ad.investigator;
       effects.push({
         type: 'fear_damage',
         params: { amount: fear, narrative: '那形體烙進你的腦海,理智發出抗議。' },
         targetId: enemy.instanceId,
       });
+      effects.push(...ad.effects);
     }
   }
   return { investigator: inv, effects };
@@ -240,11 +243,8 @@ export function applyAttackOfOpportunity(
     const data = enemyData[enemy.enemyDefinitionId] ?? {};
     // 受傷狀態修正(中毒/脆弱/標記 + / 護甲/護盾 −,§6)
     const dmg = modifyIncomingDamage(inv.statusEffects, Number(data.damage_physical ?? 1), Number(data.damage_horror ?? 0));
-    inv = {
-      ...inv,
-      hp: Math.max(0, inv.hp - dmg.physical),
-      san: Math.max(0, inv.san - dmg.horror),
-    };
+    const ad = applyDamageWithAllies(inv, dmg.physical, dmg.horror); // §11 盟友先吸
+    inv = ad.investigator;
     effects.push({
       type: 'attack_of_opportunity',
       params: {
@@ -253,6 +253,7 @@ export function applyAttackOfOpportunity(
       },
       targetId: enemyId,
     });
+    effects.push(...ad.effects);
   }
   return { investigator: inv, effects };
 }
@@ -286,20 +287,18 @@ function monsterAttackOnce(
       targetId: enemy.instanceId,
     },
   ];
-  let inv = { ...investigator, statusEffects: cs.statusEffects };
+  let inv: InvestigatorState = { ...investigator, statusEffects: cs.statusEffects };
   if (check.outcome === 'fail') {
     // 受傷狀態修正(§6)
     const dmg = modifyIncomingDamage(inv.statusEffects, phys, horror);
-    inv = {
-      ...inv,
-      hp: Math.max(0, inv.hp - dmg.physical),
-      san: Math.max(0, inv.san - dmg.horror),
-    };
+    const ad = applyDamageWithAllies(inv, dmg.physical, dmg.horror); // §11 盟友先吸
+    inv = ad.investigator;
     effects.push({
       type: 'monster_attack_hit',
       params: { physical: dmg.physical, horror: dmg.horror, narrative: '你沒能躲開。' },
       targetId: enemy.instanceId,
     });
+    effects.push(...ad.effects);
   } else {
     effects.push({
       type: 'monster_attack_missed',

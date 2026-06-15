@@ -21,3 +21,4 @@ export * from './dying';
 export * from './encounters';
 export * from './hiddenInvestigation';
 export * from './statusEffects';
+export * from './ally';

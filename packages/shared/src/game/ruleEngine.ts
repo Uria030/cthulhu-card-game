@@ -36,7 +36,7 @@ import {
 } from './checks';
 import type { AttributeKey, CommitIcons } from './checks';
 import { executeCardEffects, passiveTestModifier } from './effectsExecutor';
-import { runFearChecks, applyAttackOfOpportunity, spawnEnemy, enemyDamageAfterDefense, resolveDeathKeywords } from './monsterActions';
+import { runFearChecks, applyAttackOfOpportunity, spawnEnemy, enemyDamageAfterDefense, resolveDeathKeywords, applyHaunting, reviveHaunting } from './monsterActions';
 import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import { attachmentTestModifier } from './keeperAI';
 import { isDowned, applyStabilize } from './dying';
@@ -584,7 +584,9 @@ function resolveInvestigate(intent: IntentMessage, ctx: RuleContext): RuleResolv
     { type: 'roll_d20', params: { roll: check.roll, attribute: 'perception', modifier: check.total - check.roll, total: check.total, dc, outcome: success ? 'success' : 'fail' } },
   ];
   if (!success) {
-    return accept(intent, [...baseEffects, { type: 'investigate_fail', params: { narrative: '你翻找了一圈,什麼線索都沒留下。' } }], { investigator: newInv });
+    // §11.3 鬧鬼:該地點有死亡附著 → 調查失敗驚擾復活
+    const haunt = reviveHaunting(ctx.scenario, locId, ctx.enemyStats ?? {}, Object.keys(ctx.investigators).length || 1);
+    return accept(intent, [...baseEffects, { type: 'investigate_fail', params: { narrative: '你翻找了一圈,什麼線索都沒留下。' } }, ...haunt.effects], { investigator: newInv, scenario: haunt.scenario });
   }
   // 成功:在當前地點放 1 線索
   const newScenario: ScenarioState = {
@@ -860,13 +862,15 @@ function performAttack(intent: IntentMessage, ctx: RuleContext, enemyInstanceId:
     { type: 'attack_hit', params: { damage, critical: check.natural20, narrative: (check.natural20 ? '【爆擊】' : '') + hpToNarrative(newHp, enemy.hp) }, targetId: enemyInstanceId },
   ];
   let deathAllies: Record<string, InvestigatorState> = {};
+  let finalScenario = newScenario;
   if (newHp <= 0) {
     effects.push({ type: 'enemy_defeated', params: { narrative: '牠倒下了,空氣裡只剩下血腥與沉默。' }, targetId: enemyInstanceId });
-    const dk = deathKeywordOutcome(enemy, ctx); // §11.3 壓垮/詛咒
+    const dk = deathKeywordOutcome(enemy, ctx, finalScenario); // §11.3 壓垮/詛咒/鬧鬼
     effects.push(...dk.effects);
     deathAllies = dk.updatedAllies;
+    finalScenario = dk.scenario;
   }
-  return accept(intent, effects, { investigator: newInv, scenario: newScenario, updatedAllies: deathAllies });
+  return accept(intent, effects, { investigator: newInv, scenario: finalScenario, updatedAllies: deathAllies });
 }
 
 /**
@@ -1175,9 +1179,10 @@ function performWeaponAttack(
   let deathAllies: Record<string, InvestigatorState> = {};
   if (newHp <= 0) {
     effects.push({ type: 'enemy_defeated', params: { narrative: '牠倒下了,空氣裡只剩下血腥與沉默。' }, targetId: enemy.instanceId });
-    const dk = deathKeywordOutcome(enemy, ctx); // §11.3 壓垮/詛咒
+    const dk = deathKeywordOutcome(enemy, ctx, sc); // §11.3 壓垮/詛咒/鬧鬼
     effects.push(...dk.effects);
     deathAllies = dk.updatedAllies;
+    sc = dk.scenario;
   }
   const after = applyOnSuccessCommit(true, commit.committedIds, inv, sc, ctx.cardLookup ?? {});
   inv = after.investigator;
@@ -1234,9 +1239,10 @@ function performSpellAttack(
   let deathAllies: Record<string, InvestigatorState> = {};
   if (newHp <= 0) {
     effects.push({ type: 'enemy_defeated', params: { narrative: '牠在神秘的光焰中崩解。' }, targetId: enemy.instanceId });
-    const dk = deathKeywordOutcome(enemy, ctx); // §11.3 壓垮/詛咒(怪物詞綴與致死手段無關)
+    const dk = deathKeywordOutcome(enemy, ctx, sc); // §11.3 壓垮/詛咒/鬧鬼(與致死手段無關)
     effects.push(...dk.effects);
     deathAllies = dk.updatedAllies;
+    sc = dk.scenario;
   }
   // 混沌袋副作用
   const chaos = applySpellChaos(ctx, inv, sc, enemy.enemyDefinitionId);
@@ -1389,13 +1395,15 @@ function accept(
  * §11.3 怪物死亡詞綴(crush/curse_on_death):對同地點「其他」調查員結算閃避受傷。
  * 擊殺者本人狀態已在攻擊路徑結算,排除之;回傳效果 + updatedAllies。
  */
-function deathKeywordOutcome(enemy: EnemyInstance, ctx: RuleContext): { effects: ResultEffect[]; updatedAllies: Record<string, InvestigatorState> } {
+function deathKeywordOutcome(enemy: EnemyInstance, ctx: RuleContext, scenario: ScenarioState): { effects: ResultEffect[]; updatedAllies: Record<string, InvestigatorState>; scenario: ScenarioState } {
   const others: Record<string, InvestigatorState> = {};
   for (const [id, inv] of Object.entries(ctx.investigators)) {
     if (id !== ctx.investigator.investigatorId) others[id] = inv;
   }
-  const dk = resolveDeathKeywords(enemy, ctx.enemyStats?.[enemy.enemyDefinitionId], others, ctx.rng);
-  return { effects: dk.effects, updatedAllies: dk.investigators };
+  const enemyData = ctx.enemyStats?.[enemy.enemyDefinitionId];
+  const dk = resolveDeathKeywords(enemy, enemyData, others, ctx.rng);
+  // §11.3 鬧鬼:死亡附著地點(任何致死手段)
+  return { effects: dk.effects, updatedAllies: dk.investigators, scenario: applyHaunting(scenario, enemy, enemyData) };
 }
 
 function reject(intent: IntentMessage, narrative: string, suggestion?: string): RuleResolveOutput {

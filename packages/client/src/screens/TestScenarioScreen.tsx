@@ -169,6 +169,9 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'curse_damage': return '👁 ' + (p.narrative as string) + '(SAN -' + (p.amount as number) + ')';
     case 'death_keyword_evaded': return '🌀 ' + (p.narrative as string);
     case 'monster_apathetic': return '😐 ' + (p.narrative as string);
+    case 'monster_fly': return '🦇 ' + (p.narrative as string);
+    case 'hunter_strike': return '🐾 ' + (p.narrative as string);
+    case 'haunting_revive': return '👻 ' + (p.narrative as string);
     default: return eff.type;
   }
 }

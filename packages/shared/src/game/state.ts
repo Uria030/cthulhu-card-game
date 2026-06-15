@@ -58,6 +58,8 @@ export interface ScenarioState {
   hiddenPoints?: HiddenPoint[];
   /** 可發現卡片資源池(支柱6 探索 + 支柱8 動態牌組;bootstrap 從地點 discoverable_card_ids 預實例化) */
   discoverablePools?: DiscoverableSlot[];
+  /** §11.3 鬧鬼(haunting)死後附著的地點;該地點調查失敗 → 怪物復活 */
+  hauntings?: Array<{ locationId: string; enemyDefinitionId: string }>;
   /** 議程進度(當前議程卡上的毀滅標記數,規則書 §1.5) */
   agendaProgress: number;
   /** 目標進度(累計線索,幕推進依據) */

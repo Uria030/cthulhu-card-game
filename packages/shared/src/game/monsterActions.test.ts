@@ -10,6 +10,8 @@ import {
   spawnEnemy,
   enemyDamageAfterDefense,
   resolveDeathKeywords,
+  applyHaunting,
+  reviveHaunting,
 } from './monsterActions';
 import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import type { InvestigatorState, ScenarioState } from './state';
@@ -241,6 +243,21 @@ test('§11.3 死亡詞綴:不同地點不結算 / 無詞綴空', () => {
   assertEq(Object.keys(resolveDeathKeywords(deadEnemy, { keywords: ['crush'], dc: 10 }, { a2: far }, rngRoll(2)).investigators).length, 0);
   const here = makeInv({ investigatorId: 'a3', currentLocationId: 'A' });
   assertEq(Object.keys(resolveDeathKeywords(deadEnemy, { keywords: [] }, { a3: here }, rngRoll(2)).investigators).length, 0);
+});
+
+// ─── §11.3 鬧鬼(haunting)附著 + 復活 ──
+test('§11.3 applyHaunting:haunting 怪死附著地點;無詞綴不附', () => {
+  const sc = { scenarioId: 's', scenarioDefinitionId: 'sd', campaignId: 'c', locations: [], unlockedLocations: [], enemies: [], tokens: [], agendaProgress: 0, objectiveProgress: 0, chaosBag: [], turnNumber: 1, phase: 'investigator' as const };
+  const ghost = { instanceId: 'e1', enemyDefinitionId: 'ghost', locationId: 'A', hp: 0, engagedWith: [], modifiers: [] };
+  const haunted = applyHaunting(sc, ghost, { keywords: ['haunting'] });
+  assertEq(haunted.hauntings?.length, 1);
+  assertEq(applyHaunting(sc, ghost, { keywords: [] }).hauntings, undefined, '無詞綴不附');
+  // 復活:有附著 → spawn + 移除
+  const r = reviveHaunting(haunted, 'A', { ghost: { hp_base: 3, name_zh: '幽靈' } });
+  assertEq(r.scenario.enemies.length, 1, '復活一隻');
+  assertEq(r.scenario.hauntings?.length, 0, '附著移除');
+  assertEq(r.effects.some((e) => e.type === 'haunting_revive'), true);
+  assertEq(reviveHaunting(sc, 'A', {}).effects.length, 0, '無附著不復活');
 });
 
 // ─── runner ─────────────────────────────────

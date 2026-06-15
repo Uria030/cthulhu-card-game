@@ -110,6 +110,41 @@ export function resolveDeathKeywords(
 }
 
 /**
+ * §11.3 鬧鬼(haunting):怪物被擊敗時,若帶 haunting 詞綴 → 在其地點留下附著記錄。
+ * 之後該地點調查失敗時由 reviveHaunting 復活(任何致死手段都附著)。
+ */
+export function applyHaunting(scenario: ScenarioState, enemy: EnemyInstance, enemyData: EnemyData | undefined): ScenarioState {
+  const kw = (enemyData?.keywords ?? []).map((k) => String(k));
+  if (!kw.includes('haunting')) return scenario;
+  return {
+    ...scenario,
+    hauntings: [...(scenario.hauntings ?? []), { locationId: enemy.locationId, enemyDefinitionId: enemy.enemyDefinitionId }],
+  };
+}
+
+/**
+ * §11.3 鬧鬼復活:在某地點調查失敗時,若該地點有 haunting 附著 → 復活一隻(取第一筆)。
+ * 復活的怪帶召喚失調(當回合不行動);移除該筆附著。
+ */
+export function reviveHaunting(
+  scenario: ScenarioState,
+  locationId: string,
+  enemyData: EnemyDataLookup,
+  playerCount = 1,
+): { scenario: ScenarioState; effects: ResultEffect[] } {
+  const hauntings = scenario.hauntings ?? [];
+  const idx = hauntings.findIndex((h) => h.locationId === locationId);
+  if (idx < 0) return { scenario, effects: [] };
+  const h = hauntings[idx];
+  const spawned = spawnEnemy(scenario, h.enemyDefinitionId, locationId, enemyData, playerCount);
+  const name = enemyData[h.enemyDefinitionId]?.name_zh ?? h.enemyDefinitionId;
+  return {
+    scenario: { ...spawned.scenario, hauntings: hauntings.filter((_, i) => i !== idx) },
+    effects: [{ type: 'haunting_revive', params: { enemy: name, narrative: '你的搜查驚擾了什麼——' + name + '從陰影裡重新凝聚。' }, targetId: spawned.enemy.instanceId }],
+  };
+}
+
+/**
  * §11.4 怪物防禦詞綴:免疫該元素 → 傷害歸 0;否則減免 resistance_values[元素] 點(夾 0)。
  * 神秘(arcane)鐵則:任何怪物都不抗/免疫,原樣穿透(設計原則,server validateNoArcane 已擋資料)。
  * resistance_values 為內容缺口時當 0(無減免),機制不壞。
@@ -320,6 +355,7 @@ export function activateMonsters(
         const dk = resolveDeathKeywords(enemy, data, invs, rng);
         for (const [id, updatedInv] of Object.entries(dk.investigators)) invs[id] = updatedInv;
         effects.push(...dk.effects);
+        sc = applyHaunting(sc, enemy, data); // §11.3 鬧鬼附著
         continue;
       }
     }
@@ -447,11 +483,25 @@ export function activateMonsters(
       continue;
     }
 
-    // §10.3 未交戰 → 朝目標移動(movement_speed 格;§11.1 快速 swift 移 2 格),到達 → 交戰
+    // §11.1 飛行:目標改為敏捷最低的調查員,不走地圖直接放置其地點(「下回合放置」v0 簡化為即時)
+    const flying = kw.includes('flying');
+    let moveTarget = target;
+    if (flying) {
+      const lowestAgi = Object.values(invs)
+        .filter((i) => i.hp > 0)
+        .sort((a, b) => a.attributes.agility - b.attributes.agility)[0];
+      if (lowestAgi) moveTarget = lowestAgi;
+    }
+
+    // §10.3 未交戰 → 朝目標移動(movement_speed 格;§11.1 快速 swift 移 2 格 / 飛行直接放置),到達 → 交戰
     const speed = Math.max(kw.includes('swift') ? 2 : 1, Number(data.movement_speed ?? 1));
     let pos = enemy.locationId;
-    for (let step = 0; step < speed && pos !== target.currentLocationId; step += 1) {
-      pos = stepToward(sc.locations, pos, target.currentLocationId ?? pos, rng);
+    if (flying) {
+      pos = moveTarget.currentLocationId ?? pos;
+    } else {
+      for (let step = 0; step < speed && pos !== moveTarget.currentLocationId; step += 1) {
+        pos = stepToward(sc.locations, pos, moveTarget.currentLocationId ?? pos, rng);
+      }
     }
     if (pos !== enemy.locationId) {
       sc = {
@@ -461,35 +511,50 @@ export function activateMonsters(
         ),
       };
       effects.push({
-        type: 'monster_move',
-        params: { enemy: data.name_zh ?? enemy.enemyDefinitionId, to: pos },
+        type: flying ? 'monster_fly' : 'monster_move',
+        params: { enemy: data.name_zh ?? enemy.enemyDefinitionId, to: pos, narrative: flying ? '牠展開了不該存在的翼,憑空出現在你面前。' : undefined },
         targetId: enemy.instanceId,
       });
     }
-    if (pos === target.currentLocationId) {
-      // 進入交戰 + 恐懼檢定(§7.6 怪物進入你的地點)
-      // 單一持有者:怪只交戰這個目標(第一個交戰者固定怪物;此分支僅在怪未交戰時走)
+    if (pos === moveTarget.currentLocationId) {
+      // 進入交戰 + 恐懼檢定(§7.6)。§11.2 巨大 massive:與地點所有調查員交戰(單一持有者例外,Uria 拍板)
+      const isMassive = kw.includes('massive');
+      const engagedIds = isMassive
+        ? Object.values(invs).filter((i) => i.hp > 0 && i.currentLocationId === pos).map((i) => i.investigatorId)
+        : [moveTarget.investigatorId];
       sc = {
         ...sc,
         enemies: sc.enemies.map((e) =>
-          e.instanceId === enemy.instanceId
-            ? { ...e, engagedWith: [target.investigatorId] }
-            : e,
+          e.instanceId === enemy.instanceId ? { ...e, engagedWith: engagedIds } : e,
         ),
-      };
-      let inv = {
-        ...invs[target.investigatorId],
-        engagedWith: [...invs[target.investigatorId].engagedWith, enemy.instanceId],
       };
       effects.push({
         type: 'monster_engage',
-        params: { enemy: data.name_zh ?? enemy.enemyDefinitionId, narrative: '牠纏上了你。' },
+        params: { enemy: data.name_zh ?? enemy.enemyDefinitionId, narrative: isMassive ? '牠龐大的身軀籠罩了整個地點,所有人都被捲入交戰。' : '牠纏上了你。' },
         targetId: enemy.instanceId,
       });
-      const fear = runFearChecks(inv, sc, enemyData, rng);
-      inv = fear.investigator;
-      effects.push(...fear.effects);
-      invs[inv.investigatorId] = inv;
+      for (const id of engagedIds) {
+        if (!invs[id]) continue;
+        let inv = { ...invs[id], engagedWith: [...invs[id].engagedWith, enemy.instanceId] };
+        const fear = runFearChecks(inv, sc, enemyData, rng);
+        inv = fear.investigator;
+        effects.push(...fear.effects);
+        invs[id] = inv;
+      }
+      // §11.2 獵手 hunter:移動後進入交戰 → 立刻額外攻擊一次(對主目標)
+      if (kw.includes('hunter') && invs[moveTarget.investigatorId]?.hp > 0) {
+        const liveE = sc.enemies.find((e) => e.instanceId === enemy.instanceId) ?? enemy;
+        const pick = pickMoveByBehavior(
+          liveE, String(data.move_pattern ?? 'weighted'), data.behavior_script ?? null,
+          data.move_pool ?? [], attackCards,
+          { turnNumber: sc.turnNumber, selfHp: liveE.hp, selfMaxHp: Number(data.hp_base ?? liveE.hp), target: invs[moveTarget.investigatorId], rng }, true,
+        );
+        sc = { ...sc, enemies: sc.enemies.map((e) => e.instanceId === enemy.instanceId ? { ...e, modifiers: pick.modifiers } : e) };
+        effects.push({ type: 'hunter_strike', params: { enemy: data.name_zh ?? enemy.enemyDefinitionId, narrative: '牠撲上來的同時就咬了下去。' }, targetId: enemy.instanceId });
+        const hr = monsterAttackOnce(enemy, data, pick.card, invs[moveTarget.investigatorId], rng);
+        invs[moveTarget.investigatorId] = hr.investigator;
+        effects.push(...hr.effects);
+      }
     }
   }
   return { scenario: sc, investigators: invs, effects };

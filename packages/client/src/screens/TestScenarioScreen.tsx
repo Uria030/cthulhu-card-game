@@ -309,13 +309,16 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const applyProgress = (
     sc: ScenarioState,
     inv: InvestigatorState,
+    // §14 escape 等任務看全員位置/存活;setAiMembers 非同步,呼叫端須傳「這次更新後」的最新 AI 陣列,
+    // 不可讀閉包 aiMembers(會是上一輪 render 的舊狀態)。預設值僅為無更新時的後援。
+    partyAIs: InvestigatorState[] = aiMembers,
   ): { sc: ScenarioState; inv: InvestigatorState } => {
     if (setup.tutorial || setup.actData.length === 0) return { sc, inv };
     // 人數縮放(ch1 技術原則 4):幕線索門檻 × 隊伍人數(玩家 + AI 隊友)
     const partySize = 1 + setup.aiMembers.length;
-    // §14 escape 等任務需全員位置 → 組隊伍 map(玩家 + 現役 AI 隊友)
+    // §14 escape 等任務需全員位置 → 組隊伍 map(玩家 + 現役 AI 隊友的最新狀態)
     const party: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
-    for (const ai of aiMembers) if (ai) party[ai.investigatorId] = ai;
+    for (const ai of partyAIs) if (ai) party[ai.investigatorId] = ai;
     const tick = progressTick(sc, flags, setup.actData, setup.agendaData, setup.enemyStats, partySize, party);
     for (const eff of tick.effects) {
       // 頭目登場三段式演出(劇本 Part3 §2.4:先聽聲 → 見人 → 揭真相)
@@ -467,6 +470,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       for (const eff of sync.effects) append('[結算] ' + describeEffect(eff, locMeta));
       // 穩定救援改動到的隊友
       const allies = out.newState?.updatedAllies ?? {};
+      // 進度檢查要用「本次更新後」的 AI 陣列(setAiMembers 非同步,閉包 aiMembers 仍是舊值)
+      const freshAIs = Object.keys(allies).length > 0
+        ? aiMembers.map((ai) => allies[ai.investigatorId] ?? ai)
+        : aiMembers;
       if (Object.keys(allies).length > 0) {
         setAiMembers((ms) => ms.map((ai) => allies[ai.investigatorId] ?? ai));
       }
@@ -474,6 +481,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       const next = applyProgress(
         out.newState?.scenario ?? scenario,
         sync.investigator,
+        freshAIs,
       );
       setScenario(next.sc);
       setInvestigator(next.inv);
@@ -697,8 +705,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       }
       append('💀 雨聲蓋過了最後的呼吸。沒有人再站起來。');
     }
-    // 進度檢查(議程毀滅推進)
-    const next = applyProgress(sc, inv);
+    // 進度檢查(議程毀滅推進)— 傳本次神話階段更新後的 AI 陣列(escape 等任務看最新位置/存活)
+    const next = applyProgress(sc, inv, updatedAIs);
     setScenario(next.sc);
     setInvestigator(next.inv);
   };

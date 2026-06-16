@@ -205,6 +205,9 @@ interface ActionPlay {
   pendingDamageAlloc: PendingDamageAlloc | null;
 }
 
+// Phase2 B:AI 隊友計時器同時行動 — 每位 AI 行動的間隔(節奏化、不瞬間連發)
+const AI_ACTION_INTERVAL_MS = 1600;
+
 // 檢定拍效果型別(擲骰/檢定);其餘效果歸結果拍
 const CHECK_EFFECT_TYPES = new Set(['roll_d20', 'fear_check', 'death_save']);
 // 純記帳動作不跳演出 Modal(取資源/抽卡:頻繁且無重量,跳 Modal 反而擾民)
@@ -346,7 +349,11 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     () => setup.aiMembers.map((m) => m.investigator),
   );
   const aiStatesRef = useRef<InvestigatorAIState[]>(setup.aiMembers.map(() => initInvestigatorAIState()));
+  // Phase2 B:本回合已行動過的 AI 隊友(計時器同時行動用;新回合在 endTurn 清空)
+  const [aiActedThisTurn, setAiActedThisTurn] = useState<string[]>([]);
   const [phase, setPhase] = useState<TurnPhase>('investigator');
+  // 階段 ref(AI 計時器回呼防呆:階段已切走就不套用 AI 動作,避免插進敵人階段)
+  const phaseRef = useRef<TurnPhase>('investigator');
   // 本回合玩家是否已選短休息(放棄行動;每回合開頭重置)
   const [playerShortRested, setPlayerShortRested] = useState(false);
   const [turnNumber, setTurnNumber] = useState(1);
@@ -451,6 +458,74 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setFlags(nextFlags);
     return { sc: nextSc, inv: nextInv };
   };
+
+  // 跑單一 AI 隊友的一回合(邏輯同 enterMythosPhase ⓪;抽出供「計時器同時行動」與「結束階段補跑」共用)。
+  // 純計算式:吃 (idx, sc, inv, aiArr) 回新的三者,只 append Log、不直接 setState(commit 由呼叫端負責)。
+  const stepAITeammate = (
+    idx: number,
+    sc0: ScenarioState,
+    inv0: InvestigatorState,
+    aiArr0: InvestigatorState[],
+  ): { sc: ScenarioState; inv: InvestigatorState; aiArr: InvestigatorState[] } => {
+    const m = setup.aiMembers[idx];
+    const ai = aiArr0[idx];
+    if (!m || !ai || ai.dead || ai.permanentlyDead || isDowned(ai)) return { sc: sc0, inv: inv0, aiArr: aiArr0 };
+    let sc = sc0;
+    let inv = inv0;
+    const aiArr = [...aiArr0];
+    const allies: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
+    for (const [j, other] of aiArr.entries()) if (j !== idx && other) allies[other.investigatorId] = other;
+    const r = runInvestigatorAITurn(
+      {
+        scenario: sc, investigator: ai, allies, turnNumber,
+        locationStats: setup.locationStats, enemyStats: setup.enemyStats,
+        cardLookup: setup.cardLookup, stylePools: setup.stylePools,
+      },
+      m.profile,
+      aiStatesRef.current[idx],
+    );
+    aiStatesRef.current[idx] = r.aiState;
+    sc = r.scenario;
+    aiArr[idx] = r.investigator;
+    // 穩定救援改動到的隊友(可能是玩家或其他 AI)
+    for (const [allyId, allyState] of Object.entries(r.updatedAllies)) {
+      if (allyId === inv.investigatorId) inv = allyState;
+      else { const j = aiArr.findIndex((x) => x?.investigatorId === allyId); if (j >= 0) aiArr[j] = allyState; }
+    }
+    for (const step of r.steps) {
+      if (step.outcome === 'rejected') continue; // AI 被駁回不上戰役紀錄
+      append(`[${m.profile.name_zh}] ${step.intentNarrative}`);
+      for (const eff of step.effects) append('  └ ' + describeEffect(eff, locMeta).split('你').join(m.profile.name_zh));
+    }
+    if (r.steps.length === 0) append(`[${m.profile.name_zh}] 按兵不動,觀察著四周。`);
+    return { sc, inv, aiArr };
+  };
+
+  // 階段 ref 同步(供 AI 計時器回呼防呆)
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+
+  // Phase2 B:AI 隊友計時器同時行動 — 調查員階段中每隔 AI_ACTION_INTERVAL_MS 讓一位「本回合還沒
+  // 行動」的 AI 隊友跑一回合,結果流進 Log(非阻塞玩家、無強制玩家→AI 先後)。玩家演出 Modal 開著
+  // 或已結算時暫停。任何狀態變動都會取消重排計時器,故 AI 永遠用「最新狀態」計算(避開閉包舊值,
+  // = escape BLOCK 的同類陷阱)。granularity v0 = 每位 AI 一整回合(非逐動作)。
+  useEffect(() => {
+    if (setup.tutorial || phase !== 'investigator' || outcome) return;
+    if (actionPlay || damageAlloc) return; // 玩家演出中:暫停 AI(避免插隊與狀態交錯)
+    const idx = aiMembers.findIndex((ai) =>
+      !!ai && !ai.dead && !ai.permanentlyDead && !isDowned(ai) && !aiActedThisTurn.includes(ai.investigatorId));
+    if (idx < 0) return; // 本回合可行動的 AI 都跑過了
+    const actedId = aiMembers[idx]?.investigatorId;
+    const id = setTimeout(() => {
+      if (phaseRef.current !== 'investigator') return; // 階段已切走:不補(防微秒級競態)
+      const res = stepAITeammate(idx, scenario, investigator, aiMembers);
+      const next = applyProgress(res.sc, res.inv, res.aiArr);
+      setScenario(next.sc);
+      setInvestigator(next.inv);
+      setAiMembers(res.aiArr);
+      if (actedId) setAiActedThisTurn((s) => (s.includes(actedId) ? s : [...s, actedId]));
+    }, AI_ACTION_INTERVAL_MS);
+    return () => clearTimeout(id);
+  }, [phase, turnNumber, scenario, investigator, aiMembers, aiActedThisTurn, actionPlay, damageAlloc, outcome, flags, setup]);
 
   // 訂閱訊息匯流排
   useEffect(() => {
@@ -656,54 +731,18 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     let sc = scenario;
     let inv = investigator;
 
-    // ⓪ AI 隊友行動(仍屬調查員階段;與真人同管線 resolveIntent,規則平等)
-    const updatedAIs = [...aiMembers];
+    // ⓪ 結束調查員階段:把本回合「計時器還沒輪到」的 AI 隊友補跑完,保證每位都行動到、不損失回合。
+    //    (玩家逗留時計時器已讓 AI 陸續行動;玩家提前結束就在這裡補齊 — 同時/自由順序的數位形態)
+    let updatedAIs = [...aiMembers];
     if (!setup.tutorial) {
-      setup.aiMembers.forEach((m, idx) => {
-        const ai = updatedAIs[idx];
-        if (!ai || ai.dead || ai.permanentlyDead) return;
-        // 瀕死者:瀕死檢定已在回合開頭(endTurn 進新回合時)與玩家同步結算過,此處純跳過行動(§9.3)
-        if (isDowned(ai)) return;
-        const allies: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
-        for (const [j, other] of updatedAIs.entries()) {
-          if (j !== idx && other) allies[other.investigatorId] = other;
-        }
-        const r = runInvestigatorAITurn(
-          {
-            scenario: sc,
-            investigator: ai,
-            allies,
-            turnNumber,
-            locationStats: setup.locationStats,
-            enemyStats: setup.enemyStats,
-            cardLookup: setup.cardLookup,
-            stylePools: setup.stylePools,
-          },
-          m.profile,
-          aiStatesRef.current[idx],
-        );
-        aiStatesRef.current[idx] = r.aiState;
-        sc = r.scenario;
-        updatedAIs[idx] = r.investigator;
-        // 穩定救援改動到的隊友(可能是玩家或其他 AI)
-        for (const [allyId, allyState] of Object.entries(r.updatedAllies)) {
-          if (allyId === inv.investigatorId) {
-            inv = allyState;
-          } else {
-            const j = updatedAIs.findIndex((x) => x?.investigatorId === allyId);
-            if (j >= 0) updatedAIs[j] = allyState;
-          }
-        }
-        for (const step of r.steps) {
-          if (step.outcome === 'rejected') continue; // AI 被駁回不上戰役紀錄(內部防呆)
-          append(`[${m.profile.name_zh}] ${step.intentNarrative}`);
-          for (const eff of step.effects) {
-            // 結算敘事以「你」書寫 — 隊友行動改以名字呈現
-            append('  └ ' + describeEffect(eff, locMeta).split('你').join(m.profile.name_zh));
-          }
-        }
-        if (r.steps.length === 0) append(`[${m.profile.name_zh}] 按兵不動,觀察著四周。`);
-      });
+      for (let idx = 0; idx < updatedAIs.length; idx += 1) {
+        const aiId = updatedAIs[idx]?.investigatorId;
+        if (aiId && aiActedThisTurn.includes(aiId)) continue; // 已由計時器跑過
+        const res = stepAITeammate(idx, sc, inv, updatedAIs);
+        sc = res.sc;
+        inv = res.inv;
+        updatedAIs = res.aiArr;
+      }
     }
 
     turnLoopRef.current?.advance();
@@ -827,6 +866,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     turnLoopRef.current?.advance();
     turnLoopRef.current?.advance();
     setPlayerShortRested(false); // 新回合開頭重置短休息決定
+    setAiActedThisTurn([]); // 新回合:AI 隊友計時器重新開放(同時行動)
     // 回合結束階段(ch2 §2.4):每人抽 1 卡 + 1 資源 + 手牌上限 8(教學關卡跳過)
     if (!setup.tutorial) {
       setInvestigator((i) => {

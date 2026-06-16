@@ -26,7 +26,12 @@ export interface InvestigatorCarryover {
   hpMax: number;
   sanMax: number;
   traumas: Trauma[];
-  /** 牌組組成(整備期可調;以卡片定義 id 記) */
+  /**
+   * 牌組組成 = **卡片定義 id** 清單(不是場景內的暫態實例 id)。屬戰役層資料,只在整備期變動;
+   * 跨場景沿用同一份組成,下一場開局再依此實例化。**不可從場景末態的 inv.deck 推導**——
+   * 那是暫態實例 id、且只剩抽牌堆(手牌/棄牌/場上資產不在內),跨章會失效。
+   * (場景中探索獲卡對組成的增添 → 另批持久化,見 Task #8,非本骨幹範圍)
+   */
   deck: string[];
   combatStyle: string;
   specializations: string[];
@@ -69,8 +74,42 @@ export function initCampaignProgress(campaignId: string): CampaignProgress {
 }
 
 /**
+ * 開新戰役時把一位調查員註冊進存檔:帶起始牌組組成(**定義 id**)、build、滿血滿智。
+ * 這是牌組組成(定義 id)進存檔的唯一來源;之後只在整備期變動。
+ */
+export function registerInvestigator(
+  progress: CampaignProgress,
+  init: {
+    investigatorDefinitionId: string;
+    deck: string[]; // 卡片定義 id
+    combatStyle: string;
+    specializations: string[];
+    hpMax: number;
+    sanMax: number;
+  },
+): CampaignProgress {
+  const carry: InvestigatorCarryover = {
+    investigatorDefinitionId: init.investigatorDefinitionId,
+    hp: init.hpMax,
+    san: init.sanMax,
+    hpMax: init.hpMax,
+    sanMax: init.sanMax,
+    traumas: [],
+    deck: [...init.deck],
+    combatStyle: init.combatStyle,
+    specializations: [...init.specializations],
+    xp: 0,
+    talentPoints: 0,
+    permanentlyDead: false,
+  };
+  return { ...progress, investigators: { ...progress.investigators, [init.investigatorDefinitionId]: carry } };
+}
+
+/**
  * 從一位場景結束的調查員抽出「跨章保留切片」。
- * xp/talentPoints 是戰役層累積(不在 InvestigatorState 上),由 prev 沿用;沒有 prev 視為 0。
+ * 變動的(場景中會改的):HP/SAN、創傷、永久死亡 → 取自 inv。
+ * 不變的戰役層資料(牌組組成/xp/天賦點)→ 由 prev 沿用。
+ * **牌組刻意不讀 inv.deck**:那是場景暫態實例 id 且只剩抽牌堆,沿用 prev 的定義 id 組成才正確。
  */
 export function extractCarryover(
   inv: InvestigatorState,
@@ -83,7 +122,7 @@ export function extractCarryover(
     hpMax: inv.hpMax,
     sanMax: inv.sanMax,
     traumas: inv.traumas,
-    deck: [...inv.deck],
+    deck: prev ? [...prev.deck] : [],
     combatStyle: inv.combatStyle,
     specializations: [...inv.specializations],
     xp: prev?.xp ?? 0,

@@ -1,7 +1,7 @@
 /**
  * G-13 戰役進度 / 存檔骨幹測試 — 跨章保留矩陣 + 結算 + 長休息
  */
-import { initCampaignProgress, extractCarryover, settleScenarioEnd, applyLongRest } from './campaignProgress';
+import { initCampaignProgress, registerInvestigator, extractCarryover, settleScenarioEnd, applyLongRest } from './campaignProgress';
 import type { CampaignProgress } from './campaignProgress';
 import type { InvestigatorState } from './state';
 
@@ -25,24 +25,36 @@ function makeInv(over: Partial<InvestigatorState> = {}): InvestigatorState {
   };
 }
 
-// ─── 抽取跨章保留切片 ───────────────────────
-test('extractCarryover:只留持久欄位,場景內狀態不入存檔', () => {
-  const c = extractCarryover(makeInv());
-  assertEq(c.hp, 6); assertEq(c.san, 4);
-  assertEq(c.hpMax, 10); assertEq(c.sanMax, 8);
-  assertEq(c.deck.length, 3, '牌組組成保留');
-  assertEq(c.combatStyle, 'pistol');
-  assertEq(c.specializations[0], 'marksman');
-  // 場景內欄位(手牌/資源/行動點/狀態效果/盟友)不該出現在 carryover 型別上 — 編譯期已保證,這裡確認沒被當欄位帶出
+// ─── 註冊 + 抽取跨章保留切片 ─────────────────
+test('registerInvestigator:起始牌組組成是定義 id、滿血滿智', () => {
+  const p = registerInvestigator(initCampaignProgress('camp1'), {
+    investigatorDefinitionId: 'elias', deck: ['def_a', 'def_b', 'def_b'], combatStyle: 'pistol', specializations: ['marksman'], hpMax: 10, sanMax: 8,
+  });
+  const c = p.investigators.elias;
+  assertEq(c.deck.length, 3); assertEq(c.deck[0], 'def_a', '存的是定義 id');
+  assertEq(c.hp, 10); assertEq(c.san, 8, '開局滿血滿智');
+  assertEq(c.xp, 0); assertEq(c.talentPoints, 0);
+});
+
+test('extractCarryover:變動欄位取自 inv,牌組/xp/天賦點沿用 prev(不讀場景暫態 deck)', () => {
+  const prev = { ...registerInvestigator(initCampaignProgress('c'), { investigatorDefinitionId: 'elias', deck: ['def_a', 'def_b'], combatStyle: 'pistol', specializations: ['marksman'], hpMax: 10, sanMax: 8 }).investigators.elias, xp: 7, talentPoints: 3 };
+  // inv.deck 是場景暫態實例 id(只剩抽牌堆 1 張)— 不該被當作組成
+  const c = extractCarryover(makeInv({ hp: 2, deck: ['inst_only_1'] }), prev);
+  assertEq(c.hp, 2, '當前 HP 用新值');
+  assertEq(c.deck.length, 2, '牌組沿用 prev 的定義 id 組成(非場景殘留抽牌堆)');
+  assertEq(c.deck[0], 'def_a', '是定義 id 不是實例 id');
+  assertEq(c.xp, 7, 'xp 沿用'); assertEq(c.talentPoints, 3, '天賦點沿用');
+  // 場景內欄位(手牌/資源/行動點/狀態效果/盟友)不入存檔
   assertEq((c as unknown as { hand?: unknown }).hand, undefined, '手牌不入存檔');
   assertEq((c as unknown as { resources?: unknown }).resources, undefined, '資源不入存檔');
 });
 
-test('extractCarryover:xp/天賦點從 prev 沿用(InvestigatorState 上沒有,屬戰役層)', () => {
-  const prev = { ...extractCarryover(makeInv()), xp: 7, talentPoints: 3 };
-  const c = extractCarryover(makeInv({ hp: 2 }), prev);
-  assertEq(c.xp, 7, 'xp 沿用'); assertEq(c.talentPoints, 3, '天賦點沿用');
-  assertEq(c.hp, 2, '當前 HP 用新值');
+test('牌組組成跨「打一場 → 結算」不縮水(回歸 BLOCK:只保留抽牌堆會跨章失效)', () => {
+  const p0 = registerInvestigator(initCampaignProgress('c'), { investigatorDefinitionId: 'elias', deck: ['def_a', 'def_b', 'def_c', 'def_d'], combatStyle: 'pistol', specializations: [], hpMax: 10, sanMax: 8 });
+  // 場景結束時這位手上只剩抽牌堆 1 張(其餘散在手牌/棄牌/場上),若從 inv.deck 推導會掉成 1 張
+  const r = settleScenarioEnd(p0, { i1: makeInv({ deck: ['inst_x'], hp: 5 }) }, { xp: 3 });
+  assertEq(r.progress.investigators.elias.deck.length, 4, '組成仍是 4 張(沒被場景末態縮水)');
+  assertEq(r.progress.investigators.elias.hp, 5, '當前 HP 更新');
 });
 
 // ─── 場景結束結算 ───────────────────────────

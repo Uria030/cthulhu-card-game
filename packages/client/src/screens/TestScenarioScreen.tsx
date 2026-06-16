@@ -368,6 +368,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [damageAlloc, setDamageAlloc] = useState<{ physical: number; horror: number; targets: AllocatableTarget[] } | null>(null);
   // Phase2 C:玩家自己動作的三段演出 Modal(敘述→檢定→結果);其他人動作只進 Log
   const [actionPlay, setActionPlay] = useState<ActionPlay | null>(null);
+  // 手牌放大檢視:點手牌卡 → 放大看內容,下方打出/消耗/投入按鈕(刻意慢一拍提升體驗)
+  const [zoomCard, setZoomCard] = useState<CardDisplay | null>(null);
   const [panel, setPanel] = useState<PanelType>(null);
   // 投入加值選擇(下一次檢定動作帶上,送出後清空)
   const [commitSelection, setCommitSelection] = useState<string[]>([]);
@@ -1389,20 +1391,18 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         );
       })()}
 
-      {/* === 底部 Panel(手牌:點卡 = 切換投入加值;「打出」= play_card)=== */}
+      {/* === 底部 Panel(手牌:點卡 → 放大檢視 + 打出/消耗/投入)=== */}
       {panel === 'hand' && (
         <div className="bottom-panel active">
           <div className="panel-close" onClick={() => setPanel(null)}>[✕ 關閉]</div>
           <div className="panel-title">
-            手牌 ({handCards.length}) · 點卡片 = 投入下次檢定加值
-            {commitSelection.length > 0 && ` · 已選 ${commitSelection.length} 張`}
+            手牌 ({handCards.length}) · 點卡片 = 放大查看
+            {commitSelection.length > 0 && ` · 已投入 ${commitSelection.length} 張`}
           </div>
           <div className="mock-cards">
             {handCards.map((card, i) => {
               const center = (handCards.length - 1) / 2;
               const offset = i - center;
-              const data = setup.cardLookup[card.id];
-              const playable = data?.card_type && data.card_type !== 'skill';
               const selected = commitSelection.includes(card.id);
               return (
                 <div
@@ -1410,23 +1410,12 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                   className={'mock-card rarity-' + card.rarity + (selected ? ' commit-selected' : '')}
                   style={{ transform: `rotate(${offset * 4}deg) translateY(${Math.abs(offset) * 4 - (selected ? 14 : 0)}px)` }}
                   title={card.desc}
-                  onClick={() => toggleCommit(card.id)}
+                  onClick={() => setZoomCard(card)}
                 >
                   <div className="mc-cost">{card.cost}</div>
                   <div className="mc-name">{card.name}</div>
                   <div className="mc-desc">{card.desc}</div>
                   {selected && <div className="mc-commit-badge">🂠 投入</div>}
-                  {playable && (
-                    <button
-                      className="mc-play-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        submitIntent('play_card', { cardInstanceId: card.id });
-                      }}
-                    >
-                      打出({data?.cost ?? 0} 資源)
-                    </button>
-                  )}
                 </div>
               );
             })}
@@ -1434,6 +1423,43 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           </div>
         </div>
       )}
+
+      {/* === 卡片放大檢視(點手牌卡 → 放大看內容 + 打出/消耗/投入加值)=== */}
+      {zoomCard && (() => {
+        const d = setup.cardLookup[zoomCard.id];
+        const playable = !!(d?.card_type && d.card_type !== 'skill');
+        const consumable = !!d?.consume_enabled;
+        const selected = commitSelection.includes(zoomCard.id);
+        return (
+          <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setZoomCard(null); }}>
+            <div className="modal-frame">
+              <div
+                className={'rarity-' + zoomCard.rarity}
+                style={{ width: 300, maxWidth: '80vw', margin: '0 auto', padding: '22px 20px', borderRadius: 12, background: 'rgba(20,18,28,0.96)', border: '1px solid #6c5a3e', textAlign: 'center' }}
+              >
+                <div style={{ fontSize: 13, opacity: 0.7 }}>費用 {zoomCard.cost}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, margin: '8px 0', color: '#e8dcc0' }}>{zoomCard.name}</div>
+                <div style={{ fontSize: 15, lineHeight: 1.6, color: '#cabfa8', whiteSpace: 'pre-wrap' }}>{zoomCard.desc}</div>
+              </div>
+              <hr className="modal-divider" />
+              <div className="action-row">
+                {playable && (
+                  <button onClick={() => { submitIntent('play_card', { cardInstanceId: zoomCard.id }); setZoomCard(null); }}>
+                    🃏 打出({zoomCard.cost} 資源)
+                  </button>
+                )}
+                {consumable && (
+                  <button onClick={() => { submitIntent('consume', { cardInstanceId: zoomCard.id }); setZoomCard(null); }}>
+                    ♻ 消耗
+                  </button>
+                )}
+                <button onClick={() => toggleCommit(zoomCard.id)}>{selected ? '🂠 取消投入' : '🂠 投入加值'}</button>
+                <button onClick={() => setZoomCard(null)}>✕ 關閉</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* === 底部 Panel(背包:場上資產 + 行動效果按鈕)=== */}
       {panel === 'bag' && (

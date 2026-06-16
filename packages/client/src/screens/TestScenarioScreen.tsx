@@ -351,9 +351,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const aiStatesRef = useRef<InvestigatorAIState[]>(setup.aiMembers.map(() => initInvestigatorAIState()));
   // Phase2 B:本回合已行動過的 AI 隊友(計時器同時行動用;新回合在 endTurn 清空)
   const [aiActedThisTurn, setAiActedThisTurn] = useState<string[]>([]);
+  // AI 計時器「該動了」訊號;executor effect 監聽此值,在 fresh 閉包裡跑一位 AI(競態防護見下方 effect)
+  const [aiTick, setAiTick] = useState(0);
   const [phase, setPhase] = useState<TurnPhase>('investigator');
-  // 階段 ref(AI 計時器回呼防呆:階段已切走就不套用 AI 動作,避免插進敵人階段)
-  const phaseRef = useRef<TurnPhase>('investigator');
   // 本回合玩家是否已選短休息(放棄行動;每回合開頭重置)
   const [playerShortRested, setPlayerShortRested] = useState(false);
   const [turnNumber, setTurnNumber] = useState(1);
@@ -501,31 +501,42 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     return { sc, inv, aiArr };
   };
 
-  // 階段 ref 同步(供 AI 計時器回呼防呆)
-  useEffect(() => { phaseRef.current = phase; }, [phase]);
-
-  // Phase2 B:AI 隊友計時器同時行動 — 調查員階段中每隔 AI_ACTION_INTERVAL_MS 讓一位「本回合還沒
-  // 行動」的 AI 隊友跑一回合,結果流進 Log(非阻塞玩家、無強制玩家→AI 先後)。玩家演出 Modal 開著
-  // 或已結算時暫停。任何狀態變動都會取消重排計時器,故 AI 永遠用「最新狀態」計算(避開閉包舊值,
-  // = escape BLOCK 的同類陷阱)。granularity v0 = 每位 AI 一整回合(非逐動作)。
+  // Phase2 B:AI 隊友計時器同時行動 — 調查員階段中,每隔 AI_ACTION_INTERVAL_MS 讓一位「本回合還沒
+  // 行動」的 AI 隊友跑一回合,結果流進 Log(非阻塞玩家、無強制玩家→AI 先後)。
+  // granularity v0 = 每位 AI 一整回合(非逐動作)。
+  //
+  // 競態防護(Raviel BLOCK 修正):**絕不在 setTimeout 回呼裡用閉包狀態寫遊戲 state**
+  // (閉包會是舊值 → lost update;phaseRef 這種 ref 又因 post-render 更新而落後 → 仍有競態)。
+  // 改用標準 React 模式:計時器只發「該動了」訊號(setAiTick),真正跑 AI 在另一支 effect 裡做,
+  // 那支 effect 在 tick 觸發的 render 後才跑,讀到的是「已 commit 的最新 state」(fresh 閉包),
+  // 連階段判斷都用 fresh 閉包(不靠落後的 ref)。單執行緒下無交錯,故無 lost update。
+  const aiHasUnacted = aiMembers.some((ai) =>
+    !!ai && !ai.dead && !ai.permanentlyDead && !isDowned(ai) && !aiActedThisTurn.includes(ai.investigatorId));
+  const aiPaused = !!(setup.tutorial || phase !== 'investigator' || outcome || actionPlay || damageAlloc);
+  // 計時器:只發訊號,不碰遊戲狀態。aiActedThisTurn 入 deps → 每位 AI 行動完都重新武裝下一個計時器
+  // (否則 aiHasUnacted 仍為 true 時 deps 不變,序列會在第一位之後停住)。
   useEffect(() => {
-    if (setup.tutorial || phase !== 'investigator' || outcome) return;
-    if (actionPlay || damageAlloc) return; // 玩家演出中:暫停 AI(避免插隊與狀態交錯)
+    if (aiPaused || !aiHasUnacted) return;
+    const id = setTimeout(() => setAiTick((t) => t + 1), AI_ACTION_INTERVAL_MS);
+    return () => clearTimeout(id);
+  }, [aiPaused, aiHasUnacted, turnNumber, aiActedThisTurn]);
+  // 執行:tick 變動 → 用「當下已 commit 的最新 state」跑一位 AI(fresh 閉包,杜絕舊值寫入)
+  useEffect(() => {
+    if (aiTick === 0) return;
+    if (setup.tutorial || phase !== 'investigator' || outcome || actionPlay || damageAlloc) return;
     const idx = aiMembers.findIndex((ai) =>
       !!ai && !ai.dead && !ai.permanentlyDead && !isDowned(ai) && !aiActedThisTurn.includes(ai.investigatorId));
-    if (idx < 0) return; // 本回合可行動的 AI 都跑過了
+    if (idx < 0) return;
     const actedId = aiMembers[idx]?.investigatorId;
-    const id = setTimeout(() => {
-      if (phaseRef.current !== 'investigator') return; // 階段已切走:不補(防微秒級競態)
-      const res = stepAITeammate(idx, scenario, investigator, aiMembers);
-      const next = applyProgress(res.sc, res.inv, res.aiArr);
-      setScenario(next.sc);
-      setInvestigator(next.inv);
-      setAiMembers(res.aiArr);
-      if (actedId) setAiActedThisTurn((s) => (s.includes(actedId) ? s : [...s, actedId]));
-    }, AI_ACTION_INTERVAL_MS);
-    return () => clearTimeout(id);
-  }, [phase, turnNumber, scenario, investigator, aiMembers, aiActedThisTurn, actionPlay, damageAlloc, outcome, flags, setup]);
+    const res = stepAITeammate(idx, scenario, investigator, aiMembers);
+    const next = applyProgress(res.sc, res.inv, res.aiArr);
+    setScenario(next.sc);
+    setInvestigator(next.inv);
+    setAiMembers(res.aiArr);
+    if (actedId) setAiActedThisTurn((s) => (s.includes(actedId) ? s : [...s, actedId]));
+    // 僅依 aiTick 觸發;其餘狀態刻意讀 fresh 閉包(這正是杜絕舊值寫入的關鍵)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiTick]);
 
   // 訂閱訊息匯流排
   useEffect(() => {

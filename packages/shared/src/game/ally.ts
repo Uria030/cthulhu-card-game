@@ -53,12 +53,16 @@ export function applyIncomingDamageToPlayer(
     hp: Math.max(0, inv.hp - phys),
     san: Math.max(0, inv.san - hor),
   };
+  // 可分配量 = **本擊實際造成的損失**(夾在 0..受擊前該池值),不是完整入傷。
+  // overkill(入傷 > 受擊前該池值)時超出部分無法回收 → 否則盟友 soak 會把調查員「治到比受擊前更高」。
+  const physLost = inv.hp - investigator.hp;
+  const horLost = inv.san - investigator.san;
   const effects: ResultEffect[] = [];
   const targets = opts.direct ? [] : allocatableTargets(inv);
-  if ((phys > 0 || hor > 0) && targets.length > 0) {
+  if ((physLost > 0 || horLost > 0) && targets.length > 0) {
     effects.push({
       type: 'damage_allocatable',
-      params: { physical: phys, horror: hor, targets, narrative: '有人能替你分擔這一擊 — 要分給誰?' },
+      params: { physical: physLost, horror: horLost, targets, narrative: '有人能替你分擔這一擊 — 要分給誰?' },
       targetId: inv.investigatorId,
     });
   }

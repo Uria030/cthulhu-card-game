@@ -64,9 +64,10 @@ test('applyDamageAllocation:分配量夾在盟友剩餘上限', () => {
 });
 
 test('autoAllocateDamage:AI 自動把傷害塞給盟友(貪婪填到容量上限)', () => {
-  // AI 受 5 物理(hp 已扣到 5),有一個 3HP 肉盾 → 自動移 3 給盟友、AI 回血 3
-  const ai = makeInv({ hp: 5, allies: [mk({ hp: 3, san: 1 })] });
-  const r = autoAllocateDamage(ai, 5, 0);
+  // 受擊前 hp=10,受 5 物理 → hp=5;肉盾(hp3)吸 3,AI 回到 8(≤ 受擊前 10,不過量)
+  const hit = applyIncomingDamageToPlayer(makeInv({ allies: [mk({ hp: 3, san: 1 })] }), 5, 0);
+  const p = (hit.effects.find((e) => e.type === 'damage_allocatable')?.params) as { physical: number };
+  const r = autoAllocateDamage(hit.investigator, p.physical, 0);
   assertEq(r.investigator.hp, 8, 'AI 回血 3(5+3)');
   assertEq(r.investigator.allies?.length, 0, '盟友 HP 0 → 離場');
   assertEq(r.effects.some((e) => e.type === 'ally_soak'), true);
@@ -79,11 +80,25 @@ test('autoAllocateDamage:無盟友 → 不動、無效果', () => {
   assertEq(r.effects.length, 0);
 });
 
-test('autoAllocateDamage:恐懼塞給精神支柱、物理塞給肉盾(各依容量)', () => {
-  const ai = makeInv({ hp: 0, san: 0, allies: [mk({ hp: 2, san: 0 }), mk({ cardInstanceId: 'a2', hp: 0, san: 2 })] });
-  const r = autoAllocateDamage(ai, 2, 2);
-  assertEq(r.investigator.hp, 2, '物理 2 由肉盾擋 → 回 HP 2');
-  assertEq(r.investigator.san, 2, '恐懼 2 由支柱擋 → 回 SAN 2');
+test('autoAllocateDamage:恐懼→精神支柱、物理→肉盾(各依容量),回血不超過受擊前', () => {
+  // 受擊前 hp=2/san=2;受 2 物理 + 2 恐懼 → 歸 0。肉盾(hp2)擋物理、支柱(san2)擋恐懼,回到受擊前值
+  const pre = makeInv({ hp: 2, san: 2, allies: [mk({ hp: 2, san: 0 }), mk({ cardInstanceId: 'a2', hp: 0, san: 2 })] });
+  const hit = applyIncomingDamageToPlayer(pre, 2, 2);
+  const p = (hit.effects.find((e) => e.type === 'damage_allocatable')?.params) as { physical: number; horror: number };
+  const r = autoAllocateDamage(hit.investigator, p.physical, p.horror);
+  assertEq(r.investigator.hp, 2, '物理由肉盾擋 → 回 HP 2(受擊前值)');
+  assertEq(r.investigator.san, 2, '恐懼由支柱擋 → 回 SAN 2(受擊前值)');
+});
+
+test('overkill 防護:可分配量夾到實際損失,soak 不把調查員治到比受擊前更高', () => {
+  // 受擊前 hp=2,怪攻物理=6(overkill)。實際只損失 2,盟友最多只能吸 2 → AI 回到 2,不是被打反而 +4
+  const pre = makeInv({ hp: 2, hpMax: 10, allies: [mk({ hp: 6, san: 1 })] });
+  const hit = applyIncomingDamageToPlayer(pre, 6, 0);
+  assertEq(hit.investigator.hp, 0, '受擊後歸 0');
+  const p = (hit.effects.find((e) => e.type === 'damage_allocatable')?.params) as { physical: number };
+  assertEq(p.physical, 2, '放出的可分配量 = 實際損失 2(非完整入傷 6)');
+  const auto = autoAllocateDamage(hit.investigator, p.physical, 0);
+  assertEq(auto.investigator.hp, 2, 'soak 後回到受擊前 hp=2,不過量回血');
 });
 
 // ─── runner ─────────────────────────

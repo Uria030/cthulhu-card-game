@@ -294,16 +294,15 @@ export function TestScenarioScreen() {
     setSetup(null);
     setLoadError(null);
     const playerTemplateId = getSelectedInvestigator()?.id;
-    // AI 隊友(v0:一位):名冊上第一位不與玩家撞模板的成員
-    const aiProfile = AI_INVESTIGATOR_ROSTER.find((p) => p.templateId !== playerTemplateId) ?? null;
+    // AI 隊友:名冊上前 3 位不與玩家撞模板的成員(各自 bootstrap;某位拉不到 → 略過,少人照常開局)
+    const aiProfiles = AI_INVESTIGATOR_ROSTER.filter((p) => p.templateId !== playerTemplateId).slice(0, 3);
+    type Boot = Awaited<ReturnType<typeof fetchBootstrap>>;
     Promise.all([
       fetchBootstrap(stageId, playerTemplateId),
-      aiProfile
-        ? fetchBootstrap(stageId, aiProfile.templateId).catch(() => null) // AI 拉不到 → 單人照常開局
-        : Promise.resolve(null),
+      Promise.all(aiProfiles.map((p) => fetchBootstrap(stageId, p.templateId).catch(() => null))),
     ])
-      .then(([bootstrap, aiBootstrap]) => {
-        if (!cancelled) setSetup(buildSetupFromBootstrap(bootstrap, aiBootstrap ? [aiBootstrap] : []));
+      .then(([bootstrap, aiBoots]) => {
+        if (!cancelled) setSetup(buildSetupFromBootstrap(bootstrap, aiBoots.filter((b): b is Boot => b != null)));
       })
       .catch((e: unknown) => {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));

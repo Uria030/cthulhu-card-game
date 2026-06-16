@@ -36,6 +36,22 @@ test('registerInvestigator:起始牌組組成是定義 id、滿血滿智', () =>
   assertEq(c.xp, 0); assertEq(c.talentPoints, 0);
 });
 
+test('registerInvestigator:已註冊者不覆寫(冪等,不洗掉累積進度)', () => {
+  let p = registerInvestigator(initCampaignProgress('c'), { investigatorDefinitionId: 'elias', deck: ['def_a'], combatStyle: 'pistol', specializations: [], hpMax: 10, sanMax: 8 });
+  p = { ...p, investigators: { ...p.investigators, elias: { ...p.investigators.elias, xp: 12, hp: 3 } } }; // 累積了進度
+  p = registerInvestigator(p, { investigatorDefinitionId: 'elias', deck: ['def_zzz'], combatStyle: 'x', specializations: [], hpMax: 10, sanMax: 8 }); // 再註冊一次
+  assertEq(p.investigators.elias.xp, 12, '不覆寫累積 XP');
+  assertEq(p.investigators.elias.hp, 3, '不覆寫當前 HP');
+  assertEq(p.investigators.elias.deck[0], 'def_a', '不覆寫牌組');
+});
+
+test('extractCarryover:創傷深拷貝,後續改 inv 不污染存檔', () => {
+  const inv = makeInv({ traumas: [{ type: 'physical', amount: 1, source: 's', acquiredAt: 't' }] });
+  const c = extractCarryover(inv);
+  inv.traumas[0].amount = 99; // 之後玩家在新場景又受創,改動原 inv
+  assertEq(c.traumas[0].amount, 1, '存檔裡的創傷不被 inv 後續變動污染');
+});
+
 test('extractCarryover:變動欄位取自 inv,牌組/xp/天賦點沿用 prev(不讀場景暫態 deck)', () => {
   const prev = { ...registerInvestigator(initCampaignProgress('c'), { investigatorDefinitionId: 'elias', deck: ['def_a', 'def_b'], combatStyle: 'pistol', specializations: ['marksman'], hpMax: 10, sanMax: 8 }).investigators.elias, xp: 7, talentPoints: 3 };
   // inv.deck 是場景暫態實例 id(只剩抽牌堆 1 張)— 不該被當作組成

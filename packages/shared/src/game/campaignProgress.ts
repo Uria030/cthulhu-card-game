@@ -88,6 +88,8 @@ export function registerInvestigator(
     sanMax: number;
   },
 ): CampaignProgress {
+  // 防呆:已註冊者不覆寫(重複註冊會洗掉累積的 HP/XP/天賦點/創傷)。冪等。
+  if (progress.investigators[init.investigatorDefinitionId]) return progress;
   const carry: InvestigatorCarryover = {
     investigatorDefinitionId: init.investigatorDefinitionId,
     hp: init.hpMax,
@@ -121,7 +123,7 @@ export function extractCarryover(
     san: inv.san,
     hpMax: inv.hpMax,
     sanMax: inv.sanMax,
-    traumas: inv.traumas,
+    traumas: inv.traumas.map((t) => ({ ...t })), // 深拷貝避免與 inv 共用參照(存檔被後續 inv 變動污染)
     deck: prev ? [...prev.deck] : [],
     combatStyle: inv.combatStyle,
     specializations: [...inv.specializations],

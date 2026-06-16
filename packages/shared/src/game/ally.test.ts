@@ -1,7 +1,7 @@
 /**
  * G-08 盟友傷害分配測試 — ch3 §11(Modal 玩家選擇)
  */
-import { allocatableTargets, applyIncomingDamageToPlayer, applyDamageAllocation } from './ally';
+import { allocatableTargets, applyIncomingDamageToPlayer, applyDamageAllocation, autoAllocateDamage } from './ally';
 import type { AllyState, InvestigatorState } from './state';
 
 type TestFn = () => void;
@@ -61,6 +61,29 @@ test('applyDamageAllocation:分配量夾在盟友剩餘上限', () => {
   const r = applyDamageAllocation(inv, [{ cardInstanceId: 'a1', physical: 9 }]); // 想分 9 但盟友只 2 HP
   assertEq(r.investigator.hp, 2, '只回血 2(夾盟友上限)');
   assertEq(r.investigator.allies?.length, 0, '盟友 HP 0 → 離場');
+});
+
+test('autoAllocateDamage:AI 自動把傷害塞給盟友(貪婪填到容量上限)', () => {
+  // AI 受 5 物理(hp 已扣到 5),有一個 3HP 肉盾 → 自動移 3 給盟友、AI 回血 3
+  const ai = makeInv({ hp: 5, allies: [mk({ hp: 3, san: 1 })] });
+  const r = autoAllocateDamage(ai, 5, 0);
+  assertEq(r.investigator.hp, 8, 'AI 回血 3(5+3)');
+  assertEq(r.investigator.allies?.length, 0, '盟友 HP 0 → 離場');
+  assertEq(r.effects.some((e) => e.type === 'ally_soak'), true);
+});
+
+test('autoAllocateDamage:無盟友 → 不動、無效果', () => {
+  const ai = makeInv({ hp: 4, allies: [] });
+  const r = autoAllocateDamage(ai, 5, 0);
+  assertEq(r.investigator.hp, 4, '無盟友不回血');
+  assertEq(r.effects.length, 0);
+});
+
+test('autoAllocateDamage:恐懼塞給精神支柱、物理塞給肉盾(各依容量)', () => {
+  const ai = makeInv({ hp: 0, san: 0, allies: [mk({ hp: 2, san: 0 }), mk({ cardInstanceId: 'a2', hp: 0, san: 2 })] });
+  const r = autoAllocateDamage(ai, 2, 2);
+  assertEq(r.investigator.hp, 2, '物理 2 由肉盾擋 → 回 HP 2');
+  assertEq(r.investigator.san, 2, '恐懼 2 由支柱擋 → 回 SAN 2');
 });
 
 // ─── runner ─────────────────────────

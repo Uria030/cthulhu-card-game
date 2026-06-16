@@ -45,7 +45,7 @@ import type {
   ResultEffect,
   EnemyInstance,
 } from '@cthulhu/shared';
-import { applyDamageAllocation } from '@cthulhu/shared';
+import { applyDamageAllocation, autoAllocateDamage } from '@cthulhu/shared';
 import type { AllocatableTarget } from '@cthulhu/shared';
 import { fetchBootstrap } from '../api';
 import { getSelectedInvestigator } from '../game/selectedInvestigator';
@@ -459,6 +459,25 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     return { sc: nextSc, inv: nextInv };
   };
 
+  // §11 v0 AI auto-policy:對 effects 內所有「指向 AI 隊友」的 damage_allocatable,自動把傷害塞給
+  // 該 AI 的盟友(隊友 AI 不跳 Modal — Modal 是玩家專屬)。就地更新傳入的 aiArr,逐筆寫 Log。
+  // 玩家本人的 damage_allocatable 不在此處理(走 setDamageAlloc Modal)。
+  const settleAITeamAllocatable = (effects: ResultEffect[], aiArr: InvestigatorState[], playerId: string): void => {
+    for (const eff of effects) {
+      if (eff.type !== 'damage_allocatable' || eff.targetId === playerId) continue;
+      const j = aiArr.findIndex((ai) => ai?.investigatorId === eff.targetId);
+      if (j < 0) continue;
+      const cur = aiArr[j];
+      if (!cur) continue;
+      const pp = eff.params as { physical?: number; horror?: number };
+      const auto = autoAllocateDamage(cur, Number(pp.physical ?? 0), Number(pp.horror ?? 0));
+      if (auto.effects.length === 0) continue;
+      aiArr[j] = auto.investigator;
+      const aiName = setup.aiMembers[j]?.profile.name_zh ?? 'AI';
+      for (const e of auto.effects) append('  └ ' + describeEffect(e, locMeta).split('你').join(aiName));
+    }
+  };
+
   // 跑單一 AI 隊友的一回合(邏輯同 enterMythosPhase ⓪;抽出供「計時器同時行動」與「結束階段補跑」共用)。
   // 純計算式:吃 (idx, sc, inv, aiArr) 回新的三者,只 append Log、不直接 setState(commit 由呼叫端負責)。
   const stepAITeammate = (
@@ -495,8 +514,13 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     for (const step of r.steps) {
       if (step.outcome === 'rejected') continue; // AI 被駁回不上戰役紀錄
       append(`[${m.profile.name_zh}] ${step.intentNarrative}`);
-      for (const eff of step.effects) append('  └ ' + describeEffect(eff, locMeta).split('你').join(m.profile.name_zh));
+      for (const eff of step.effects) {
+        if (eff.type === 'damage_allocatable') continue; // Modal 提示不對 AI 顯示;改下方自動分配
+        append('  └ ' + describeEffect(eff, locMeta).split('你').join(m.profile.name_zh));
+      }
     }
+    // v0 AI auto-policy:把 AI 本回合自身受到的可分配傷害自動塞給自己的盟友(不跳 Modal)
+    settleAITeamAllocatable(r.steps.flatMap((s) => s.effects), aiArr, inv0.investigatorId);
     if (r.steps.length === 0) append(`[${m.profile.name_zh}] 按兵不動,觀察著四周。`);
     return { sc, inv, aiArr };
   };
@@ -816,7 +840,12 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           const aiFear = runFearChecks(ai, sc, setup.enemyStats);
           updatedAIs[idx] = aiFear.investigator;
           const aiName = setup.aiMembers[idx]?.profile.name_zh ?? 'AI';
-          for (const eff of aiFear.effects) append('  └ ' + describeEffect(eff, locMeta).split('你').join(aiName));
+          for (const eff of aiFear.effects) {
+            if (eff.type === 'damage_allocatable') continue; // Modal 提示不對 AI 顯示;改下方自動分配
+            append('  └ ' + describeEffect(eff, locMeta).split('你').join(aiName));
+          }
+          // v0 AI auto-policy:恐懼造成的可分配傷害 → 自動塞給該 AI 的盟友
+          settleAITeamAllocatable(aiFear.effects, updatedAIs, inv.investigatorId);
         });
       }
     }
@@ -840,6 +869,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       const dp = mythosDa.params as { physical?: number; horror?: number; targets?: AllocatableTarget[] };
       setDamageAlloc({ physical: Number(dp.physical ?? 0), horror: Number(dp.horror ?? 0), targets: dp.targets ?? [] });
     }
+    // §11 v0 AI auto-policy:神話階段對 AI 隊友造成的可分配傷害 → 自動塞給該 AI 的盟友(玩家才跳 Modal)
+    settleAITeamAllocatable(act.effects, updatedAIs, inv.investigatorId);
 
     // 倒地狀態同步(§9:歸零 → 瀕死,不是直接出局)
     {

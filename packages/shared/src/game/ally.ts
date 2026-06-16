@@ -72,6 +72,35 @@ export interface DamageAllocation {
 }
 
 /**
+ * §11 AI 隊友傷害自動分配(v0 auto-policy):隊友 AI 不跳 Modal(Modal 是玩家專屬affordance),
+ * 改用貪婪策略把可分配傷害塞給自己的盟友(肉盾/精神支柱先擋),塞到盟友容量上限為止。
+ * 與 applyDamageAllocation 同底層(調查員回血、盟友扣血/離場),差別只在分配方案由策略決定、非玩家選。
+ */
+export function autoAllocateDamage(
+  inv: InvestigatorState,
+  physical: number,
+  horror: number,
+): { investigator: InvestigatorState; effects: ResultEffect[] } {
+  const targets = allocatableTargets(inv);
+  let pRemain = Math.max(0, physical);
+  let hRemain = Math.max(0, horror);
+  if (targets.length === 0 || (pRemain <= 0 && hRemain <= 0)) return { investigator: inv, effects: [] };
+  const allocations: DamageAllocation[] = [];
+  for (const t of targets) {
+    const p = Math.min(pRemain, t.physicalCapacity);
+    const h = Math.min(hRemain, t.horrorCapacity);
+    if (p > 0 || h > 0) {
+      allocations.push({ cardInstanceId: t.cardInstanceId, physical: p, horror: h });
+      pRemain -= p;
+      hRemain -= h;
+    }
+    if (pRemain <= 0 && hRemain <= 0) break;
+  }
+  if (allocations.length === 0) return { investigator: inv, effects: [] };
+  return applyDamageAllocation(inv, allocations);
+}
+
+/**
  * §11 套用玩家在 Modal 選的分配:把傷害從調查員移到選定盟友(調查員回血、盟友扣血)。
  * 每筆分配上限 = 盟友剩餘 HP/SAN 與調查員「本回合已受傷量」的較小值(由 client 控,引擎再夾一次)。
  * 任一池歸 0 → 盟友離場。

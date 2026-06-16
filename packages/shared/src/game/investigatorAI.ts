@@ -257,6 +257,11 @@ export interface InvestigatorAIContext {
   stylePools: Record<string, StyleCardData[]>;
   /** 混沌袋情境標記效果碼(施法軌場景效果用;傳給 resolveIntent) */
   chaosMarkerEffects?: Record<string, string>;
+  /**
+   * 當前幕的「該擊敗目標」enemyDefinitionId 清單(來自 front_advance_condition 為擊敗型時)。
+   * 設了之後:AI 不再悠哉搜線索,改向目標 boss 聚攏並集火(目標導向,人格權重不變)。
+   */
+  objectiveEnemyCodes?: string[];
   rng: () => number;
 }
 
@@ -308,6 +313,10 @@ export function enumerateCandidates(
   const here = scenario.locations.find((l) => l.locationDefinitionId === inv.currentLocationId);
   const enemiesHere = scenario.enemies.filter((e) => e.hp > 0 && e.locationId === inv.currentLocationId);
   const aliveEnemies = scenario.enemies.filter((e) => e.hp > 0);
+  // 目標導向:幕條件是「擊敗某 boss」時,該 boss 還活著 → 全隊向它聚攏集火、別再悠哉搜線索
+  const objectiveCodes = ctx.objectiveEnemyCodes ?? [];
+  const isObjective = (e: { enemyDefinitionId: string }) => objectiveCodes.includes(e.enemyDefinitionId);
+  const objectiveAlive = aliveEnemies.some(isObjective);
   const engaged = inv.engagedWith
     .map((id) => scenario.enemies.find((e) => e.instanceId === id))
     .filter((e): e is NonNullable<typeof e> => !!e && e.hp > 0);
@@ -324,8 +333,9 @@ export function enumerateCandidates(
       const engagedPenalty = engaged.length > 0 ? 0.2 : 1;
       out.push({
         actionType: 'investigate',
+        // 目標 boss 還活著:搜線索退居其次(否則悠哉搜到全滅也不打 boss)
         payload: commit.length > 0 ? { commitCardIds: commit } : {},
-        score: profile.weights.clueFocus * p * engagedPenalty,
+        score: profile.weights.clueFocus * p * engagedPenalty * (objectiveAlive ? 0.2 : 1),
         intentNarrative: '在這裡仔細搜查',
       });
     }
@@ -339,6 +349,7 @@ export function enumerateCandidates(
     const engagedWithAlly = otherAllies.some((a) => enemy.engagedWith.includes(a.investigatorId));
     const protectBonus = engagedWithAlly ? profile.weights.protectAllies : 0;
     const finishBonus = enemy.hp <= 2 ? 0.8 : 0; // 補刀:差一口氣的怪優先清掉
+    const objectiveBonus = isObjective(enemy) ? 3.5 : 0; // 幕目標 boss:集火(壓過搜線索)
     const retreatMul = retreating ? 0.4 : 1;
 
     // 武器攻擊(場上有 attack 行動效果的資產;彈藥耗盡的略過)
@@ -356,7 +367,7 @@ export function enumerateCandidates(
       out.push({
         actionType: 'execute_card_action',
         payload: { cardInstanceId: weaponId, enemyInstanceId: enemy.instanceId },
-        score: (profile.weights.combatFocus * p * (1 + expect.damage * 0.3) + protectBonus + finishBonus) * retreatMul,
+        score: (profile.weights.combatFocus * p * (1 + expect.damage * 0.3) + protectBonus + finishBonus + objectiveBonus) * retreatMul,
         intentNarrative: `舉起${cardLookup[weaponId]?.name_zh ?? '武器'}攻擊`,
       });
     }
@@ -368,7 +379,7 @@ export function enumerateCandidates(
         out.push({
           actionType: 'attack',
           payload: { enemyInstanceId: enemy.instanceId },
-          score: (profile.weights.combatFocus * p * 0.9 + protectBonus + finishBonus) * retreatMul,
+          score: (profile.weights.combatFocus * p * 0.9 + protectBonus + finishBonus + objectiveBonus) * retreatMul,
           intentNarrative: '徒手撲向那東西',
         });
       }
@@ -496,6 +507,9 @@ export function enumerateCandidates(
       // 戰意:有怪的地點(健康且好戰才湊過去)
       const enemyThere = scenario.enemies.some((e) => e.hp > 0 && e.locationId === targetId);
       if (enemyThere && !retreating) value += profile.weights.combatFocus * 0.4;
+      // 目標導向:幕目標 boss 在隔壁 → 強烈聚攏過去集火(壓過搜線索的好奇心)
+      const objectiveThere = scenario.enemies.some((e) => e.hp > 0 && e.locationId === targetId && isObjective(e));
+      if (objectiveThere && !retreating) value += 3.0 + profile.weights.combatFocus * 0.6;
       if (enemyThere && retreating) value -= 1.5;
       // 退守:離開有怪的地點
       if (retreating && enemiesHere.length > 0 && !enemyThere) value += 1.8;

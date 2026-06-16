@@ -208,6 +208,21 @@ test('出牌:有威脅且沒武器 → 武器鋪場優先於盟友', () => {
   assert((weapon?.score ?? 0) > (ally?.score ?? 0), '威脅在場,先亮刀');
 });
 
+test('目標導向:幕目標 boss 在場 → 攻擊壓過搜線索(否則悠哉搜到全滅都不打 boss)', () => {
+  const boss = { instanceId: 'b1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 12, engagedWith: [], modifiers: [] };
+  const base = { scenario: makeScenario({ enemies: [boss] }), investigator: makeInv({ attributes: { ...makeInv().attributes, strength: 3 } }) };
+  // 無目標:clueFocus 3.0 的 Elias 傾向搜線索
+  const without = enumerateCandidates(ctx(base), ELIAS, initInvestigatorAIState());
+  const wInv = without.find((c) => c.actionType === 'investigate');
+  // 有目標(同隻 boss 設為幕目標)→ 攻擊分數壓過搜線索,且搜線索被壓低
+  const withObj = enumerateCandidates(ctx({ ...base, objectiveEnemyCodes: ['rev_t1'] }), ELIAS, initInvestigatorAIState());
+  const oInv = withObj.find((c) => c.actionType === 'investigate');
+  const oAtk = withObj.find((c) => c.actionType === 'attack');
+  assert(!!oAtk, '該有攻擊候選');
+  assert((oAtk?.score ?? 0) > (oInv?.score ?? 0), '目標在場:攻擊 > 搜線索');
+  assert((oInv?.score ?? 99) < (wInv?.score ?? 0), '目標在場時搜線索分數被壓低');
+});
+
 test('決策溫度:0 永遠最佳;觸發時選次佳(會犯小錯)', () => {
   const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 4, engagedWith: [], modifiers: [] };
   const base = ctx({ scenario: makeScenario({ enemies: [enemy] }) });

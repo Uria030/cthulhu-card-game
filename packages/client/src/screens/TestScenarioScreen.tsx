@@ -495,11 +495,17 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     const aiArr = [...aiArr0];
     const allies: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
     for (const [j, other] of aiArr.entries()) if (j !== idx && other) allies[other.investigatorId] = other;
+    // 當前幕若是「擊敗 boss」型 → 把目標 boss 代碼餵給 AI,讓全隊聚攏集火而非悠哉搜線索
+    const curAct = [...setup.actData].sort((a, b) => a.card_order - b.card_order)[sc.actIndex ?? 0];
+    const objCond = curAct?.front_advance_condition as { type?: string; variant_code?: string } | undefined;
+    const objectiveEnemyCodes = objCond && (objCond.type === 'enemy_defeated' || objCond.type === 'defeat_titan') && objCond.variant_code
+      ? [String(objCond.variant_code)] : undefined;
     const r = runInvestigatorAITurn(
       {
         scenario: sc, investigator: ai, allies, turnNumber,
         locationStats: setup.locationStats, enemyStats: setup.enemyStats,
         cardLookup: setup.cardLookup, stylePools: setup.stylePools,
+        objectiveEnemyCodes,
       },
       m.profile,
       aiStatesRef.current[idx],

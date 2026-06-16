@@ -183,6 +183,56 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
   }
 }
 
+// ─── 動作三段演出(Phase2 C:敘述 → 檢定 → 結果)──────────────
+// 玩家自己的動作拆三拍跳 Modal;其他調查員的動作只進 Log(見設計記憶 action-timing-pacing)。
+// v0 骨架:純演出層,引擎/狀態/Log 流程不變(效果照舊經 bus 進 Log),Modal 只重播同批效果。
+type ActionBeat = 1 | 2 | 3;
+interface ActionPlay {
+  beat: ActionBeat;
+  title: string;
+  /** 敘述拍情境文字(結構占位;敘事插圖與 flavor 之後由資料/美術帶入)*/
+  narration: string;
+  /** 檢定拍要顯示的擲骰/檢定行 */
+  checkLines: string[];
+  /** 結果拍要顯示的結果行 */
+  resultLines: string[];
+}
+
+// 檢定拍效果型別(擲骰/檢定);其餘效果歸結果拍
+const CHECK_EFFECT_TYPES = new Set(['roll_d20', 'fear_check', 'death_save']);
+const ACTION_PLAY_TITLE: Record<string, string> = { investigate: '🔎 調查' };
+
+/** 動作敘述拍的情境文字(結構占位,非最終 flavor;待資料/Gemini 帶入)*/
+function actionNarration(actionType: string, locName: string): string {
+  switch (actionType) {
+    case 'investigate': return `你壓低身子,在【${locName}】仔細搜尋,留意每一處不對勁的細節……`;
+    default: return `你在【${locName}】採取行動……`;
+  }
+}
+
+/** 把一次動作的效果拆成三拍(敘述/檢定/結果);費用等背景結算不入演出拍 */
+function buildActionPlay(
+  actionType: string,
+  effects: ResultEffect[],
+  locName: string,
+  locMeta: Record<string, LocationDisplay>,
+): ActionPlay {
+  const checkLines: string[] = [];
+  const resultLines: string[] = [];
+  for (const eff of effects) {
+    if (eff.type === 'spend_action_point' || eff.type === 'damage_allocatable') continue;
+    if (CHECK_EFFECT_TYPES.has(eff.type)) checkLines.push(describeEffect(eff, locMeta));
+    else resultLines.push(describeEffect(eff, locMeta));
+  }
+  return {
+    beat: 1,
+    title: ACTION_PLAY_TITLE[actionType] ?? '行動',
+    narration: actionNarration(actionType, locName),
+    checkLines,
+    resultLines,
+  };
+}
+
 const PHASE_LABEL: Record<TurnPhase, string> = {
   investigator: '調查員階段',
   mythos: '敵人階段',
@@ -283,6 +333,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [modal, setModal] = useState<ModalType>(null);
   // §11 傷害分配 Modal:受傷且場上有可分配卡時跳出讓玩家分配
   const [damageAlloc, setDamageAlloc] = useState<{ physical: number; horror: number; targets: AllocatableTarget[] } | null>(null);
+  // Phase2 C:玩家自己動作的三段演出 Modal(敘述→檢定→結果);其他人動作只進 Log
+  const [actionPlay, setActionPlay] = useState<ActionPlay | null>(null);
   const [panel, setPanel] = useState<PanelType>(null);
   // 投入加值選擇(下一次檢定動作帶上,送出後清空)
   const [commitSelection, setCommitSelection] = useState<string[]>([]);
@@ -494,8 +546,16 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       if ((intent.payload as { commitCardIds?: unknown }).commitCardIds) {
         setCommitSelection([]);
       }
+      // Phase2 C v0:玩家自己的「調查」動作跳三段演出 Modal(敘述→檢定→結果)。
+      // 純演出 — 效果已照舊經 bus 進 Log、狀態也已套用,Modal 只重播這批效果讓動作有重量感。
+      // v0 先只接調查,確認方向後再鋪到所有動作。
+      if (actionType === 'investigate') {
+        const locId = investigator.currentLocationId;
+        const locName = (locId && setup.locMeta[locId]?.name) || locId || '此地';
+        setActionPlay(buildActionPlay(actionType, out.result.effects ?? [], locName, locMeta));
+      }
     }
-  }, [bus, investigator, scenario, turnNumber, phase, setup, flags]);
+  }, [bus, investigator, scenario, turnNumber, phase, setup, flags, locMeta]);
 
   /** 檢定類動作:自動帶上目前的加值選擇 */
   const submitCheckIntent = useCallback((
@@ -1284,6 +1344,56 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               );
             })}
             {investigator.assetsInPlay.length === 0 && <div className="empty-note">尚無場上資產 — 從手牌「打出」卡片</div>}
+          </div>
+        </div>
+      )}
+
+      {/* === Modal 動作三段演出(Phase2 C:敘述 → 檢定 → 結果)=== */}
+      {actionPlay && (
+        <div className="modal-backdrop active">
+          <div className="modal-frame modal-action-play">
+            <div className="modal-title">{actionPlay.title} · {actionPlay.beat === 1 ? '敘述' : actionPlay.beat === 2 ? '檢定' : '結果'}</div>
+            {actionPlay.beat === 1 && (
+              <>
+                <div className="modal-illustration">敘事插圖(待美術／資料)</div>
+                <hr className="modal-divider" />
+                <div className="modal-narrative">{actionPlay.narration}</div>
+                <hr className="modal-divider" />
+                <div className="action-row">
+                  <button onClick={() => setActionPlay({ ...actionPlay, beat: 2 })}>🎲 擲骰檢定 →</button>
+                </div>
+              </>
+            )}
+            {actionPlay.beat === 2 && (
+              <>
+                <div className="modal-illustration">🎲 擲骰</div>
+                <hr className="modal-divider" />
+                <div className="modal-narrative">
+                  {actionPlay.checkLines.length > 0
+                    ? actionPlay.checkLines.map((l, i) => <div key={i}>{l}</div>)
+                    : <div>(此動作無需擲骰)</div>}
+                </div>
+                <hr className="modal-divider" />
+                <div className="action-row">
+                  <button onClick={() => setActionPlay({ ...actionPlay, beat: 3 })}>👁 看結果 →</button>
+                </div>
+              </>
+            )}
+            {actionPlay.beat === 3 && (
+              <>
+                <div className="modal-illustration">結果</div>
+                <hr className="modal-divider" />
+                <div className="modal-narrative">
+                  {actionPlay.resultLines.length > 0
+                    ? actionPlay.resultLines.map((l, i) => <div key={i}>{l}</div>)
+                    : <div>(無額外結果)</div>}
+                </div>
+                <hr className="modal-divider" />
+                <div className="action-row">
+                  <button onClick={() => setActionPlay(null)}>✓ 完成</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

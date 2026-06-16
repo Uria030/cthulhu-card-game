@@ -185,8 +185,9 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
 
 // ─── 動作三段演出(Phase2 C:敘述 → 檢定 → 結果)──────────────
 // 玩家自己的動作拆三拍跳 Modal;其他調查員的動作只進 Log(見設計記憶 action-timing-pacing)。
-// v0 骨架:純演出層,引擎/狀態/Log 流程不變(效果照舊經 bus 進 Log),Modal 只重播同批效果。
+// 純演出層:引擎/狀態/Log 流程不變(效果照舊經 bus 進 Log),Modal 只重播同批效果讓動作有重量感。
 type ActionBeat = 1 | 2 | 3;
+interface PendingDamageAlloc { physical: number; horror: number; targets: AllocatableTarget[] }
 interface ActionPlay {
   beat: ActionBeat;
   title: string;
@@ -196,26 +197,48 @@ interface ActionPlay {
   checkLines: string[];
   /** 結果拍要顯示的結果行 */
   resultLines: string[];
+  /** 此動作是否含檢定拍(無檢定 → 敘述直接到結果,2 拍)*/
+  hasCheck: boolean;
+  /** 檢定拍擲骰動畫中(節奏窗口:遮蔽延遲載入 + 重量感)*/
+  rolling: boolean;
+  /** 演出走完(完成鍵)後才跳的傷害分配 Modal(避免兩 Modal 疊)*/
+  pendingDamageAlloc: PendingDamageAlloc | null;
 }
 
 // 檢定拍效果型別(擲骰/檢定);其餘效果歸結果拍
 const CHECK_EFFECT_TYPES = new Set(['roll_d20', 'fear_check', 'death_save']);
-const ACTION_PLAY_TITLE: Record<string, string> = { investigate: '🔎 調查' };
+// 純記帳動作不跳演出 Modal(取資源/抽卡:頻繁且無重量,跳 Modal 反而擾民)
+const ACTION_PLAY_SKIP = new Set(['gain_resource', 'draw_card']);
+const ACTION_PLAY_TITLE: Record<string, string> = {
+  investigate: '🔎 調查', search: '🔍 搜尋', investigate_hidden: '👁 探查隱密',
+  attack: '⚔ 攻擊', execute_card_action: '🃏 卡牌行動', ally_attack: '🤝 盟友攻擊',
+  evade: '🌀 閃避', move: '👣 移動', taunt: '🗯 嘲諷', stabilize: '🤲 穩定隊友',
+};
 
 /** 動作敘述拍的情境文字(結構占位,非最終 flavor;待資料/Gemini 帶入)*/
 function actionNarration(actionType: string, locName: string): string {
   switch (actionType) {
     case 'investigate': return `你壓低身子,在【${locName}】仔細搜尋,留意每一處不對勁的細節……`;
+    case 'search': return `你翻找【${locName}】的角落,看看有沒有能用上的東西……`;
+    case 'investigate_hidden': return `你盯住那處先前察覺的異樣,湊近細看……`;
+    case 'attack': return `你穩住呼吸,向眼前的威脅出手……`;
+    case 'execute_card_action': return `你催動手中卡牌的力量……`;
+    case 'ally_attack': return `你的盟友會意,撲向那東西……`;
+    case 'evade': return `你壓低重心,準備閃開逼近的攻擊……`;
+    case 'move': return `你離開【${locName}】,往下一處推進……`;
+    case 'taunt': return `你高聲挑釁,把怪物的注意力引向自己……`;
+    case 'stabilize': return `你跪到倒下的同伴身旁,設法穩住他的傷勢……`;
     default: return `你在【${locName}】採取行動……`;
   }
 }
 
-/** 把一次動作的效果拆成三拍(敘述/檢定/結果);費用等背景結算不入演出拍 */
+/** 把一次動作的效果拆成兩/三拍(敘述/檢定/結果);費用等背景結算不入演出拍 */
 function buildActionPlay(
   actionType: string,
   effects: ResultEffect[],
   locName: string,
   locMeta: Record<string, LocationDisplay>,
+  pendingDamageAlloc: PendingDamageAlloc | null,
 ): ActionPlay {
   const checkLines: string[] = [];
   const resultLines: string[] = [];
@@ -230,6 +253,9 @@ function buildActionPlay(
     narration: actionNarration(actionType, locName),
     checkLines,
     resultLines,
+    hasCheck: checkLines.length > 0,
+    rolling: false,
+    pendingDamageAlloc,
   };
 }
 
@@ -537,22 +563,25 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       );
       setScenario(next.sc);
       setInvestigator(next.inv);
-      // §11 受傷且有可分配卡 → 跳傷害分配 Modal(只認玩家本人的傷害,排除隊友)
+      // §11 受傷且有可分配卡 → 傷害分配 Modal(只認玩家本人的傷害,排除隊友)。
+      // 走演出的動作:延後到演出「完成」才跳(避免兩 Modal 疊);否則立即跳。
       const da = (out.result.effects ?? []).find((e) => e.type === 'damage_allocatable' && e.targetId === investigator.investigatorId);
-      if (da) {
-        const dp = da.params as { physical?: number; horror?: number; targets?: AllocatableTarget[] };
-        setDamageAlloc({ physical: Number(dp.physical ?? 0), horror: Number(dp.horror ?? 0), targets: dp.targets ?? [] });
-      }
+      const dp = da?.params as { physical?: number; horror?: number; targets?: AllocatableTarget[] } | undefined;
+      const pendingDamageAlloc: PendingDamageAlloc | null = dp
+        ? { physical: Number(dp.physical ?? 0), horror: Number(dp.horror ?? 0), targets: dp.targets ?? [] }
+        : null;
       if ((intent.payload as { commitCardIds?: unknown }).commitCardIds) {
         setCommitSelection([]);
       }
-      // Phase2 C v0:玩家自己的「調查」動作跳三段演出 Modal(敘述→檢定→結果)。
-      // 純演出 — 效果已照舊經 bus 進 Log、狀態也已套用,Modal 只重播這批效果讓動作有重量感。
-      // v0 先只接調查,確認方向後再鋪到所有動作。
-      if (actionType === 'investigate') {
+      // Phase2 C:玩家自己的動作跳三段演出 Modal(敘述→檢定→結果)。純演出 —
+      // 效果已照舊經 bus 進 Log、狀態也已套用,Modal 只重播這批效果讓動作有重量感。
+      // 純記帳動作(取資源/抽卡)不跳,維持輕快。
+      if (!ACTION_PLAY_SKIP.has(actionType)) {
         const locId = investigator.currentLocationId;
         const locName = (locId && setup.locMeta[locId]?.name) || locId || '此地';
-        setActionPlay(buildActionPlay(actionType, out.result.effects ?? [], locName, locMeta));
+        setActionPlay(buildActionPlay(actionType, out.result.effects ?? [], locName, locMeta, pendingDamageAlloc));
+      } else if (pendingDamageAlloc) {
+        setDamageAlloc(pendingDamageAlloc);
       }
     }
   }, [bus, investigator, scenario, turnNumber, phase, setup, flags, locMeta]);
@@ -580,6 +609,29 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setInvestigator(sync.investigator);
     setDamageAlloc(null);
   }, [damageAlloc, investigator, locMeta]);
+
+  // Phase2 C:三段演出進拍 + 完成。完成後若有待跳的傷害分配 Modal,接著跳。
+  const advanceActionPlay = () => {
+    setActionPlay((ap) => {
+      if (!ap) return ap;
+      if (ap.beat === 1) return ap.hasCheck ? { ...ap, beat: 2, rolling: true } : { ...ap, beat: 3 };
+      if (ap.beat === 2) return { ...ap, beat: 3 };
+      return ap;
+    });
+  };
+  const completeActionPlay = () => {
+    const pending = actionPlay?.pendingDamageAlloc ?? null;
+    setActionPlay(null);
+    if (pending) setDamageAlloc(pending);
+  };
+  // 檢定拍擲骰動畫(節奏窗口 ~700ms:重量感 + 遮蔽未來延遲載入)
+  useEffect(() => {
+    if (!actionPlay || actionPlay.beat !== 2 || !actionPlay.rolling) return;
+    const id = setTimeout(() => {
+      setActionPlay((ap) => (ap && ap.beat === 2 && ap.rolling ? { ...ap, rolling: false } : ap));
+    }, 700);
+    return () => clearTimeout(id);
+  }, [actionPlay]);
 
   const toggleCommit = (cardId: string) => {
     setCommitSelection((sel) =>
@@ -1360,22 +1412,22 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                 <div className="modal-narrative">{actionPlay.narration}</div>
                 <hr className="modal-divider" />
                 <div className="action-row">
-                  <button onClick={() => setActionPlay({ ...actionPlay, beat: 2 })}>🎲 擲骰檢定 →</button>
+                  <button onClick={advanceActionPlay}>{actionPlay.hasCheck ? '🎲 擲骰檢定 →' : '繼續 →'}</button>
                 </div>
               </>
             )}
             {actionPlay.beat === 2 && (
               <>
-                <div className="modal-illustration">🎲 擲骰</div>
+                <div className="modal-illustration">{actionPlay.rolling ? '🎲 擲骰中…' : '🎲 擲骰'}</div>
                 <hr className="modal-divider" />
                 <div className="modal-narrative">
-                  {actionPlay.checkLines.length > 0
-                    ? actionPlay.checkLines.map((l, i) => <div key={i}>{l}</div>)
-                    : <div>(此動作無需擲骰)</div>}
+                  {actionPlay.rolling
+                    ? <div>骰子還在桌上滾動……</div>
+                    : actionPlay.checkLines.map((l, i) => <div key={i}>{l}</div>)}
                 </div>
                 <hr className="modal-divider" />
                 <div className="action-row">
-                  <button onClick={() => setActionPlay({ ...actionPlay, beat: 3 })}>👁 看結果 →</button>
+                  <button disabled={actionPlay.rolling} onClick={advanceActionPlay}>👁 看結果 →</button>
                 </div>
               </>
             )}
@@ -1390,7 +1442,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                 </div>
                 <hr className="modal-divider" />
                 <div className="action-row">
-                  <button onClick={() => setActionPlay(null)}>✓ 完成</button>
+                  <button onClick={completeActionPlay}>✓ 完成</button>
                 </div>
               </>
             )}

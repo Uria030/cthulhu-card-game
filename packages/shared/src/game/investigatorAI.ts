@@ -679,7 +679,9 @@ function simulateStep(
     turn: { turnNumber: ctx.turnNumber, phase: 'investigator', actionPointsSpent: {}, pendingLegendaryActions: [], triggeredReactions: [] },
     investigators: { ...allies, [inv.investigatorId]: inv },
     cardLookup: ctx.cardLookup, locationStats: ctx.locationStats, enemyStats: ctx.enemyStats,
-    stylePools: ctx.stylePools, chaosMarkerEffects: ctx.chaosMarkerEffects, rng: ctx.rng,
+    stylePools: ctx.stylePools, chaosMarkerEffects: ctx.chaosMarkerEffects,
+    // 模擬用「期望值」固定骰(中位 d20≈11),前瞻穩定、不消耗真 rng(實戰再擲真骰)
+    rng: () => 0.5,
   };
   const r = resolveIntent(intent, ruleCtx);
   if (r.result.outcome === 'rejected') return null;

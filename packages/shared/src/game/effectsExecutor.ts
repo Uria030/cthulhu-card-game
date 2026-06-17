@@ -14,7 +14,7 @@
 import type { ResultEffect } from './messages';
 import type { InvestigatorState, ScenarioState } from './state';
 import type { CardDataLookup } from './ruleEngine';
-import { addStatus, removeStatus, NEGATIVE_STATUSES } from './statusEffects';
+import { addStatus, removeStatus, NEGATIVE_STATUSES, elementalDamageBonus } from './statusEffects';
 
 export interface CardEffectRow {
   trigger_type: string;
@@ -74,7 +74,11 @@ export function executeCardEffects(
         break;
       }
       case 'deal_damage': {
-        const amount = Number(p.amount ?? 1);
+        const base = Number(p.amount ?? 1);
+        // 元素(§6.5 對帶對應狀態的敵人增傷)/ 暴擊倍率 / direct(卡面傷害本就直入 HP,僅敘事旗標)
+        const element = p.element != null && p.element !== '' ? String(p.element) : null;
+        const critMul = p.crit === true ? 2 : (Number(p.crit) > 1 ? Number(p.crit) : 1);
+        const direct = p.direct === true || p.direct === 'true';
         const here = inv.currentLocationId;
         // area = 同地點全體;單體 = 優先與自己交戰的敵人,其次同地點第一隻(ch3 §5.3 enemy_one)
         const candidates = sc.enemies.filter((e) => e.hp > 0 && e.locationId === here);
@@ -84,15 +88,32 @@ export function executeCardEffects(
           out.push({ type: 'attack_miss', params: { narrative: '攻擊劃過空蕩的雨幕 — 這裡沒有目標。' } });
           break;
         }
+        // 逐敵計傷:元素增傷吃「該敵自身」狀態層數(§6.5),再乘暴擊倍率,命中至少 1
+        const dmgFor = (e: typeof targets[number]): number => {
+          const elem = element ? elementalDamageBonus(e.statusEffects, element) : 0;
+          return Math.max(1, (base + elem) * critMul);
+        };
         sc = {
           ...sc,
-          enemies: sc.enemies.map((e) =>
-            targets.some((t) => t.instanceId === e.instanceId) ? { ...e, hp: e.hp - amount } : e,
-          ),
+          enemies: sc.enemies.map((e) => {
+            const t = targets.find((x) => x.instanceId === e.instanceId);
+            return t ? { ...e, hp: e.hp - dmgFor(e) } : e;
+          }),
         };
         for (const t of targets) {
-          out.push({ type: 'attack_hit', params: { damage: amount, narrative: p.area ? '範圍攻擊命中' : '直擊要害' }, targetId: t.instanceId });
-          if (t.hp - amount <= 0) {
+          const d = dmgFor(t);
+          out.push({
+            type: 'attack_hit',
+            params: {
+              damage: d,
+              element: element ?? undefined,
+              crit: critMul > 1 || undefined,
+              direct: direct || undefined,
+              narrative: p.area ? '範圍攻擊命中' : (critMul > 1 ? '致命一擊撕開了牠的防禦。' : '直擊要害'),
+            },
+            targetId: t.instanceId,
+          });
+          if (t.hp - d <= 0) {
             out.push({ type: 'enemy_defeated', params: { narrative: '牠倒下了。' }, targetId: t.instanceId });
           }
         }
@@ -183,6 +204,52 @@ export function executeCardEffects(
         const amount = Number(p.amount ?? 1);
         inv = { ...inv, resources: Math.max(0, inv.resources - amount) };
         out.push({ type: 'spend_resource', params: { amount } });
+        break;
+      }
+      case 'stun_enemy': {
+        // 控場(§10):給目標敵人加 'stunned' 修飾(= monsterActions STUNNED),神話階段該敵跳過啟動一輪
+        const here = inv.currentLocationId;
+        const candidates = sc.enemies.filter((e) => e.hp > 0 && e.locationId === here);
+        const engagedFirst = candidates.find((e) => inv.engagedWith.includes(e.instanceId));
+        const targets = p.area ? candidates : (engagedFirst ? [engagedFirst] : candidates.slice(0, 1));
+        if (targets.length === 0) { unsupported.push('stun_enemy'); break; }
+        sc = {
+          ...sc,
+          enemies: sc.enemies.map((e) =>
+            targets.some((t) => t.instanceId === e.instanceId) && !e.modifiers.includes('stunned')
+              ? { ...e, modifiers: [...e.modifiers, 'stunned'] }
+              : e,
+          ),
+        };
+        for (const t of targets) {
+          out.push({ type: 'enemy_stunned', params: { narrative: '你打斷了牠的節奏 — 下一輪牠將無法行動。' }, targetId: t.instanceId });
+        }
+        break;
+      }
+      case 'evade': {
+        // 閃避(效果碼版):立即脫離與本地點所有敵人的交戰(雙向清),避開藉機攻擊
+        const wasEngaged = inv.engagedWith.length;
+        if (wasEngaged === 0) {
+          out.push({ type: 'evade', params: { narrative: '你拉開了距離 — 這裡沒有什麼纏著你。', disengaged: 0 }, targetId: inv.investigatorId });
+          break;
+        }
+        sc = {
+          ...sc,
+          enemies: sc.enemies.map((e) =>
+            e.engagedWith.includes(inv.investigatorId)
+              ? { ...e, engagedWith: e.engagedWith.filter((id) => id !== inv.investigatorId) }
+              : e,
+          ),
+        };
+        inv = { ...inv, engagedWith: [] };
+        out.push({ type: 'evade', params: { narrative: '你一個側滑脫離了纏鬥。', disengaged: wasEngaged }, targetId: inv.investigatorId });
+        break;
+      }
+      case 'extra_attack': {
+        // 額外行動(§3 行動點):給 +amount 行動點,讓本回合可再出手一次(由玩家/AI 決定攻擊)
+        const amount = Math.max(1, Number(p.amount ?? 1));
+        inv = { ...inv, actionPoints: inv.actionPoints + amount };
+        out.push({ type: 'extra_attack', params: { amount, narrative: '腎上腺素湧上 — 你還能再出手。' }, targetId: inv.investigatorId });
         break;
       }
       case 'modify_test':

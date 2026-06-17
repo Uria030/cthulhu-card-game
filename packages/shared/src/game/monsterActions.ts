@@ -363,6 +363,27 @@ export function activateMonsters(
       }
     }
 
+    // 控場(stun_enemy 卡):被擊暈的怪物本回合不啟動,標記用掉即除(單回合;多層由再次施加維持)
+    if (enemy.modifiers.includes(STUNNED)) {
+      sc = {
+        ...sc,
+        enemies: sc.enemies.map((e) =>
+          e.instanceId === enemy.instanceId
+            ? { ...e, modifiers: e.modifiers.filter((m) => m !== STUNNED) }
+            : e,
+        ),
+      };
+      effects.push({
+        type: 'monster_stunned',
+        params: {
+          enemy: data.name_zh ?? enemy.enemyDefinitionId,
+          narrative: '牠的動作僵在半空——這一輪,牠什麼也做不了。',
+        },
+        targetId: enemy.instanceId,
+      });
+      continue;
+    }
+
     // 召喚失調(Uria 裁定 2026-06-11):剛被召喚的怪物本回合不啟動,標記用掉即除
     if (enemy.modifiers.includes(SUMMON_SICKNESS)) {
       sc = {
@@ -571,6 +592,9 @@ export function activateMonsters(
 
 /** 召喚失調標記(Uria 裁定:被召喚當回合不啟動) */
 export const SUMMON_SICKNESS = 'summon_sickness';
+
+/** 擊暈標記(stun_enemy 卡施加;神話階段該敵跳過啟動一輪,標記用掉即除) */
+export const STUNNED = 'stunned';
 
 // ─── 生成怪物(城主召喚/初始敵人共用;城主 AI 在階段三接上)──
 export function spawnEnemy(

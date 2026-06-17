@@ -214,6 +214,20 @@ test('召喚失調:當回合不啟動,次回合恢復行動(Uria 裁定)', () =>
   assertEq(r2.scenario.enemies[0].locationId, 'A');
 });
 
+test('擊暈(stun_enemy):當回合不啟動,標記用掉即除,次回合恢復攻擊', () => {
+  const sc = makeScenario();
+  sc.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'ghoul', locationId: 'A', hp: 3, engagedWith: ['inv-1'], modifiers: ['stunned'] }];
+  const inv = makeInv({ engagedWith: ['e1'], hp: 7 });
+  // 第 1 次啟動:擊暈,不攻擊
+  const r1 = activateMonsters(sc, { 'inv-1': inv }, ENEMY_DATA, ATTACK_CARDS, rngRoll(5));
+  assertEq(r1.effects.some((e) => e.type === 'monster_stunned'), true);
+  assertEq(r1.investigators['inv-1'].hp, 7, '擊暈回合不受擊');
+  assertEq(r1.scenario.enemies[0].modifiers.includes('stunned'), false, '標記用掉即除');
+  // 第 2 次啟動:恢復攻擊(roll 5 + 敏捷3 = 8 < 撕咬 DC14 → 中)
+  const r2 = activateMonsters(r1.scenario, r1.investigators, ENEMY_DATA, ATTACK_CARDS, rngRoll(5));
+  assertEq(r2.investigators['inv-1'].hp < 7, true, '次回合恢復攻擊');
+});
+
 // ─── §11.4 防禦詞綴(抗性/免疫)──
 test('enemyDamageAfterDefense:免疫歸 0 / 抗性減點 / arcane 鐵則穿透 / 無資料原傷', () => {
   assertEq(enemyDamageAfterDefense({ immunities: ['fire'] }, 'fire', 5), 0, '火免疫');

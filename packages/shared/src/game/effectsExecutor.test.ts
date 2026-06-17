@@ -99,6 +99,46 @@ test('spend_resource:扣資源不破 0', () => {
   assertEq(executeCardEffects([fx('spend_resource', { amount: 9 })], makeInv({ resources: 2 }), makeScenario(), {}).investigator.resources, 0);
 });
 
+// ─── P0 批次2:元素/暴擊傷害 + 控場/閃避/額外行動 ─────────────
+test('deal_damage element=fire:對帶燃燒的敵人 +該層數(§6.5)', () => {
+  const r = executeCardEffects([fx('deal_damage', { amount: 3, element: 'fire' })], makeInv(), makeScenario([makeEnemy({ hp: 5, statusEffects: { burning: 2 } })]), {});
+  assertEq(r.scenario.enemies[0].hp, 0, '3+2 燃燒 = 5,擊殺');
+  assertEq(r.effects.some((e) => e.type === 'enemy_defeated'), true);
+  const hit = r.effects.find((e) => e.type === 'attack_hit');
+  assertEq((hit?.params as any).damage, 5);
+});
+
+test('deal_damage crit:暴擊倍率 ×2', () => {
+  const r = executeCardEffects([fx('deal_damage', { amount: 3, crit: true })], makeInv(), makeScenario([makeEnemy({ hp: 10 })]), {});
+  assertEq(r.scenario.enemies[0].hp, 4, '10 - 3×2');
+  assertEq((r.effects.find((e) => e.type === 'attack_hit')?.params as any).crit, true);
+});
+
+test('deal_damage 無元素:行為不變(回歸)', () => {
+  const r = executeCardEffects([fx('deal_damage', { amount: 2 })], makeInv(), makeScenario([makeEnemy({ hp: 5 })]), {});
+  assertEq(r.scenario.enemies[0].hp, 3);
+});
+
+test('stun_enemy:對目標敵人加 stunned 修飾', () => {
+  const r = executeCardEffects([fx('stun_enemy')], makeInv(), makeScenario([makeEnemy()]), {});
+  assertEq(r.scenario.enemies[0].modifiers.includes('stunned'), true);
+  assertEq(r.effects.some((e) => e.type === 'enemy_stunned'), true);
+  // 無敵人 → unsupported
+  assertEq(executeCardEffects([fx('stun_enemy')], makeInv(), makeScenario([]), {}).unsupported.some((u) => u.includes('stun_enemy')), true);
+});
+
+test('evade:雙向清除交戰', () => {
+  const r = executeCardEffects([fx('evade')], makeInv({ engagedWith: ['e1'] }), makeScenario([makeEnemy({ engagedWith: ['i1'] })]), {});
+  assertEq(r.investigator.engagedWith.length, 0, '自身脫離');
+  assertEq(r.scenario.enemies[0].engagedWith.length, 0, '敵人脫離');
+  assertEq((r.effects.find((e) => e.type === 'evade')?.params as any).disengaged, 1);
+});
+
+test('extra_attack:+行動點', () => {
+  const r = executeCardEffects([fx('extra_attack', { amount: 2 })], makeInv({ actionPoints: 3 }), makeScenario(), {});
+  assertEq(r.investigator.actionPoints, 5);
+});
+
 // ─── runner ─────────────────────────
 let passed = 0; let failed = 0; const failures: string[] = [];
 for (const t of tests) {

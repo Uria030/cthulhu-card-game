@@ -636,14 +636,19 @@ export function axisConditionMet(
   cardLookup: CardDataLookup,
 ): boolean {
   if (!condition || typeof condition !== 'object') return true; // null / §5.2 字串 → 不擋
-  const type = String((condition as Record<string, unknown>).type ?? '');
-  const axisValue = String((condition as Record<string, unknown>).axis_value ?? '');
+  const c = condition as Record<string, unknown>;
+  const type = String(c.type ?? '');
+  const axisValue = String(c.axis_value ?? '');
   if (!axisValue) return true; // 非軸向結構條件 → 不擋
-  const min = Math.max(1, Number((condition as Record<string, unknown>).min ?? 1));
+  // 「同軸」= 同層 + 同值(§軸向 4 層;只比 value 會跨層誤觸發,如 faction 'S' 撞他層同字串)
+  const axisLayer = String(c.axis_layer ?? '');
+  const min = Math.max(1, Number(c.min ?? 1));
   if (type === 'same_axis_in_play') {
-    const count = investigator.assetsInPlay.filter(
-      (id) => String(cardLookup[id]?.primary_axis_value ?? '') === axisValue,
-    ).length;
+    const count = investigator.assetsInPlay.filter((id) => {
+      const data = cardLookup[id];
+      if (String(data?.primary_axis_value ?? '') !== axisValue) return false;
+      return !axisLayer || String(data?.primary_axis_layer ?? '') === axisLayer; // 有指定層則須同層
+    }).length;
     return count >= min;
   }
   return false; // same_axis_played_this_turn 等 → Phase A-2

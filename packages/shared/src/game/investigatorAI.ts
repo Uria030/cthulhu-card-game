@@ -438,15 +438,21 @@ export function enumerateCandidates(
   // 設計裁定(Uria 2026-06-12):卡片的價值永遠比單純動作高 —
   // 打得出的卡加固定優先分;打不起的好卡讓「拿資源」繼承折扣分(存錢買刀)。
   // 軸向 COMBO 覺察(Uria #2):AI 讀手牌 + 場上 + **牌組**的軸向分布,辨識同軸連動並主動湊牌。
-  const axisOf = (id: string): string => String(cardLookup[id]?.primary_axis_value ?? '');
-  const sameAxisInPlay = (axis: string): number => (axis ? inv.assetsInPlay.filter((id) => axisOf(id) === axis).length : 0);
-  const sameAxisInHandDeck = (axis: string): number =>
-    axis ? inv.hand.filter((id) => axisOf(id) === axis).length + inv.deck.filter((id) => axisOf(id) === axis).length : 0;
-  const inPlayComboCond = (id: string, axis: string): { min: number } | null => {
+  // 同軸 = 層:值(§軸向 4 層;只比 value 會跨層誤判,故用 layer:value 複合鍵)
+  const axisOf = (id: string): string => {
+    const d = cardLookup[id];
+    const v = String(d?.primary_axis_value ?? '');
+    return v ? String(d?.primary_axis_layer ?? '') + ':' + v : '';
+  };
+  const sameAxisInPlay = (axisKey: string): number => (axisKey ? inv.assetsInPlay.filter((id) => axisOf(id) === axisKey).length : 0);
+  const sameAxisInHandDeck = (axisKey: string): number =>
+    axisKey ? inv.hand.filter((id) => axisOf(id) === axisKey).length + inv.deck.filter((id) => axisOf(id) === axisKey).length : 0;
+  const inPlayComboCond = (id: string, axisKey: string): { min: number } | null => {
     for (const f of cardLookup[id]?.effects ?? []) {
       const c = f.condition; // 既有 card_effects.condition 欄位
-      if (c && typeof c === 'object' && String((c as Record<string, unknown>).type) === 'same_axis_in_play' && String((c as Record<string, unknown>).axis_value) === axis) {
-        return { min: Math.max(1, Number((c as Record<string, unknown>).min ?? 1)) };
+      if (c && typeof c === 'object' && String((c as Record<string, unknown>).type) === 'same_axis_in_play') {
+        const condKey = String((c as Record<string, unknown>).axis_layer ?? '') + ':' + String((c as Record<string, unknown>).axis_value ?? '');
+        if (condKey === axisKey) return { min: Math.max(1, Number((c as Record<string, unknown>).min ?? 1)) };
       }
     }
     return null;

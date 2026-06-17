@@ -1523,9 +1523,24 @@ function deathKeywordOutcome(enemy: EnemyInstance, ctx: RuleContext, scenario: S
 function reconcileEngagement(
   scenario: ScenarioState,
   investigators: Record<string, InvestigatorState>,
+  enemyStats?: RuleContext['enemyStats'],
 ): { scenario: ScenarioState; investigators: Record<string, InvestigatorState> } {
-  // 有效交戰對 = 敵存活 + 雙方同地點 + **雙方互列**(單向殘留視為無效,§7.2 單一交戰由此收斂)
-  const liveById = new Map(scenario.enemies.filter((e) => e.hp > 0).map((e) => [e.instanceId, e]));
+  // 有效交戰對 = 敵存活 + 雙方同地點 + 投查員側互列(§7.2)。敵側為權威:
+  //  · 非 massive 怪只能交戰 1 人 → 多人殘留時只留「末位」(engage_enemy 把拉怪者追加在末位)
+  //  · massive 怪可與全地點交戰 → 全留(不誤清多人)
+  const enemies = scenario.enemies.map((en) => {
+    if (en.hp <= 0) return en.engagedWith.length ? { ...en, engagedWith: [] } : en;
+    let kept = en.engagedWith.filter((iid) => {
+      const inv = investigators[iid];
+      return inv && inv.currentLocationId === en.locationId && inv.engagedWith.includes(en.instanceId);
+    });
+    const isMassive = ((enemyStats?.[en.enemyDefinitionId]?.keywords ?? []) as unknown[]).map((k) => String(k)).includes('massive');
+    if (!isMassive && kept.length > 1) kept = [kept[kept.length - 1]]; // 單一交戰:留末位拉怪者
+    const same = kept.length === en.engagedWith.length && kept.every((v, i) => v === en.engagedWith[i]);
+    return same ? en : { ...en, engagedWith: kept };
+  });
+  // 調查員側對齊敵側最終結果(敵已不列入 → 脫離)
+  const liveById = new Map(enemies.filter((e) => e.hp > 0).map((e) => [e.instanceId, e]));
   const invs: Record<string, InvestigatorState> = {};
   for (const [id, inv] of Object.entries(investigators)) {
     const kept = inv.engagedWith.filter((eid) => {
@@ -1534,14 +1549,6 @@ function reconcileEngagement(
     });
     invs[id] = kept.length === inv.engagedWith.length ? inv : { ...inv, engagedWith: kept };
   }
-  const enemies = scenario.enemies.map((en) => {
-    if (en.hp <= 0) return en.engagedWith.length ? { ...en, engagedWith: [] } : en;
-    const kept = en.engagedWith.filter((iid) => {
-      const inv = invs[iid];
-      return inv && inv.currentLocationId === en.locationId && inv.engagedWith.includes(en.instanceId);
-    });
-    return kept.length === en.engagedWith.length ? en : { ...en, engagedWith: kept };
-  });
   return { scenario: { ...scenario, enemies }, investigators: invs };
 }
 
@@ -1571,8 +1578,8 @@ function postProcessCardEffects(
     sc = dk.scenario;
     invMap = { ...invMap, ...dk.updatedAllies };
   }
-  // 2. 交戰一致性對帳(全體)
-  const recon = reconcileEngagement(sc, invMap);
+  // 2. 交戰一致性對帳(全體;massive 詞綴依 enemyStats 判定)
+  const recon = reconcileEngagement(sc, invMap, ctx.enemyStats);
   sc = recon.scenario;
   invMap = recon.investigators;
   const updatedAllies: Record<string, InvestigatorState> = {};

@@ -425,12 +425,13 @@ export function executeCardEffects(
         break;
       }
       case 'engage_enemy': {
-        // 拉怪到自身(taunt/pull):單一交戰(§7.2)— 敵人改為只與本人交戰(替換非追加),
-        // 被牠原本纏住的其他調查員由 ruleEngine reconcileEngagement 對帳脫離
+        // 拉怪到自身(taunt/pull):把本人「追加」到敵人交戰名單末位(本人=最近拉怪者)。
+        // 單一交戰(§7.2,非 massive)與被搶走的原交戰者脫離,由 ruleEngine reconcileEngagement
+        // 依 massive 詞綴對帳(非 massive 只留末位拉怪者,massive 全留)— 此處不可判 massive(無敵資料)
         const here = inv.currentLocationId;
         const enemyT = sc.enemies.find((e) => e.hp > 0 && e.locationId === here && !inv.engagedWith.includes(e.instanceId));
         if (!enemyT) { unsupported.push('engage_enemy'); break; }
-        sc = { ...sc, enemies: sc.enemies.map((e) => (e.instanceId === enemyT.instanceId ? { ...e, engagedWith: [inv.investigatorId] } : e)) };
+        sc = { ...sc, enemies: sc.enemies.map((e) => (e.instanceId === enemyT.instanceId ? { ...e, engagedWith: e.engagedWith.includes(inv.investigatorId) ? e.engagedWith : [...e.engagedWith, inv.investigatorId] } : e)) };
         inv = { ...inv, engagedWith: [...inv.engagedWith, enemyT.instanceId] };
         out.push({ type: 'engage_enemy', params: { enemyId: enemyT.instanceId } });
         break;

@@ -914,6 +914,26 @@ test('卡片 engage_enemy 拉怪:單一交戰,原交戰者被對帳脫離(Raviel
   assertEq(r.newState!.updatedAllies?.['inv-2']?.engagedWith.length, 0, '原交戰者 inv-2 被對帳脫離');
 });
 
+test('卡片 engage_enemy 對 massive:不誤清多人交戰(Raviel BLOCK 回歸)', () => {
+  const sc = makeScenario(['loc-a']);
+  sc.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'def-big', locationId: 'loc-a', hp: 9, engagedWith: ['inv-2', 'inv-3'], modifiers: [] }];
+  const inv1 = makeInv({ currentLocationId: 'loc-a', hand: ['ev1'], engagedWith: [] });
+  const inv2 = makeInv({ investigatorId: 'inv-2', currentLocationId: 'loc-a', engagedWith: ['e1'] });
+  const inv3 = makeInv({ investigatorId: 'inv-3', currentLocationId: 'loc-a', engagedWith: ['e1'] });
+  const ctx: RuleContext = {
+    scenario: sc, investigator: inv1, turn: makeTurn(), investigators: { 'inv-1': inv1, 'inv-2': inv2, 'inv-3': inv3 },
+    enemyStats: { 'def-big': { dc: 10, keywords: ['massive'] } },
+    cardLookup: { ev1: { name_zh: '挑釁', card_type: 'event', cost: 0, effects: [{ trigger_type: 'action', effect_code: 'engage_enemy', effect_params: {} }] } },
+    rng: rngRoll(10),
+  };
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'ev1' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  const e1 = r.newState!.scenario!.enemies[0];
+  assertEq(e1.engagedWith.includes('inv-2'), true, 'massive 保留 inv-2');
+  assertEq(e1.engagedWith.includes('inv-3'), true, 'massive 保留 inv-3');
+  assertEq(e1.engagedWith.includes('inv-1'), true, 'massive 也納入拉怪者');
+});
+
 // ─── runner ─────────────────────────
 let passed = 0;
 let failed = 0;

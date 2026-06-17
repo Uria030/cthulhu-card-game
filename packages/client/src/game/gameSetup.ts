@@ -359,6 +359,9 @@ export function buildSetupFromBootstrap(
         card_type: info.card_type,
         cost: info.cost,
         combat_style: d.combat_style ?? null,
+        // 軸向系統(s08–s10):保留軸值供軸向 COMBO 連動辨識(in_play 同軸計數)
+        primary_axis_layer: d.primary_axis_layer ?? null,
+        primary_axis_value: d.primary_axis_value ?? null,
         damage_element: d.damage_element ?? null,
         ally_hp: d.ally_hp ?? null,
         ally_san: d.ally_san ?? null,

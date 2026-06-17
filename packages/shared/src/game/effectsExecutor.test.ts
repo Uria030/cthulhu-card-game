@@ -340,6 +340,38 @@ test('reveal_tile:G4 tile 系統未建模 → unsupported', () => {
   assertEq(executeCardEffects([fx('reveal_tile')], makeInv(), locScenario(), {}).unsupported.includes('reveal_tile'), true);
 });
 
+// ─── #2 軸向 COMBO:連動條件(in_play)─────────────
+test('軸向 combo:in_play 同軸卡達門檻 → combo 效果結算', () => {
+  const lookup = { a1: { primary_axis_value: '老警長' }, a2: { primary_axis_value: '老警長' } } as any;
+  const inv = makeInv({ assetsInPlay: ['a1', 'a2'] });
+  const r = executeCardEffects([fx('deal_damage', { amount: 3, condition: { axis_value: '老警長', scope: 'in_play', min: 2 } })], inv, makeScenario([makeEnemy({ hp: 5 })]), lookup);
+  assertEq(r.scenario.enemies[0].hp, 2, 'combo 生效,扣 3');
+  assertEq(r.effects.some((e) => e.type === 'combo_inactive'), false);
+});
+
+test('軸向 combo:同軸卡不足門檻 → combo_inactive,效果不結算', () => {
+  const lookup = { a1: { primary_axis_value: '老警長' } } as any;
+  const r = executeCardEffects([fx('deal_damage', { amount: 3, condition: { axis_value: '老警長', scope: 'in_play', min: 2 } })], makeInv({ assetsInPlay: ['a1'] }), makeScenario([makeEnemy({ hp: 5 })]), lookup);
+  assertEq(r.scenario.enemies[0].hp, 5, '未達門檻,不扣血');
+  assertEq(r.effects.some((e) => e.type === 'combo_inactive'), true);
+});
+
+test('軸向 combo:base(無 condition)照常 + combo entry 分開 gate', () => {
+  const lookup = { a1: { primary_axis_value: '老警長' } } as any;
+  const r = executeCardEffects([
+    fx('draw_card', { amount: 1 }),
+    fx('deal_damage', { amount: 3, condition: { axis_value: '老警長', scope: 'in_play', min: 2 } }),
+  ], makeInv({ assetsInPlay: ['a1'], deck: ['d1'] }), makeScenario([makeEnemy({ hp: 5 })]), lookup);
+  assertEq(r.investigator.hand.length, 1, 'base 抽牌照常');
+  assertEq(r.scenario.enemies[0].hp, 5, 'combo 被 gate');
+});
+
+test('軸向 combo:played_this_turn 暫不啟用(Phase A-2 接回合軸計數)', () => {
+  const r = executeCardEffects([fx('deal_damage', { amount: 3, condition: { axis_value: 'X', scope: 'played_this_turn', min: 1 } })], makeInv(), makeScenario([makeEnemy({ hp: 5 })]), {});
+  assertEq(r.scenario.enemies[0].hp, 5, 'played_this_turn 暫不生效');
+  assertEq(r.effects.some((e) => e.type === 'combo_inactive'), true);
+});
+
 // ─── runner ─────────────────────────
 let passed = 0; let failed = 0; const failures: string[] = [];
 for (const t of tests) {

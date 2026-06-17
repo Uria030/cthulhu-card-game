@@ -52,6 +52,12 @@ export function executeCardEffects(
     const paren = rawCode.match(/^([a-z_]+)\((.+)\)$/);
     const code = paren ? paren[1] : rawCode;
     if (paren && /area/.test(paren[2])) p.area = true;
+    // 軸向連動條件(s08–s10 軸向 combo):此效果帶 condition 且不滿足 → 不結算(combo 未成形;
+    // 基礎效果放在別的「無條件」effect entry,照常結算)。
+    if (p.condition && !axisConditionMet(p.condition as Record<string, unknown>, inv, cardLookup)) {
+      out.push({ type: 'combo_inactive', params: { axis: String((p.condition as Record<string, unknown>).axis_value ?? ''), narrative: '軸向連動尚未成形 —— 只發揮了基礎效果。' } });
+      continue;
+    }
     switch (code) {
       case 'draw_card': {
         const amount = Number(p.amount ?? 1);
@@ -610,6 +616,31 @@ export function executeCardEffects(
     }
   }
   return { investigator: inv, scenario: sc, effects: out, unsupported };
+}
+
+/**
+ * 軸向連動條件評估(s08–s10 軸向 COMBO):同軸卡狀態滿足才讓 combo 效果結算。
+ * condition 形狀(Gemini 寫進 effect_params.condition):{ axis_value, scope, min }
+ *  - scope='in_play':場上(assetsInPlay)同軸卡數 ≥ min(持續「場上有 N 張 X」/ 條件「有 X 時」)
+ *  - scope='played_this_turn':本回合已打出同軸卡數 ≥ min — 需回合級軸計數(Phase A-2 接 ruleEngine),暫不啟用
+ * 無 axis_value → 不擋(回 true);無法評估的 scope → 不啟用(回 false,combo 不生效,基礎效果不受影響)。
+ */
+export function axisConditionMet(
+  condition: Record<string, unknown>,
+  investigator: InvestigatorState,
+  cardLookup: CardDataLookup,
+): boolean {
+  const axisValue = String(condition?.axis_value ?? '');
+  if (!axisValue) return true;
+  const min = Math.max(1, Number(condition?.min ?? 1));
+  const scope = String(condition?.scope ?? 'in_play');
+  if (scope === 'in_play') {
+    const count = investigator.assetsInPlay.filter(
+      (id) => String(cardLookup[id]?.primary_axis_value ?? '') === axisValue,
+    ).length;
+    return count >= min;
+  }
+  return false;
 }
 
 /**

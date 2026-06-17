@@ -51,6 +51,10 @@ export interface CardData {
   card_type?: string;
   cost?: number | null;
   combat_style?: string | null;
+  /** 軸向系統(s08–s10;四層 faction/combat_style/proficiency/card_name + 法器 talisman_type)。
+   *  軸向 COMBO 連動條件以此辨識「同軸」;bootstrap SELECT * 已載入,容器轉 cardLookup 須保留。 */
+  primary_axis_layer?: string | null;
+  primary_axis_value?: string | null;
   /** 武器傷害元素(§6.5 元素增傷;空 = 物理) */
   damage_element?: string | null;
   /** 盟友卡 HP/SAN(ch3 §10.5)+ 攻擊力(damage 欄位,§10.5 攻擊力 1-3) */

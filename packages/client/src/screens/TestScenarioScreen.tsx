@@ -133,6 +133,7 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'remove_haunting': return '✨ 驅散了 ' + (locMeta[p.location as string]?.name || p.location) + ' 的鬧鬼';
     case 'connect_tiles': return '🔗 打通 ' + (locMeta[p.from as string]?.name || p.from) + ' ↔ ' + (locMeta[p.to as string]?.name || p.to);
     case 'disconnect_tiles': return '⛓ 切斷 ' + (locMeta[p.from as string]?.name || p.from) + ' ✕ ' + (locMeta[p.to as string]?.name || p.to);
+    case 'combo_inactive': return '🔗 ' + (p.narrative as string);
     case 'effect_unsupported': return 'ℹ 部分卡面效果引擎尚未支援:' + ((p.codes as string[]) ?? []).join('、');
     case 'fear_check': return '😨 恐懼檢定 vs ' + (p.enemy as string) + ':d20 ' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '穩住了' : '失敗') + ')';
     case 'fear_damage': return '😱 ' + (p.narrative as string) + '(SAN -' + (p.amount as number) + ')';

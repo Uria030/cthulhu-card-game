@@ -70,6 +70,35 @@ test('remove_status(指定) → 只移除該狀態', () => {
   assertEq(r.investigator.statusEffects?.bleed, 1, '其他狀態保留');
 });
 
+// ─── P0 補完:治療 / 恐懼 / 資源 ─────────────
+test('heal_hp:回復當前 HP,夾在上限', () => {
+  const r = executeCardEffects([fx('heal_hp', { amount: 5 })], makeInv({ hp: 3, hpMax: 9 }), makeScenario(), {});
+  assertEq(r.investigator.hp, 8, '3+5');
+  const cap = executeCardEffects([fx('heal_hp', { amount: 5 })], makeInv({ hp: 7, hpMax: 9 }), makeScenario(), {});
+  assertEq(cap.investigator.hp, 9, '夾在 hpMax');
+  assertEq(r.effects.some((e) => e.type === 'heal_hp'), true);
+});
+
+test('heal_san:回復當前 SAN,夾在上限', () => {
+  const r = executeCardEffects([fx('heal_san', { amount: 4 })], makeInv({ san: 2, sanMax: 9 }), makeScenario(), {});
+  assertEq(r.investigator.san, 6);
+  const cap = executeCardEffects([fx('heal_san', { amount: 9 })], makeInv({ san: 8, sanMax: 9 }), makeScenario(), {});
+  assertEq(cap.investigator.san, 9, '夾在 sanMax');
+});
+
+test('deal_horror:對自身扣 SAN(不破 0)', () => {
+  const r = executeCardEffects([fx('deal_horror', { amount: 3 })], makeInv({ san: 5 }), makeScenario(), {});
+  assertEq(r.investigator.san, 2);
+  assertEq(r.effects.some((e) => e.type === 'fear_damage'), true);
+  const floor = executeCardEffects([fx('deal_horror', { amount: 9 })], makeInv({ san: 2 }), makeScenario(), {});
+  assertEq(floor.investigator.san, 0, '夾在 0');
+});
+
+test('spend_resource:扣資源不破 0', () => {
+  assertEq(executeCardEffects([fx('spend_resource', { amount: 2 })], makeInv({ resources: 5 }), makeScenario(), {}).investigator.resources, 3);
+  assertEq(executeCardEffects([fx('spend_resource', { amount: 9 })], makeInv({ resources: 2 }), makeScenario(), {}).investigator.resources, 0);
+});
+
 // ─── runner ─────────────────────────
 let passed = 0; let failed = 0; const failures: string[] = [];
 for (const t of tests) {

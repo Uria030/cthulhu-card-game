@@ -156,6 +156,35 @@ export function executeCardEffects(
         out.push({ type: 'search_deck', params: { viewed: top.length, taken: taken.length } });
         break;
       }
+      case 'heal_hp': {
+        // 治療 HP(ch3 §7.1):回復當前 HP,夾在上限內(預設 self;盟友定向待 updatedAllies 管線)
+        const amount = Number(p.amount ?? 1);
+        const healed = Math.min(inv.hpMax, inv.hp + amount) - inv.hp;
+        inv = { ...inv, hp: inv.hp + healed };
+        out.push({ type: 'heal_hp', params: { amount: healed, narrative: '傷口在你眼前癒合。' }, targetId: inv.investigatorId });
+        break;
+      }
+      case 'heal_san': {
+        // 治療 SAN(ch3 §7.1):回復當前理智,夾在上限內
+        const amount = Number(p.amount ?? 1);
+        const healed = Math.min(inv.sanMax, inv.san + amount) - inv.san;
+        inv = { ...inv, san: inv.san + healed };
+        out.push({ type: 'heal_san', params: { amount: healed, narrative: '一陣清明壓過了腦中的雜音。' }, targetId: inv.investigatorId });
+        break;
+      }
+      case 'deal_horror': {
+        // 玩家卡的 deal_horror:對自身造成 SAN 傷害(禁忌知識/施法代價;敵人無 SAN,故預設 self)
+        const amount = Number(p.amount ?? 1);
+        inv = { ...inv, san: Math.max(0, inv.san - amount) };
+        out.push({ type: 'fear_damage', params: { amount, narrative: '某種不該知道的東西擠進了你的意識。' }, targetId: inv.investigatorId });
+        break;
+      }
+      case 'spend_resource': {
+        const amount = Number(p.amount ?? 1);
+        inv = { ...inv, resources: Math.max(0, inv.resources - amount) };
+        out.push({ type: 'spend_resource', params: { amount } });
+        break;
+      }
       case 'modify_test':
         // passive 聚合於檢定時;on_commit 與 commit_icons 重複 — 都不在此執行
         break;

@@ -84,6 +84,9 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
   switch (eff.type) {
     case 'spend_action_point': return '扣 ' + (p.amount as number) + ' 行動點';
     case 'gain_resource': return '獲得 ' + (p.amount as number) + ' 資源';
+    case 'spend_resource': return '🪙 花費 ' + (p.amount as number) + ' 資源';
+    case 'heal_hp': return '💚 ' + ((p.narrative as string) || '回復體力') + '(HP +' + (p.amount as number) + ')';
+    case 'heal_san': return '💙 ' + ((p.narrative as string) || '回復理智') + '(SAN +' + (p.amount as number) + ')';
     case 'draw_card': return '抽 1 張卡 → 手牌';
     case 'deck_empty_horror': return '⚠ 牌庫空,改受 ' + (p.amount as number) + ' 點恐懼(§3.3)';
     case 'move': return '移動 ' + (locMeta[p.from as string]?.name || p.from) + ' → ' + (locMeta[p.to as string]?.name || p.to);

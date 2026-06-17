@@ -454,6 +454,13 @@ export function enumerateCandidates(
         (cardLookup[id]?.effects ?? []).some((f) => f.trigger_type === 'action' && f.effect_code === 'attack'),
       );
       value = aliveEnemies.length > 0 && !armed ? 2.4 : 0.8;
+      // 整回合價值鏈(Uria 裁定):鋪武器不只看鋪場分,要把「本回合能用它打出的攻擊」算進來——
+      // 有怪當前在場 + 打完還剩行動點(打牌 1AP)→ 解鎖的攻擊也是卡片動作(每發 ≥ CARD_ACTION_BONUS)。
+      // 於是「一動打牌鋪槍 + 後續開火」整回合產出 > 3 個基本動作,AI 才會為了 combo 而鋪場。
+      if (enemiesHere.length > 0) {
+        const attacksThisTurn = Math.min(Math.max(0, inv.actionPoints - 1), 2);
+        value += attacksThisTurn * CARD_ACTION_BONUS;
+      }
     } else if (isArcaneSpell) {
       // 施法事件(ch2 §8.4 神秘攻擊):一定命中、穿透抗性,但抽混沌袋有 SAN 風險。
       // 有目標才打;戰意權重 × 命中保證(法術不擲骰),SAN 低時謹慎(玩火不玩命)。

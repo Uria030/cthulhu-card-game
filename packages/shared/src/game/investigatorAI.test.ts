@@ -237,6 +237,18 @@ test('用卡片優先:場上有武器 + 有怪 → clue 型 AI 也開火(攻擊�
   assert((atk?.score ?? 0) > (inv?.score ?? 0), '用卡片(開火)是卡片動作,該壓過搜線索');
 });
 
+test('整回合價值鏈:有怪+剩行動點 → 鋪武器把「本回合解鎖的攻擊」算進價值(為 combo 鋪場)', () => {
+  const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 4, engagedWith: [], modifiers: [] };
+  // 有怪 + 3 AP(打牌後還能開火)→ combo 加成
+  const combo = enumerateCandidates(ctx({ scenario: makeScenario({ enemies: [enemy] }), investigator: makeInv({ hand: ['weapon'], resources: 3, actionPoints: 3 }) }), ELIAS, initInvestigatorAIState());
+  // 有怪但只剩 1 AP(打完牌就沒行動點開火)→ 無 combo 加成
+  const noAp = enumerateCandidates(ctx({ scenario: makeScenario({ enemies: [enemy] }), investigator: makeInv({ hand: ['weapon'], resources: 3, actionPoints: 1 }) }), ELIAS, initInvestigatorAIState());
+  const pCombo = combo.find((x) => x.actionType === 'play_card' && x.payload.cardInstanceId === 'weapon');
+  const pNoAp = noAp.find((x) => x.actionType === 'play_card' && x.payload.cardInstanceId === 'weapon');
+  assert(!!pCombo && !!pNoAp, '兩情境都該有鋪武器候選');
+  assert((pCombo?.score ?? 0) > (pNoAp?.score ?? 0), '能接著開火時,鋪武器價值含 combo 加成,更高');
+});
+
 test('決策溫度:0 永遠最佳;觸發時選次佳(會犯小錯)', () => {
   const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 4, engagedWith: [], modifiers: [] };
   const base = ctx({ scenario: makeScenario({ enemies: [enemy] }) });

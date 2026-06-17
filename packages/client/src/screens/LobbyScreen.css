@@ -19,24 +19,25 @@
   animation: lobbyEnter var(--beat-lobby-enter) var(--ease-paper) both;
 }
 
-/* CalibrationSurface 撐滿剩餘空間並依比例縮(不超出 viewport)*/
+/* CalibrationSurface 撐滿整個 viewport(SDK 類名為 hash,用 [class*=] 命中)*/
 .lobby-root > [data-calibration-surface],
-.lobby-root .calibration-surface {
-  flex: 1 1 auto;
+.lobby-root [class*="_surface_"] {
+  flex: 1 1 auto !important;
   min-height: 0;
-  width: 100%;
+  width: 100% !important;
+  height: 100% !important;
   max-height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  overflow: hidden;
 }
-.lobby-root .calibration-surface img,
-.lobby-root .calibration-surface svg {
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
-  object-fit: contain;
+/* 底圖 + 熱區 svg 同框 cover 填滿 → 消除底圖下方黑帶;兩者同尺寸故熱區仍對齊 */
+.lobby-root [class*="_background_"],
+.lobby-root [class*="_overlay_"] {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
 }
 
 /* 熱區形狀:預設完全透明保留美術,hover/觸控才浮現 10% 深色 + 金色光暈漸層 */

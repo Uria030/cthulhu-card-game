@@ -141,8 +141,7 @@ export function LobbyScreen() {
         case 'seat.front':
         case 'seat.left':
         case 'seat.right':
-          // 椅子 = 設定調查員入口(邀請隊友/召喚 AI 仍在 G2)
-          setPickerOpen(true);
+          // 椅子取消點擊(改由左上組隊名單管理;椅上只放「在席人形影子」意象)
           break;
         default:
           console.warn('[lobby] 未處理熱區', detail.hotspotId);

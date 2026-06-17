@@ -1,7 +1,7 @@
 /**
  * G-02 卡片效果執行器測試 — add_status / remove_status 接 statusEffects(ch3 §6)
  */
-import { executeCardEffects } from './effectsExecutor';
+import { executeCardEffects, passiveTestModifier } from './effectsExecutor';
 import type { CardEffectRow } from './effectsExecutor';
 import type { InvestigatorState, ScenarioState, EnemyInstance } from './state';
 
@@ -215,6 +215,26 @@ test('exhaust_card / ready_card:橫置與轉正', () => {
 test('gain_use:資產補充使用次數', () => {
   const r = executeCardEffects([fx('gain_use', { amount: 3 })], makeInv({ assetsInPlay: ['a1'], assetState: { a1: { usesLeft: 2, exhausted: false } } }), makeScenario(), {});
   assertEq(r.investigator.assetState?.a1.usesLeft, 5);
+});
+
+// ─── P1 批次2:資源掠奪 + 檢定時機聚合 ─────────────
+test('steal_resource:自身獲得資源(單人近似)', () => {
+  assertEq(executeCardEffects([fx('steal_resource', { amount: 2 })], makeInv({ resources: 1 }), makeScenario(), {}).investigator.resources, 3);
+});
+
+test('wild_attr_boost / reroll 在 action 路徑不報 unsupported(檢定時機)', () => {
+  const r = executeCardEffects([fx('wild_attr_boost', { amount: 2 }), fx('reroll'), fx('auto_success')], makeInv(), makeScenario(), {});
+  assertEq(r.unsupported.length, 0);
+});
+
+test('passiveTestModifier:wild_attr_boost 全屬性 + modify_test 限定屬性', () => {
+  const inv = makeInv({ assetsInPlay: ['w1', 'm1'] });
+  const lookup = {
+    w1: { effects: [{ trigger_type: 'passive', effect_code: 'wild_attr_boost', effect_params: { amount: 2 } }] },
+    m1: { effects: [{ trigger_type: 'passive', effect_code: 'modify_test', effect_params: { attribute: 'strength', modifier: 3 } }] },
+  } as any;
+  assertEq(passiveTestModifier(inv, lookup, 'strength'), 5, 'wild 2 + str 3');
+  assertEq(passiveTestModifier(inv, lookup, 'intellect'), 2, 'wild 2 only');
 });
 
 // ─── runner ─────────────────────────

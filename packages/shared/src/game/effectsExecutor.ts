@@ -207,6 +207,13 @@ export function executeCardEffects(
         out.push({ type: 'spend_resource', params: { amount } });
         break;
       }
+      case 'steal_resource': {
+        // 單人範圍:奪取對象(其他調查員)不在本函式可達範圍 → 以自身獲得近似(掠奪環境/敵方資源)
+        const amount = Math.max(1, Number(p.amount ?? 1));
+        inv = { ...inv, resources: inv.resources + amount };
+        out.push({ type: 'steal_resource', params: { amount, narrative: '你順手摸走了能用得上的東西。' } });
+        break;
+      }
       case 'stun_enemy': {
         // 控場(§10):給目標敵人加 'stunned' 修飾(= monsterActions STUNNED),神話階段該敵跳過啟動一輪
         const here = inv.currentLocationId;
@@ -390,7 +397,14 @@ export function executeCardEffects(
       }
 
       case 'modify_test':
-        // passive 聚合於檢定時;on_commit 與 commit_icons 重複 — 都不在此執行
+      case 'wild_attr_boost':
+        // 檢定時機修正:於 resolveCheck 由 passiveTestModifier 聚合
+        //(modify_test 指定屬性 +modifier / wild_attr_boost 全屬性 +amount);action 路徑不結算
+        break;
+      case 'reroll':
+      case 'auto_success':
+      case 'auto_fail':
+        // 檢定反應碼(on_fail/on_success 時機):反應觸發管線待補;action 路徑暫不結算(不報 unsupported 避免洗 log)
         break;
       case 'attack':
         // 武器攻擊走 ruleEngine 路徑
@@ -428,10 +442,14 @@ export function passiveTestModifier(
   for (const assetId of investigator.assetsInPlay) {
     const data = cardLookup[assetId];
     for (const fx of (data?.effects ?? []) as CardEffectRow[]) {
-      if (fx.trigger_type !== 'passive' || fx.effect_code !== 'modify_test') continue;
+      if (fx.trigger_type !== 'passive') continue;
       const p = (fx.effect_params ?? {}) as Record<string, any>;
-      if (String(p.attribute ?? '') === attribute) {
-        sum += Number(p.modifier ?? 0);
+      if (fx.effect_code === 'modify_test') {
+        // 指定屬性 +modifier(限定本次檢定屬性才算)
+        if (String(p.attribute ?? '') === attribute) sum += Number(p.modifier ?? 0);
+      } else if (fx.effect_code === 'wild_attr_boost') {
+        // 全屬性/全技能 +amount(§5.5):任何屬性檢定都加(Key of Ys 型)
+        sum += Number(p.amount ?? 0);
       }
     }
   }

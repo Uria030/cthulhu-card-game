@@ -404,7 +404,9 @@ export function executeCardEffects(
         const target = dest && sc.locations.some((l) => l.locationDefinitionId === dest) ? dest : here?.connectedTo?.[0];
         if (!target || target === inv.currentLocationId) { unsupported.push('move_investigator'); break; }
         const from = inv.currentLocationId;
-        inv = { ...inv, currentLocationId: target };
+        // 離開地點 → 與原地點所有敵人脫離交戰(雙向),避免殘留跨地點交戰
+        sc = { ...sc, enemies: sc.enemies.map((e) => (e.engagedWith.includes(inv.investigatorId) ? { ...e, engagedWith: e.engagedWith.filter((id) => id !== inv.investigatorId) } : e)) };
+        inv = { ...inv, currentLocationId: target, engagedWith: [] };
         out.push({ type: 'move', params: { from, to: target } });
         break;
       }

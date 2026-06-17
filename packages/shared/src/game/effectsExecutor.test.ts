@@ -248,9 +248,13 @@ function locScenario(enemies: EnemyInstance[] = []): ScenarioState {
   };
 }
 
-test('move_investigator:指定地點 / 預設沿連線走 1 格', () => {
+test('move_investigator:指定地點 / 預設沿連線走 1 格 / 脫離交戰', () => {
   assertEq(executeCardEffects([fx('move_investigator')], makeInv(), locScenario(), {}).investigator.currentLocationId, 'B', '預設走第一條連線');
   assertEq(executeCardEffects([fx('move_investigator', { location: 'B' })], makeInv(), locScenario(), {}).investigator.currentLocationId, 'B');
+  // 移動必脫離原地點交戰(雙向),不殘留跨地點交戰
+  const eng = executeCardEffects([fx('move_investigator', { location: 'B' })], makeInv({ engagedWith: ['e1'] }), locScenario([makeEnemy({ engagedWith: ['i1'] })]), {});
+  assertEq(eng.investigator.engagedWith.length, 0, '自身脫離');
+  assertEq(eng.scenario.enemies[0].engagedWith.length, 0, '敵人側清除');
 });
 
 test('move_enemy:推離敵人並脫離交戰', () => {

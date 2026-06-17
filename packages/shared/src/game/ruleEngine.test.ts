@@ -858,6 +858,26 @@ test('盟友攻擊:都橫置 → 駁回', () => {
   assertEq(resolveIntent(makeIntent('ally_attack'), ctx).result.outcome, 'rejected');
 });
 
+// ─── G-02 卡片效果擊殺 → 死亡詞綴(Raviel BLOCK 回歸)───
+test('事件卡擊殺觸發死亡詞綴(crush 結到非擊殺隊友,排除出牌者)', () => {
+  const sc = makeScenario(['loc-a']);
+  sc.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'def-e1', locationId: 'loc-a', hp: 3, engagedWith: ['inv-1'], modifiers: [] }];
+  const inv1 = makeInv({ currentLocationId: 'loc-a', hand: ['ev1'], engagedWith: ['e1'] });
+  const inv2 = makeInv({ investigatorId: 'inv-2', currentLocationId: 'loc-a', hp: 7 });
+  const ctx: RuleContext = {
+    scenario: sc, investigator: inv1, turn: makeTurn(), investigators: { 'inv-1': inv1, 'inv-2': inv2 },
+    enemyStats: { 'def-e1': { dc: 10, damage_physical: 3, keywords: ['crush'] } },
+    cardLookup: { ev1: { name_zh: '爆裂符', card_type: 'event', cost: 0, effects: [{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount: 3 } }] } },
+    rng: rngRoll(2),
+  };
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'ev1' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.result.effects!.some((e) => e.type === 'enemy_defeated'), true, '卡片擊殺');
+  assertEq(r.result.effects!.some((e) => e.type === 'crush_damage'), true, '死亡詞綴觸發');
+  assertEq(r.newState!.updatedAllies?.['inv-2']?.hp, 4, 'inv-2 受 crush 3');
+  assertEq(r.newState!.updatedAllies?.['inv-1'], undefined, '出牌者(擊殺者)不被自己擊殺的詞綴誤傷');
+});
+
 // ─── runner ─────────────────────────
 let passed = 0;
 let failed = 0;

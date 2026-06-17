@@ -461,15 +461,17 @@ function resolveConsume(intent: IntentMessage, ctx: RuleContext): RuleResolveOut
     ctx.cardLookup ?? {},
   );
   inv = exec.investigator;
+  const kills = resolveCardKillDeaths(exec.effects, ctx, exec.scenario);
   const effects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
     { type: 'card_consumed', params: { cardInstanceId: cardId, name: data.name_zh ?? '' } },
     ...exec.effects,
+    ...kills.effects,
   ];
   if (exec.unsupported.length > 0) {
     effects.push({ type: 'effect_unsupported', params: { codes: exec.unsupported } });
   }
-  return accept(intent, effects, { investigator: inv, scenario: exec.scenario });
+  return accept(intent, effects, { investigator: inv, scenario: kills.scenario, updatedAllies: kills.updatedAllies });
 }
 
 /**
@@ -1085,6 +1087,10 @@ function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOu
     if (exec.unsupported.length > 0) {
       effects.push({ type: 'effect_unsupported', params: { codes: exec.unsupported } });
     }
+    // §11.3 卡片效果擊殺也結算死亡詞綴/鬧鬼(擊殺者=本人,排除)
+    const kills = resolveCardKillDeaths(exec.effects, ctx, sc);
+    effects.push(...kills.effects);
+    sc = kills.scenario;
     // 施法軌(ch2 §8.4):arcane 事件結算後抽混沌袋定副作用(法術一定命中,代價在袋裡)
     if (String(data.combat_style ?? '') === 'arcane') {
       const targetDef = sc.enemies.find((e) => e.locationId === inv.currentLocationId)?.enemyDefinitionId ?? null;
@@ -1094,7 +1100,7 @@ function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOu
       sc = chaos.scenario;
       effects.push(...chaos.effects);
     }
-    return accept(intent, effects, { investigator: inv, scenario: sc });
+    return accept(intent, effects, { investigator: inv, scenario: sc, updatedAllies: kills.updatedAllies });
   }
 
   // §10.5 盟友:獨立 HP/SAN 進場(攻擊力 = damage 欄位;不進 assetsInPlay,自成一格)
@@ -1158,16 +1164,18 @@ function resolveExecuteCardAction(intent: IntentMessage, ctx: RuleContext): Rule
   if (spend.rejected) return reject(intent, spend.rejected);
   const inv: InvestigatorState = { ...spend.investigator, actionPoints: ctx.investigator.actionPoints - 1 };
   const exec = executeCardEffects([fx], inv, ctx.scenario, ctx.cardLookup ?? {});
+  const kills = resolveCardKillDeaths(exec.effects, ctx, exec.scenario);
   const effects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
     { type: 'card_action', params: { cardInstanceId: cardId, name: data?.name_zh ?? '' } },
     ...spend.effects,
     ...exec.effects,
+    ...kills.effects,
   ];
   if (exec.unsupported.length > 0) {
     effects.push({ type: 'effect_unsupported', params: { codes: exec.unsupported } });
   }
-  return accept(intent, effects, { investigator: exec.investigator, scenario: exec.scenario });
+  return accept(intent, effects, { investigator: exec.investigator, scenario: kills.scenario, updatedAllies: kills.updatedAllies });
 }
 
 /**
@@ -1503,6 +1511,30 @@ function deathKeywordOutcome(enemy: EnemyInstance, ctx: RuleContext, scenario: S
   const dk = resolveDeathKeywords(enemy, enemyData, others, ctx.rng);
   // §11.3 鬧鬼:死亡附著地點(任何致死手段)
   return { effects: dk.effects, updatedAllies: dk.investigators, scenario: applyHaunting(scenario, enemy, enemyData) };
+}
+
+/**
+ * §11.3 卡片效果擊殺善後:掃 executeCardEffects 產出的 enemy_defeated,逐隻結算死亡詞綴 + 鬧鬼。
+ * 擊殺者 = 出牌的 ctx.investigator,由 deathKeywordOutcome 自動排除(對齊武器擊殺路徑)。
+ */
+function resolveCardKillDeaths(
+  effects: ResultEffect[],
+  ctx: RuleContext,
+  scenario: ScenarioState,
+): { effects: ResultEffect[]; scenario: ScenarioState; updatedAllies: Record<string, InvestigatorState> } {
+  let sc = scenario;
+  const extra: ResultEffect[] = [];
+  let allies: Record<string, InvestigatorState> = {};
+  for (const e of effects) {
+    if (e.type !== 'enemy_defeated' || !e.targetId) continue;
+    const enemy = sc.enemies.find((x) => x.instanceId === e.targetId);
+    if (!enemy) continue;
+    const dk = deathKeywordOutcome(enemy, { ...ctx, investigators: { ...ctx.investigators, ...allies } }, sc);
+    extra.push(...dk.effects);
+    sc = dk.scenario;
+    allies = { ...allies, ...dk.updatedAllies };
+  }
+  return { effects: extra, scenario: sc, updatedAllies: allies };
 }
 
 function reject(intent: IntentMessage, narrative: string, suggestion?: string): RuleResolveOutput {

@@ -57,7 +57,7 @@ function hotspotCentroid(hs: HotspotData): { cx: number; cy: number } {
 function HotspotLabel({ hs }: { hs: HotspotData }) {
   const { cx, cy } = hotspotCentroid(hs);
   return (
-    <g pointer-events="none" className="hotspot-label-group" transform={`translate(${cx}, ${cy})`}>
+    <g pointerEvents="none" className="hotspot-label-group" transform={`translate(${cx}, ${cy})`}>
       <text
         x={0} y={-4}
         textAnchor="middle"
@@ -206,7 +206,7 @@ export function LobbyScreen() {
             if (!hs) return null;
             const { cx, cy } = hotspotCentroid(hs);
             return (
-              <g key={seatId} className="seat-occupant" transform={`translate(${cx}, ${cy})`} pointer-events="none">
+              <g key={seatId} className="seat-occupant" transform={`translate(${cx}, ${cy})`} pointerEvents="none">
                 <ellipse cx={0} cy={-22} rx={22} ry={26} fill="rgba(8,8,14,0.6)" />
                 <path d="M -40 58 Q -34 -6 0 -6 Q 34 -6 40 58 Z" fill="rgba(8,8,14,0.6)" />
                 <text x={0} y={80} textAnchor="middle" fill="#C9A84C" style={{ font: '700 14px "Noto Serif TC", serif', paintOrder: 'stroke', stroke: 'rgba(13,13,20,0.92)', strokeWidth: 4 }}>{member.name}</text>

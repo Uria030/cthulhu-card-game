@@ -436,8 +436,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     // §14 escape 等任務看全員位置/存活;setAiMembers 非同步,呼叫端須傳「這次更新後」的最新 AI 陣列,
     // 不可讀閉包 aiMembers(會是上一輪 render 的舊狀態)。預設值僅為無更新時的後援。
     partyAIs: InvestigatorState[] = aiMembers,
-  ): { sc: ScenarioState; inv: InvestigatorState } => {
-    if (setup.tutorial || setup.actData.length === 0) return { sc, inv };
+  ): { sc: ScenarioState; inv: InvestigatorState; aiArr: InvestigatorState[] } => {
+    // 回傳「最終 AI 陣列」(場景轉換會重置落點);呼叫端一律用這個 setAiMembers,
+    // 不可在 applyProgress 之後再 setAiMembers(舊陣列)蓋掉(否則轉場後隊友落點/token 會掉)。
+    if (setup.tutorial || setup.actData.length === 0) return { sc, inv, aiArr: partyAIs };
     // 人數縮放(ch1 技術原則 4):幕線索門檻 × 隊伍人數(玩家 + AI 隊友)
     const partySize = 1 + setup.aiMembers.length;
     // §14 escape 等任務需全員位置 → 組隊伍 map(玩家 + 現役 AI 隊友的最新狀態)
@@ -458,6 +460,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     let nextSc = tick.scenario;
     let nextInv = inv;
     let nextFlags = tick.flags;
+    let nextAIs = partyAIs;
 
     // 幕翻面要求切換場景:用開局包重建新場景拓撲,保留進度與已生成敵人
     if (tick.switchScenario != null && setup.bootstrap) {
@@ -478,12 +481,13 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         currentLocationId: built2.investigator.currentLocationId,
         engagedWith: [],
       };
-      // AI 隊友跟著轉場(同出生點,解除交戰)
-      setAiMembers((ms) => ms.map((ai) => ({
+      // AI 隊友跟著轉場(同出生點,解除交戰)— 寫進回傳的 nextAIs,由呼叫端一次 setAiMembers,
+      // 不在此 setAiMembers(否則呼叫端後續 setAiMembers(舊陣列)會蓋掉落點)。
+      nextAIs = partyAIs.map((ai) => ({
         ...ai,
         currentLocationId: built2.investigator.currentLocationId,
         engagedWith: [],
-      })));
+      }));
       append('🌧 ──── 場景轉換 ──── 你追著線索踏進了那條傳聞中的巷子。');
     }
 
@@ -495,7 +499,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       }
     }
     setFlags(nextFlags);
-    return { sc: nextSc, inv: nextInv };
+    return { sc: nextSc, inv: nextInv, aiArr: nextAIs };
   };
 
   // §11 v0 AI auto-policy:對 effects 內所有「指向 AI 隊友」的 damage_allocatable,自動把傷害塞給
@@ -601,7 +605,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     const next = applyProgress(res.sc, res.inv, res.aiArr);
     setScenario(next.sc);
     setInvestigator(next.inv);
-    setAiMembers(res.aiArr);
+    setAiMembers(next.aiArr); // 用 applyProgress 回傳的最終陣列(含場景轉場落點),非 res.aiArr
     if (actedId) setAiActedThisTurn((s) => (s.includes(actedId) ? s : [...s, actedId]));
     // 僅依 aiTick 觸發;其餘狀態刻意讀 fresh 閉包(這正是杜絕舊值寫入的關鍵)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -707,9 +711,6 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       const freshAIs = Object.keys(allies).length > 0
         ? aiMembers.map((ai) => allies[ai.investigatorId] ?? ai)
         : aiMembers;
-      if (Object.keys(allies).length > 0) {
-        setAiMembers((ms) => ms.map((ai) => allies[ai.investigatorId] ?? ai));
-      }
       // 進度檢查(幕推進/場景切換/結局)疊在引擎結算之上
       const next = applyProgress(
         out.newState?.scenario ?? scenario,
@@ -718,6 +719,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       );
       setScenario(next.sc);
       setInvestigator(next.inv);
+      setAiMembers(next.aiArr); // 含救援盟友更新 + 場景轉場落點(freshAIs 已疊 allies,applyProgress 再轉場)
       // §11 受傷且有可分配卡 → 傷害分配 Modal(只認玩家本人的傷害,排除隊友)。
       // 走演出的動作:延後到演出「完成」才跳(避免兩 Modal 疊);否則立即跳。
       const da = (out.result.effects ?? []).find((e) => e.type === 'damage_allocatable' && e.targetId === investigator.investigatorId);
@@ -930,7 +932,6 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         for (const eff of s.effects) append(`[結算] ` + describeEffect(eff, locMeta).split('你').join(name));
       });
     }
-    setAiMembers(updatedAIs);
 
     // ④ 全滅檢查(§9:全員死亡才終局;倒地者還有瀕死檢定的機會)
     const party: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
@@ -947,6 +948,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     const next = applyProgress(sc, inv, updatedAIs);
     setScenario(next.sc);
     setInvestigator(next.inv);
+    setAiMembers(next.aiArr); // 一律用 applyProgress 回傳的最終陣列(含可能的轉場落點)
   };
   const endTurn = () => {
     // 敵人階段 → 回合結束 → 下一回合的調查員階段(三階段:advance ×2)

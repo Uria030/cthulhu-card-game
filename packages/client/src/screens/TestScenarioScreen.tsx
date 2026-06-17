@@ -239,6 +239,10 @@ interface ActionPlay {
   pendingDamageAlloc: PendingDamageAlloc | null;
   /** 原始 effects:演出「完成」拍時才一次進 Log(方向 A 單一來源 + 與演出同步,不即時暴雷)*/
   effects: ResultEffect[];
+  /** 後續行(倒地同步 + 進度/場景/結局敘事):同樣延到「完成」拍進 Log,排在主效果之後(不先於演出暴雷)*/
+  cascadeLogs: string[];
+  /** 進度檢查若判定結局:延到「完成」拍才覆蓋結算畫面(否則結局畫面會蓋掉沒播完的演出)*/
+  pendingOutcome: OutcomeData | null;
 }
 
 // Phase2 B:AI 隊友計時器同時行動 — 每位 AI 行動的間隔(節奏化、不瞬間連發)
@@ -278,6 +282,8 @@ function buildActionPlay(
   locName: string,
   locMeta: Record<string, LocationDisplay>,
   pendingDamageAlloc: PendingDamageAlloc | null,
+  cascadeLogs: string[],
+  pendingOutcome: OutcomeData | null,
 ): ActionPlay {
   const checkLines: string[] = [];
   const resultLines: string[] = [];
@@ -296,6 +302,8 @@ function buildActionPlay(
     rolling: false,
     pendingDamageAlloc,
     effects,
+    cascadeLogs,
+    pendingOutcome,
   };
 }
 
@@ -439,10 +447,14 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     // §14 escape 等任務看全員位置/存活;setAiMembers 非同步,呼叫端須傳「這次更新後」的最新 AI 陣列,
     // 不可讀閉包 aiMembers(會是上一輪 render 的舊狀態)。預設值僅為無更新時的後援。
     partyAIs: InvestigatorState[] = aiMembers,
-  ): { sc: ScenarioState; inv: InvestigatorState; aiArr: InvestigatorState[] } => {
+  ): { sc: ScenarioState; inv: InvestigatorState; aiArr: InvestigatorState[]; logs: string[]; outcome: OutcomeData | null } => {
     // 回傳「最終 AI 陣列」(場景轉換會重置落點);呼叫端一律用這個 setAiMembers,
     // 不可在 applyProgress 之後再 setAiMembers(舊陣列)蓋掉(否則轉場後隊友落點/token 會掉)。
-    if (setup.tutorial || setup.actData.length === 0) return { sc, inv, aiArr: partyAIs };
+    // 進度敘事不在此直接 append:改收集進 logs 回傳,讓「演出動作」延到完成拍才放(不先於演出暴雷);
+    // 結局同理改回傳 outcome,由呼叫端決定何時覆蓋結算畫面。
+    const logs: string[] = [];
+    let pendingOutcome: OutcomeData | null = null;
+    if (setup.tutorial || setup.actData.length === 0) return { sc, inv, aiArr: partyAIs, logs, outcome: pendingOutcome };
     // 人數縮放(ch1 技術原則 4):幕線索門檻 × 隊伍人數(玩家 + AI 隊友)
     const partySize = 1 + setup.aiMembers.length;
     // §14 escape 等任務需全員位置 → 組隊伍 map(玩家 + 現役 AI 隊友的最新狀態)
@@ -455,9 +467,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         ? setup.bossIntro[String((eff.params as { code?: string }).code ?? '')]
         : undefined;
       if (introLines) {
-        for (const line of introLines) append('[劇情] ' + line);
+        for (const line of introLines) logs.push('[劇情] ' + line);
       } else {
-        append('[劇情] ' + describeEffect(eff, locMeta));
+        logs.push('[劇情] ' + describeEffect(eff, locMeta));
       }
     }
     let nextSc = tick.scenario;
@@ -491,18 +503,18 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         currentLocationId: built2.investigator.currentLocationId,
         engagedWith: [],
       }));
-      append('🌧 ──── 場景轉換 ──── 你追著線索踏進了那條傳聞中的巷子。');
+      logs.push('🌧 ──── 場景轉換 ──── 你追著線索踏進了那條傳聞中的巷子。');
     }
 
     if (tick.victory || tick.defeat) {
       const finalOutcome = evaluateOutcome(setup.outcomes, nextFlags);
       if (finalOutcome) {
         nextFlags = applyOutcomeFlags(finalOutcome, nextFlags);
-        setOutcome(finalOutcome);
+        pendingOutcome = finalOutcome; // 不在此 setOutcome:演出動作要等完成拍才覆蓋畫面(見呼叫端)
       }
     }
     setFlags(nextFlags);
-    return { sc: nextSc, inv: nextInv, aiArr: nextAIs };
+    return { sc: nextSc, inv: nextInv, aiArr: nextAIs, logs, outcome: pendingOutcome };
   };
 
   // §11 v0 AI auto-policy:對 effects 內所有「指向 AI 隊友」的 damage_allocatable,自動把傷害塞給
@@ -609,6 +621,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setScenario(next.sc);
     setInvestigator(next.inv);
     setAiMembers(next.aiArr); // 用 applyProgress 回傳的最終陣列(含場景轉場落點),非 res.aiArr
+    next.logs.forEach((l) => append(l)); // AI 動作無玩家演出 → 進度敘事即時進 Log
+    if (next.outcome) setOutcome(next.outcome);
     if (actedId) setAiActedThisTurn((s) => (s.includes(actedId) ? s : [...s, actedId]));
     // 僅依 aiTick 觸發;其餘狀態刻意讀 fresh 閉包(這正是杜絕舊值寫入的關鍵)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -704,16 +718,16 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     const out = resolveIntent(intent, ctx);
     bus.publish(out.result);
     if (out.result.outcome === 'accepted') {
-      // 倒地同步(閃避失敗/藉機攻擊可能把自己打趴)
+      // 倒地同步(閃避失敗/藉機攻擊可能把自己打趴)— 不即時 append,收成 syncLogs 排在主效果之後
       const sync = syncDownedState(out.newState?.investigator ?? investigator);
-      for (const eff of sync.effects) append('[結算] ' + describeEffect(eff, locMeta));
+      const syncLogs = sync.effects.map((eff) => '[結算] ' + describeEffect(eff, locMeta));
       // 穩定救援改動到的隊友
       const allies = out.newState?.updatedAllies ?? {};
       // 進度檢查要用「本次更新後」的 AI 陣列(setAiMembers 非同步,閉包 aiMembers 仍是舊值)
       const freshAIs = Object.keys(allies).length > 0
         ? aiMembers.map((ai) => allies[ai.investigatorId] ?? ai)
         : aiMembers;
-      // 進度檢查(幕推進/場景切換/結局)疊在引擎結算之上
+      // 進度檢查(幕推進/場景切換/結局)疊在引擎結算之上 — 進度敘事與結局都改回傳,不在內部即時生效
       const next = applyProgress(
         out.newState?.scenario ?? scenario,
         sync.investigator,
@@ -732,16 +746,20 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       if ((intent.payload as { commitCardIds?: unknown }).commitCardIds) {
         setCommitSelection([]);
       }
-      // Phase2 C:玩家自己的動作跳三段演出 Modal(敘述→檢定→結果)。純演出 —
-      // 效果已照舊經 bus 進 Log、狀態也已套用,Modal 只重播這批效果讓動作有重量感。
-      // 純記帳動作(取資源/抽卡)不跳,維持輕快。
+      // 後續行(倒地同步 + 進度/場景/結局敘事):一律排在主效果「之後」。
+      const cascadeLogs = [...syncLogs, ...next.logs];
+      // Phase2 C:玩家自己的動作跳三段演出 Modal(敘述→檢定→結果)。方向 A 完整收斂 —
+      // 主效果 + 後續行(cascadeLogs)+ 結局(outcome)全部延到演出「完成」拍才生效:
+      // 演出期間 Log 不暴雷、結局畫面不蓋掉沒播完的演出。純記帳動作(取資源/抽卡)不跳,維持輕快。
       if (!ACTION_PLAY_SKIP.has(actionType)) {
         const locId = investigator.currentLocationId;
         const locName = (locId && setup.locMeta[locId]?.name) || locId || '此地';
-        setActionPlay(buildActionPlay(actionType, out.result.effects ?? [], locName, locMeta, pendingDamageAlloc));
+        setActionPlay(buildActionPlay(actionType, out.result.effects ?? [], locName, locMeta, pendingDamageAlloc, cascadeLogs, next.outcome));
       } else {
-        // 純記帳動作(拿資源/抽卡)不跳演出 → effects 直接進 Log(無演出可同步)
+        // 純記帳動作(拿資源/抽卡)不跳演出 → 主效果 + 後續行即時進 Log(無演出可同步)
         for (const eff of out.result.effects ?? []) append('[結算] ' + describeEffect(eff, locMeta));
+        for (const l of cascadeLogs) append(l);
+        if (next.outcome) setOutcome(next.outcome);
         if (pendingDamageAlloc) setDamageAlloc(pendingDamageAlloc);
       }
     }
@@ -782,11 +800,15 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   };
   const completeActionPlay = () => {
     const pending = actionPlay?.pendingDamageAlloc ?? null;
-    // 方向 A:演出走完才把這批 effects 一次進 Log(與 modal 同步、單一來源、不先於演出暴雷)
+    const pendingOutcome = actionPlay?.pendingOutcome ?? null;
+    // 方向 A 完整收斂:演出走完才一次放 Log — 主效果 → 後續行(倒地同步 + 進度/場景/結局敘事),
+    // 順序固定、單一來源、不先於演出暴雷。結局畫面也等到此刻才覆蓋(不蓋掉沒播完的演出)。
     if (actionPlay) {
       for (const eff of actionPlay.effects) append('[結算] ' + describeEffect(eff, locMeta));
+      for (const l of actionPlay.cascadeLogs) append(l);
     }
     setActionPlay(null);
+    if (pendingOutcome) setOutcome(pendingOutcome);
     if (pending) setDamageAlloc(pending);
   };
   // 檢定拍擲骰動畫(節奏窗口 ~700ms:重量感 + 遮蔽未來延遲載入)
@@ -957,6 +979,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setScenario(next.sc);
     setInvestigator(next.inv);
     setAiMembers(next.aiArr); // 一律用 applyProgress 回傳的最終陣列(含可能的轉場落點)
+    next.logs.forEach((l) => append(l)); // 神話階段無玩家演出 → 進度敘事即時進 Log
+    if (next.outcome) setOutcome(next.outcome);
   };
   const endTurn = () => {
     // 敵人階段 → 回合結束 → 下一回合的調查員階段(三階段:advance ×2)

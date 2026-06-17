@@ -166,6 +166,27 @@ test('選卡:非 reusable 用過即不再選', () => {
   assertEq(r.activations.length, 0);
 });
 
+test('#21 強制毀滅時鐘:鋪陳期/未快贏也保證放 advance_agenda(繞守門)', () => {
+  const p = defaultKeeperProfile();
+  const fresh = initKeeperState(p); // 0 → +3
+  // setup tier + 玩家沒快贏 → scoreCard(AGENDA) 正常會被守門擋成 null;強制時鐘仍須放
+  const r = selectKeeperActivations([AMBIENT, AGENDA], situation({ dramaTier: 'setup', playerProgressPct: 0 }), fresh, p, () => 0);
+  assertEq(r.activations.some((c) => c.id === 'agenda'), true, '繞守門強制放議程卡');
+  assertEq((r.state.uses['agenda'] ?? 0) >= 1, true, '記 uses');
+});
+
+test('#21 強制毀滅時鐘:不夠費用也放(夾 0),且非 reusable 用完不重放', () => {
+  const p = defaultKeeperProfile();
+  const oneShotDoom = card({ id: 'doomonce', name_zh: '一次推進', card_category: 'agenda', action_cost: 5, reusable: false, effects: [{ action_code: 'advance_agenda', action_params: { doom_tokens: 1 } }] });
+  // 首回合只有 3 點 < 5,仍強制放(夾 0)
+  const r1 = selectKeeperActivations([oneShotDoom], situation({ dramaTier: 'setup' }), initKeeperState(p), p, () => 0);
+  assertEq(r1.activations.some((c) => c.id === 'doomonce'), true, '不夠費用也放');
+  assertEq(r1.state.actionPoints, 0, '費用夾 0');
+  // 下一回合該一次性議程卡已用完 → 不再強制(無其他議程卡 → 不放)
+  const r2 = selectKeeperActivations([oneShotDoom], situation({ dramaTier: 'rising' }), r1.state, p, () => 0);
+  assertEq(r2.activations.some((c) => c.id === 'doomonce'), false, '一次性用完不重放');
+});
+
 // ─── 效果執行 ───────────────────────────────
 test('advance_agenda / horror cap / set_visibility 結算', () => {
   const sc = makeScenario();

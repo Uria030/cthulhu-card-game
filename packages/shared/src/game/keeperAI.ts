@@ -209,7 +209,37 @@ export function selectKeeperActivations(
   };
 
   const activations: MythosCardData[] = [];
-  for (let i = 0; i < profile.maxActivationsPerTurn; i += 1) {
+
+  // #21 強制毀滅時鐘(Uria 裁定):每回合至少推進一次議程,否則敗局倒數永遠停在 0。
+  // 議程推進=基準敗局時鐘,繞過戲劇曲線守門與「快贏才加分」評分,但仍尊重 uses/cooldown/reusable。
+  // 取費用最低的可用 advance_agenda 卡(時鐘要穩定能放);不夠費用也放(夾 0),可被後續貪婪多放。
+  const doomReady = (c: MythosCardData): boolean => {
+    if (!(c.effects ?? []).some((f) => f.action_code === 'advance_agenda')) return false;
+    if ((state.cooldowns[c.id] ?? 0) > 0) return false;
+    const used = state.uses[c.id] ?? 0;
+    if (!c.reusable && used >= 1) return false;
+    if (c.max_uses_per_stage != null && used >= c.max_uses_per_stage) return false;
+    return true;
+  };
+  const doomPool = cards.filter(doomReady);
+  if (doomPool.length > 0) {
+    const minCost = Math.min(...doomPool.map((c) => c.action_cost));
+    const cheapest = doomPool.filter((c) => c.action_cost === minCost);
+    const pick = cheapest[Math.floor(rng() * cheapest.length)];
+    activations.push(pick);
+    state = {
+      actionPoints: Math.max(0, state.actionPoints - pick.action_cost),
+      cooldowns: {
+        ...state.cooldowns,
+        ...(pick.reusable && Number(pick.cooldown_rounds ?? 0) > 0 ? { [pick.id]: Number(pick.cooldown_rounds) } : {}),
+      },
+      uses: { ...state.uses, [pick.id]: (state.uses[pick.id] ?? 0) + 1 },
+      lastCategory: String(pick.card_category ?? 'general'),
+      lastCardId: pick.id,
+    };
+  }
+
+  for (let i = activations.length; i < profile.maxActivationsPerTurn; i += 1) {
     const scored = cards
       .map((c) => ({ card: c, score: scoreCard(c, situation, state, profile) }))
       .filter((x): x is { card: MythosCardData; score: number } => x.score !== null);

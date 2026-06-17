@@ -514,6 +514,76 @@ export function executeCardEffects(
       case 'auto_fail':
         // 檢定反應碼(on_fail/on_success 時機):反應觸發管線待補;action 路徑暫不結算(不報 unsupported 避免洗 log)
         break;
+      // ─── P3 環境(光照/火/鬧鬼/連線)— 已被引擎消費的部分 ────
+      case 'create_darkness':
+      case 'create_fire':
+      case 'create_light':
+      case 'extinguish_fire':
+      case 'extinguish_light':
+      case 'remove_darkness': {
+        // 改地點視野(§第五章 §7;visibilityModifier 消費):光→day / 暗→darkness / 火→fire / 滅燈→night
+        const loc = (p.location as string) || inv.currentLocationId || '';
+        if (!sc.locations.some((l) => l.locationDefinitionId === loc)) { unsupported.push(code); break; }
+        const vis: 'day' | 'night' | 'darkness' | 'fire' =
+          code === 'create_darkness' ? 'darkness'
+            : code === 'create_fire' ? 'fire'
+              : code === 'extinguish_light' ? 'night'
+                : 'day'; // create_light / remove_darkness / extinguish_fire
+        sc = { ...sc, locations: sc.locations.map((l) => (l.locationDefinitionId === loc ? { ...l, visibility: vis } : l)) };
+        out.push({ type: 'visibility_changed', params: { location: loc, visibility: vis } });
+        break;
+      }
+      case 'place_haunting': {
+        // 鬧鬼附著地點(§11.3;reviveHaunting 消費):需指定復活的怪物定義
+        const enemyDef = String(p.enemy ?? p.enemyDefinitionId ?? '');
+        const loc = (p.location as string) || inv.currentLocationId || '';
+        if (!enemyDef || !loc) { unsupported.push('place_haunting'); break; }
+        sc = { ...sc, hauntings: [...(sc.hauntings ?? []), { locationId: loc, enemyDefinitionId: enemyDef }] };
+        out.push({ type: 'place_haunting', params: { location: loc, enemy: enemyDef } });
+        break;
+      }
+      case 'remove_haunting': {
+        const loc = (p.location as string) || inv.currentLocationId || '';
+        const before = (sc.hauntings ?? []).length;
+        const next = (sc.hauntings ?? []).filter((h) => h.locationId !== loc);
+        if (next.length === before) { unsupported.push('remove_haunting'); break; }
+        sc = { ...sc, hauntings: next };
+        out.push({ type: 'remove_haunting', params: { location: loc } });
+        break;
+      }
+      case 'connect_tiles': {
+        // 連通兩地點(connectedTo 雙向;尋路消費)
+        const a = (p.from as string) || inv.currentLocationId || '';
+        const b = (p.to as string) || (p.location as string) || '';
+        const ok = a && b && a !== b && sc.locations.some((l) => l.locationDefinitionId === a) && sc.locations.some((l) => l.locationDefinitionId === b);
+        if (!ok) { unsupported.push('connect_tiles'); break; }
+        sc = { ...sc, locations: sc.locations.map((l) => {
+          if (l.locationDefinitionId === a && !l.connectedTo.includes(b)) return { ...l, connectedTo: [...l.connectedTo, b] };
+          if (l.locationDefinitionId === b && !l.connectedTo.includes(a)) return { ...l, connectedTo: [...l.connectedTo, a] };
+          return l;
+        }) };
+        out.push({ type: 'connect_tiles', params: { from: a, to: b } });
+        break;
+      }
+      case 'disconnect_tiles': {
+        const a = (p.from as string) || inv.currentLocationId || '';
+        const b = (p.to as string) || (p.location as string) || '';
+        if (!a || !b) { unsupported.push('disconnect_tiles'); break; }
+        sc = { ...sc, locations: sc.locations.map((l) => {
+          if (l.locationDefinitionId === a) return { ...l, connectedTo: l.connectedTo.filter((x) => x !== b) };
+          if (l.locationDefinitionId === b) return { ...l, connectedTo: l.connectedTo.filter((x) => x !== a) };
+          return l;
+        }) };
+        out.push({ type: 'disconnect_tiles', params: { from: a, to: b } });
+        break;
+      }
+      case 'reveal_tile':
+      case 'place_tile':
+      case 'remove_tile':
+        // G4 隨機地城 tile 系統尚未建模(場景為固定地點非 tile)→ 明確回報待 G4,不靜默
+        unsupported.push(code);
+        break;
+
       case 'attack':
         // 武器攻擊走 ruleEngine 路徑
         break;

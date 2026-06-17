@@ -299,6 +299,43 @@ test('add_keyword / remove_keyword:敵人詞綴增減', () => {
   assertEq(rm.scenario.enemies[0].modifiers.includes('flying'), false);
 });
 
+// ─── P3 批次1:環境(光照/火/鬧鬼/連線)─────────────
+test('create_darkness / create_fire / create_light:改地點視野', () => {
+  assertEq(executeCardEffects([fx('create_darkness')], makeInv(), locScenario(), {}).scenario.locations[0].visibility, 'darkness');
+  assertEq(executeCardEffects([fx('create_fire')], makeInv(), locScenario(), {}).scenario.locations[0].visibility, 'fire');
+  assertEq(executeCardEffects([fx('extinguish_light')], makeInv(), locScenario(), {}).scenario.locations[0].visibility, 'night');
+  // 還原類 → day
+  const dark = { ...locScenario(), locations: [{ locationDefinitionId: 'A', visibility: 'darkness' as const, connectedTo: ['B'], isObstacle: false }, { locationDefinitionId: 'B', visibility: 'day' as const, connectedTo: ['A'], isObstacle: false }] };
+  assertEq(executeCardEffects([fx('remove_darkness')], makeInv(), dark, {}).scenario.locations[0].visibility, 'day');
+});
+
+test('place_haunting / remove_haunting:鬧鬼附著與移除', () => {
+  const r = executeCardEffects([fx('place_haunting', { enemy: 'ghoul' })], makeInv(), locScenario(), {});
+  assertEq(r.scenario.hauntings?.[0]?.enemyDefinitionId, 'ghoul');
+  assertEq(r.scenario.hauntings?.[0]?.locationId, 'A');
+  assertEq(executeCardEffects([fx('place_haunting')], makeInv(), locScenario(), {}).unsupported.some((u) => u.includes('place_haunting')), true);
+  const rm = executeCardEffects([fx('remove_haunting')], makeInv(), { ...locScenario(), hauntings: [{ locationId: 'A', enemyDefinitionId: 'ghoul' }] }, {});
+  assertEq((rm.scenario.hauntings ?? []).length, 0);
+});
+
+test('connect_tiles / disconnect_tiles:雙向連線增減', () => {
+  const sc3: ScenarioState = { ...makeScenario(), locations: [
+    { locationDefinitionId: 'A', visibility: 'day', connectedTo: ['B'], isObstacle: false },
+    { locationDefinitionId: 'B', visibility: 'day', connectedTo: ['A'], isObstacle: false },
+    { locationDefinitionId: 'C', visibility: 'day', connectedTo: [], isObstacle: false },
+  ] };
+  const c = executeCardEffects([fx('connect_tiles', { from: 'A', to: 'C' })], makeInv(), sc3, {});
+  assertEq(c.scenario.locations.find((l) => l.locationDefinitionId === 'A')!.connectedTo.includes('C'), true);
+  assertEq(c.scenario.locations.find((l) => l.locationDefinitionId === 'C')!.connectedTo.includes('A'), true);
+  const d = executeCardEffects([fx('disconnect_tiles', { from: 'A', to: 'B' })], makeInv(), sc3, {});
+  assertEq(d.scenario.locations.find((l) => l.locationDefinitionId === 'A')!.connectedTo.includes('B'), false);
+  assertEq(d.scenario.locations.find((l) => l.locationDefinitionId === 'B')!.connectedTo.includes('A'), false);
+});
+
+test('reveal_tile:G4 tile 系統未建模 → unsupported', () => {
+  assertEq(executeCardEffects([fx('reveal_tile')], makeInv(), locScenario(), {}).unsupported.includes('reveal_tile'), true);
+});
+
 // ─── runner ─────────────────────────
 let passed = 0; let failed = 0; const failures: string[] = [];
 for (const t of tests) {

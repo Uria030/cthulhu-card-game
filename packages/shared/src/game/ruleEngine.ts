@@ -74,6 +74,8 @@ export interface CardData {
     trigger_type: string;
     effect_code: string;
     effect_params: Record<string, unknown> | null;
+    /** card_effects.condition(JSONB):§5.2 字串條件 或 軸向結構條件(軸向 COMBO 連動門檻) */
+    condition?: Record<string, unknown> | string | null;
     duration?: string | null;
     description_zh?: string | null;
   }>;

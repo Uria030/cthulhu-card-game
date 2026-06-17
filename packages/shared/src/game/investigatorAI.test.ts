@@ -80,7 +80,7 @@ const CARDS: CardDataLookup = {
   dmg_event: { name_zh: '隱身刺殺', card_type: 'event', cost: 2, effects: [{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount: 2 } }] },
   tool: { name_zh: '老式相機', card_type: 'asset', cost: 1, effects: [{ trigger_type: 'action', effect_code: 'discover_clue', effect_params: { amount: 1 } }] },
   axis_enabler: { name_zh: '退休警員夥伴', card_type: 'asset', cost: 1, primary_axis_value: '老警長', effects: [{ trigger_type: 'passive', effect_code: 'modify_test', effect_params: { attribute: 'perception', modifier: 1 } }] },
-  axis_payoff: { name_zh: '老警長警徽', card_type: 'asset', cost: 1, primary_axis_value: '老警長', effects: [{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount: 3, condition: { axis_value: '老警長', scope: 'in_play', min: 2 } } }] },
+  axis_payoff: { name_zh: '老警長警徽', card_type: 'asset', cost: 1, primary_axis_value: '老警長', effects: [{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount: 3 }, condition: { type: 'same_axis_in_play', axis_value: '老警長', min: 2 } }] },
 };
 
 const ELIAS = AI_INVESTIGATOR_ROSTER[0];

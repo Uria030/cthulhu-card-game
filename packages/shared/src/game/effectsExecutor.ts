@@ -20,6 +20,8 @@ export interface CardEffectRow {
   trigger_type: string;
   effect_code: string;
   effect_params: Record<string, unknown> | null;
+  /** card_effects.condition(JSONB):§5.2 字串條件 或 軸向結構條件 { type:'same_axis_in_play', axis_value, min }。 */
+  condition?: Record<string, unknown> | string | null;
   duration?: string | null;
   description_zh?: string | null;
 }
@@ -52,10 +54,11 @@ export function executeCardEffects(
     const paren = rawCode.match(/^([a-z_]+)\((.+)\)$/);
     const code = paren ? paren[1] : rawCode;
     if (paren && /area/.test(paren[2])) p.area = true;
-    // 軸向連動條件(s08–s10 軸向 combo):此效果帶 condition 且不滿足 → 不結算(combo 未成形;
-    // 基礎效果放在別的「無條件」effect entry,照常結算)。
-    if (p.condition && !axisConditionMet(p.condition as Record<string, unknown>, inv, cardLookup)) {
-      out.push({ type: 'combo_inactive', params: { axis: String((p.condition as Record<string, unknown>).axis_value ?? ''), narrative: '軸向連動尚未成形 —— 只發揮了基礎效果。' } });
+    // 軸向連動條件(s08–s10 軸向 combo):用既有 card_effects.condition 欄位(JSONB),非自造。
+    // 軸向結構條件不滿足 → 此 effect entry 不結算(combo 未成形;基礎效果在別的無條件 entry,照常)。
+    if (fx.condition && !axisConditionMet(fx.condition, inv, cardLookup)) {
+      const cv = (fx.condition && typeof fx.condition === 'object') ? String((fx.condition as Record<string, unknown>).axis_value ?? '') : '';
+      out.push({ type: 'combo_inactive', params: { axis: cv, narrative: '軸向連動尚未成形 —— 只發揮了基礎效果。' } });
       continue;
     }
     switch (code) {
@@ -620,27 +623,30 @@ export function executeCardEffects(
 
 /**
  * 軸向連動條件評估(s08–s10 軸向 COMBO):同軸卡狀態滿足才讓 combo 效果結算。
- * condition 形狀(Gemini 寫進 effect_params.condition):{ axis_value, scope, min }
- *  - scope='in_play':場上(assetsInPlay)同軸卡數 ≥ min(持續「場上有 N 張 X」/ 條件「有 X 時」)
- *  - scope='played_this_turn':本回合已打出同軸卡數 ≥ min — 需回合級軸計數(Phase A-2 接 ruleEngine),暫不啟用
- * 無 axis_value → 不擋(回 true);無法評估的 scope → 不啟用(回 false,combo 不生效,基礎效果不受影響)。
+ * 讀 **既有 card_effects.condition 欄位**(JSONB)。內容可能是:
+ *  - §5.2 字串條件(while_engaged/has_weapon/...)→ 非本系統,不擋(回 true,留給日後 §5.2 評估器)
+ *  - 軸向結構條件物件 { type, axis_value, min }:
+ *      · type='same_axis_in_play':場上 assetsInPlay 同軸卡數 ≥ min(「場上有 N 張 X」/「有 X 時」)
+ *      · type='same_axis_played_this_turn':本回合打出同軸卡數 ≥ min — 需回合軸計數(Phase A-2),暫不啟用
+ * 無 axis_value → 不擋;無法評估的軸向 type → 不啟用(回 false,combo 不生效,基礎效果不受影響)。
  */
 export function axisConditionMet(
-  condition: Record<string, unknown>,
+  condition: Record<string, unknown> | string | null | undefined,
   investigator: InvestigatorState,
   cardLookup: CardDataLookup,
 ): boolean {
-  const axisValue = String(condition?.axis_value ?? '');
-  if (!axisValue) return true;
-  const min = Math.max(1, Number(condition?.min ?? 1));
-  const scope = String(condition?.scope ?? 'in_play');
-  if (scope === 'in_play') {
+  if (!condition || typeof condition !== 'object') return true; // null / §5.2 字串 → 不擋
+  const type = String((condition as Record<string, unknown>).type ?? '');
+  const axisValue = String((condition as Record<string, unknown>).axis_value ?? '');
+  if (!axisValue) return true; // 非軸向結構條件 → 不擋
+  const min = Math.max(1, Number((condition as Record<string, unknown>).min ?? 1));
+  if (type === 'same_axis_in_play') {
     const count = investigator.assetsInPlay.filter(
       (id) => String(cardLookup[id]?.primary_axis_value ?? '') === axisValue,
     ).length;
     return count >= min;
   }
-  return false;
+  return false; // same_axis_played_this_turn 等 → Phase A-2
 }
 
 /**

@@ -444,8 +444,10 @@ export function enumerateCandidates(
     axis ? inv.hand.filter((id) => axisOf(id) === axis).length + inv.deck.filter((id) => axisOf(id) === axis).length : 0;
   const inPlayComboCond = (id: string, axis: string): { min: number } | null => {
     for (const f of cardLookup[id]?.effects ?? []) {
-      const c = (f.effect_params as Record<string, unknown> | null)?.condition as Record<string, unknown> | undefined;
-      if (c && String(c.scope) === 'in_play' && String(c.axis_value) === axis) return { min: Math.max(1, Number(c.min ?? 1)) };
+      const c = f.condition; // 既有 card_effects.condition 欄位
+      if (c && typeof c === 'object' && String((c as Record<string, unknown>).type) === 'same_axis_in_play' && String((c as Record<string, unknown>).axis_value) === axis) {
+        return { min: Math.max(1, Number((c as Record<string, unknown>).min ?? 1)) };
+      }
     }
     return null;
   };

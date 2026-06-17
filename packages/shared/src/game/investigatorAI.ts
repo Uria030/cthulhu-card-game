@@ -342,6 +342,9 @@ export function enumerateCandidates(
   }
 
   // ── 攻擊(武器優先,徒手墊底)──
+  // 卡片優先(Uria 裁定):「用場上的卡」(武器攻擊/施法)是卡片動作,價值遠高於基本動作(1V),
+  // 拿卡片級優先分,不再被當廉價基本動作低估 → 打出來的武器一定會開火,不會擱著去搜線索。
+  const CARD_ACTION_BONUS = 1.6;
   for (const enemy of enemiesHere) {
     const stats = enemyStats[enemy.enemyDefinitionId];
     const dc = stats?.dc ?? 10;
@@ -367,7 +370,8 @@ export function enumerateCandidates(
       out.push({
         actionType: 'execute_card_action',
         payload: { cardInstanceId: weaponId, enemyInstanceId: enemy.instanceId },
-        score: (profile.weights.combatFocus * p * (1 + expect.damage * 0.3) + protectBonus + finishBonus + objectiveBonus) * retreatMul,
+        // 卡片動作:基底 CARD_ACTION_BONUS(>1V)+ 戰意×命中×傷害 + 護援/補刀/目標集火
+        score: (CARD_ACTION_BONUS + profile.weights.combatFocus * p * (1 + expect.damage * 0.3) + protectBonus + finishBonus + objectiveBonus) * retreatMul,
         intentNarrative: `舉起${cardLookup[weaponId]?.name_zh ?? '武器'}攻擊`,
       });
     }

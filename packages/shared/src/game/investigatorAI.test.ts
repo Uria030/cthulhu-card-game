@@ -223,6 +223,20 @@ test('目標導向:幕目標 boss 在場 → 攻擊壓過搜線索(否則悠哉�
   assert((oInv?.score ?? 99) < (wInv?.score ?? 0), '目標在場時搜線索分數被壓低');
 });
 
+test('用卡片優先:場上有武器 + 有怪 → clue 型 AI 也開火(攻擊壓過搜線索,不擱著武器)', () => {
+  const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 4, engagedWith: [], modifiers: [] };
+  const c = ctx({
+    scenario: makeScenario({ enemies: [enemy] }),
+    // Elias 是 clueFocus 3.0 的搜線索型;感知高 → 搜線索是強候選,但武器攻擊(用卡片)仍該勝出
+    investigator: makeInv({ combatStyle: 'assassin', assetsInPlay: ['weapon'], attributes: { ...makeInv().attributes, reflex: 5, perception: 8 } }),
+  });
+  const cands = enumerateCandidates(c, ELIAS, initInvestigatorAIState());
+  const atk = cands.find((x) => x.actionType === 'execute_card_action');
+  const inv = cands.find((x) => x.actionType === 'investigate');
+  assert(!!atk && !!inv, '武器攻擊與搜線索都該是候選');
+  assert((atk?.score ?? 0) > (inv?.score ?? 0), '用卡片(開火)是卡片動作,該壓過搜線索');
+});
+
 test('決策溫度:0 永遠最佳;觸發時選次佳(會犯小錯)', () => {
   const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 4, engagedWith: [], modifiers: [] };
   const base = ctx({ scenario: makeScenario({ enemies: [enemy] }) });

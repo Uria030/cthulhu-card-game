@@ -237,6 +237,8 @@ interface ActionPlay {
   rolling: boolean;
   /** 演出走完(完成鍵)後才跳的傷害分配 Modal(避免兩 Modal 疊)*/
   pendingDamageAlloc: PendingDamageAlloc | null;
+  /** 原始 effects:演出「完成」拍時才一次進 Log(方向 A 單一來源 + 與演出同步,不即時暴雷)*/
+  effects: ResultEffect[];
 }
 
 // Phase2 B:AI 隊友計時器同時行動 — 每位 AI 行動的間隔(節奏化、不瞬間連發)
@@ -293,6 +295,7 @@ function buildActionPlay(
     hasCheck: checkLines.length > 0,
     rolling: false,
     pendingDamageAlloc,
+    effects,
   };
 }
 
@@ -624,10 +627,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       if (m.outcome === 'rejected') {
         append('[駁回] ' + (m.rejection?.narrative ?? '未知原因'));
         if (m.rejection?.suggestion) append('   建議:' + m.rejection.suggestion);
-      } else {
-        const effects = m.effects ?? [];
-        for (const eff of effects) append('[結算] ' + describeEffect(eff, locMeta));
       }
+      // 方向 A:accepted 的 effects 不在此即時 append(會先於演出暴雷 + 與 modal 重複)。
+      // 改由「演出完成拍」一次進 Log(completeActionPlay);無演出的純記帳動作在 submitIntent 直接進。
     });
     return () => { unsubNotif(); unsubResult(); };
   }, [bus, locMeta]);
@@ -737,8 +739,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         const locId = investigator.currentLocationId;
         const locName = (locId && setup.locMeta[locId]?.name) || locId || '此地';
         setActionPlay(buildActionPlay(actionType, out.result.effects ?? [], locName, locMeta, pendingDamageAlloc));
-      } else if (pendingDamageAlloc) {
-        setDamageAlloc(pendingDamageAlloc);
+      } else {
+        // 純記帳動作(拿資源/抽卡)不跳演出 → effects 直接進 Log(無演出可同步)
+        for (const eff of out.result.effects ?? []) append('[結算] ' + describeEffect(eff, locMeta));
+        if (pendingDamageAlloc) setDamageAlloc(pendingDamageAlloc);
       }
     }
   }, [bus, investigator, scenario, turnNumber, phase, setup, flags, locMeta]);
@@ -778,6 +782,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   };
   const completeActionPlay = () => {
     const pending = actionPlay?.pendingDamageAlloc ?? null;
+    // 方向 A:演出走完才把這批 effects 一次進 Log(與 modal 同步、單一來源、不先於演出暴雷)
+    if (actionPlay) {
+      for (const eff of actionPlay.effects) append('[結算] ' + describeEffect(eff, locMeta));
+    }
     setActionPlay(null);
     if (pending) setDamageAlloc(pending);
   };

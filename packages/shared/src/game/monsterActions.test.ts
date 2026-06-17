@@ -247,6 +247,28 @@ test('反擊擊殺:counter ≥ 敵 HP → 敵倒下', () => {
   assertEq(r.effects.some((e) => e.type === 'enemy_defeated'), true);
 });
 
+test('反擊致死:觸發死亡詞綴(crush 結到同地點隊友)', () => {
+  const sc = makeScenario();
+  sc.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'crusher', locationId: 'A', hp: 2, engagedWith: ['inv-1'], modifiers: [] }];
+  const ed: EnemyDataLookup = { crusher: { name_zh: '碾壓者', dc: 10, damage_physical: 3, hp_base: 2, tier: 2, keywords: ['crush'], move_pool: [{ code: 'mac_bite', weight: 1 }] } };
+  const inv = makeInv({ engagedWith: ['e1'], statusEffects: { counter: 3 }, hp: 7 });
+  const ally = makeInv({ investigatorId: 'inv-2', currentLocationId: 'A', hp: 7 });
+  const r = activateMonsters(sc, { 'inv-1': inv, 'inv-2': ally }, ed, ATTACK_CARDS, rngRoll(2));
+  assertEq(r.scenario.enemies[0].hp <= 0, true, '反擊殺死碾壓者');
+  assertEq(r.effects.some((e) => e.type === 'crush_damage'), true, '反擊致死也觸發死亡詞綴');
+});
+
+test('massive 反殺:擊殺後停止對其餘交戰目標續攻', () => {
+  const sc = makeScenario();
+  sc.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'titan', locationId: 'A', hp: 2, engagedWith: ['inv-1', 'inv-2'], modifiers: [] }];
+  const ed: EnemyDataLookup = { titan: { name_zh: '巨物', dc: 10, damage_physical: 5, hp_base: 2, tier: 3, keywords: ['massive'], move_pool: [{ code: 'mac_bite', weight: 1 }] } };
+  const inv1 = makeInv({ investigatorId: 'inv-1', engagedWith: ['e1'], statusEffects: { counter: 3 }, hp: 7 });
+  const inv2 = makeInv({ investigatorId: 'inv-2', currentLocationId: 'A', engagedWith: ['e1'], hp: 7 });
+  const r = activateMonsters(sc, { 'inv-1': inv1, 'inv-2': inv2 }, ed, ATTACK_CARDS, rngRoll(2));
+  assertEq(r.scenario.enemies[0].hp <= 0, true, 'inv-1 反殺巨物');
+  assertEq(r.investigators['inv-2'].hp, 7, 'inv-2 未被死怪續攻');
+});
+
 // ─── §11.4 防禦詞綴(抗性/免疫)──
 test('enemyDamageAfterDefense:免疫歸 0 / 抗性減點 / arcane 鐵則穿透 / 無資料原傷', () => {
   assertEq(enemyDamageAfterDefense({ immunities: ['fire'] }, 'fire', 5), 0, '火免疫');

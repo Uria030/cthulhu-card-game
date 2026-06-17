@@ -472,6 +472,7 @@ export function activateMonsters(
         ? liveEnemy.engagedWith.map((id) => invs[id]).filter((i) => i && i.hp > 0 && i.currentLocationId === liveEnemy.locationId)
         : [engagedTarget];
       const times = Math.max(1, Number(data.attacks_per_round ?? 1));
+      let enemyDead = false;
       for (const t0 of attackTargets) {
         let inv = invs[t0.investigatorId] ?? t0;
         for (let i = 0; i < times; i += 1) {
@@ -519,11 +520,20 @@ export function activateMonsters(
             sc = { ...sc, enemies: sc.enemies.map((e) => e.instanceId === enemy.instanceId ? { ...e, hp: e.hp - r.counterDamage } : e) };
             if (before > 0 && before - r.counterDamage <= 0) {
               effects.push({ type: 'enemy_defeated', params: { narrative: '牠倒在自己發起的攻勢裡。' }, targetId: enemy.instanceId });
-              break; // 反擊擊殺 → 停止後續攻擊
+              enemyDead = true;
+              break; // 反擊擊殺 → 停止本目標後續攻擊
             }
           }
         }
         invs[inv.investigatorId] = inv;
+        if (enemyDead) {
+          // §11.3 反擊致死同樣結算死亡詞綴 + 鬧鬼(與狀態 tick 致死路徑一致),並停止對其餘 massive 目標攻擊
+          const dk = resolveDeathKeywords(enemy, data, invs, rng);
+          for (const [id, updatedInv] of Object.entries(dk.investigators)) invs[id] = updatedInv;
+          effects.push(...dk.effects);
+          sc = applyHaunting(sc, enemy, data);
+          break;
+        }
       }
       continue;
     }
@@ -611,6 +621,11 @@ export function activateMonsters(
           sc = { ...sc, enemies: sc.enemies.map((e) => e.instanceId === enemy.instanceId ? { ...e, hp: e.hp - hr.counterDamage } : e) };
           if (before > 0 && before - hr.counterDamage <= 0) {
             effects.push({ type: 'enemy_defeated', params: { narrative: '牠倒在自己發起的攻勢裡。' }, targetId: enemy.instanceId });
+            // §11.3 反擊致死同樣結算死亡詞綴 + 鬧鬼
+            const dk = resolveDeathKeywords(enemy, data, invs, rng);
+            for (const [id, updatedInv] of Object.entries(dk.investigators)) invs[id] = updatedInv;
+            effects.push(...dk.effects);
+            sc = applyHaunting(sc, enemy, data);
           }
         }
       }

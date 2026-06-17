@@ -528,7 +528,9 @@ export function activateMonsters(
         invs[inv.investigatorId] = inv;
         if (enemyDead) {
           // §11.3 反擊致死同樣結算死亡詞綴 + 鬧鬼(與狀態 tick 致死路徑一致),並停止對其餘 massive 目標攻擊
-          const dk = resolveDeathKeywords(enemy, data, invs, rng);
+          // 擊殺者(反擊者本人)狀態已在受擊路徑結算,排除之(對齊 ruleEngine deathKeywordOutcome)
+          const others = Object.fromEntries(Object.entries(invs).filter(([id]) => id !== inv.investigatorId));
+          const dk = resolveDeathKeywords(enemy, data, others, rng);
           for (const [id, updatedInv] of Object.entries(dk.investigators)) invs[id] = updatedInv;
           effects.push(...dk.effects);
           sc = applyHaunting(sc, enemy, data);
@@ -621,8 +623,9 @@ export function activateMonsters(
           sc = { ...sc, enemies: sc.enemies.map((e) => e.instanceId === enemy.instanceId ? { ...e, hp: e.hp - hr.counterDamage } : e) };
           if (before > 0 && before - hr.counterDamage <= 0) {
             effects.push({ type: 'enemy_defeated', params: { narrative: '牠倒在自己發起的攻勢裡。' }, targetId: enemy.instanceId });
-            // §11.3 反擊致死同樣結算死亡詞綴 + 鬧鬼
-            const dk = resolveDeathKeywords(enemy, data, invs, rng);
+            // §11.3 反擊致死同樣結算死亡詞綴 + 鬧鬼;擊殺者(反擊者)排除(對齊 ruleEngine deathKeywordOutcome)
+            const others = Object.fromEntries(Object.entries(invs).filter(([id]) => id !== moveTarget.investigatorId));
+            const dk = resolveDeathKeywords(enemy, data, others, rng);
             for (const [id, updatedInv] of Object.entries(dk.investigators)) invs[id] = updatedInv;
             effects.push(...dk.effects);
             sc = applyHaunting(sc, enemy, data);

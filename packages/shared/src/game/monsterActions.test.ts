@@ -256,6 +256,8 @@ test('反擊致死:觸發死亡詞綴(crush 結到同地點隊友)', () => {
   const r = activateMonsters(sc, { 'inv-1': inv, 'inv-2': ally }, ed, ATTACK_CARDS, rngRoll(2));
   assertEq(r.scenario.enemies[0].hp <= 0, true, '反擊殺死碾壓者');
   assertEq(r.effects.some((e) => e.type === 'crush_damage'), true, '反擊致死也觸發死亡詞綴');
+  assertEq(r.investigators['inv-2'].hp, 4, '同地點隊友受 crush 3');
+  assertEq(r.investigators['inv-1'].hp, 4, '擊殺者只受攻擊傷(mac_bite 3),不被自己擊殺的死亡詞綴誤傷');
 });
 
 test('massive 反殺:擊殺後停止對其餘交戰目標續攻', () => {

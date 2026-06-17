@@ -79,6 +79,8 @@ const CARDS: CardDataLookup = {
   ally_card: { name_zh: '偵探的線人', card_type: 'ally', cost: 2, effects: [] },
   dmg_event: { name_zh: '隱身刺殺', card_type: 'event', cost: 2, effects: [{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount: 2 } }] },
   tool: { name_zh: '老式相機', card_type: 'asset', cost: 1, effects: [{ trigger_type: 'action', effect_code: 'discover_clue', effect_params: { amount: 1 } }] },
+  axis_enabler: { name_zh: '退休警員夥伴', card_type: 'asset', cost: 1, primary_axis_value: '老警長', effects: [{ trigger_type: 'passive', effect_code: 'modify_test', effect_params: { attribute: 'perception', modifier: 1 } }] },
+  axis_payoff: { name_zh: '老警長警徽', card_type: 'asset', cost: 1, primary_axis_value: '老警長', effects: [{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount: 3, condition: { axis_value: '老警長', scope: 'in_play', min: 2 } } }] },
 };
 
 const ELIAS = AI_INVESTIGATOR_ROSTER[0];
@@ -258,6 +260,25 @@ test('整回合價值鏈(通用 #1):非武器資產(有行動效果)也含 combo
   const pNoAp = noAp.find((x) => x.actionType === 'play_card' && x.payload.cardInstanceId === 'tool');
   assert(!!pCombo && !!pNoAp, '兩情境都該有鋪資產候選');
   assert((pCombo?.score ?? 0) > (pNoAp?.score ?? 0), '能接著用工具時,鋪場價值含 combo 加成(通用,不限武器)');
+});
+
+test('軸向 combo 覺察 #2:同軸資產在場 → 打 payoff 卡觸發連動,評分大增', () => {
+  // 場上已有 1 張同軸資產 → 打第 2 張同軸 payoff(in_play min 2)→ afterPlay 2 ≥ 2 觸發
+  const withEnabler = enumerateCandidates(ctx({ investigator: makeInv({ hand: ['axis_payoff'], assetsInPlay: ['axis_enabler'], resources: 3, actionPoints: 1 }) }), ELIAS, initInvestigatorAIState());
+  const without = enumerateCandidates(ctx({ investigator: makeInv({ hand: ['axis_payoff'], assetsInPlay: [], resources: 3, actionPoints: 1 }) }), ELIAS, initInvestigatorAIState());
+  const a = withEnabler.find((x) => x.payload.cardInstanceId === 'axis_payoff');
+  const b = without.find((x) => x.payload.cardInstanceId === 'axis_payoff');
+  assert(!!a && !!b, '兩情境都有打 payoff 候選');
+  assert((a?.score ?? 0) > (b?.score ?? 0), '同軸在場時打 payoff 觸發連動,評分更高');
+});
+
+test('軸向 combo 覺察 #2:手握同軸 payoff → 鋪同軸 enabler 加「湊軸鋪路」分', () => {
+  const withPayoff = enumerateCandidates(ctx({ investigator: makeInv({ hand: ['axis_enabler', 'axis_payoff'], resources: 3, actionPoints: 2 }) }), ELIAS, initInvestigatorAIState());
+  const without = enumerateCandidates(ctx({ investigator: makeInv({ hand: ['axis_enabler'], resources: 3, actionPoints: 2 }) }), ELIAS, initInvestigatorAIState());
+  const a = withPayoff.find((x) => x.payload.cardInstanceId === 'axis_enabler');
+  const b = without.find((x) => x.payload.cardInstanceId === 'axis_enabler');
+  assert(!!a && !!b, '兩情境都有鋪 enabler 候選');
+  assert((a?.score ?? 0) > (b?.score ?? 0), '手握同軸 payoff 時,鋪 enabler 更有價值');
 });
 
 test('決策溫度:0 永遠最佳;觸發時選次佳(會犯小錯)', () => {

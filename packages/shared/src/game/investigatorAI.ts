@@ -437,6 +437,18 @@ export function enumerateCandidates(
   // ── 出牌(資產鋪場/相關事件)──
   // 設計裁定(Uria 2026-06-12):卡片的價值永遠比單純動作高 —
   // 打得出的卡加固定優先分;打不起的好卡讓「拿資源」繼承折扣分(存錢買刀)。
+  // 軸向 COMBO 覺察(Uria #2):AI 讀手牌 + 場上 + **牌組**的軸向分布,辨識同軸連動並主動湊牌。
+  const axisOf = (id: string): string => String(cardLookup[id]?.primary_axis_value ?? '');
+  const sameAxisInPlay = (axis: string): number => (axis ? inv.assetsInPlay.filter((id) => axisOf(id) === axis).length : 0);
+  const sameAxisInHandDeck = (axis: string): number =>
+    axis ? inv.hand.filter((id) => axisOf(id) === axis).length + inv.deck.filter((id) => axisOf(id) === axis).length : 0;
+  const inPlayComboCond = (id: string, axis: string): { min: number } | null => {
+    for (const f of cardLookup[id]?.effects ?? []) {
+      const c = (f.effect_params as Record<string, unknown> | null)?.condition as Record<string, unknown> | undefined;
+      if (c && String(c.scope) === 'in_play' && String(c.axis_value) === axis) return { min: Math.max(1, Number(c.min ?? 1)) };
+    }
+    return null;
+  };
   const CARD_FIRST_BONUS = 1.0;
   let bestUnaffordable = 0;
   for (const cardId of inv.hand) {
@@ -482,6 +494,20 @@ export function enumerateCandidates(
       if (usesThisTurn > 0 && (!needsEnemy || enemiesHere.length > 0)) {
         value += usesThisTurn * CARD_ACTION_BONUS;
         narrative += '(接著就能用它)';
+      }
+    }
+    // 軸向 COMBO(Uria #2):辨識同軸連動,主動湊牌。
+    const axis = axisOf(cardId);
+    if (axis) {
+      const myCond = inPlayComboCond(cardId, axis);
+      const afterPlay = sameAxisInPlay(axis) + (data.card_type === 'asset' ? 1 : 0); // 資產進場後 +1
+      if (myCond && afterPlay >= myCond.min) {
+        value += 2.0; narrative += '(觸發軸向連動!)'; // 自身 combo 此刻成立
+      } else {
+        // 手上有同軸 payoff(帶 in_play 條件)→ 鋪這張往門檻靠;否則同軸群(含牌組)→ 構築方向性小加分
+        const holdsPayoff = inv.hand.some((hid) => hid !== cardId && axisOf(hid) === axis && inPlayComboCond(hid, axis) !== null);
+        if (holdsPayoff && data.card_type === 'asset') { value += 0.8; narrative += '(湊軸鋪路)'; }
+        else if (sameAxisInPlay(axis) + sameAxisInHandDeck(axis) >= 2) { value += 0.4; }
       }
     }
     const score = (value + CARD_FIRST_BONUS) * profile.weights.cardPlayAffinity;

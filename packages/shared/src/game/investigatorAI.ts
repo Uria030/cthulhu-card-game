@@ -566,8 +566,10 @@ export function enumerateCandidates(
 }
 
 /**
- * 挑一個行動:最佳解為主,依決策溫度偶爾選次佳(會犯小錯,像個人)。
- * 全部候選都低於行動門檻 → null(本行動點不硬做事,留給回合結束)。
+ * 即時貪婪挑一個行動(不前瞻):依 enumerateCandidates 即時分挑最佳,溫度偶爾選次佳。
+ * **這是「即時評分層」的基準/building block,非正式決策路徑**——`runInvestigatorAITurn`
+ * 走 `planTurn`(模擬前瞻)。本函式用於:① enumerateCandidates 即時評分的單元驗證
+ * (個性/守護/退守/存錢等行為斷言走這層);② 無前瞻的快速基準。全候選低於門檻 → null。
  */
 export function planNextAction(
   ctx: InvestigatorAIContext,
@@ -647,8 +649,8 @@ export function scoreState(
     const isObj = objectiveCodes.includes(e.enemyDefinitionId);
     s -= e.hp * w.combatFocus * (isObj ? 1.2 : 0.4);
   }
-  // 線索/目標推進
-  s += scenario.objectiveProgress * w.clueFocus * 2;
+  // 線索/目標推進(每線索 ≈ clueFocus;與戰鬥項 combatFocus×0.4/傷害 平衡,個性才不被洗掉)
+  s += scenario.objectiveProgress * w.clueFocus;
   // 自身存活(低血/低 SAN 陡降)
   const hpPct = inv.hpMax > 0 ? inv.hp / inv.hpMax : 0;
   const sanPct = inv.sanMax > 0 ? inv.san / inv.sanMax : 0;

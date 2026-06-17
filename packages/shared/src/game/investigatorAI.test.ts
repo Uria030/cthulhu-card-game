@@ -300,6 +300,16 @@ test('planTurn:無可行動作 → null(行動門檻下不硬做)', () => {
   assertEq(planTurn(c, ELIAS, initInvestigatorAIState()), null);
 });
 
+test('planTurn(正式路徑)保留個性:有武器在場(有意義戰鬥)→ 偵探搜線索 / 軍官開火', () => {
+  const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 5, engagedWith: [], modifiers: [] };
+  const sc = makeScenario({ enemies: [enemy] });
+  const mk = () => makeInv({ combatStyle: 'assassin', actionPoints: 1, assetsInPlay: ['weapon'], assetState: { weapon: { usesLeft: null, exhausted: false } } });
+  const eliasPick = planTurn(ctx({ scenario: sc, investigator: mk(), rng: rngRoll(20) }), ELIAS, initInvestigatorAIState());
+  const marcusPick = planTurn(ctx({ scenario: sc, investigator: mk(), rng: rngRoll(20) }), MARCUS, initInvestigatorAIState());
+  assertEq(eliasPick?.actionType, 'investigate', '偵探(clueFocus 高)前瞻選搜線索');
+  assertEq(marcusPick?.actionType, 'execute_card_action', '軍官(combatFocus 高)前瞻選用武器開火');
+});
+
 test('決策溫度:0 永遠最佳;觸發時選次佳(會犯小錯)', () => {
   const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 4, engagedWith: [], modifiers: [] };
   const base = ctx({ scenario: makeScenario({ enemies: [enemy] }) });

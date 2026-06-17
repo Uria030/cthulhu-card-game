@@ -10,6 +10,8 @@ import {
   chooseCommitCards,
   enumerateCandidates,
   planNextAction,
+  planTurn,
+  scoreState,
   runInvestigatorAITurn,
 } from './investigatorAI';
 import type { InvestigatorAIProfile, InvestigatorAIContext } from './investigatorAI';
@@ -26,6 +28,7 @@ function assertEq<T>(actual: T, expected: T, msg?: string): void {
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(msg);
 }
+const rngRoll = (roll: number) => () => (roll - 1) / 20;
 
 // ─── fixtures ───────────────────────────────
 function makeInv(over: Partial<InvestigatorState> = {}): InvestigatorState {
@@ -79,8 +82,6 @@ const CARDS: CardDataLookup = {
   ally_card: { name_zh: '偵探的線人', card_type: 'ally', cost: 2, effects: [] },
   dmg_event: { name_zh: '隱身刺殺', card_type: 'event', cost: 2, effects: [{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount: 2 } }] },
   tool: { name_zh: '老式相機', card_type: 'asset', cost: 1, effects: [{ trigger_type: 'action', effect_code: 'discover_clue', effect_params: { amount: 1 } }] },
-  axis_enabler: { name_zh: '退休警員夥伴', card_type: 'asset', cost: 1, primary_axis_layer: 'card_name', primary_axis_value: '老警長', effects: [{ trigger_type: 'passive', effect_code: 'modify_test', effect_params: { attribute: 'perception', modifier: 1 } }] },
-  axis_payoff: { name_zh: '老警長警徽', card_type: 'asset', cost: 1, primary_axis_layer: 'card_name', primary_axis_value: '老警長', effects: [{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount: 3 }, condition: { type: 'same_axis_in_play', axis_layer: 'card_name', axis_value: '老警長', min: 2 } }] },
 };
 
 const ELIAS = AI_INVESTIGATOR_ROSTER[0];
@@ -262,23 +263,41 @@ test('整回合價值鏈(通用 #1):非武器資產(有行動效果)也含 combo
   assert((pCombo?.score ?? 0) > (pNoAp?.score ?? 0), '能接著用工具時,鋪場價值含 combo 加成(通用,不限武器)');
 });
 
-test('軸向 combo 覺察 #2:同軸資產在場 → 打 payoff 卡觸發連動,評分大增', () => {
-  // 場上已有 1 張同軸資產 → 打第 2 張同軸 payoff(in_play min 2)→ afterPlay 2 ≥ 2 觸發
-  const withEnabler = enumerateCandidates(ctx({ investigator: makeInv({ hand: ['axis_payoff'], assetsInPlay: ['axis_enabler'], resources: 3, actionPoints: 1 }) }), ELIAS, initInvestigatorAIState());
-  const without = enumerateCandidates(ctx({ investigator: makeInv({ hand: ['axis_payoff'], assetsInPlay: [], resources: 3, actionPoints: 1 }) }), ELIAS, initInvestigatorAIState());
-  const a = withEnabler.find((x) => x.payload.cardInstanceId === 'axis_payoff');
-  const b = without.find((x) => x.payload.cardInstanceId === 'axis_payoff');
-  assert(!!a && !!b, '兩情境都有打 payoff 候選');
-  assert((a?.score ?? 0) > (b?.score ?? 0), '同軸在場時打 payoff 觸發連動,評分更高');
+// ─── #2 模擬-評分 整回合規劃器(planTurn / scoreState)─────────────
+test('scoreState:敵人 HP 越低分越高(清怪有價值)', () => {
+  const c = ctx({ scenario: makeScenario({ enemies: [{ instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 1, engagedWith: [], modifiers: [] }] }) });
+  const low = scoreState(c.investigator, c.scenario, c, ELIAS);
+  const c2 = ctx({ scenario: makeScenario({ enemies: [{ instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 8, engagedWith: [], modifiers: [] }] }) });
+  const high = scoreState(c2.investigator, c2.scenario, c2, ELIAS);
+  assert(low > high, '敵剩血少的狀態分數較高');
 });
 
-test('軸向 combo 覺察 #2:手握同軸 payoff → 鋪同軸 enabler 加「湊軸鋪路」分', () => {
-  const withPayoff = enumerateCandidates(ctx({ investigator: makeInv({ hand: ['axis_enabler', 'axis_payoff'], resources: 3, actionPoints: 2 }) }), ELIAS, initInvestigatorAIState());
-  const without = enumerateCandidates(ctx({ investigator: makeInv({ hand: ['axis_enabler'], resources: 3, actionPoints: 2 }) }), ELIAS, initInvestigatorAIState());
-  const a = withPayoff.find((x) => x.payload.cardInstanceId === 'axis_enabler');
-  const b = without.find((x) => x.payload.cardInstanceId === 'axis_enabler');
-  assert(!!a && !!b, '兩情境都有鋪 enabler 候選');
-  assert((a?.score ?? 0) > (b?.score ?? 0), '手握同軸 payoff 時,鋪 enabler 更有價值');
+test('scoreState:場上有可用武器 → 潛力加分(鋪陳步不被當廢步)', () => {
+  const withWeapon = ctx({ investigator: makeInv({ assetsInPlay: ['weapon'], assetState: { weapon: { usesLeft: null, exhausted: false } } }) });
+  const without = ctx({ investigator: makeInv({ assetsInPlay: [] }) });
+  assert(
+    scoreState(withWeapon.investigator, withWeapon.scenario, withWeapon, ELIAS) >
+    scoreState(without.investigator, without.scenario, without, ELIAS),
+    '場上有武器(潛在傷害)的狀態潛力更高',
+  );
+});
+
+test('planTurn:戰鬥型 AI 手握武器 + 有怪 → 先鋪武器(模擬看到「鋪槍再開火 > 徒手」自動選 combo)', () => {
+  const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 6, engagedWith: [], modifiers: [] };
+  const c = ctx({
+    scenario: makeScenario({ enemies: [enemy] }),
+    investigator: makeInv({ combatStyle: 'assassin', hand: ['weapon'], resources: 3, actionPoints: 3, assetsInPlay: [] }),
+    objectiveEnemyCodes: ['rev_t1'], // 幕目標=擊敗此怪 → 搜線索被壓低,戰鬥當主軸(隔離 combo)
+    rng: rngRoll(20), // 模擬時攻擊命中
+  });
+  const first = planTurn(c, MARCUS, initInvestigatorAIState()); // 戰鬥型(combatFocus 高)
+  assertEq(first?.actionType, 'play_card', '前瞻選擇先鋪武器(combo 起手),不是徒手');
+  assertEq(first?.payload.cardInstanceId, 'weapon');
+});
+
+test('planTurn:無可行動作 → null(行動門檻下不硬做)', () => {
+  const c = ctx({ investigator: makeInv({ actionPoints: 0 }) });
+  assertEq(planTurn(c, ELIAS, initInvestigatorAIState()), null);
 });
 
 test('決策溫度:0 永遠最佳;觸發時選次佳(會犯小錯)', () => {

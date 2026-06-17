@@ -54,13 +54,6 @@ export function executeCardEffects(
     const paren = rawCode.match(/^([a-z_]+)\((.+)\)$/);
     const code = paren ? paren[1] : rawCode;
     if (paren && /area/.test(paren[2])) p.area = true;
-    // 軸向連動條件(s08–s10 軸向 combo):用既有 card_effects.condition 欄位(JSONB),非自造。
-    // 軸向結構條件不滿足 → 此 effect entry 不結算(combo 未成形;基礎效果在別的無條件 entry,照常)。
-    if (fx.condition && !axisConditionMet(fx.condition, inv, cardLookup)) {
-      const cv = (fx.condition && typeof fx.condition === 'object') ? String((fx.condition as Record<string, unknown>).axis_value ?? '') : '';
-      out.push({ type: 'combo_inactive', params: { axis: cv, narrative: '軸向連動尚未成形 —— 只發揮了基礎效果。' } });
-      continue;
-    }
     switch (code) {
       case 'draw_card': {
         const amount = Number(p.amount ?? 1);
@@ -619,39 +612,6 @@ export function executeCardEffects(
     }
   }
   return { investigator: inv, scenario: sc, effects: out, unsupported };
-}
-
-/**
- * 軸向連動條件評估(s08–s10 軸向 COMBO):同軸卡狀態滿足才讓 combo 效果結算。
- * 讀 **既有 card_effects.condition 欄位**(JSONB)。內容可能是:
- *  - §5.2 字串條件(while_engaged/has_weapon/...)→ 非本系統,不擋(回 true,留給日後 §5.2 評估器)
- *  - 軸向結構條件物件 { type, axis_value, min }:
- *      · type='same_axis_in_play':場上 assetsInPlay 同軸卡數 ≥ min(「場上有 N 張 X」/「有 X 時」)
- *      · type='same_axis_played_this_turn':本回合打出同軸卡數 ≥ min — 需回合軸計數(Phase A-2),暫不啟用
- * 無 axis_value → 不擋;無法評估的軸向 type → 不啟用(回 false,combo 不生效,基礎效果不受影響)。
- */
-export function axisConditionMet(
-  condition: Record<string, unknown> | string | null | undefined,
-  investigator: InvestigatorState,
-  cardLookup: CardDataLookup,
-): boolean {
-  if (!condition || typeof condition !== 'object') return true; // null / §5.2 字串 → 不擋
-  const c = condition as Record<string, unknown>;
-  const type = String(c.type ?? '');
-  const axisValue = String(c.axis_value ?? '');
-  if (!axisValue) return true; // 非軸向結構條件 → 不擋
-  // 「同軸」= 同層 + 同值(§軸向 4 層;只比 value 會跨層誤觸發,如 faction 'S' 撞他層同字串)
-  const axisLayer = String(c.axis_layer ?? '');
-  const min = Math.max(1, Number(c.min ?? 1));
-  if (type === 'same_axis_in_play') {
-    const count = investigator.assetsInPlay.filter((id) => {
-      const data = cardLookup[id];
-      if (String(data?.primary_axis_value ?? '') !== axisValue) return false;
-      return !axisLayer || String(data?.primary_axis_layer ?? '') === axisLayer; // 有指定層則須同層
-    }).length;
-    return count >= min;
-  }
-  return false; // same_axis_played_this_turn 等 → Phase A-2
 }
 
 /**

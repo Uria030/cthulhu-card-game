@@ -437,26 +437,6 @@ export function enumerateCandidates(
   // ── 出牌(資產鋪場/相關事件)──
   // 設計裁定(Uria 2026-06-12):卡片的價值永遠比單純動作高 —
   // 打得出的卡加固定優先分;打不起的好卡讓「拿資源」繼承折扣分(存錢買刀)。
-  // 軸向 COMBO 覺察(Uria #2):AI 讀手牌 + 場上 + **牌組**的軸向分布,辨識同軸連動並主動湊牌。
-  // 同軸 = 層:值(§軸向 4 層;只比 value 會跨層誤判,故用 layer:value 複合鍵)
-  const axisOf = (id: string): string => {
-    const d = cardLookup[id];
-    const v = String(d?.primary_axis_value ?? '');
-    return v ? String(d?.primary_axis_layer ?? '') + ':' + v : '';
-  };
-  const sameAxisInPlay = (axisKey: string): number => (axisKey ? inv.assetsInPlay.filter((id) => axisOf(id) === axisKey).length : 0);
-  const sameAxisInHandDeck = (axisKey: string): number =>
-    axisKey ? inv.hand.filter((id) => axisOf(id) === axisKey).length + inv.deck.filter((id) => axisOf(id) === axisKey).length : 0;
-  const inPlayComboCond = (id: string, axisKey: string): { min: number } | null => {
-    for (const f of cardLookup[id]?.effects ?? []) {
-      const c = f.condition; // 既有 card_effects.condition 欄位
-      if (c && typeof c === 'object' && String((c as Record<string, unknown>).type) === 'same_axis_in_play') {
-        const condKey = String((c as Record<string, unknown>).axis_layer ?? '') + ':' + String((c as Record<string, unknown>).axis_value ?? '');
-        if (condKey === axisKey) return { min: Math.max(1, Number((c as Record<string, unknown>).min ?? 1)) };
-      }
-    }
-    return null;
-  };
   const CARD_FIRST_BONUS = 1.0;
   let bestUnaffordable = 0;
   for (const cardId of inv.hand) {
@@ -502,20 +482,6 @@ export function enumerateCandidates(
       if (usesThisTurn > 0 && (!needsEnemy || enemiesHere.length > 0)) {
         value += usesThisTurn * CARD_ACTION_BONUS;
         narrative += '(接著就能用它)';
-      }
-    }
-    // 軸向 COMBO(Uria #2):辨識同軸連動,主動湊牌。
-    const axis = axisOf(cardId);
-    if (axis) {
-      const myCond = inPlayComboCond(cardId, axis);
-      const afterPlay = sameAxisInPlay(axis) + (data.card_type === 'asset' ? 1 : 0); // 資產進場後 +1
-      if (myCond && afterPlay >= myCond.min) {
-        value += 2.0; narrative += '(觸發軸向連動!)'; // 自身 combo 此刻成立
-      } else {
-        // 手上有同軸 payoff(帶 in_play 條件)→ 鋪這張往門檻靠;否則同軸群(含牌組)→ 構築方向性小加分
-        const holdsPayoff = inv.hand.some((hid) => hid !== cardId && axisOf(hid) === axis && inPlayComboCond(hid, axis) !== null);
-        if (holdsPayoff && data.card_type === 'asset') { value += 0.8; narrative += '(湊軸鋪路)'; }
-        else if (sameAxisInPlay(axis) + sameAxisInHandDeck(axis) >= 2) { value += 0.4; }
       }
     }
     const score = (value + CARD_FIRST_BONUS) * profile.weights.cardPlayAffinity;
@@ -618,6 +584,170 @@ export function planNextAction(
   return candidates[0];
 }
 
+// ════════════════════════════════════════════════════════════════
+// #2 模擬-評分 整回合規劃器(Uria 2026-06-17 設計)
+// 不定義 combo:模擬卡序的真實效果 + 評分 + beam search,combo 自動浮現。
+// 一台引擎解三件事:#1 整回合價值鏈 / #2(a) 牌組覺察 / #2(b) 軸向 combo。
+// ════════════════════════════════════════════════════════════════
+const PLAN_BEAM_WIDTH = 4; // 每層保留前 K 條序列
+const PLAN_BRANCH = 5;     // 每個狀態最多展開 M 個候選(依即時分剪枝)
+const ACTION_POTENTIAL = 1.6; // 一個未兌現卡片動作的潛在價值(= CARD_ACTION_BONUS)
+
+function axisKeyOf(id: string, cl: CardDataLookup): string {
+  const d = cl[id];
+  const v = String(d?.primary_axis_value ?? '');
+  return v ? String(d?.primary_axis_layer ?? '') + ':' + v : '';
+}
+
+/** 2(a) 牌組覺察:場上+手上的主軸 vs 牌組同軸濃度 → 構築方向潛力(越厚越值錢) */
+function deckAxisPotential(inv: InvestigatorState, cl: CardDataLookup): number {
+  const counts: Record<string, number> = {};
+  for (const id of [...inv.assetsInPlay, ...inv.hand]) {
+    const a = axisKeyOf(id, cl);
+    if (a) counts[a] = (counts[a] ?? 0) + 1;
+  }
+  let best = 0;
+  for (const [axis, n] of Object.entries(counts)) {
+    if (n < 2) continue; // 至少手上/場上 2 張同軸才算在構築
+    const inDeck = inv.deck.filter((id) => axisKeyOf(id, cl) === axis).length;
+    best = Math.max(best, (n + inDeck) * 0.15);
+  }
+  return best;
+}
+
+/** 潛力項(關鍵):未兌現的價值。讓 combo 的「鋪陳步」不被當廢步剪掉。 */
+function statePotential(inv: InvestigatorState, cl: CardDataLookup): number {
+  let p = 0;
+  for (const id of inv.assetsInPlay) {
+    const hasAction = (cl[id]?.effects ?? []).some((f) => f.trigger_type === 'action');
+    const usesLeft = inv.assetState?.[id]?.usesLeft;
+    if (hasAction && (usesLeft == null || usesLeft > 0)) p += ACTION_POTENTIAL; // 場上資產還能用 = 潛在卡片動作
+  }
+  for (const id of inv.hand) {
+    const d = cl[id];
+    if (d && d.card_type && d.card_type !== 'skill' && d.card_type !== 'weakness') p += 0.4; // 手牌潛力
+  }
+  p += deckAxisPotential(inv, cl);
+  return p;
+}
+
+/** 一把尺:把狀態壓成一個分數(AI 唯一的價值觀)。所有規劃繞它。 */
+export function scoreState(
+  inv: InvestigatorState,
+  scenario: ScenarioState,
+  ctx: InvestigatorAIContext,
+  profile: InvestigatorAIProfile,
+): number {
+  const w = profile.weights;
+  const objectiveCodes = ctx.objectiveEnemyCodes ?? [];
+  let s = 0;
+  // 戰鬥推進:敵人活著扣分(目標 boss 加重)→ 清怪/集火加分
+  for (const e of scenario.enemies) {
+    if (e.hp <= 0) continue;
+    const isObj = objectiveCodes.includes(e.enemyDefinitionId);
+    s -= e.hp * w.combatFocus * (isObj ? 1.2 : 0.4);
+  }
+  // 線索/目標推進
+  s += scenario.objectiveProgress * w.clueFocus * 2;
+  // 自身存活(低血/低 SAN 陡降)
+  const hpPct = inv.hpMax > 0 ? inv.hp / inv.hpMax : 0;
+  const sanPct = inv.sanMax > 0 ? inv.san / inv.sanMax : 0;
+  s += (hpPct + sanPct) * 3;
+  if (hpPct < 0.34) s -= 4;
+  if (sanPct < 0.34) s -= 4;
+  // 潛力(手牌/場上/牌組)— combo 鋪陳步靠這項保住
+  s += statePotential(inv, ctx.cardLookup);
+  s += inv.resources * 0.2;
+  return s;
+}
+
+/** 模擬器:把一個行動丟進真引擎跑,回傳新狀態(被駁回回 null)。借真引擎 → 模擬 = 實戰。 */
+function simulateStep(
+  ctx: InvestigatorAIContext,
+  inv: InvestigatorState,
+  scenario: ScenarioState,
+  allies: Record<string, InvestigatorState>,
+  action: AIPlannedAction,
+): { inv: InvestigatorState; scenario: ScenarioState; allies: Record<string, InvestigatorState> } | null {
+  const intent: IntentMessage = {
+    id: 'sim', timestamp: '1970-01-01T00:00:00Z', schemaVersion: CURRENT_MESSAGE_SCHEMA_VERSION,
+    source: 'ai', kind: 'intent', actionType: action.actionType, payload: action.payload,
+    playerId: 'ai', investigatorId: inv.investigatorId,
+  };
+  const ruleCtx: RuleContext = {
+    scenario, investigator: inv,
+    turn: { turnNumber: ctx.turnNumber, phase: 'investigator', actionPointsSpent: {}, pendingLegendaryActions: [], triggeredReactions: [] },
+    investigators: { ...allies, [inv.investigatorId]: inv },
+    cardLookup: ctx.cardLookup, locationStats: ctx.locationStats, enemyStats: ctx.enemyStats,
+    stylePools: ctx.stylePools, chaosMarkerEffects: ctx.chaosMarkerEffects, rng: ctx.rng,
+  };
+  const r = resolveIntent(intent, ruleCtx);
+  if (r.result.outcome === 'rejected') return null;
+  const nextAllies = { ...allies };
+  for (const [id, a] of Object.entries(r.newState?.updatedAllies ?? {})) nextAllies[id] = a;
+  return {
+    inv: r.newState?.investigator ?? inv,
+    scenario: r.newState?.scenario ?? scenario,
+    allies: nextAllies,
+  };
+}
+
+interface PlanNode {
+  inv: InvestigatorState;
+  scenario: ScenarioState;
+  allies: Record<string, InvestigatorState>;
+  aiState: InvestigatorAIState;
+  first: AIPlannedAction | null; // 這條序列的第一步(AI 真正會執行的)
+  score: number;
+}
+
+/**
+ * 整回合前瞻:beam search 模擬卡序,回傳最佳「第一步」。取代 planNextAction。
+ * combo 自動浮現:打 A 再打 B 的終局分 > 各自獨立 → 搜尋自然選它。
+ */
+export function planTurn(
+  ctx: InvestigatorAIContext,
+  profile: InvestigatorAIProfile,
+  aiState: InvestigatorAIState,
+): AIPlannedAction | null {
+  const start: PlanNode = { inv: ctx.investigator, scenario: ctx.scenario, allies: ctx.allies, aiState, first: null, score: 0 };
+  let beam: PlanNode[] = [start];
+  const depth = Math.min(3, Math.max(1, ctx.investigator.actionPoints));
+  let anyExpanded = false;
+  for (let d = 0; d < depth; d += 1) {
+    const next: PlanNode[] = [];
+    for (const node of beam) {
+      if (node.inv.actionPoints <= 0 || !isStanding(node.inv)) { next.push(node); continue; } // 不能再動 → 原狀態帶到底
+      const subCtx: InvestigatorAIContext = { ...ctx, investigator: node.inv, scenario: node.scenario, allies: node.allies };
+      const cands = enumerateCandidates(subCtx, profile, node.aiState)
+        .filter((c) => c.score > 0.25)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, PLAN_BRANCH); // 即時分剪枝:只模擬最有希望的 M 個
+      if (cands.length === 0) { next.push(node); continue; }
+      for (const c of cands) {
+        const sim = simulateStep(ctx, node.inv, node.scenario, node.allies, c);
+        if (!sim) continue;
+        anyExpanded = true;
+        const simCtx: InvestigatorAIContext = { ...ctx, investigator: sim.inv, scenario: sim.scenario, allies: sim.allies };
+        next.push({
+          inv: sim.inv, scenario: sim.scenario, allies: sim.allies,
+          aiState: { lastActionType: c.actionType, cameFromLocationId: c.actionType === 'move' ? (node.inv.currentLocationId ?? node.aiState.cameFromLocationId) : node.aiState.cameFromLocationId },
+          first: node.first ?? c,
+          score: scoreState(sim.inv, sim.scenario, simCtx, profile),
+        });
+      }
+    }
+    if (next.length === 0) break;
+    beam = next.sort((a, b) => b.score - a.score).slice(0, PLAN_BEAM_WIDTH); // beam:留終局分前 K
+  }
+  if (!anyExpanded) return null;
+  const ranked = beam.filter((n) => n.first).sort((a, b) => b.score - a.score);
+  if (ranked.length === 0) return null;
+  // 溫度:偶爾選次佳序列(像人,會小失誤)
+  if (ranked.length > 1 && ctx.rng() < profile.temperature) return ranked[1].first;
+  return ranked[0].first;
+}
+
 // ─── AI 回合執行(與真人同管線:組 Intent → resolveIntent)──
 export interface AITurnStep {
   actionType: string;
@@ -653,7 +783,8 @@ export function runInvestigatorAITurn(
   for (let guard = 0; guard < 8 && inv.actionPoints > 0; guard += 1) {
     if (!isStanding(inv)) break; // 瀕死/死亡不行動(§9)
     const fullCtx: InvestigatorAIContext = { ...ctx, scenario, investigator: inv, allies, rng };
-    const plan = planNextAction(fullCtx, profile, state);
+    // 整回合前瞻規劃(模擬卡序 + 評分 + beam search):回最佳第一步,執行後滾動重算
+    const plan = planTurn(fullCtx, profile, state);
     if (!plan) break;
 
     const intent: IntentMessage = {

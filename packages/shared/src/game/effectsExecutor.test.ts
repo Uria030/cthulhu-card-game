@@ -340,49 +340,6 @@ test('reveal_tile:G4 tile 系統未建模 → unsupported', () => {
   assertEq(executeCardEffects([fx('reveal_tile')], makeInv(), locScenario(), {}).unsupported.includes('reveal_tile'), true);
 });
 
-// ─── #2 軸向 COMBO:用既有 card_effects.condition 欄位(in_play)─────────────
-const IN_PLAY = (axis_layer: string, axis_value: string, min: number) => ({ type: 'same_axis_in_play', axis_layer, axis_value, min });
-const dmgCombo = (amount: number, condition: Record<string, unknown>): CardEffectRow => ({ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount }, condition });
-
-test('軸向 combo:condition 欄位 in_play 同層同值達門檻 → combo 結算', () => {
-  const lookup = { a1: { primary_axis_layer: 'card_name', primary_axis_value: '老警長' }, a2: { primary_axis_layer: 'card_name', primary_axis_value: '老警長' } } as any;
-  const r = executeCardEffects([dmgCombo(3, IN_PLAY('card_name', '老警長', 2))], makeInv({ assetsInPlay: ['a1', 'a2'] }), makeScenario([makeEnemy({ hp: 5 })]), lookup);
-  assertEq(r.scenario.enemies[0].hp, 2, 'combo 生效,扣 3');
-  assertEq(r.effects.some((e) => e.type === 'combo_inactive'), false);
-});
-
-test('軸向 combo:同值但跨層 → 不算同軸,combo 不觸發(WARN 回歸)', () => {
-  // a1 card_name:老警長 / a2 faction:老警長(同字串不同層)→ 只算 1 張同軸 < min 2
-  const lookup = { a1: { primary_axis_layer: 'card_name', primary_axis_value: '老警長' }, a2: { primary_axis_layer: 'faction', primary_axis_value: '老警長' } } as any;
-  const r = executeCardEffects([dmgCombo(3, IN_PLAY('card_name', '老警長', 2))], makeInv({ assetsInPlay: ['a1', 'a2'] }), makeScenario([makeEnemy({ hp: 5 })]), lookup);
-  assertEq(r.scenario.enemies[0].hp, 5, '跨層不誤觸發');
-  assertEq(r.effects.some((e) => e.type === 'combo_inactive'), true);
-});
-
-test('軸向 combo:同軸卡不足門檻 → combo_inactive,效果不結算', () => {
-  const lookup = { a1: { primary_axis_layer: 'card_name', primary_axis_value: '老警長' } } as any;
-  const r = executeCardEffects([dmgCombo(3, IN_PLAY('card_name', '老警長', 2))], makeInv({ assetsInPlay: ['a1'] }), makeScenario([makeEnemy({ hp: 5 })]), lookup);
-  assertEq(r.scenario.enemies[0].hp, 5, '未達門檻,不扣血');
-  assertEq(r.effects.some((e) => e.type === 'combo_inactive'), true);
-});
-
-test('軸向 combo:base(無 condition)照常 + combo entry 分開 gate', () => {
-  const lookup = { a1: { primary_axis_layer: 'card_name', primary_axis_value: '老警長' } } as any;
-  const r = executeCardEffects([fx('draw_card', { amount: 1 }), dmgCombo(3, IN_PLAY('card_name', '老警長', 2))], makeInv({ assetsInPlay: ['a1'], deck: ['d1'] }), makeScenario([makeEnemy({ hp: 5 })]), lookup);
-  assertEq(r.investigator.hand.length, 1, 'base 抽牌照常');
-  assertEq(r.scenario.enemies[0].hp, 5, 'combo 被 gate');
-});
-
-test('軸向 combo:§5.2 字串條件不擋(非本系統)/ played_this_turn 暫不啟用', () => {
-  // 字串條件(§5.2)→ axisConditionMet 回 true,effect 照常結算
-  const strCond = executeCardEffects([{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount: 2 }, condition: 'while_engaged' }], makeInv(), makeScenario([makeEnemy({ hp: 5 })]), {});
-  assertEq(strCond.scenario.enemies[0].hp, 3, '§5.2 字串條件不擋');
-  // played_this_turn → Phase A-2,暫不生效
-  const ptt = executeCardEffects([dmgCombo(3, { type: 'same_axis_played_this_turn', axis_value: 'X', min: 1 })], makeInv(), makeScenario([makeEnemy({ hp: 5 })]), {});
-  assertEq(ptt.scenario.enemies[0].hp, 5, 'played_this_turn 暫不生效');
-  assertEq(ptt.effects.some((e) => e.type === 'combo_inactive'), true);
-});
-
 // ─── runner ─────────────────────────
 let passed = 0; let failed = 0; const failures: string[] = [];
 for (const t of tests) {

@@ -454,13 +454,6 @@ export function enumerateCandidates(
         (cardLookup[id]?.effects ?? []).some((f) => f.trigger_type === 'action' && f.effect_code === 'attack'),
       );
       value = aliveEnemies.length > 0 && !armed ? 2.4 : 0.8;
-      // 整回合價值鏈(Uria 裁定):鋪武器不只看鋪場分,要把「本回合能用它打出的攻擊」算進來——
-      // 有怪當前在場 + 打完還剩行動點(打牌 1AP)→ 解鎖的攻擊也是卡片動作(每發 ≥ CARD_ACTION_BONUS)。
-      // 於是「一動打牌鋪槍 + 後續開火」整回合產出 > 3 個基本動作,AI 才會為了 combo 而鋪場。
-      if (enemiesHere.length > 0) {
-        const attacksThisTurn = Math.min(Math.max(0, inv.actionPoints - 1), 2);
-        value += attacksThisTurn * CARD_ACTION_BONUS;
-      }
     } else if (isArcaneSpell) {
       // 施法事件(ch2 §8.4 神秘攻擊):一定命中、穿透抗性,但抽混沌袋有 SAN 風險。
       // 有目標才打;戰意權重 × 命中保證(法術不擲骰),SAN 低時謹慎(玩火不玩命)。
@@ -480,6 +473,17 @@ export function enumerateCandidates(
       value = 1.2;
     }
     if (value <= 0) continue;
+    // 整回合三行動價值鏈(Uria #1):打出有「行動效果」的資產後,本回合還能用它(每次 ≥ CARD_ACTION_BONUS=1.6V > 1V 基本動作)。
+    // 「一動打牌鋪場 + 後續用牌」整回合產出 > 3 個基本動作 → AI 為了 combo 而鋪場(通用,不限武器;武器是其特例)。
+    const usableActions = fx.filter((f) => f.trigger_type === 'action');
+    if (usableActions.length > 0 && data.card_type !== 'event') {
+      const usesThisTurn = Math.min(Math.max(0, inv.actionPoints - 1), 2); // 鋪場花 1AP,剩餘可用次數(本回合上限 2)
+      const needsEnemy = usableActions.every((f) => /attack|deal_damage|stun_enemy|taunt/.test(String(f.effect_code)));
+      if (usesThisTurn > 0 && (!needsEnemy || enemiesHere.length > 0)) {
+        value += usesThisTurn * CARD_ACTION_BONUS;
+        narrative += '(接著就能用它)';
+      }
+    }
     const score = (value + CARD_FIRST_BONUS) * profile.weights.cardPlayAffinity;
     if (cost > inv.resources) {
       bestUnaffordable = Math.max(bestUnaffordable, score);

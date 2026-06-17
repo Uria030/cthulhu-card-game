@@ -78,6 +78,7 @@ const CARDS: CardDataLookup = {
   },
   ally_card: { name_zh: '偵探的線人', card_type: 'ally', cost: 2, effects: [] },
   dmg_event: { name_zh: '隱身刺殺', card_type: 'event', cost: 2, effects: [{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount: 2 } }] },
+  tool: { name_zh: '老式相機', card_type: 'asset', cost: 1, effects: [{ trigger_type: 'action', effect_code: 'discover_clue', effect_params: { amount: 1 } }] },
 };
 
 const ELIAS = AI_INVESTIGATOR_ROSTER[0];
@@ -247,6 +248,16 @@ test('整回合價值鏈:有怪+剩行動點 → 鋪武器把「本回合解鎖�
   const pNoAp = noAp.find((x) => x.actionType === 'play_card' && x.payload.cardInstanceId === 'weapon');
   assert(!!pCombo && !!pNoAp, '兩情境都該有鋪武器候選');
   assert((pCombo?.score ?? 0) > (pNoAp?.score ?? 0), '能接著開火時,鋪武器價值含 combo 加成,更高');
+});
+
+test('整回合價值鏈(通用 #1):非武器資產(有行動效果)也含 combo 加成,且無怪也算', () => {
+  // 老式相機(discover_clue 行動)→ needsEnemy=false:3 AP(鋪完還能用)有 combo;1 AP 無
+  const combo = enumerateCandidates(ctx({ investigator: makeInv({ hand: ['tool'], resources: 3, actionPoints: 3 }) }), ELIAS, initInvestigatorAIState());
+  const noAp = enumerateCandidates(ctx({ investigator: makeInv({ hand: ['tool'], resources: 3, actionPoints: 1 }) }), ELIAS, initInvestigatorAIState());
+  const pCombo = combo.find((x) => x.actionType === 'play_card' && x.payload.cardInstanceId === 'tool');
+  const pNoAp = noAp.find((x) => x.actionType === 'play_card' && x.payload.cardInstanceId === 'tool');
+  assert(!!pCombo && !!pNoAp, '兩情境都該有鋪資產候選');
+  assert((pCombo?.score ?? 0) > (pNoAp?.score ?? 0), '能接著用工具時,鋪場價值含 combo 加成(通用,不限武器)');
 });
 
 test('決策溫度:0 永遠最佳;觸發時選次佳(會犯小錯)', () => {

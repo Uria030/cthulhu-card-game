@@ -164,6 +164,59 @@ test('transfer_horror:盟友理智耗損移到自身', () => {
   assertEq(r.investigator.san, 6, '自身承受 3');
 });
 
+// ─── P1 批次1:牌庫/手牌/資產引擎 ─────────────
+test('reveal_top:看牌頂 N 張(不改區)', () => {
+  const r = executeCardEffects([fx('reveal_top', { amount: 2 })], makeInv({ deck: ['c1', 'c2', 'c3'] }), makeScenario(), {});
+  assertEq((r.effects.find((e) => e.type === 'reveal_top')?.params as any).count, 2);
+  assertEq(r.investigator.deck.length, 3, '牌庫不變');
+});
+
+test('discard_card:棄手牌前 N 張', () => {
+  const r = executeCardEffects([fx('discard_card', { amount: 2 })], makeInv({ hand: ['h1', 'h2', 'h3'] }), makeScenario(), {});
+  assertEq(r.investigator.hand.join(','), 'h3');
+  assertEq(r.investigator.discardPile.join(','), 'h1,h2');
+});
+
+test('retrieve_card:棄牌堆回收最近 N 張回手(P 流影)', () => {
+  const r = executeCardEffects([fx('retrieve_card', { amount: 2 })], makeInv({ discardPile: ['d1', 'd2', 'd3'] }), makeScenario(), {});
+  assertEq(r.investigator.hand.join(','), 'd2,d3');
+  assertEq(r.investigator.discardPile.join(','), 'd1');
+  assertEq(executeCardEffects([fx('retrieve_card')], makeInv(), makeScenario(), {}).unsupported.some((u) => u.includes('retrieve_card')), true);
+});
+
+test('return_to_deck:手牌前 N 張回牌庫頂', () => {
+  const r = executeCardEffects([fx('return_to_deck', { amount: 1 })], makeInv({ hand: ['h1', 'h2'], deck: ['x'] }), makeScenario(), {});
+  assertEq(r.investigator.hand.join(','), 'h2');
+  assertEq(r.investigator.deck.join(','), 'h1,x');
+});
+
+test('remove_from_game:優先放逐棄牌堆,空則手牌', () => {
+  const a = executeCardEffects([fx('remove_from_game', { amount: 1 })], makeInv({ discardPile: ['d1', 'd2'] }), makeScenario(), {});
+  assertEq(a.investigator.removedPile.join(','), 'd2');
+  assertEq(a.investigator.discardPile.join(','), 'd1');
+  const b = executeCardEffects([fx('remove_from_game', { amount: 1 })], makeInv({ hand: ['h1'] }), makeScenario(), {});
+  assertEq(b.investigator.removedPile.join(','), 'h1');
+  assertEq((b.effects.find((e) => e.type === 'remove_from_game')?.params as any).from, 'hand');
+});
+
+test('shuffle_deck:保留全部牌(注入 rng 可重現)', () => {
+  const r = executeCardEffects([fx('shuffle_deck')], makeInv({ deck: ['a', 'b', 'c', 'd', 'e'] }), makeScenario(), {}, () => 0);
+  assertEq(r.investigator.deck.length, 5);
+  assertEq([...r.investigator.deck].sort().join(','), 'a,b,c,d,e', '多重集不變');
+});
+
+test('exhaust_card / ready_card:橫置與轉正', () => {
+  const ex = executeCardEffects([fx('exhaust_card')], makeInv({ assetsInPlay: ['a1'], assetState: { a1: { usesLeft: null, exhausted: false } } }), makeScenario(), {});
+  assertEq(ex.investigator.assetState?.a1.exhausted, true);
+  const rd = executeCardEffects([fx('ready_card')], makeInv({ assetsInPlay: ['a1'], assetState: { a1: { usesLeft: null, exhausted: true } } }), makeScenario(), {});
+  assertEq(rd.investigator.assetState?.a1.exhausted, false);
+});
+
+test('gain_use:資產補充使用次數', () => {
+  const r = executeCardEffects([fx('gain_use', { amount: 3 })], makeInv({ assetsInPlay: ['a1'], assetState: { a1: { usesLeft: 2, exhausted: false } } }), makeScenario(), {});
+  assertEq(r.investigator.assetState?.a1.usesLeft, 5);
+});
+
 // ─── runner ─────────────────────────
 let passed = 0; let failed = 0; const failures: string[] = [];
 for (const t of tests) {

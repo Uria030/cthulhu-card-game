@@ -37,6 +37,7 @@ export function executeCardEffects(
   investigator: InvestigatorState,
   scenario: ScenarioState,
   cardLookup: CardDataLookup,
+  rng: () => number = Math.random,
 ): ExecuteResult {
   let inv = investigator;
   let sc = scenario;
@@ -291,6 +292,103 @@ export function executeCardEffects(
         out.push({ type: 'transfer_horror', params: { amount: moved, ally: allies[idx].name, narrative: '你接過了同伴眼中的恐懼。' }, targetId: inv.investigatorId });
         break;
       }
+      // ─── P1 牌庫/手牌/資產引擎 ───────────────────────
+      case 'reveal_top': {
+        // 看牌頂 N 張(資訊型:列出,不改區;具體「對揭露牌做什麼」由卡面 search_deck/retrieve 處理)
+        const amount = Math.max(1, Number(p.amount ?? 1));
+        const top = inv.deck.slice(0, amount);
+        out.push({ type: 'reveal_top', params: { count: top.length, cardInstanceIds: top } });
+        break;
+      }
+      case 'discard_card': {
+        // 棄牌(MVP 無選牌 UI:棄手牌前 N 張)
+        const amount = Math.max(1, Number(p.amount ?? 1));
+        const moved = inv.hand.slice(0, amount);
+        if (moved.length === 0) { unsupported.push('discard_card'); break; }
+        inv = { ...inv, hand: inv.hand.slice(moved.length), discardPile: [...inv.discardPile, ...moved] };
+        out.push({ type: 'discard_card', params: { amount: moved.length } });
+        break;
+      }
+      case 'retrieve_card': {
+        // 棄牌堆回收(P 流影核心):取最近棄置的 N 張回手
+        const amount = Math.max(1, Number(p.amount ?? 1));
+        const n = Math.min(amount, inv.discardPile.length);
+        if (n === 0) { unsupported.push('retrieve_card'); break; }
+        const taken = inv.discardPile.slice(inv.discardPile.length - n);
+        inv = { ...inv, discardPile: inv.discardPile.slice(0, inv.discardPile.length - n), hand: [...inv.hand, ...taken] };
+        out.push({ type: 'retrieve_card', params: { amount: n } });
+        break;
+      }
+      case 'return_to_deck': {
+        // 放回牌庫頂(MVP 無選牌 UI:取手牌前 N 張)
+        const amount = Math.max(1, Number(p.amount ?? 1));
+        const moved = inv.hand.slice(0, amount);
+        if (moved.length === 0) { unsupported.push('return_to_deck'); break; }
+        inv = { ...inv, hand: inv.hand.slice(moved.length), deck: [...moved, ...inv.deck] };
+        out.push({ type: 'return_to_deck', params: { amount: moved.length } });
+        break;
+      }
+      case 'remove_from_game': {
+        // 放逐:優先從棄牌堆移除,棄牌堆空則從手牌 → removedPile
+        const amount = Math.max(1, Number(p.amount ?? 1));
+        if (inv.discardPile.length > 0) {
+          const n = Math.min(amount, inv.discardPile.length);
+          const taken = inv.discardPile.slice(inv.discardPile.length - n);
+          inv = { ...inv, discardPile: inv.discardPile.slice(0, inv.discardPile.length - n), removedPile: [...inv.removedPile, ...taken] };
+          out.push({ type: 'remove_from_game', params: { amount: n, from: 'discard' } });
+        } else if (inv.hand.length > 0) {
+          const n = Math.min(amount, inv.hand.length);
+          const taken = inv.hand.slice(0, n);
+          inv = { ...inv, hand: inv.hand.slice(n), removedPile: [...inv.removedPile, ...taken] };
+          out.push({ type: 'remove_from_game', params: { amount: n, from: 'hand' } });
+        } else {
+          unsupported.push('remove_from_game');
+        }
+        break;
+      }
+      case 'shuffle_deck': {
+        // Fisher-Yates(注入 rng,測試可重現)
+        const d = [...inv.deck];
+        for (let i = d.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(rng() * (i + 1));
+          const tmp = d[i]; d[i] = d[j]; d[j] = tmp;
+        }
+        inv = { ...inv, deck: d };
+        out.push({ type: 'shuffle_deck', params: { size: d.length } });
+        break;
+      }
+      case 'exhaust_card': {
+        // 橫置一張場上資產(ch2 §2.4):取第一張未橫置的
+        const st = { ...(inv.assetState ?? {}) };
+        const targetId = inv.assetsInPlay.find((id) => !st[id]?.exhausted);
+        if (!targetId) { unsupported.push('exhaust_card'); break; }
+        st[targetId] = { usesLeft: st[targetId]?.usesLeft ?? null, exhausted: true };
+        inv = { ...inv, assetState: st };
+        out.push({ type: 'exhaust_card', params: { cardInstanceId: targetId } });
+        break;
+      }
+      case 'ready_card': {
+        // 轉正一張橫置資產
+        const st = { ...(inv.assetState ?? {}) };
+        const targetId = inv.assetsInPlay.find((id) => st[id]?.exhausted);
+        if (!targetId) { unsupported.push('ready_card'); break; }
+        st[targetId] = { usesLeft: st[targetId]?.usesLeft ?? null, exhausted: false };
+        inv = { ...inv, assetState: st };
+        out.push({ type: 'ready_card', params: { cardInstanceId: targetId } });
+        break;
+      }
+      case 'gain_use': {
+        // 補充消耗次數(ch3 §10.1):給第一張有使用次數的資產 +amount
+        const amount = Math.max(1, Number(p.amount ?? 1));
+        const st = { ...(inv.assetState ?? {}) };
+        const targetId = inv.assetsInPlay.find((id) => st[id] && st[id].usesLeft !== null);
+        if (!targetId) { unsupported.push('gain_use'); break; }
+        st[targetId] = { usesLeft: (st[targetId].usesLeft ?? 0) + amount, exhausted: st[targetId].exhausted };
+        inv = { ...inv, assetState: st };
+        out.push({ type: 'gain_use', params: { cardInstanceId: targetId, amount } });
+        break;
+      }
+
       case 'modify_test':
         // passive 聚合於檢定時;on_commit 與 commit_icons 重複 — 都不在此執行
         break;

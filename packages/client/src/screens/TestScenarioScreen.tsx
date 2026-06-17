@@ -111,6 +111,15 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'style_card_drawn': return '🎴 風格卡【' + (p.name as string) + '】— 本次檢定屬性:' + (p.attribute as string);
     case 'status_applied': return '🏷 施加「' + (p.status as string) + '」狀態';
     case 'search_deck': return '🔍 檢視牌庫頂 ' + (p.viewed as number) + ' 張,取走 ' + (p.taken as number) + ' 張';
+    case 'reveal_top': return '👁 看牌庫頂 ' + (p.count as number) + ' 張';
+    case 'discard_card': return '🗑 棄 ' + (p.amount as number) + ' 張手牌';
+    case 'retrieve_card': return '♻ 從棄牌堆回收 ' + (p.amount as number) + ' 張回手';
+    case 'return_to_deck': return '↩ ' + (p.amount as number) + ' 張手牌放回牌庫頂';
+    case 'remove_from_game': return '✖ 放逐 ' + (p.amount as number) + ' 張(' + (p.from === 'hand' ? '手牌' : '棄牌堆') + ')';
+    case 'shuffle_deck': return '🔀 洗牌庫(' + (p.size as number) + ' 張)';
+    case 'exhaust_card': return '↪ 橫置一張資產';
+    case 'ready_card': return '↺ 轉正一張資產';
+    case 'gain_use': return '🔋 資產補充 ' + (p.amount as number) + ' 次使用';
     case 'effect_unsupported': return 'ℹ 部分卡面效果引擎尚未支援:' + ((p.codes as string[]) ?? []).join('、');
     case 'fear_check': return '😨 恐懼檢定 vs ' + (p.enemy as string) + ':d20 ' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '穩住了' : '失敗') + ')';
     case 'fear_damage': return '😱 ' + (p.narrative as string) + '(SAN -' + (p.amount as number) + ')';

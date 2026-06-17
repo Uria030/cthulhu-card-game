@@ -49,6 +49,7 @@ import { applyDamageAllocation, autoAllocateDamage } from '@cthulhu/shared';
 import type { AllocatableTarget } from '@cthulhu/shared';
 import { fetchBootstrap } from '../api';
 import { getSelectedInvestigator } from '../game/selectedInvestigator';
+import { getPartyCodes } from '../game/selectedParty';
 import { makeTestSetup, buildSetupFromBootstrap } from '../game/gameSetup';
 import type { GameSetup, LocationDisplay, CardDisplay } from '../game/gameSetup';
 import './TestScenarioScreen.css';
@@ -294,8 +295,12 @@ export function TestScenarioScreen() {
     setSetup(null);
     setLoadError(null);
     const playerTemplateId = getSelectedInvestigator()?.id;
-    // AI 隊友:名冊上前 3 位不與玩家撞模板的成員(各自 bootstrap;某位拉不到 → 略過,少人照常開局)
-    const aiProfiles = AI_INVESTIGATOR_ROSTER.filter((p) => p.templateId !== playerTemplateId).slice(0, 3);
+    // AI 隊友:讀大廳組隊名單(rosterCode);未設則預設名冊前 3 位不與玩家撞模板
+    const partyCodes = getPartyCodes();
+    const aiProfiles = (partyCodes && partyCodes.length > 0
+      ? partyCodes.map((c) => AI_INVESTIGATOR_ROSTER.find((p) => p.rosterCode === c))
+      : AI_INVESTIGATOR_ROSTER.filter((p) => p.templateId !== playerTemplateId).slice(0, 3)
+    ).filter((p): p is (typeof AI_INVESTIGATOR_ROSTER)[number] => !!p && p.templateId !== playerTemplateId);
     type Boot = Awaited<ReturnType<typeof fetchBootstrap>>;
     Promise.all([
       fetchBootstrap(stageId, playerTemplateId),

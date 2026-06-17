@@ -10,6 +10,7 @@ import {
 } from '@cthulhu/calibration';
 import '@cthulhu/calibration/styles';
 
+import { AI_INVESTIGATOR_ROSTER } from '@cthulhu/shared';
 import hotspotsJson from '../data/surfaces/study-room/hotspots.json';
 import { fetchPlayInvestigators } from '../api';
 import type { PlayInvestigator } from '../api';
@@ -17,7 +18,13 @@ import {
   getSelectedInvestigator,
   setSelectedInvestigator,
 } from '../game/selectedInvestigator';
+import { getPartyCodes, setPartyCodes } from '../game/selectedParty';
 import './LobbyScreen.css';
+
+// 入隊 AI 預設:名冊前 3 位
+const DEFAULT_PARTY_CODES = AI_INVESTIGATOR_ROSTER.slice(0, 3).map((p) => p.rosterCode);
+// 座位 ↔ 成員對應(主位=玩家;其餘三席 = AI 1/2/3)
+const SEAT_ORDER = ['seat.head', 'seat.front', 'seat.left', 'seat.right'];
 
 const ATTR_LABELS: Array<[keyof PlayInvestigator, string]> = [
   ['attr_strength', '力量'],
@@ -89,6 +96,20 @@ export function LobbyScreen() {
   const [candidates, setCandidates] = useState<PlayInvestigator[] | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [selected, setSelected] = useState(getSelectedInvestigator());
+  // 入隊 AI 名單(rosterCode);左上組隊名單可調整
+  const [partyCodes, setPartyCodesState] = useState<string[]>(() => getPartyCodes() ?? DEFAULT_PARTY_CODES);
+  const [aiPickerSlot, setAiPickerSlot] = useState<number | null>(null);
+  const partyProfiles = partyCodes
+    .map((c) => AI_INVESTIGATOR_ROSTER.find((p) => p.rosterCode === c))
+    .filter((p): p is (typeof AI_INVESTIGATOR_ROSTER)[number] => !!p);
+
+  const swapAi = (slot: number, rosterCode: string) => {
+    const next = [...partyCodes];
+    next[slot] = rosterCode;
+    setPartyCodes(next);
+    setPartyCodesState(next);
+    setAiPickerSlot(null);
+  };
 
   // 開面板時才撈候選名單(設計完成的調查員)
   useEffect(() => {
@@ -177,18 +198,43 @@ export function LobbyScreen() {
               <HotspotLabel hs={hs} />
             </g>
           ))}
+          {/* 在席人形影子:座位有成員就放一個剪影(主位=玩家,其餘三席=AI)*/}
+          {SEAT_ORDER.map((seatId, i) => {
+            const member = i === 0 ? (selected ? { name: selected.name_zh } : null) : (partyProfiles[i - 1] ? { name: partyProfiles[i - 1].name_zh } : null);
+            if (!member) return null;
+            const hs = hotspots.find((h) => h.id === seatId);
+            if (!hs) return null;
+            const { cx, cy } = hotspotCentroid(hs);
+            return (
+              <g key={seatId} className="seat-occupant" transform={`translate(${cx}, ${cy})`} pointer-events="none">
+                <ellipse cx={0} cy={-22} rx={22} ry={26} fill="rgba(8,8,14,0.6)" />
+                <path d="M -40 58 Q -34 -6 0 -6 Q 34 -6 40 58 Z" fill="rgba(8,8,14,0.6)" />
+                <text x={0} y={80} textAnchor="middle" fill="#C9A84C" style={{ font: '700 14px "Noto Serif TC", serif', paintOrder: 'stroke', stroke: 'rgba(13,13,20,0.92)', strokeWidth: 4 }}>{member.name}</text>
+              </g>
+            );
+          })}
         </CalibrationSurface>
+
+        {/* 左上書櫃:組隊名單(我的調查員 + 入隊 AI)*/}
+        <div className="lobby-roster">
+          <div className="lr-title">組隊名單</div>
+          <button className="lr-slot lr-me" onClick={() => setPickerOpen(true)}>
+            <span className="lr-role">我</span>
+            <span className="lr-name">{selected ? selected.name_zh : '＋ 選擇調查員'}</span>
+          </button>
+          {[0, 1, 2].map((i) => (
+            <button key={i} className="lr-slot" onClick={() => setAiPickerSlot(i)}>
+              <span className="lr-role">AI {i + 1}</span>
+              <span className="lr-name">{partyProfiles[i] ? partyProfiles[i].name_zh : '＋ 入隊'}</span>
+            </button>
+          ))}
+        </div>
 
         <footer className="lobby-footer">
           <button className="lobby-back" onClick={() => navigate('/')}>
             ← 回啟動畫面
           </button>
-          <button className="lobby-investigator-chip" onClick={() => setPickerOpen(true)}>
-            {selected ? `🕵 ${selected.name_zh}(${selected.mbti_code ?? ''})` : '🕵 點椅子選擇調查員'}
-          </button>
-          <span className="lobby-tip">
-            整備七功能 / 邀請隊友 / 召喚 AI 在 G2 開放
-          </span>
+          <span className="lobby-tip">整備七功能 / 鍛造 / 製作 在 G2 開放</span>
         </footer>
 
         {pickerOpen && (
@@ -227,6 +273,35 @@ export function LobbyScreen() {
                     {selected?.id === inv.id && <div className="inv-card-badge">✓ 目前選用</div>}
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {aiPickerSlot !== null && (
+          <div className="inv-picker-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setAiPickerSlot(null); }}>
+            <div className="inv-picker-frame">
+              <button className="inv-picker-close" onClick={() => setAiPickerSlot(null)}>✕</button>
+              <div className="inv-picker-title">❖ 選擇入隊 AI ❖</div>
+              <div className="inv-picker-sub">換上這個位置的 AI 調查員(同一位不可重複入隊)。</div>
+              <div className="inv-picker-grid">
+                {AI_INVESTIGATOR_ROSTER.map((p) => {
+                  const here = partyCodes[aiPickerSlot] === p.rosterCode;
+                  const elsewhere = !here && partyCodes.includes(p.rosterCode);
+                  return (
+                    <button
+                      key={p.rosterCode}
+                      className={'inv-card' + (here ? ' inv-card-selected' : '')}
+                      disabled={elsewhere}
+                      onClick={() => swapAi(aiPickerSlot, p.rosterCode)}
+                    >
+                      <div className="inv-card-name">{p.name_zh}</div>
+                      <div className="inv-card-meta">{p.templateCode} · {p.title_zh}</div>
+                      {here && <div className="inv-card-badge">✓ 此位</div>}
+                      {elsewhere && <div className="inv-card-badge">已在隊上</div>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>

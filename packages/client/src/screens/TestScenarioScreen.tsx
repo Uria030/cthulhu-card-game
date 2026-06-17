@@ -120,6 +120,15 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'exhaust_card': return '↪ 橫置一張資產';
     case 'ready_card': return '↺ 轉正一張資產';
     case 'gain_use': return '🔋 資產補充 ' + (p.amount as number) + ' 次使用';
+    case 'steal_resource': return '🪙 ' + ((p.narrative as string) || '奪取資源') + '(+' + (p.amount as number) + ')';
+    case 'move_enemy': return '➡ 將敵人推到 ' + (locMeta[p.to as string]?.name || p.to);
+    case 'engage_enemy': return '⚔ 主動纏上敵人';
+    case 'disengage_enemy': return '🏃 脫離 ' + (p.count as number) + ' 個交戰';
+    case 'enemy_removed': return '✖ ' + (p.narrative as string);
+    case 'place_clue': return '🔎 在 ' + (locMeta[p.location as string]?.name || p.location) + ' 放下 ' + (p.amount as number) + ' 個線索';
+    case 'remove_doom': return '🌟 移除 ' + (p.amount as number) + ' 個毀滅標記(剩 ' + (p.total as number) + ')';
+    case 'add_keyword': return '🏷 敵人獲得詞綴「' + (p.keyword as string) + '」';
+    case 'remove_keyword': return '🏷 移除敵人詞綴「' + (p.keyword as string) + '」';
     case 'effect_unsupported': return 'ℹ 部分卡面效果引擎尚未支援:' + ((p.codes as string[]) ?? []).join('、');
     case 'fear_check': return '😨 恐懼檢定 vs ' + (p.enemy as string) + ':d20 ' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '穩住了' : '失敗') + ')';
     case 'fear_damage': return '😱 ' + (p.narrative as string) + '(SAN -' + (p.amount as number) + ')';

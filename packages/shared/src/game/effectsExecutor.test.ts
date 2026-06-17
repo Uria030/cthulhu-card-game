@@ -237,6 +237,68 @@ test('passiveTestModifier:wild_attr_boost 全屬性 + modify_test 限定屬性',
   assertEq(passiveTestModifier(inv, lookup, 'intellect'), 2, 'wild 2 only');
 });
 
+// ─── P2 批次1:走位/敵控/任務 ─────────────
+function locScenario(enemies: EnemyInstance[] = []): ScenarioState {
+  return {
+    ...makeScenario(enemies),
+    locations: [
+      { locationDefinitionId: 'A', visibility: 'day', connectedTo: ['B'], isObstacle: false },
+      { locationDefinitionId: 'B', visibility: 'day', connectedTo: ['A'], isObstacle: false },
+    ],
+  };
+}
+
+test('move_investigator:指定地點 / 預設沿連線走 1 格', () => {
+  assertEq(executeCardEffects([fx('move_investigator')], makeInv(), locScenario(), {}).investigator.currentLocationId, 'B', '預設走第一條連線');
+  assertEq(executeCardEffects([fx('move_investigator', { location: 'B' })], makeInv(), locScenario(), {}).investigator.currentLocationId, 'B');
+});
+
+test('move_enemy:推離敵人並脫離交戰', () => {
+  const r = executeCardEffects([fx('move_enemy')], makeInv({ engagedWith: ['e1'] }), locScenario([makeEnemy({ engagedWith: ['i1'] })]), {});
+  assertEq(r.scenario.enemies[0].locationId, 'B');
+  assertEq(r.scenario.enemies[0].engagedWith.length, 0);
+  assertEq(r.investigator.engagedWith.length, 0);
+});
+
+test('engage_enemy / disengage_enemy:雙向交戰開關', () => {
+  const en = executeCardEffects([fx('engage_enemy')], makeInv(), locScenario([makeEnemy()]), {});
+  assertEq(en.investigator.engagedWith.join(','), 'e1');
+  assertEq(en.scenario.enemies[0].engagedWith.join(','), 'i1');
+  const dis = executeCardEffects([fx('disengage_enemy')], makeInv({ engagedWith: ['e1'] }), locScenario([makeEnemy({ engagedWith: ['i1'] })]), {});
+  assertEq(dis.investigator.engagedWith.length, 0);
+  assertEq(dis.scenario.enemies[0].engagedWith.length, 0);
+});
+
+test('remove_enemy:放逐移出場景', () => {
+  const r = executeCardEffects([fx('remove_enemy')], makeInv(), locScenario([makeEnemy()]), {});
+  assertEq(r.scenario.enemies.length, 0);
+  assertEq(r.effects.some((e) => e.type === 'enemy_removed'), true);
+});
+
+test('execute_enemy:處決 HP 歸 0', () => {
+  const r = executeCardEffects([fx('execute_enemy')], makeInv(), locScenario([makeEnemy({ hp: 99 })]), {});
+  assertEq(r.scenario.enemies[0].hp, 0);
+  assertEq(r.effects.some((e) => e.type === 'enemy_defeated'), true);
+});
+
+test('place_clue:地點放線索標記', () => {
+  const r = executeCardEffects([fx('place_clue', { amount: 2 })], makeInv(), locScenario(), {});
+  assertEq(r.scenario.tokens.some((t) => t.tokenType === 'clue' && t.amount === 2 && t.locationId === 'A'), true);
+});
+
+test('place_doom / remove_doom:議程進度增減(夾 0)', () => {
+  assertEq(executeCardEffects([fx('place_doom', { amount: 3 })], makeInv(), makeScenario(), {}).scenario.agendaProgress, 3);
+  const sc = { ...makeScenario(), agendaProgress: 2 };
+  assertEq(executeCardEffects([fx('remove_doom', { amount: 5 })], makeInv(), sc, {}).scenario.agendaProgress, 0, '夾 0');
+});
+
+test('add_keyword / remove_keyword:敵人詞綴增減', () => {
+  const add = executeCardEffects([fx('add_keyword', { keyword: 'vulnerable_mark' })], makeInv(), locScenario([makeEnemy()]), {});
+  assertEq(add.scenario.enemies[0].modifiers.includes('vulnerable_mark'), true);
+  const rm = executeCardEffects([fx('remove_keyword', { keyword: 'flying' })], makeInv(), locScenario([makeEnemy({ modifiers: ['flying'] })]), {});
+  assertEq(rm.scenario.enemies[0].modifiers.includes('flying'), false);
+});
+
 // ─── runner ─────────────────────────
 let passed = 0; let failed = 0; const failures: string[] = [];
 for (const t of tests) {

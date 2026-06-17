@@ -396,6 +396,114 @@ export function executeCardEffects(
         break;
       }
 
+      // ─── P2 走位/敵控/任務 ───────────────────────
+      case 'move_investigator': {
+        // 移動自身:有指定地點且合法 → 去那;否則沿連線走 1 格
+        const here = sc.locations.find((l) => l.locationDefinitionId === inv.currentLocationId);
+        const dest = (p.location ?? p.to ?? p.destination) as string | undefined;
+        const target = dest && sc.locations.some((l) => l.locationDefinitionId === dest) ? dest : here?.connectedTo?.[0];
+        if (!target || target === inv.currentLocationId) { unsupported.push('move_investigator'); break; }
+        const from = inv.currentLocationId;
+        inv = { ...inv, currentLocationId: target };
+        out.push({ type: 'move', params: { from, to: target } });
+        break;
+      }
+      case 'move_enemy': {
+        const here = inv.currentLocationId;
+        const candidates = sc.enemies.filter((e) => e.hp > 0 && e.locationId === here);
+        const enemyT = candidates.find((e) => inv.engagedWith.includes(e.instanceId)) ?? candidates[0];
+        if (!enemyT) { unsupported.push('move_enemy'); break; }
+        const loc = sc.locations.find((l) => l.locationDefinitionId === enemyT.locationId);
+        const dest = (p.location ?? p.to) as string | undefined;
+        const target = dest && sc.locations.some((l) => l.locationDefinitionId === dest) ? dest : loc?.connectedTo?.[0];
+        if (!target || target === enemyT.locationId) { unsupported.push('move_enemy'); break; }
+        sc = { ...sc, enemies: sc.enemies.map((e) => (e.instanceId === enemyT.instanceId ? { ...e, locationId: target, engagedWith: [] } : e)) };
+        inv = { ...inv, engagedWith: inv.engagedWith.filter((id) => id !== enemyT.instanceId) }; // 推離 → 脫離交戰
+        out.push({ type: 'move_enemy', params: { from: enemyT.locationId, to: target, enemyId: enemyT.instanceId } });
+        break;
+      }
+      case 'engage_enemy': {
+        const here = inv.currentLocationId;
+        const enemyT = sc.enemies.find((e) => e.hp > 0 && e.locationId === here && !inv.engagedWith.includes(e.instanceId));
+        if (!enemyT) { unsupported.push('engage_enemy'); break; }
+        sc = { ...sc, enemies: sc.enemies.map((e) => (e.instanceId === enemyT.instanceId ? { ...e, engagedWith: [...e.engagedWith, inv.investigatorId] } : e)) };
+        inv = { ...inv, engagedWith: [...inv.engagedWith, enemyT.instanceId] };
+        out.push({ type: 'engage_enemy', params: { enemyId: enemyT.instanceId } });
+        break;
+      }
+      case 'disengage_enemy': {
+        if (inv.engagedWith.length === 0) { unsupported.push('disengage_enemy'); break; }
+        const count = inv.engagedWith.length;
+        sc = { ...sc, enemies: sc.enemies.map((e) => (e.engagedWith.includes(inv.investigatorId) ? { ...e, engagedWith: e.engagedWith.filter((id) => id !== inv.investigatorId) } : e)) };
+        inv = { ...inv, engagedWith: [] };
+        out.push({ type: 'disengage_enemy', params: { count } });
+        break;
+      }
+      case 'remove_enemy': {
+        // 放逐:移出場景(非擊殺,不結算死亡詞綴)
+        const here = inv.currentLocationId;
+        const candidates = sc.enemies.filter((e) => e.hp > 0 && e.locationId === here);
+        const enemyT = candidates.find((e) => inv.engagedWith.includes(e.instanceId)) ?? candidates[0];
+        if (!enemyT) { unsupported.push('remove_enemy'); break; }
+        sc = { ...sc, enemies: sc.enemies.filter((e) => e.instanceId !== enemyT.instanceId) };
+        inv = { ...inv, engagedWith: inv.engagedWith.filter((id) => id !== enemyT.instanceId) };
+        out.push({ type: 'enemy_removed', params: { enemyId: enemyT.instanceId, narrative: '牠被逐出了這個位面。' }, targetId: enemyT.instanceId });
+        break;
+      }
+      case 'execute_enemy': {
+        // 處決:目標 HP 歸 0(擊殺;死亡詞綴需 investigators map,本函式範圍外 → 由容器結算路徑補)
+        const here = inv.currentLocationId;
+        const candidates = sc.enemies.filter((e) => e.hp > 0 && e.locationId === here);
+        const enemyT = candidates.find((e) => inv.engagedWith.includes(e.instanceId)) ?? candidates[0];
+        if (!enemyT) { unsupported.push('execute_enemy'); break; }
+        sc = { ...sc, enemies: sc.enemies.map((e) => (e.instanceId === enemyT.instanceId ? { ...e, hp: 0 } : e)) };
+        out.push({ type: 'enemy_defeated', params: { narrative: '一擊斃命 — 牠甚至來不及反應。' }, targetId: enemyT.instanceId });
+        break;
+      }
+      case 'place_clue': {
+        // 在地點放線索標記(不直接推進目標進度,供後續調查領取)
+        const amount = Math.max(1, Number(p.amount ?? 1));
+        const loc = (p.location as string) || inv.currentLocationId || '';
+        sc = { ...sc, tokens: [...sc.tokens, { tokenType: 'clue', locationId: loc, amount }] };
+        out.push({ type: 'place_clue', params: { amount, location: loc } });
+        break;
+      }
+      case 'place_doom': {
+        const amount = Math.max(1, Number(p.amount ?? 1));
+        sc = { ...sc, agendaProgress: sc.agendaProgress + amount };
+        out.push({ type: 'doom_added', params: { amount, total: sc.agendaProgress, source: '卡片效果' } });
+        break;
+      }
+      case 'remove_doom': {
+        const amount = Math.max(1, Number(p.amount ?? 1));
+        const before = sc.agendaProgress;
+        sc = { ...sc, agendaProgress: Math.max(0, sc.agendaProgress - amount) };
+        out.push({ type: 'remove_doom', params: { amount: before - sc.agendaProgress, total: sc.agendaProgress } });
+        break;
+      }
+      case 'add_keyword': {
+        const kw = String(p.keyword ?? '');
+        if (!kw) { unsupported.push('add_keyword()'); break; }
+        const here = inv.currentLocationId;
+        const candidates = sc.enemies.filter((e) => e.hp > 0 && e.locationId === here);
+        const enemyT = candidates.find((e) => inv.engagedWith.includes(e.instanceId)) ?? candidates[0];
+        if (!enemyT) { unsupported.push('add_keyword'); break; }
+        sc = { ...sc, enemies: sc.enemies.map((e) => (e.instanceId === enemyT.instanceId && !e.modifiers.includes(kw) ? { ...e, modifiers: [...e.modifiers, kw] } : e)) };
+        out.push({ type: 'add_keyword', params: { keyword: kw, enemyId: enemyT.instanceId } });
+        break;
+      }
+      case 'remove_keyword': {
+        const kw = String(p.keyword ?? '');
+        if (!kw) { unsupported.push('remove_keyword()'); break; }
+        const here = inv.currentLocationId;
+        const candidates = sc.enemies.filter((e) => e.hp > 0 && e.locationId === here);
+        const enemyT = candidates.find((e) => e.modifiers.includes(kw)) ?? candidates.find((e) => inv.engagedWith.includes(e.instanceId)) ?? candidates[0];
+        if (!enemyT) { unsupported.push('remove_keyword'); break; }
+        sc = { ...sc, enemies: sc.enemies.map((e) => (e.instanceId === enemyT.instanceId ? { ...e, modifiers: e.modifiers.filter((m) => m !== kw) } : e)) };
+        out.push({ type: 'remove_keyword', params: { keyword: kw, enemyId: enemyT.instanceId } });
+        break;
+      }
+
       case 'modify_test':
       case 'wild_attr_boost':
         // 檢定時機修正:於 resolveCheck 由 passiveTestModifier 聚合

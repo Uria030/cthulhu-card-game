@@ -878,6 +878,23 @@ test('事件卡擊殺觸發死亡詞綴(crush 結到非擊殺隊友,排除出牌
   assertEq(r.newState!.updatedAllies?.['inv-1'], undefined, '出牌者(擊殺者)不被自己擊殺的詞綴誤傷');
 });
 
+test('卡片敵控(remove_enemy)對帳多人交戰一致性(Raviel BLOCK 回歸)', () => {
+  const sc = makeScenario(['loc-a']);
+  sc.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'def-e1', locationId: 'loc-a', hp: 5, engagedWith: ['inv-1', 'inv-2'], modifiers: [] }];
+  const inv1 = makeInv({ currentLocationId: 'loc-a', hand: ['ev1'], engagedWith: ['e1'] });
+  const inv2 = makeInv({ investigatorId: 'inv-2', currentLocationId: 'loc-a', engagedWith: ['e1'] });
+  const ctx: RuleContext = {
+    scenario: sc, investigator: inv1, turn: makeTurn(), investigators: { 'inv-1': inv1, 'inv-2': inv2 },
+    enemyStats: { 'def-e1': { dc: 10 } },
+    cardLookup: { ev1: { name_zh: '放逐術', card_type: 'event', cost: 0, effects: [{ trigger_type: 'action', effect_code: 'remove_enemy', effect_params: {} }] } },
+    rng: rngRoll(10),
+  };
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'ev1' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState!.scenario!.enemies.length, 0, '敵人被放逐');
+  assertEq(r.newState!.updatedAllies?.['inv-2']?.engagedWith.length, 0, 'inv-2 殘留交戰被對帳清除');
+});
+
 // ─── runner ─────────────────────────
 let passed = 0;
 let failed = 0;

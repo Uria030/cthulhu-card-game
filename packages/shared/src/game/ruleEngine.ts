@@ -460,18 +460,17 @@ function resolveConsume(intent: IntentMessage, ctx: RuleContext): RuleResolveOut
     ctx.scenario,
     ctx.cardLookup ?? {},
   );
-  inv = exec.investigator;
-  const kills = resolveCardKillDeaths(exec.effects, ctx, exec.scenario);
+  const post = postProcessCardEffects(exec.effects, exec.investigator, ctx, exec.scenario);
   const effects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
     { type: 'card_consumed', params: { cardInstanceId: cardId, name: data.name_zh ?? '' } },
     ...exec.effects,
-    ...kills.effects,
+    ...post.effects,
   ];
   if (exec.unsupported.length > 0) {
     effects.push({ type: 'effect_unsupported', params: { codes: exec.unsupported } });
   }
-  return accept(intent, effects, { investigator: inv, scenario: kills.scenario, updatedAllies: kills.updatedAllies });
+  return accept(intent, effects, { investigator: post.investigator, scenario: post.scenario, updatedAllies: post.updatedAllies });
 }
 
 /**
@@ -1087,10 +1086,12 @@ function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOu
     if (exec.unsupported.length > 0) {
       effects.push({ type: 'effect_unsupported', params: { codes: exec.unsupported } });
     }
-    // §11.3 卡片效果擊殺也結算死亡詞綴/鬧鬼(擊殺者=本人,排除)
-    const kills = resolveCardKillDeaths(exec.effects, ctx, sc);
-    effects.push(...kills.effects);
-    sc = kills.scenario;
+    // §11.3 卡片擊殺死亡詞綴 + 交戰一致性對帳(擊殺者=本人,排除)
+    const post = postProcessCardEffects(exec.effects, inv, ctx, sc);
+    inv = post.investigator;
+    effects.push(...post.effects);
+    sc = post.scenario;
+    const cardKillAllies = post.updatedAllies;
     // 施法軌(ch2 §8.4):arcane 事件結算後抽混沌袋定副作用(法術一定命中,代價在袋裡)
     if (String(data.combat_style ?? '') === 'arcane') {
       const targetDef = sc.enemies.find((e) => e.locationId === inv.currentLocationId)?.enemyDefinitionId ?? null;
@@ -1100,7 +1101,7 @@ function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOu
       sc = chaos.scenario;
       effects.push(...chaos.effects);
     }
-    return accept(intent, effects, { investigator: inv, scenario: sc, updatedAllies: kills.updatedAllies });
+    return accept(intent, effects, { investigator: inv, scenario: sc, updatedAllies: cardKillAllies });
   }
 
   // §10.5 盟友:獨立 HP/SAN 進場(攻擊力 = damage 欄位;不進 assetsInPlay,自成一格)
@@ -1164,18 +1165,18 @@ function resolveExecuteCardAction(intent: IntentMessage, ctx: RuleContext): Rule
   if (spend.rejected) return reject(intent, spend.rejected);
   const inv: InvestigatorState = { ...spend.investigator, actionPoints: ctx.investigator.actionPoints - 1 };
   const exec = executeCardEffects([fx], inv, ctx.scenario, ctx.cardLookup ?? {});
-  const kills = resolveCardKillDeaths(exec.effects, ctx, exec.scenario);
+  const post = postProcessCardEffects(exec.effects, exec.investigator, ctx, exec.scenario);
   const effects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
     { type: 'card_action', params: { cardInstanceId: cardId, name: data?.name_zh ?? '' } },
     ...spend.effects,
     ...exec.effects,
-    ...kills.effects,
+    ...post.effects,
   ];
   if (exec.unsupported.length > 0) {
     effects.push({ type: 'effect_unsupported', params: { codes: exec.unsupported } });
   }
-  return accept(intent, effects, { investigator: exec.investigator, scenario: kills.scenario, updatedAllies: kills.updatedAllies });
+  return accept(intent, effects, { investigator: post.investigator, scenario: post.scenario, updatedAllies: post.updatedAllies });
 }
 
 /**
@@ -1514,27 +1515,70 @@ function deathKeywordOutcome(enemy: EnemyInstance, ctx: RuleContext, scenario: S
 }
 
 /**
- * §11.3 卡片效果擊殺善後:掃 executeCardEffects 產出的 enemy_defeated,逐隻結算死亡詞綴 + 鬧鬼。
- * 擊殺者 = 出牌的 ctx.investigator,由 deathKeywordOutcome 自動排除(對齊武器擊殺路徑)。
+ * 交戰一致性對帳:交戰必須「雙方同地點 + 敵存活」(§7.2)。
+ * 卡片敵控(move_enemy/remove_enemy/execute_enemy/deal_damage 致死)動到的敵人,
+ * 會讓「其他調查員」殘留無效交戰 — executeCardEffects 只持有出牌者,無法清。這裡對全體對帳。
+ * 只移除(非同地點 / 敵已亡 / 單向),絕不新增交戰。
  */
-function resolveCardKillDeaths(
+function reconcileEngagement(
+  scenario: ScenarioState,
+  investigators: Record<string, InvestigatorState>,
+): { scenario: ScenarioState; investigators: Record<string, InvestigatorState> } {
+  const liveById = new Map(scenario.enemies.filter((e) => e.hp > 0).map((e) => [e.instanceId, e]));
+  const invs: Record<string, InvestigatorState> = {};
+  for (const [id, inv] of Object.entries(investigators)) {
+    const kept = inv.engagedWith.filter((eid) => {
+      const en = liveById.get(eid);
+      return en && en.locationId === inv.currentLocationId;
+    });
+    invs[id] = kept.length === inv.engagedWith.length ? inv : { ...inv, engagedWith: kept };
+  }
+  const enemies = scenario.enemies.map((en) => {
+    if (en.hp <= 0) return en.engagedWith.length ? { ...en, engagedWith: [] } : en;
+    const kept = en.engagedWith.filter((iid) => {
+      const inv = invs[iid];
+      return inv && inv.currentLocationId === en.locationId;
+    });
+    return kept.length === en.engagedWith.length ? en : { ...en, engagedWith: kept };
+  });
+  return { scenario: { ...scenario, enemies }, investigators: invs };
+}
+
+/**
+ * 卡片效果善後(executeCardEffects 之後統一跑):
+ * 1. §11.3 擊殺善後:掃 enemy_defeated 逐隻結算死亡詞綴 + 鬧鬼(擊殺者=出牌者,deathKeywordOutcome 自動排除)。
+ * 2. 交戰一致性對帳:敵控動到的敵人讓全體調查員交戰收斂(多人一致性)。
+ * 回傳 reconcile 後的出牌者 + 其他調查員(updatedAllies)。
+ */
+function postProcessCardEffects(
   effects: ResultEffect[],
+  investigator: InvestigatorState,
   ctx: RuleContext,
   scenario: ScenarioState,
-): { effects: ResultEffect[]; scenario: ScenarioState; updatedAllies: Record<string, InvestigatorState> } {
+): { effects: ResultEffect[]; scenario: ScenarioState; investigator: InvestigatorState; updatedAllies: Record<string, InvestigatorState> } {
   let sc = scenario;
   const extra: ResultEffect[] = [];
-  let allies: Record<string, InvestigatorState> = {};
+  const playerId = investigator.investigatorId;
+  let invMap: Record<string, InvestigatorState> = { ...ctx.investigators, [playerId]: investigator };
+  // 1. 死亡詞綴
   for (const e of effects) {
     if (e.type !== 'enemy_defeated' || !e.targetId) continue;
     const enemy = sc.enemies.find((x) => x.instanceId === e.targetId);
     if (!enemy) continue;
-    const dk = deathKeywordOutcome(enemy, { ...ctx, investigators: { ...ctx.investigators, ...allies } }, sc);
+    const dk = deathKeywordOutcome(enemy, { ...ctx, investigators: invMap }, sc);
     extra.push(...dk.effects);
     sc = dk.scenario;
-    allies = { ...allies, ...dk.updatedAllies };
+    invMap = { ...invMap, ...dk.updatedAllies };
   }
-  return { effects: extra, scenario: sc, updatedAllies: allies };
+  // 2. 交戰一致性對帳(全體)
+  const recon = reconcileEngagement(sc, invMap);
+  sc = recon.scenario;
+  invMap = recon.investigators;
+  const updatedAllies: Record<string, InvestigatorState> = {};
+  for (const [id, v] of Object.entries(invMap)) {
+    if (id !== playerId) updatedAllies[id] = v;
+  }
+  return { effects: extra, scenario: sc, investigator: invMap[playerId], updatedAllies };
 }
 
 function reject(intent: IntentMessage, narrative: string, suggestion?: string): RuleResolveOutput {

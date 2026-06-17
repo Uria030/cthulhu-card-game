@@ -139,6 +139,31 @@ test('extra_attack:+行動點', () => {
   assertEq(r.investigator.actionPoints, 5);
 });
 
+// ─── P0 批次3:反擊 + 盟友分傷 ─────────────
+function makeAlly(over: Partial<import('./state').AllyState> = {}): import('./state').AllyState {
+  return { cardInstanceId: 'a1', name: '老獵犬', hp: 5, hpMax: 5, san: 5, sanMax: 5, attack: 1, exhausted: false, ...over };
+}
+
+test('counterattack:在自身掛 counter 層', () => {
+  const r = executeCardEffects([fx('counterattack', { amount: 2 })], makeInv(), makeScenario(), {});
+  assertEq(r.investigator.statusEffects?.counter, 2);
+  assertEq(r.effects.some((e) => e.type === 'counterattack_armed'), true);
+});
+
+test('transfer_damage:盟友傷勢移到自身(夾在缺口與 amount)', () => {
+  const r = executeCardEffects([fx('transfer_damage', { amount: 2 })], makeInv({ hp: 9, allies: [makeAlly({ hp: 1, hpMax: 5 })] }), makeScenario(), {});
+  assertEq(r.investigator.allies?.[0].hp, 3, '盟友回 2');
+  assertEq(r.investigator.hp, 7, '自身承受 2');
+  // 無盟友 → unsupported
+  assertEq(executeCardEffects([fx('transfer_damage', { amount: 2 })], makeInv(), makeScenario(), {}).unsupported.some((u) => u.includes('transfer_damage')), true);
+});
+
+test('transfer_horror:盟友理智耗損移到自身', () => {
+  const r = executeCardEffects([fx('transfer_horror', { amount: 3 })], makeInv({ san: 9, allies: [makeAlly({ san: 1, sanMax: 5 })] }), makeScenario(), {});
+  assertEq(r.investigator.allies?.[0].san, 4, '盟友回 3');
+  assertEq(r.investigator.san, 6, '自身承受 3');
+});
+
 // ─── runner ─────────────────────────
 let passed = 0; let failed = 0; const failures: string[] = [];
 for (const t of tests) {

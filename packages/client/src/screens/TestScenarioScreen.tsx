@@ -127,6 +127,10 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'enemy_stunned': return '💫 ' + (p.narrative as string);
     case 'evade': return '🌀 ' + (p.narrative as string);
     case 'extra_attack': return '⚡ ' + (p.narrative as string) + '(行動點 +' + (p.amount as number) + ')';
+    case 'counterattack_armed': return '🛡 ' + (p.narrative as string) + '(反擊 ' + (p.amount as number) + ')';
+    case 'counterattack': return '↩ 反擊!' + (p.narrative as string) + '(對' + (p.enemy as string) + ' ' + (p.damage as number) + ' 點)';
+    case 'transfer_damage': return '🤝 ' + (p.narrative as string) + '(替 ' + (p.ally as string) + ' 扛下 ' + (p.amount as number) + ' 傷)';
+    case 'transfer_horror': return '🤝 ' + (p.narrative as string) + '(替 ' + (p.ally as string) + ' 分擔 ' + (p.amount as number) + ' 恐懼)';
     case 'doom_added': return '☄ 毀滅標記 +' + (p.amount as number) + '(累計 ' + (p.total as number) + ')' + (p.source ? ' — ' + (p.source as string) + ' 的存在加速著終局' : '');
     case 'keeper_card_activated': return '🃏 城主啟用【' + (p.name as string) + '】(' + (p.cost as number) + ' 點)— ' + (p.narrative as string);
     case 'keeper_attachment': return '🕸 【' + (p.name as string) + '】的影響附著在這場雨上,揮之不去。';

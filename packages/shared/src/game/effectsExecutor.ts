@@ -252,6 +252,45 @@ export function executeCardEffects(
         out.push({ type: 'extra_attack', params: { amount, narrative: '腎上腺素湧上 — 你還能再出手。' }, targetId: inv.investigatorId });
         break;
       }
+      case 'counterattack': {
+        // 反擊(reaction):在自身掛 'counter' 層(= 反擊傷害);神話階段被怪攻擊時由 monsterActions 消耗回敬
+        const amount = Math.max(1, Number(p.amount ?? 1));
+        inv = { ...inv, statusEffects: addStatus(inv.statusEffects, 'counter', amount) };
+        out.push({ type: 'counterattack_armed', params: { amount, narrative: '你擺出架式 — 誰敢撲上來,就先嚐到回敬。' }, targetId: inv.investigatorId });
+        break;
+      }
+      case 'transfer_damage': {
+        // 坦克分傷(§10.5 盟友):把傷勢最重盟友的 HP 缺口,最多 amount 點移到自身(盟友回復、自身承受)
+        const cap = Math.max(1, Number(p.amount ?? 1));
+        const allies = inv.allies ?? [];
+        let idx = -1; let gap = 0;
+        allies.forEach((a, i) => { const g = a.hpMax - a.hp; if (g > gap) { gap = g; idx = i; } });
+        if (idx < 0 || gap <= 0) { unsupported.push('transfer_damage'); break; }
+        const moved = Math.min(cap, gap);
+        inv = {
+          ...inv,
+          allies: allies.map((a, i) => (i === idx ? { ...a, hp: a.hp + moved } : a)),
+          hp: Math.max(0, inv.hp - moved),
+        };
+        out.push({ type: 'transfer_damage', params: { amount: moved, ally: allies[idx].name, narrative: '你扛下了同伴身上的傷。' }, targetId: inv.investigatorId });
+        break;
+      }
+      case 'transfer_horror': {
+        // 坦克分擔恐懼:把理智耗損最重盟友的 SAN 缺口,最多 amount 點移到自身
+        const cap = Math.max(1, Number(p.amount ?? 1));
+        const allies = inv.allies ?? [];
+        let idx = -1; let gap = 0;
+        allies.forEach((a, i) => { const g = a.sanMax - a.san; if (g > gap) { gap = g; idx = i; } });
+        if (idx < 0 || gap <= 0) { unsupported.push('transfer_horror'); break; }
+        const moved = Math.min(cap, gap);
+        inv = {
+          ...inv,
+          allies: allies.map((a, i) => (i === idx ? { ...a, san: a.san + moved } : a)),
+          san: Math.max(0, inv.san - moved),
+        };
+        out.push({ type: 'transfer_horror', params: { amount: moved, ally: allies[idx].name, narrative: '你接過了同伴眼中的恐懼。' }, targetId: inv.investigatorId });
+        break;
+      }
       case 'modify_test':
         // passive 聚合於檢定時;on_commit 與 commit_icons 重複 — 都不在此執行
         break;

@@ -18,7 +18,7 @@ import type { ResultEffect } from './messages';
 import type { InvestigatorState, ScenarioState, EnemyInstance } from './state';
 import { resolveCheck } from './checks';
 import type { AttributeKey } from './checks';
-import { modifyIncomingDamage, applyCheckStatus, tickEnemyStatus, normalizeElement } from './statusEffects';
+import { modifyIncomingDamage, applyCheckStatus, tickEnemyStatus, normalizeElement, getLayers, removeStatus } from './statusEffects';
 import { applyIncomingDamageToPlayer } from './ally';
 import {
   locationDistance,
@@ -269,7 +269,7 @@ function monsterAttackOnce(
   card: AttackCardData | null,
   investigator: InvestigatorState,
   rng: () => number,
-): { investigator: InvestigatorState; effects: ResultEffect[] } {
+): { investigator: InvestigatorState; effects: ResultEffect[]; counterDamage: number } {
   const defAttr = asAttr(card?.defense_attribute, 'reflex');
   const dc = Number(card?.dc_override ?? data.dc ?? 10);
   const phys = Number(card?.damage_physical ?? data.damage_physical ?? 1);
@@ -310,7 +310,19 @@ function monsterAttackOnce(
       targetId: enemy.instanceId,
     });
   }
-  return { investigator: inv, effects };
+  // 反擊(counterattack 卡掛的 'counter' 狀態):被攻擊就回敬,消耗該層;傷害由 activateMonsters 套回敵人
+  let counterDamage = 0;
+  const counter = getLayers(inv.statusEffects, 'counter');
+  if (counter > 0) {
+    counterDamage = counter;
+    inv = { ...inv, statusEffects: removeStatus(inv.statusEffects, 'counter') };
+    effects.push({
+      type: 'counterattack',
+      params: { damage: counter, enemy: data.name_zh ?? enemy.enemyDefinitionId, narrative: '牠撲上來的剎那,你的反擊已經回敬上去。' },
+      targetId: enemy.instanceId,
+    });
+  }
+  return { investigator: inv, effects, counterDamage };
 }
 
 // ─── 神話階段怪物啟動(§10.2/10.3)────────────────
@@ -501,6 +513,15 @@ export function activateMonsters(
           const r = monsterAttackOnce(enemy, data, pick.card, inv, rng);
           inv = r.investigator;
           effects.push(...r.effects);
+          if (r.counterDamage > 0) {
+            const cur = sc.enemies.find((e) => e.instanceId === enemy.instanceId);
+            const before = cur?.hp ?? 0;
+            sc = { ...sc, enemies: sc.enemies.map((e) => e.instanceId === enemy.instanceId ? { ...e, hp: e.hp - r.counterDamage } : e) };
+            if (before > 0 && before - r.counterDamage <= 0) {
+              effects.push({ type: 'enemy_defeated', params: { narrative: '牠倒在自己發起的攻勢裡。' }, targetId: enemy.instanceId });
+              break; // 反擊擊殺 → 停止後續攻擊
+            }
+          }
         }
         invs[inv.investigatorId] = inv;
       }
@@ -584,6 +605,14 @@ export function activateMonsters(
         const hr = monsterAttackOnce(enemy, data, pick.card, invs[moveTarget.investigatorId], rng);
         invs[moveTarget.investigatorId] = hr.investigator;
         effects.push(...hr.effects);
+        if (hr.counterDamage > 0) {
+          const cur = sc.enemies.find((e) => e.instanceId === enemy.instanceId);
+          const before = cur?.hp ?? 0;
+          sc = { ...sc, enemies: sc.enemies.map((e) => e.instanceId === enemy.instanceId ? { ...e, hp: e.hp - hr.counterDamage } : e) };
+          if (before > 0 && before - hr.counterDamage <= 0) {
+            effects.push({ type: 'enemy_defeated', params: { narrative: '牠倒在自己發起的攻勢裡。' }, targetId: enemy.instanceId });
+          }
+        }
       }
     }
   }

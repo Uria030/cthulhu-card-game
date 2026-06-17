@@ -228,6 +228,25 @@ test('擊暈(stun_enemy):當回合不啟動,標記用掉即除,次回合恢復�
   assertEq(r2.investigators['inv-1'].hp < 7, true, '次回合恢復攻擊');
 });
 
+test('反擊(counter 狀態):怪攻擊後受回敬傷害,counter 消耗一次', () => {
+  const sc = makeScenario();
+  sc.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'ghoul', locationId: 'A', hp: 3, engagedWith: ['inv-1'], modifiers: [] }];
+  const inv = makeInv({ engagedWith: ['e1'], statusEffects: { counter: 2 } });
+  const r = activateMonsters(sc, { 'inv-1': inv }, ENEMY_DATA, ATTACK_CARDS, rngRoll(20));
+  assertEq(r.scenario.enemies[0].hp, 1, '食屍鬼 3 - 反擊 2');
+  assertEq(r.effects.some((e) => e.type === 'counterattack'), true);
+  assertEq(r.investigators['inv-1'].statusEffects?.counter ?? 0, 0, 'counter 用掉');
+});
+
+test('反擊擊殺:counter ≥ 敵 HP → 敵倒下', () => {
+  const sc = makeScenario();
+  sc.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'ghoul', locationId: 'A', hp: 2, engagedWith: ['inv-1'], modifiers: [] }];
+  const inv = makeInv({ engagedWith: ['e1'], statusEffects: { counter: 3 } });
+  const r = activateMonsters(sc, { 'inv-1': inv }, ENEMY_DATA, ATTACK_CARDS, rngRoll(20));
+  assertEq(r.scenario.enemies[0].hp <= 0, true);
+  assertEq(r.effects.some((e) => e.type === 'enemy_defeated'), true);
+});
+
 // ─── §11.4 防禦詞綴(抗性/免疫)──
 test('enemyDamageAfterDefense:免疫歸 0 / 抗性減點 / arcane 鐵則穿透 / 無資料原傷', () => {
   assertEq(enemyDamageAfterDefense({ immunities: ['fire'] }, 'fire', 5), 0, '火免疫');

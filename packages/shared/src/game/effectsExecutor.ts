@@ -425,10 +425,12 @@ export function executeCardEffects(
         break;
       }
       case 'engage_enemy': {
+        // 拉怪到自身(taunt/pull):單一交戰(§7.2)— 敵人改為只與本人交戰(替換非追加),
+        // 被牠原本纏住的其他調查員由 ruleEngine reconcileEngagement 對帳脫離
         const here = inv.currentLocationId;
         const enemyT = sc.enemies.find((e) => e.hp > 0 && e.locationId === here && !inv.engagedWith.includes(e.instanceId));
         if (!enemyT) { unsupported.push('engage_enemy'); break; }
-        sc = { ...sc, enemies: sc.enemies.map((e) => (e.instanceId === enemyT.instanceId ? { ...e, engagedWith: [...e.engagedWith, inv.investigatorId] } : e)) };
+        sc = { ...sc, enemies: sc.enemies.map((e) => (e.instanceId === enemyT.instanceId ? { ...e, engagedWith: [inv.investigatorId] } : e)) };
         inv = { ...inv, engagedWith: [...inv.engagedWith, enemyT.instanceId] };
         out.push({ type: 'engage_enemy', params: { enemyId: enemyT.instanceId } });
         break;

@@ -1524,12 +1524,13 @@ function reconcileEngagement(
   scenario: ScenarioState,
   investigators: Record<string, InvestigatorState>,
 ): { scenario: ScenarioState; investigators: Record<string, InvestigatorState> } {
+  // 有效交戰對 = 敵存活 + 雙方同地點 + **雙方互列**(單向殘留視為無效,§7.2 單一交戰由此收斂)
   const liveById = new Map(scenario.enemies.filter((e) => e.hp > 0).map((e) => [e.instanceId, e]));
   const invs: Record<string, InvestigatorState> = {};
   for (const [id, inv] of Object.entries(investigators)) {
     const kept = inv.engagedWith.filter((eid) => {
       const en = liveById.get(eid);
-      return en && en.locationId === inv.currentLocationId;
+      return en && en.locationId === inv.currentLocationId && en.engagedWith.includes(id);
     });
     invs[id] = kept.length === inv.engagedWith.length ? inv : { ...inv, engagedWith: kept };
   }
@@ -1537,7 +1538,7 @@ function reconcileEngagement(
     if (en.hp <= 0) return en.engagedWith.length ? { ...en, engagedWith: [] } : en;
     const kept = en.engagedWith.filter((iid) => {
       const inv = invs[iid];
-      return inv && inv.currentLocationId === en.locationId;
+      return inv && inv.currentLocationId === en.locationId && inv.engagedWith.includes(en.instanceId);
     });
     return kept.length === en.engagedWith.length ? en : { ...en, engagedWith: kept };
   });

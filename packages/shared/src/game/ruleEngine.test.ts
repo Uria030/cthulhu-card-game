@@ -895,6 +895,25 @@ test('卡片敵控(remove_enemy)對帳多人交戰一致性(Raviel BLOCK 回歸)
   assertEq(r.newState!.updatedAllies?.['inv-2']?.engagedWith.length, 0, 'inv-2 殘留交戰被對帳清除');
 });
 
+test('卡片 engage_enemy 拉怪:單一交戰,原交戰者被對帳脫離(Raviel BLOCK 回歸)', () => {
+  const sc = makeScenario(['loc-a']);
+  sc.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'def-e1', locationId: 'loc-a', hp: 5, engagedWith: ['inv-2'], modifiers: [] }];
+  const inv1 = makeInv({ currentLocationId: 'loc-a', hand: ['ev1'], engagedWith: [] });
+  const inv2 = makeInv({ investigatorId: 'inv-2', currentLocationId: 'loc-a', engagedWith: ['e1'] });
+  const ctx: RuleContext = {
+    scenario: sc, investigator: inv1, turn: makeTurn(), investigators: { 'inv-1': inv1, 'inv-2': inv2 },
+    enemyStats: { 'def-e1': { dc: 10 } },
+    cardLookup: { ev1: { name_zh: '挑釁', card_type: 'event', cost: 0, effects: [{ trigger_type: 'action', effect_code: 'engage_enemy', effect_params: {} }] } },
+    rng: rngRoll(10),
+  };
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'ev1' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  const e1 = r.newState!.scenario!.enemies[0];
+  assertEq(e1.engagedWith.length, 1, '敵人維持單一交戰');
+  assertEq(e1.engagedWith[0], 'inv-1', '改與拉怪者交戰');
+  assertEq(r.newState!.updatedAllies?.['inv-2']?.engagedWith.length, 0, '原交戰者 inv-2 被對帳脫離');
+});
+
 // ─── runner ─────────────────────────
 let passed = 0;
 let failed = 0;

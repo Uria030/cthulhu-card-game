@@ -28,6 +28,7 @@ import type { EnemyDataLookup } from './monsterActions';
 import { attachmentTestModifier } from './keeperAI';
 import { hpMaxFor, sanMaxFor } from './upkeep';
 import { isDowned, isStanding } from './dying';
+import { stepToward, locationDistance } from './monsterBehavior';
 
 // ─── 人格即資料:調查員 AI 設定檔 ─────────────────────
 export interface InvestigatorAIProfile {
@@ -245,6 +246,58 @@ export interface AIPlannedAction {
   intentNarrative: string;
 }
 
+/**
+ * 當前 ACT(調查員勝利條件)正規化後的目標 —— 由 front_advance_condition 資料推導。
+ * AI 的「追什麼」一律來自這裡(資料驅動),個性權重只決定「怎麼追」。
+ * - clues:數線索型(clue_threshold/seal_gate/uncover_truth),clueTarget = count×人數,達標後線索零價值
+ * - kill :殺目標型(enemy_defeated/defeat_titan),enemyCodes = 該擊敗的 variant
+ * - escape/survive:走位/撐回合型(v1 僅推導,主動評分待 v2)
+ * - none :無幕資料(教學/無 ACT)→ 回退舊的無上限線索分,行為不退化
+ */
+export interface AIObjective {
+  kind: 'clues' | 'kill' | 'escape' | 'survive' | 'none';
+  /** clues:達標線索數(count × 人數);達到後再洗線索對「贏」零貢獻 */
+  clueTarget?: number;
+  /** kill:該集火擊敗的敵人 variant 代碼 */
+  enemyCodes?: string[];
+  /** escape:全員要抵達的地點 code */
+  locationCode?: string;
+}
+
+/** 從當前 ACT 的 front_advance_condition 推導 AI 目標(鏡射 gameProgress.actConditionMet 的型別) */
+export function deriveObjective(
+  actCondition: Record<string, unknown> | null | undefined,
+  playerCount = 1,
+  enemyData?: EnemyDataLookup,
+): AIObjective {
+  if (!actCondition || typeof actCondition !== 'object') return { kind: 'none' };
+  const players = Math.max(1, playerCount);
+  const count = actCondition.count != null ? Number(actCondition.count) * players : undefined;
+  switch (String(actCondition.type ?? '')) {
+    case 'clue_threshold':
+    case 'seal_gate':
+      return { kind: 'clues', clueTarget: count };
+    case 'uncover_truth':
+      // 旗標型(truth_flag)AI 無法靠 investigate 穩定達成 → 僅 count 型當數線索
+      return count != null ? { kind: 'clues', clueTarget: count } : { kind: 'none' };
+    case 'enemy_defeated':
+      return { kind: 'kill', enemyCodes: actCondition.variant_code ? [String(actCondition.variant_code)] : [] };
+    case 'defeat_titan': {
+      if (actCondition.variant_code) return { kind: 'kill', enemyCodes: [String(actCondition.variant_code)] };
+      const codes = enemyData
+        ? Object.entries(enemyData).filter(([, d]) => Number(d.tier ?? 0) >= 5).map(([c]) => c)
+        : [];
+      return { kind: 'kill', enemyCodes: codes };
+    }
+    case 'escape':
+      return { kind: 'escape', locationCode: String(actCondition.location_code ?? '') };
+    case 'endurance':
+      return { kind: 'survive' };
+    default:
+      return { kind: 'none' };
+  }
+}
+
 export interface InvestigatorAIContext {
   scenario: ScenarioState;
   investigator: InvestigatorState;
@@ -257,12 +310,20 @@ export interface InvestigatorAIContext {
   stylePools: Record<string, StyleCardData[]>;
   /** 混沌袋情境標記效果碼(施法軌場景效果用;傳給 resolveIntent) */
   chaosMarkerEffects?: Record<string, string>;
-  /**
-   * 當前幕的「該擊敗目標」enemyDefinitionId 清單(來自 front_advance_condition 為擊敗型時)。
-   * 設了之後:AI 不再悠哉搜線索,改向目標 boss 聚攏並集火(目標導向,人格權重不變)。
-   */
+  /** 當前 ACT 目標(資料驅動;呼叫端用 deriveObjective 由幕條件算出傳入)。 */
+  objective?: AIObjective;
+  /** @deprecated 舊版只帶擊敗目標;改用 objective。仍接受以相容舊呼叫端。 */
   objectiveEnemyCodes?: string[];
   rng: () => number;
+}
+
+/** 解析當前目標:優先 objective,回退舊 objectiveEnemyCodes,再回退 none */
+function getObjective(ctx: InvestigatorAIContext): AIObjective {
+  if (ctx.objective) return ctx.objective;
+  if (ctx.objectiveEnemyCodes && ctx.objectiveEnemyCodes.length > 0) {
+    return { kind: 'kill', enemyCodes: ctx.objectiveEnemyCodes };
+  }
+  return { kind: 'none' };
 }
 
 /** 武器攻擊的期望屬性修正:對風格池逐卡平均(屬性 + 武器對應屬性加成) */
@@ -313,10 +374,31 @@ export function enumerateCandidates(
   const here = scenario.locations.find((l) => l.locationDefinitionId === inv.currentLocationId);
   const enemiesHere = scenario.enemies.filter((e) => e.hp > 0 && e.locationId === inv.currentLocationId);
   const aliveEnemies = scenario.enemies.filter((e) => e.hp > 0);
-  // 目標導向:幕條件是「擊敗某 boss」時,該 boss 還活著 → 全隊向它聚攏集火、別再悠哉搜線索
-  const objectiveCodes = ctx.objectiveEnemyCodes ?? [];
+  // 目標導向(資料驅動):殺目標型 → 向目標聚攏集火;數線索型 → 達標前才值得搜
+  const objective = getObjective(ctx);
+  const objectiveCodes = objective.kind === 'kill' ? (objective.enemyCodes ?? []) : [];
   const isObjective = (e: { enemyDefinitionId: string }) => objectiveCodes.includes(e.enemyDefinitionId);
   const objectiveAlive = aliveEnemies.some(isObjective);
+  // 還需要線索嗎?數線索型未達門檻 / 無幕資料 → 需要;殺目標·走位·撐回合型 → 洗線索對「贏」零貢獻
+  const cluesNeeded = objective.kind === 'clues'
+    ? (objective.clueTarget == null || scenario.objectiveProgress < objective.clueTarget)
+    : objective.kind === 'none';
+  // 殺目標型且目標不在腳下 → 算朝最近目標前進的下一步(多跳導航:目標在遠處也要穿過地圖去集火)
+  let stepToObjective: string | null = null;
+  if (objective.kind === 'kill' && objectiveAlive && inv.currentLocationId) {
+    const objLocs = aliveEnemies.filter(isObjective).map((e) => e.locationId);
+    if (!objLocs.includes(inv.currentLocationId)) {
+      let bestLoc: string | null = null;
+      let bestDist = Infinity;
+      for (const loc of objLocs) {
+        const d = locationDistance(scenario.locations, inv.currentLocationId, loc);
+        if (d < bestDist) { bestDist = d; bestLoc = loc; }
+      }
+      if (bestLoc && bestDist !== Infinity) {
+        stepToObjective = stepToward(scenario.locations, inv.currentLocationId, bestLoc, ctx.rng);
+      }
+    }
+  }
   const engaged = inv.engagedWith
     .map((id) => scenario.enemies.find((e) => e.instanceId === id))
     .filter((e): e is NonNullable<typeof e> => !!e && e.hp > 0);
@@ -333,9 +415,9 @@ export function enumerateCandidates(
       const engagedPenalty = engaged.length > 0 ? 0.2 : 1;
       out.push({
         actionType: 'investigate',
-        // 目標 boss 還活著:搜線索退居其次(否則悠哉搜到全滅也不打 boss)
+        // 目標 boss 還活著 → 搜線索退居其次;線索已達門檻(或非數線索幕)→ 幾乎不再搜(對贏零貢獻)
         payload: commit.length > 0 ? { commitCardIds: commit } : {},
-        score: profile.weights.clueFocus * p * engagedPenalty * (objectiveAlive ? 0.2 : 1),
+        score: profile.weights.clueFocus * p * engagedPenalty * (objectiveAlive ? 0.2 : 1) * (cluesNeeded ? 1 : 0.15),
         intentNarrative: '在這裡仔細搜查',
       });
     }
@@ -525,6 +607,8 @@ export function enumerateCandidates(
       // 目標導向:幕目標 boss 在隔壁 → 強烈聚攏過去集火(壓過搜線索的好奇心)
       const objectiveThere = scenario.enemies.some((e) => e.hp > 0 && e.locationId === targetId && isObjective(e));
       if (objectiveThere && !retreating) value += 3.0 + profile.weights.combatFocus * 0.6;
+      // 多跳導航:這格是通往遠處目標的最短路徑下一步 → 拉過去(目標不在隔壁也穿過地圖集火)
+      else if (stepToObjective && targetId === stepToObjective && !retreating) value += 2.5 + profile.weights.combatFocus * 0.5;
       if (enemyThere && retreating) value -= 1.5;
       // 退守:離開有怪的地點
       if (retreating && enemiesHere.length > 0 && !enemyThere) value += 1.8;
@@ -641,16 +725,22 @@ export function scoreState(
   profile: InvestigatorAIProfile,
 ): number {
   const w = profile.weights;
-  const objectiveCodes = ctx.objectiveEnemyCodes ?? [];
+  const objective = getObjective(ctx);
+  const objectiveCodes = objective.kind === 'kill' ? (objective.enemyCodes ?? []) : [];
   let s = 0;
-  // 戰鬥推進:敵人活著扣分(目標 boss 加重)→ 清怪/集火加分
+  // 戰鬥推進:敵人活著扣分(殺目標型的目標 ×1.2 → 集火)→ 清怪加分
   for (const e of scenario.enemies) {
     if (e.hp <= 0) continue;
     const isObj = objectiveCodes.includes(e.enemyDefinitionId);
     s -= e.hp * w.combatFocus * (isObj ? 1.2 : 0.4);
   }
-  // 線索/目標推進(每線索 ≈ clueFocus;與戰鬥項 combatFocus×0.4/傷害 平衡,個性才不被洗掉)
-  s += scenario.objectiveProgress * w.clueFocus;
+  // ACT 目標推進(資料驅動):數線索型在門檻封頂 → 達標後線索零邊際價值(不再洗);
+  // 殺目標型不給線索分(目標是擊殺,靠上面 ×1.2 集火驅動);無幕資料回退舊的無上限線索分。
+  if (objective.kind === 'clues') {
+    s += Math.min(scenario.objectiveProgress, objective.clueTarget ?? Infinity) * w.clueFocus;
+  } else if (objective.kind === 'none') {
+    s += scenario.objectiveProgress * w.clueFocus;
+  }
   // 自身存活(低血/低 SAN 陡降)
   const hpPct = inv.hpMax > 0 ? inv.hp / inv.hpMax : 0;
   const sanPct = inv.sanMax > 0 ? inv.san / inv.sanMax : 0;

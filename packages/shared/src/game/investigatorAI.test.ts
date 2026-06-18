@@ -12,6 +12,7 @@ import {
   planNextAction,
   planTurn,
   scoreState,
+  deriveObjective,
   runInvestigatorAITurn,
 } from './investigatorAI';
 import type { InvestigatorAIProfile, InvestigatorAIContext } from './investigatorAI';
@@ -280,6 +281,57 @@ test('scoreState:場上有可用武器 → 潛力加分(鋪陳步不被當廢步
     scoreState(without.investigator, without.scenario, without, ELIAS),
     '場上有武器(潛在傷害)的狀態潛力更高',
   );
+});
+
+// ─── v1:ACT 目標驅動(資料驅動,取代硬寫的無上限線索分)──────────
+test('deriveObjective:clue_threshold→clues(門檻×人數);enemy_defeated→kill(codes);無幕→none', () => {
+  const clues = deriveObjective({ type: 'clue_threshold', count: 2 }, 4);
+  assertEq(clues.kind, 'clues');
+  assertEq(clues.clueTarget, 8); // 2 × 4 人
+  const kill = deriveObjective({ type: 'enemy_defeated', variant_code: 'boss_t3' }, 4);
+  assertEq(kill.kind, 'kill');
+  assertEq((kill.enemyCodes ?? []).join(','), 'boss_t3');
+  assertEq(deriveObjective(null, 4).kind, 'none');
+});
+
+test('scoreState:數線索型在門檻封頂(達標後洗線索零邊際 → 不再洗 32 個)', () => {
+  const obj = { kind: 'clues' as const, clueTarget: 4 };
+  const at = ctx({ scenario: makeScenario({ objectiveProgress: 4 }), objective: obj });
+  const over = ctx({ scenario: makeScenario({ objectiveProgress: 6 }), objective: obj });
+  assertEq(
+    scoreState(over.investigator, over.scenario, over, ELIAS),
+    scoreState(at.investigator, at.scenario, at, ELIAS),
+    '超過門檻的線索不再加分',
+  );
+  const below = ctx({ scenario: makeScenario({ objectiveProgress: 2 }), objective: obj });
+  assert(
+    scoreState(at.investigator, at.scenario, at, ELIAS) > scoreState(below.investigator, below.scenario, below, ELIAS),
+    '門檻內線索越多分越高',
+  );
+});
+
+test('scoreState:殺目標型不給線索分(目標是擊殺,殘留線索不影響分數)', () => {
+  const killObj = { kind: 'kill' as const, enemyCodes: ['boss_t3'] };
+  const c0 = ctx({ scenario: makeScenario({ objectiveProgress: 0 }), objective: killObj });
+  const c9 = ctx({ scenario: makeScenario({ objectiveProgress: 9 }), objective: killObj });
+  assertEq(
+    scoreState(c9.investigator, c9.scenario, c9, ELIAS),
+    scoreState(c0.investigator, c0.scenario, c0, ELIAS),
+    '殺目標型:殘留線索數對分數無影響',
+  );
+});
+
+test('planTurn:遠處目標 boss → 規劃移動朝它前進(多跳導航)', () => {
+  // boss 在 B,投查員在 A(A-B 相鄰);殺目標型 → 應選 move 往 B
+  const enemy = { instanceId: 'boss', enemyDefinitionId: 'boss_t3', locationId: 'B', hp: 20, engagedWith: [], modifiers: [] };
+  const c = ctx({
+    scenario: makeScenario({ enemies: [enemy] }),
+    investigator: makeInv({ currentLocationId: 'A', actionPoints: 3, hand: [], assetsInPlay: [] }),
+    objective: { kind: 'kill', enemyCodes: ['boss_t3'] },
+  });
+  const first = planTurn(c, ELIAS, initInvestigatorAIState());
+  assertEq(first?.actionType, 'move', '目標在隔壁但不在腳下 → 先移動過去集火');
+  assertEq(first?.payload.targetLocationId, 'B');
 });
 
 test('planTurn:戰鬥型 AI 手握武器 + 有怪 → 先鋪武器(模擬看到「鋪槍再開火 > 徒手」自動選 combo)', () => {

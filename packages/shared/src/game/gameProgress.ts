@@ -133,6 +133,14 @@ function actConditionMet(
   }
 }
 
+// 回血量:資料 amount_rule='per_other_enemy' → 場上每隻「非目標」活怪回 1(裂嘴女靠潮水中同類補充);否則用固定 amount。
+function regenAmount(pen: Record<string, unknown>, sc: ScenarioState, code: string): number {
+  if (String(pen.amount_rule ?? '') === 'per_other_enemy') {
+    return sc.enemies.filter((e) => e.hp > 0 && e.enemyDefinitionId !== code).length;
+  }
+  return Number(pen.amount ?? 1);
+}
+
 // 議程「潮汐」翻面一次性結算:boss 在場 → 瞬間回 N HP(封頂 spawn 最大 HP)。
 // 規則書 ch2 §2.3:毀滅達門檻「翻面結算背面效果」= 翻面當下一次性,非每回合。
 function healEnemyOnce(
@@ -250,15 +258,16 @@ export function progressTick(
         sc = { ...sc, globalMoveCostBonus: (sc.globalMoveCostBonus ?? 0) + add };
         effects.push({ type: 'penalty_applied', params: { penalty: type, narrative: '暴雨封路,移動更加艱難(移動成本 +' + add + ')。' } });
       } else if (type === 'enemy_regen') {
-        // 規則書:翻面一次性結算 → boss 瞬間回 N HP(非每回合)
-        sc = healEnemyOnce(sc, String(pen.variant_code ?? ''), Number(pen.amount ?? 1), enemyData, playerCount, effects);
+        // 規則書:翻面一次性結算 → boss 瞬間回血(量見 regenAmount;潮汐 = 場上非目標活怪數)
+        const code = String(pen.variant_code ?? '');
+        sc = healEnemyOnce(sc, code, regenAmount(pen, sc, code), enemyData, playerCount, effects);
       } else if (type === 'enemy_regen_or_spawn') {
         // AGENDA2 但書(Uria):怪在場 → 回血;不在場 → 生成在指定地點(裂嘴女不在場補位)
         const code = String(pen.variant_code ?? '');
         const present = sc.enemies.some((e) => e.enemyDefinitionId === code && e.hp > 0);
         if (present) {
-          // 規則書:翻面一次性結算 → boss 瞬間回 N HP(非每回合)
-          sc = healEnemyOnce(sc, code, Number(pen.amount ?? 1), enemyData, playerCount, effects);
+          // 規則書:翻面一次性結算 → boss 瞬間回血(潮汐 = 場上非目標活怪數)
+          sc = healEnemyOnce(sc, code, regenAmount(pen, sc, code), enemyData, playerCount, effects);
         } else {
           const loc = String(pen.location_code ?? sc.locations[sc.locations.length - 1]?.locationDefinitionId ?? '');
           if (code && loc) {

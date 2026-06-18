@@ -140,6 +140,21 @@ test('議程二翻面:回血封頂於最大 HP(滿血不溢出)', () => {
   assertEq(r.scenario.enemies[0].hp, 23, 'max 23 → 不溢出');
 });
 
+test('議程二翻面:amount_rule=per_other_enemy → 回血量 = 場上非目標活怪數(死的不算)', () => {
+  const ags = [{ card_order: 1, name_zh: '潮汐', front_doom_threshold: 4, back_penalties: [{ type: 'enemy_regen', variant_code: 'boss', amount_rule: 'per_other_enemy' }] }];
+  const sc = makeScenario({
+    agendaProgress: 4,
+    enemies: [
+      { instanceId: 'boss', enemyDefinitionId: 'boss', locationId: 'B', hp: 10, engagedWith: [], modifiers: [] },
+      { instanceId: 'm1', enemyDefinitionId: 'minion', locationId: 'A', hp: 4, engagedWith: [], modifiers: [] },
+      { instanceId: 'm2', enemyDefinitionId: 'minion', locationId: 'B', hp: 4, engagedWith: [], modifiers: [] },
+      { instanceId: 'dead', enemyDefinitionId: 'minion', locationId: 'A', hp: 0, engagedWith: [], modifiers: [] },
+    ],
+  });
+  const r = progressTick(sc, {}, [], ags, ENEMY_DATA);
+  assertEq(r.scenario.enemies.find((e) => e.instanceId === 'boss')!.hp, 12, '2 隻活的非 boss → 回 2');
+});
+
 test('議程三翻面:defeat 訊號', () => {
   const sc = makeScenario({ agendaIndex: 2, agendaProgress: 4 });
   const r = progressTick(sc, {}, ACTS, AGENDAS, ENEMY_DATA);

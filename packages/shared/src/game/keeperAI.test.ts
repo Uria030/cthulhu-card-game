@@ -72,13 +72,13 @@ function situation(over: Partial<ReturnType<typeof snapshotSituation>> = {}) {
 }
 
 // ─── 設定檔 ─────────────────────────────────
-test('defaultKeeperProfile:每回合能量=人數+1,上限=6+2×人數(Uria 2026-06-18)', () => {
+test('defaultKeeperProfile:每回合能量=3(標準難度,規則書級),累積上限=6+2×人數', () => {
   const solo = defaultKeeperProfile(undefined, 1);
-  assertEq(solo.baseActionPoints, 2);  // 人數1 + 1
+  assertEq(solo.baseActionPoints, 3);
   assertEq(solo.maxAccumulation, 8);   // 6 + 2×1
   const four = defaultKeeperProfile({ keeper_action_per_player: 2 }, 4);
-  assertEq(four.baseActionPoints, 5);  // 人數4 + 1
-  assertEq(four.maxAccumulation, 14);  // 6 + 2×4
+  assertEq(four.baseActionPoints, 3);  // 不再隨人數灌爆(原+1會把 boss 戰壓成不可勝)
+  assertEq(four.maxAccumulation, 14);  // 6 + 2×4(人數加成移到累積上限)
 });
 
 // ─── 局勢快照 ───────────────────────────────
@@ -160,12 +160,11 @@ test('選卡:首回合行動點 = 基礎值,不雙算(BLOCK 回歸)', () => {
   assertEq(r.state.actionPoints, 0, '首回合 2 點被費 3 議程夾 0');
 });
 
-test('人數加成:4 人隊城主在末日推進外還能再放一張(不再 AP 餓死)', () => {
-  const p = defaultKeeperProfile({ keeper_action_per_player: 2 }, 4); // base 5
-  // 首回合 5 點:#21 強制 AGENDA(3) + 剩 2 點 → 貪婪再放一張 cost≤2
+test('base 3:#21 強制末日推進(費3)吃光每回合 AP → 城主聚焦 doom 時鐘(換取 boss 戰可勝;待後續平衡能加壓力卡)', () => {
+  const p = defaultKeeperProfile({ keeper_action_per_player: 2 }, 4); // base 3
   const r = selectKeeperActivations([SUMMON, AGENDA, STATUS, AMBIENT], situation({ aliveEnemies: 2, dramaTier: 'climax' }), initKeeperState(p), p, () => 0);
-  assertEq(r.activations.length, 2, '末日推進 + 1 張');
-  assertEq(r.activations.some((c) => c.id === 'agenda'), true, '末日推進仍每回合強制');
+  assertEq(r.activations.length, 1, '首回合只放末日推進(費3吃光 base3)');
+  assertEq(r.activations[0].id, 'agenda', '末日推進每回合強制');
 });
 
 test('選卡:非 reusable 用過即不再選', () => {

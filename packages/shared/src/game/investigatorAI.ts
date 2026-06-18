@@ -434,7 +434,7 @@ export function enumerateCandidates(
     const engagedWithAlly = otherAllies.some((a) => enemy.engagedWith.includes(a.investigatorId));
     const protectBonus = engagedWithAlly ? profile.weights.protectAllies : 0;
     const finishBonus = enemy.hp <= 2 ? 0.8 : 0; // 補刀:差一口氣的怪優先清掉
-    const objectiveBonus = isObjective(enemy) ? 3.5 : 0; // 幕目標 boss:集火(壓過搜線索)
+    const objectiveBonus = isObjective(enemy) ? 5.0 : 0; // 幕目標 boss:全力集火(壓過搜線索/鋪場/救援)
     const retreatMul = retreating ? 0.4 : 1;
 
     // 武器攻擊(場上有 attack 行動效果的資產;彈藥耗盡的略過)
@@ -448,7 +448,8 @@ export function enumerateCandidates(
       const expect = weaponExpectedModifier(inv, weaponId, cardLookup, stylePools);
       if (!expect) continue;
       const p = estimateSuccessChance(expect.modifier + vis, dc);
-      if (p < profile.weights.riskTolerance * 0.5) continue;
+      // 命中率太低就不攻擊 —— 但幕目標 boss 例外:再難也要打(否則高 DC boss 永遠不被生成攻擊候選 → 打不掉)
+      if (p < profile.weights.riskTolerance * 0.5 && !isObjective(enemy)) continue;
       out.push({
         actionType: 'execute_card_action',
         payload: { cardInstanceId: weaponId, enemyInstanceId: enemy.instanceId },
@@ -461,7 +462,7 @@ export function enumerateCandidates(
     {
       const mod = inv.attributes.strength;
       const p = estimateSuccessChance(mod + vis, dc);
-      if (p >= profile.weights.riskTolerance * 0.5) {
+      if (p >= profile.weights.riskTolerance * 0.5 || isObjective(enemy)) { // 幕目標 boss:再難也徒手拼
         out.push({
           actionType: 'attack',
           payload: { enemyInstanceId: enemy.instanceId },
@@ -499,7 +500,7 @@ export function enumerateCandidates(
         actionType: 'stabilize',
         payload: { targetInvestigatorId: ally.investigatorId },
         // 基礎分高到壓過日常行動;守護型(馬庫斯)再往上疊
-        score: 2.5 + profile.weights.protectAllies * 1.5,
+        score: 1.8 + profile.weights.protectAllies * 1.2,
         intentNarrative: '撲到倒下的隊友身邊壓住傷勢',
       });
     }
@@ -610,9 +611,9 @@ export function enumerateCandidates(
       if (enemyThere && !retreating) value += profile.weights.combatFocus * 0.4;
       // 目標導向:幕目標 boss 在隔壁 → 強烈聚攏過去集火(壓過搜線索的好奇心)
       const objectiveThere = scenario.enemies.some((e) => e.hp > 0 && e.locationId === targetId && isObjective(e));
-      if (objectiveThere && !retreating) value += 3.0 + profile.weights.combatFocus * 0.6;
+      if (objectiveThere && !retreating) value += 4.0 + profile.weights.combatFocus * 0.6;
       // 多跳導航:這格是通往遠處目標的最短路徑下一步 → 拉過去(目標不在隔壁也穿過地圖集火)
-      else if (stepToObjective && targetId === stepToObjective && !retreating) value += 2.5 + profile.weights.combatFocus * 0.5;
+      else if (stepToObjective && targetId === stepToObjective && !retreating) value += 3.5 + profile.weights.combatFocus * 0.5;
       if (enemyThere && retreating) value -= 1.5;
       // 退守:離開有怪的地點
       if (retreating && enemiesHere.length > 0 && !enemyThere) value += 1.8;
@@ -739,10 +740,22 @@ export function scoreState(
   const objectiveCodes = objective.kind === 'kill' ? (objective.enemyCodes ?? []) : [];
   let s = 0;
   // 戰鬥推進:敵人活著扣分(殺目標型的目標 ×1.2 → 集火)→ 清怪加分
+  // 目標 boss 還活著 → 雜兵幾乎不給清怪分(別被召喚的亡靈引走,專心打 boss);沒 boss 時正常清怪。
+  const objBossAlive = objectiveCodes.length > 0 && scenario.enemies.some((e) => e.hp > 0 && objectiveCodes.includes(e.enemyDefinitionId));
   for (const e of scenario.enemies) {
     if (e.hp <= 0) continue;
     const isObj = objectiveCodes.includes(e.enemyDefinitionId);
-    s -= e.hp * w.combatFocus * (isObj ? 1.2 : 0.4);
+    s -= e.hp * w.combatFocus * (isObj ? 1.2 : (objBossAlive ? 0.12 : 0.4));
+  }
+  // 朝殺目標靠近也加分:模擬前瞻深度有限,看不到「一步步走過去打」的價值 → 給距離項,
+  // 否則遠處 boss 永遠不去(走一步不改終局分),全隊在原地鋪場/救人。離目標越遠扣越多 → 驅動穿圖集火。
+  if (objective.kind === 'kill' && inv.currentLocationId) {
+    let dist = Infinity;
+    for (const e of scenario.enemies) {
+      if (e.hp <= 0 || !objectiveCodes.includes(e.enemyDefinitionId)) continue;
+      dist = Math.min(dist, locationDistance(scenario.locations, inv.currentLocationId, e.locationId));
+    }
+    if (dist !== Infinity && dist > 0) s -= dist * w.combatFocus * 1.2;
   }
   // ACT 目標推進(資料驅動):數線索型在門檻封頂 → 達標後線索零邊際價值(不再洗);
   // 殺目標型不給線索分(目標是擊殺,靠上面 ×1.2 集火驅動);無幕資料回退舊的無上限線索分。
@@ -818,6 +831,11 @@ export function planTurn(
   let beam: PlanNode[] = [start];
   const depth = Math.min(3, Math.max(1, ctx.investigator.actionPoints));
   let anyExpanded = false;
+  // 首步期望值偏置:planTurn 用中位骰模擬,對高 DC 目標(boss + 黑暗)的攻擊常模擬成 miss →
+  // 終局分看不出價值,結果寧可鋪牌/救人也不打 boss。把「首步即時分(已含命中率期望值)」摻進排序,
+  // 讓高期望攻擊不被中位 miss 抹掉(攻擊目標 boss 即時分 ~7,壓過鋪牌 ~3/救人 ~2.8)。
+  const FIRST_STEP_BIAS = 0.6;
+  const rankScore = (n: PlanNode) => n.score + FIRST_STEP_BIAS * (n.first?.score ?? 0);
   for (let d = 0; d < depth; d += 1) {
     const next: PlanNode[] = [];
     for (const node of beam) {
@@ -842,10 +860,10 @@ export function planTurn(
       }
     }
     if (next.length === 0) break;
-    beam = next.sort((a, b) => b.score - a.score).slice(0, PLAN_BEAM_WIDTH); // beam:留終局分前 K
+    beam = next.sort((a, b) => rankScore(b) - rankScore(a)).slice(0, PLAN_BEAM_WIDTH); // beam:留(終局分+首步期望值)前 K
   }
   if (!anyExpanded) return null;
-  const ranked = beam.filter((n) => n.first).sort((a, b) => b.score - a.score);
+  const ranked = beam.filter((n) => n.first).sort((a, b) => rankScore(b) - rankScore(a));
   if (ranked.length === 0) return null;
   // 溫度:偶爾選次佳序列(像人,會小失誤)
   if (ranked.length > 1 && ctx.rng() < profile.temperature) return ranked[1].first;

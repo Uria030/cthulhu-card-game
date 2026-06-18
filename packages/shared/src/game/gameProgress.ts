@@ -220,12 +220,18 @@ export function progressTick(
     }
     for (const pen of agenda.back_penalties ?? []) {
       const type = String(pen.type ?? '');
-      if (type === 'enemy_regen') {
+      if (type === 'heavy_rain') {
+        // 滂沱暴雨:翻面後全域移動成本 +N(持續效果,移動結算讀 scenario.globalMoveCostBonus)
+        const add = Number(pen.amount ?? 1);
+        sc = { ...sc, globalMoveCostBonus: (sc.globalMoveCostBonus ?? 0) + add };
+        effects.push({ type: 'penalty_applied', params: { penalty: type, narrative: '暴雨封路,移動更加艱難(移動成本 +' + add + ')。' } });
+      } else if (type === 'enemy_regen') {
         const code = String(pen.variant_code ?? '');
+        const n = Number(pen.amount ?? 1);
         sc = {
           ...sc,
           enemies: sc.enemies.map((e) =>
-            e.enemyDefinitionId === code ? { ...e, modifiers: [...e.modifiers, 'regen_boost'] } : e,
+            e.enemyDefinitionId === code ? { ...e, modifiers: [...e.modifiers.filter((m) => !m.startsWith('regen_boost')), 'regen_boost:' + n] } : e,
           ),
         };
         effects.push({ type: 'penalty_applied', params: { penalty: type, narrative: '牠的傷口開始癒合。' } });
@@ -234,10 +240,11 @@ export function progressTick(
         const code = String(pen.variant_code ?? '');
         const present = sc.enemies.some((e) => e.enemyDefinitionId === code && e.hp > 0);
         if (present) {
+          const n = Number(pen.amount ?? 1);
           sc = {
             ...sc,
             enemies: sc.enemies.map((e) =>
-              e.enemyDefinitionId === code && e.hp > 0 ? { ...e, modifiers: [...e.modifiers, 'regen_boost'] } : e,
+              e.enemyDefinitionId === code && e.hp > 0 ? { ...e, modifiers: [...e.modifiers.filter((m) => !m.startsWith('regen_boost')), 'regen_boost:' + n] } : e,
             ),
           };
           effects.push({ type: 'penalty_applied', params: { penalty: 'enemy_regen', narrative: '牠的傷口開始癒合。' } });

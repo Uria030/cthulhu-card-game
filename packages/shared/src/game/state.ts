@@ -68,6 +68,8 @@ export interface ScenarioState {
   actIndex?: number;
   /** 當前議程索引(0-based) */
   agendaIndex?: number;
+  /** 全域移動成本加成(議程「滂沱」暴雨等持續背面效果翻面後生效;每次移動 +N AP)*/
+  globalMoveCostBonus?: number;
   /** 城主持續附著卡(open-hand 神話卡 persistent 效果;keeper_ai_regulation §2.2) */
   keeperAttachments?: Array<{
     cardId: string;

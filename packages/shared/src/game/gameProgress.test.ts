@@ -5,6 +5,7 @@ import { progressTick, evaluateOutcome, applyOutcomeFlags, addDoom, allInvestiga
 import type { ActCardData, AgendaCardData, OutcomeData } from './gameProgress';
 import type { ScenarioState, InvestigatorState } from './state';
 import type { EnemyDataLookup } from './monsterActions';
+import { tickEnemyRegen } from './monsterActions';
 
 type TestFn = () => void;
 const tests: { name: string; fn: TestFn }[] = [];
@@ -128,7 +129,7 @@ test('議程二翻面:boss 獲得再生標記', () => {
     enemies: [{ instanceId: 'e1', enemyDefinitionId: 'boss', locationId: 'B', hp: 10, engagedWith: [], modifiers: [] }],
   });
   const r = progressTick(sc, {}, ACTS, AGENDAS, ENEMY_DATA);
-  assertEq(r.scenario.enemies[0].modifiers.includes('regen_boost'), true);
+  assertEq(r.scenario.enemies[0].modifiers.some((m) => m.startsWith('regen_boost:')), true);
 });
 
 test('議程三翻面:defeat 訊號', () => {
@@ -141,7 +142,7 @@ test('enemy_regen_or_spawn:裂嘴女在場→回血', () => {
   const ags = [{ card_order: 1, name_zh: '潮汐', front_doom_threshold: 4, back_penalties: [{ type: 'enemy_regen_or_spawn', variant_code: 'boss', location_code: 'B' }] }];
   const sc = makeScenario({ agendaProgress: 4, enemies: [{ instanceId: 'e1', enemyDefinitionId: 'boss', locationId: 'B', hp: 10, engagedWith: [], modifiers: [] }] });
   const r = progressTick(sc, {}, [], ags, ENEMY_DATA);
-  assertEq(r.scenario.enemies[0].modifiers.includes('regen_boost'), true);
+  assertEq(r.scenario.enemies[0].modifiers.some((m) => m.startsWith('regen_boost:')), true);
   assertEq(r.scenario.enemies.length, 1, '在場不補生成');
 });
 
@@ -158,6 +159,22 @@ test('enemy_regen_or_spawn:裂嘴女不在場→生成在指定地點', () => {
 test('addDoom 累積', () => {
   const r = addDoom(makeScenario({ agendaProgress: 2 }), 1);
   assertEq(r.scenario.agendaProgress, 3);
+});
+
+// ─── 議程背面效果生效(Uria 2026-06-18:讓議程真的有牙)──────
+test('議程一翻面:heavy_rain → 全域移動成本 +1', () => {
+  const sc = makeScenario({ agendaIndex: 0, agendaProgress: 4 });
+  const r = progressTick(sc, {}, ACTS, AGENDAS, ENEMY_DATA);
+  assertEq(r.scenario.globalMoveCostBonus, 1);
+});
+
+test('tickEnemyRegen:帶 regen_boost:N 的怪每回合回 N,封頂於最大 HP;無標記不回', () => {
+  const sc = makeScenario({ enemies: [{ instanceId: 'e1', enemyDefinitionId: 'boss', locationId: 'B', hp: 20, engagedWith: [], modifiers: ['regen_boost:1'] }] });
+  assertEq(tickEnemyRegen(sc, ENEMY_DATA, 1).scenario.enemies[0].hp, 21, '回 1');
+  const scMax = makeScenario({ enemies: [{ instanceId: 'e1', enemyDefinitionId: 'boss', locationId: 'B', hp: 23, engagedWith: [], modifiers: ['regen_boost:1'] }] });
+  assertEq(tickEnemyRegen(scMax, ENEMY_DATA, 1).scenario.enemies[0].hp, 23, '已滿(max 23)不超過');
+  const scNo = makeScenario({ enemies: [{ instanceId: 'e1', enemyDefinitionId: 'boss', locationId: 'B', hp: 10, engagedWith: [], modifiers: [] }] });
+  assertEq(tickEnemyRegen(scNo, ENEMY_DATA, 1).scenario.enemies[0].hp, 10, '無標記不回血');
 });
 
 // ─── 結局判定 ───────────────────────────────

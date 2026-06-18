@@ -5,6 +5,7 @@ import {
   createTurnLoop,
   resolveIntent,
   activateMonsters,
+  tickEnemyRegen,
   runFearChecks,
   progressTick,
   evaluateOutcome,
@@ -490,6 +491,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         agendaIndex: nextSc.agendaIndex,
         turnNumber: nextSc.turnNumber,
         phase: nextSc.phase,
+        globalMoveCostBonus: nextSc.globalMoveCostBonus, // 議程滂沱暴雨等持續效果跨場景保留
         enemies: nextSc.enemies.filter((e) => sceneLocs.has(e.locationId)),
       };
       nextInv = {
@@ -931,6 +933,13 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       }
     }
     if (selection.activations.length === 0) append('[城主] 雨聲之外,某種注視沉默地積蓄著。');
+
+    // ②.5 議程「潮汐」回血:帶 regen_boost 標記的敵人每回合癒合(神話階段一次,封頂於 spawn 最大 HP)
+    {
+      const regen = tickEnemyRegen(sc, setup.enemyStats, 1 + setup.aiMembers.length);
+      sc = regen.scenario;
+      for (const eff of regen.effects) append('[神話階段] ' + describeEffect(eff, locMeta));
+    }
 
     // ③ §10 怪物啟動(行為腳本層選招;目標含 AI 隊友 — 對怪物而言獵物平等)
     const partyMap: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
@@ -1401,7 +1410,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                 const meta = locMeta[tid];
                 const target = scenario.locations.find((l) => l.locationDefinitionId === tid);
                 const unlocked = isLocationUnlocked(tid);
-                const cost = target?.isObstacle ? 2 : 1;
+                const cost = (target?.isObstacle ? 2 : 1) + (scenario.globalMoveCostBonus ?? 0);
                 return (
                   <button key={tid} disabled={!unlocked} onClick={() => submitIntent('move', { targetLocationId: tid })}>
                     {unlocked ? '' : '🔒 '}移動→{meta?.name ?? tid}({cost} AP)

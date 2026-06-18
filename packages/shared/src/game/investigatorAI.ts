@@ -584,7 +584,7 @@ export function enumerateCandidates(
     for (const targetId of here.connectedTo) {
       if (scenario.unlockedLocations.length > 0 && !scenario.unlockedLocations.includes(targetId)) continue;
       const target = scenario.locations.find((l) => l.locationDefinitionId === targetId);
-      const cost = target?.isObstacle ? 2 : 1;
+      const cost = (target?.isObstacle ? 2 : 1) + (scenario.globalMoveCostBonus ?? 0);
       if (inv.actionPoints < cost) continue;
       let value = 0.3; // 基礎好奇心
       // 守護:隊友在隔壁被怪纏住 → 過去支援

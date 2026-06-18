@@ -397,7 +397,7 @@ function resolveMove(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput
   if (ctx.scenario.unlockedLocations.length > 0 && !ctx.scenario.unlockedLocations.includes(targetId)) {
     return reject(intent, '「' + targetId + '」這條路還沒打開', '完成當前地點的目標即可解鎖');
   }
-  const cost = (target.isObstacle ? 2 : 1) + moveCostBonus(ctx.investigator.statusEffects); // §6.2 冷凍 +1
+  const cost = (target.isObstacle ? 2 : 1) + moveCostBonus(ctx.investigator.statusEffects) + (ctx.scenario.globalMoveCostBonus ?? 0); // §6.2 冷凍 +1;議程滂沱暴雨全域 +N
   if (ctx.investigator.actionPoints < cost) {
     return reject(intent, '行動點不足:移動到「' + targetId + '」需 ' + cost + ',剩 ' + ctx.investigator.actionPoints);
   }

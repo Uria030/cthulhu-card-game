@@ -667,32 +667,3 @@ export function spawnEnemy(
   };
 }
 
-/**
- * 議程「潮汐」回血:每回合幫帶 `regen_boost:N` 標記的敵人回 N HP(封頂於 spawn 公式的最大 HP)。
- * 神話階段呼叫(client enterMythosPhase + sim);只對 hp>0 的敵人生效。
- */
-export function tickEnemyRegen(
-  scenario: ScenarioState,
-  enemyData: EnemyDataLookup,
-  playerCount = 1,
-): { scenario: ScenarioState; effects: ResultEffect[] } {
-  const effects: ResultEffect[] = [];
-  const enemies = scenario.enemies.map((e) => {
-    if (e.hp <= 0) return e;
-    const tag = e.modifiers.find((m) => m.startsWith('regen_boost:'));
-    if (!tag) return e;
-    const n = Number(tag.slice('regen_boost:'.length)) || 0;
-    if (n <= 0) return e;
-    const data = enemyData[e.enemyDefinitionId] ?? {};
-    const maxHp = Number(data.hp_base ?? e.hp) + Number(data.hp_per_player ?? 0) * (playerCount - 1);
-    const healed = Math.min(maxHp, e.hp + n);
-    if (healed <= e.hp) return e;
-    effects.push({
-      type: 'enemy_regen_tick',
-      params: { enemy: data.name_zh ?? e.enemyDefinitionId, amount: healed - e.hp, narrative: '深海的潮汐裡,牠的傷口正在癒合(HP +' + (healed - e.hp) + ')。' },
-      targetId: e.instanceId,
-    });
-    return { ...e, hp: healed };
-  });
-  return { scenario: { ...scenario, enemies }, effects };
-}

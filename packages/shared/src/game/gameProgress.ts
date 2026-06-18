@@ -133,6 +133,30 @@ function actConditionMet(
   }
 }
 
+// 議程「潮汐」翻面一次性結算:boss 在場 → 瞬間回 N HP(封頂 spawn 最大 HP)。
+// 規則書 ch2 §2.3:毀滅達門檻「翻面結算背面效果」= 翻面當下一次性,非每回合。
+function healEnemyOnce(
+  sc: ScenarioState,
+  code: string,
+  amount: number,
+  enemyData: EnemyDataLookup,
+  playerCount: number,
+  effects: ResultEffect[],
+): ScenarioState {
+  const data = enemyData[code] ?? {};
+  const maxHp = Number(data.hp_base ?? 0) + Number(data.hp_per_player ?? 0) * (playerCount - 1);
+  let healed = 0;
+  const enemies = sc.enemies.map((e) => {
+    if (e.enemyDefinitionId !== code || e.hp <= 0) return e;
+    const cap = maxHp > 0 ? maxHp : e.hp + amount;
+    const nh = Math.min(cap, e.hp + amount);
+    if (nh > e.hp) healed = nh - e.hp;
+    return { ...e, hp: nh };
+  });
+  effects.push({ type: 'penalty_applied', params: { penalty: 'enemy_regen', narrative: healed > 0 ? '深海的潮汐裡,牠的傷口瞬間癒合(HP +' + healed + ')。' : '牠的傷口開始癒合。' } });
+  return { ...sc, enemies };
+}
+
 // ─── 主入口:每次狀態變化後呼叫 ─────────────────
 export function progressTick(
   scenario: ScenarioState,
@@ -226,28 +250,15 @@ export function progressTick(
         sc = { ...sc, globalMoveCostBonus: (sc.globalMoveCostBonus ?? 0) + add };
         effects.push({ type: 'penalty_applied', params: { penalty: type, narrative: '暴雨封路,移動更加艱難(移動成本 +' + add + ')。' } });
       } else if (type === 'enemy_regen') {
-        const code = String(pen.variant_code ?? '');
-        const n = Number(pen.amount ?? 1);
-        sc = {
-          ...sc,
-          enemies: sc.enemies.map((e) =>
-            e.enemyDefinitionId === code ? { ...e, modifiers: [...e.modifiers.filter((m) => !m.startsWith('regen_boost')), 'regen_boost:' + n] } : e,
-          ),
-        };
-        effects.push({ type: 'penalty_applied', params: { penalty: type, narrative: '牠的傷口開始癒合。' } });
+        // 規則書:翻面一次性結算 → boss 瞬間回 N HP(非每回合)
+        sc = healEnemyOnce(sc, String(pen.variant_code ?? ''), Number(pen.amount ?? 1), enemyData, playerCount, effects);
       } else if (type === 'enemy_regen_or_spawn') {
         // AGENDA2 但書(Uria):怪在場 → 回血;不在場 → 生成在指定地點(裂嘴女不在場補位)
         const code = String(pen.variant_code ?? '');
         const present = sc.enemies.some((e) => e.enemyDefinitionId === code && e.hp > 0);
         if (present) {
-          const n = Number(pen.amount ?? 1);
-          sc = {
-            ...sc,
-            enemies: sc.enemies.map((e) =>
-              e.enemyDefinitionId === code && e.hp > 0 ? { ...e, modifiers: [...e.modifiers.filter((m) => !m.startsWith('regen_boost')), 'regen_boost:' + n] } : e,
-            ),
-          };
-          effects.push({ type: 'penalty_applied', params: { penalty: 'enemy_regen', narrative: '牠的傷口開始癒合。' } });
+          // 規則書:翻面一次性結算 → boss 瞬間回 N HP(非每回合)
+          sc = healEnemyOnce(sc, code, Number(pen.amount ?? 1), enemyData, playerCount, effects);
         } else {
           const loc = String(pen.location_code ?? sc.locations[sc.locations.length - 1]?.locationDefinitionId ?? '');
           if (code && loc) {

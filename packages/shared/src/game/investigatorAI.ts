@@ -478,7 +478,11 @@ export function enumerateCandidates(
     const dc = enemyStats[target.enemyDefinitionId]?.dc ?? 10;
     const vis = here?.visibility === 'night' || here?.visibility === 'darkness' ? 2 : 0;
     const p = estimateSuccessChance(inv.attributes.reflex + vis, dc);
-    const urgency = retreating ? 2.5 : 0.6; // 健康時傾向打贏而不是逃
+    // 避免承受傷害(Uria):被「非目標」會傷人的怪纏住 → 閃避脫離,別站著挨打;目標 boss 則留著打
+    const tt = enemyStats[target.enemyDefinitionId];
+    const dmgThreat = Number(tt?.damage_physical ?? 0) + Number(tt?.damage_horror ?? 0);
+    const shedThreat = !isObjective(target) && dmgThreat > 0;
+    const urgency = retreating ? 2.5 : (shedThreat ? 1.6 : 0.6);
     out.push({
       actionType: 'evade',
       payload: { enemyInstanceId: target.instanceId },
@@ -632,10 +636,11 @@ export function enumerateCandidates(
     // (連續存兩回合就買得起 2-3 費武器;比漫無目的翻找有方向)
     // 守則:交戰中或退守時不購物(Raviel BLOCK 回歸)— 先活下來,錢之後再存
     const calm = engaged.length === 0 && !retreating;
-    const resourceValue = Math.max(0.4, calm ? bestUnaffordable * 0.85 : 0);
+    // 資源/抽卡是進階數據(Uria),非主要目的 → 只當「存錢買能攻擊的牌」的手段,基礎分壓低
+    const resourceValue = calm ? Math.max(0.2, bestUnaffordable * 0.5) : 0;
     out.push({ actionType: 'gain_resource', payload: {}, score: resourceValue, intentNarrative: '整理隨身物資' });
     if (inv.deck.length > 0) {
-      const drawValue = inv.hand.length < 3 ? 1.0 : 0.35;
+      const drawValue = inv.hand.length < 2 ? 0.6 : 0.25;
       out.push({ actionType: 'draw_card', payload: {}, score: drawValue, intentNarrative: '翻找更多手段' });
     }
   }
@@ -704,14 +709,19 @@ function deckAxisPotential(inv: InvestigatorState, cl: CardDataLookup): number {
 /** 潛力項(關鍵):未兌現的價值。讓 combo 的「鋪陳步」不被當廢步剪掉。 */
 function statePotential(inv: InvestigatorState, cl: CardDataLookup): number {
   let p = 0;
+  // 場上可用資產 = 潛在攻擊,但一回合打不了幾次 → 封頂 2 件,不獎勵囤一堆武器
+  // (Uria 診斷:舊版每把槍 +1.6 不管有沒有開火 → 鋪 8 把槍只開 1 槍的根)
+  let usable = 0;
   for (const id of inv.assetsInPlay) {
     const hasAction = (cl[id]?.effects ?? []).some((f) => f.trigger_type === 'action');
     const usesLeft = inv.assetState?.[id]?.usesLeft;
-    if (hasAction && (usesLeft == null || usesLeft > 0)) p += ACTION_POTENTIAL; // 場上資產還能用 = 潛在卡片動作
+    if (hasAction && (usesLeft == null || usesLeft > 0)) usable += 1;
   }
+  p += Math.min(usable, 2) * ACTION_POTENTIAL;
+  // 手牌是「進階數據」非主要目的(Uria)→ 低權重,別讓囤牌壓過攻擊/搜線索
   for (const id of inv.hand) {
     const d = cl[id];
-    if (d && d.card_type && d.card_type !== 'skill' && d.card_type !== 'weakness') p += 0.4; // 手牌潛力
+    if (d && d.card_type && d.card_type !== 'skill' && d.card_type !== 'weakness') p += 0.2;
   }
   p += deckAxisPotential(inv, cl);
   return p;
@@ -747,9 +757,9 @@ export function scoreState(
   s += (hpPct + sanPct) * 3;
   if (hpPct < 0.34) s -= 4;
   if (sanPct < 0.34) s -= 4;
-  // 潛力(手牌/場上/牌組)— combo 鋪陳步靠這項保住
+  // 潛力(手牌/場上/牌組)— combo 鋪陳步靠這項保住(但已封頂,不獎勵囤積)
   s += statePotential(inv, ctx.cardLookup);
-  s += inv.resources * 0.2;
+  s += inv.resources * 0.1; // 資源是進階數據(Uria),非主要目的 → 低權重
   return s;
 }
 

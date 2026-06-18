@@ -76,11 +76,8 @@ export function defaultKeeperProfile(
   const size = Math.max(1, Math.floor(Number(partySize) || 1));
   const ppRaw = Number(settings?.keeper_action_per_player ?? 2);
   const perPlayer = Number.isFinite(ppRaw) && ppRaw >= 0 ? ppRaw : 2;
-  // 每回合基礎能量 = 3(標準難度;規則書「敵人階段翻 1 神話卡 + 放 1 毀滅」≈ doom + ~1 卡)。
-  // 註(Uria 2026-06-18):原「人數+1」會 4 人 → base 5 → 每回合 2 張壓力卡,> 規則書,把 boss 戰壓成不可勝;
-  // 診斷 sim 確認 base 5 敗(boss 6)、base 3 勝。人數加成移到累積上限(maxAccumulation),不灌爆每回合輸出。
   return {
-    baseActionPoints: 3,
+    baseActionPoints: size + 1,
     maxAccumulation: 6 + perPlayer * size,
     maxActivationsPerTurn: 2,
     sanDangerPct: 50,

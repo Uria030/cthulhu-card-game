@@ -52,9 +52,9 @@ export function initKeeperState(_profile: KeeperProfile): KeeperState {
 
 // ─── 風格即資料:城主設定檔 ─────────────────────
 export interface KeeperProfile {
-  /** 每回合基礎行動點(game_balance_settings keeper_action_base_difficulty_N) */
+  /** 每回合基礎能量 = 人數 + 1(Uria 2026-06-18;人數 = 玩家方總人數,含 AI 隊友) */
   baseActionPoints: number;
-  /** 未用累積上限(0 = 規格 fallback 6) */
+  /** 未用累積上限 = 6 + per_player × 人數 */
   maxAccumulation: number;
   /** 每回合至多啟用張數(規範 §8.1.3) */
   maxActivationsPerTurn: number;
@@ -68,13 +68,17 @@ export interface KeeperProfile {
 
 export function defaultKeeperProfile(
   settings?: Record<string, unknown>,
-  difficulty = 2,
+  partySize = 1,
 ): KeeperProfile {
-  const base = Number(settings?.[`keeper_action_base_difficulty_${difficulty}`] ?? 3);
-  const maxAcc = Number(settings?.keeper_action_max_accumulation ?? 0);
+  // 行動點公式(Uria 2026-06-18 裁定;人數 = 玩家方總人數,含 AI 隊友):
+  //   每回合基礎能量 = 人數 + 1;累積上限 = 6 + per_player × 人數(per_player 取 DB,fallback 2)。
+  // 取代原難度表 base —— 難度從未接線,且固定 3 點會被費 3 的強制毀滅卡吃光(城主餓死成純時鐘)。
+  const size = Math.max(1, Math.floor(Number(partySize) || 1));
+  const ppRaw = Number(settings?.keeper_action_per_player ?? 2);
+  const perPlayer = Number.isFinite(ppRaw) && ppRaw >= 0 ? ppRaw : 2;
   return {
-    baseActionPoints: Number.isFinite(base) && base > 0 ? base : 3,
-    maxAccumulation: maxAcc > 0 ? maxAcc : 6,
+    baseActionPoints: size + 1,
+    maxAccumulation: 6 + perPlayer * size,
     maxActivationsPerTurn: 2,
     sanDangerPct: 50,
     playerWinningPct: 80,

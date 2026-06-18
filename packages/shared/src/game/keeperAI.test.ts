@@ -72,10 +72,13 @@ function situation(over: Partial<ReturnType<typeof snapshotSituation>> = {}) {
 }
 
 // ─── 設定檔 ─────────────────────────────────
-test('defaultKeeperProfile:讀 balance settings,缺值 fallback', () => {
-  const p = defaultKeeperProfile({ keeper_action_base_difficulty_2: 3, keeper_action_max_accumulation: 0 }, 2);
-  assertEq(p.baseActionPoints, 3);
-  assertEq(p.maxAccumulation, 6); // 0 = fallback 6
+test('defaultKeeperProfile:每回合能量=人數+1,上限=6+2×人數(Uria 2026-06-18)', () => {
+  const solo = defaultKeeperProfile(undefined, 1);
+  assertEq(solo.baseActionPoints, 2);  // 人數1 + 1
+  assertEq(solo.maxAccumulation, 8);   // 6 + 2×1
+  const four = defaultKeeperProfile({ keeper_action_per_player: 2 }, 4);
+  assertEq(four.baseActionPoints, 5);  // 人數4 + 1
+  assertEq(four.maxAccumulation, 14);  // 6 + 2×4
 });
 
 // ─── 局勢快照 ───────────────────────────────
@@ -138,24 +141,31 @@ test('避免單調:同類別連用扣分', () => {
 
 // ─── 選卡 ───────────────────────────────────
 test('選卡:行動點預算+累積上限+至多 2 張', () => {
-  const p = defaultKeeperProfile();
-  // 前回合剩 5 點 → 回復 +3 夾 6
-  const prev: KeeperState = { actionPoints: 5, cooldowns: {}, uses: {}, lastCategory: null, lastCardId: null };
+  const p = defaultKeeperProfile({ keeper_action_per_player: 2 }, 4); // base 5, cap 14
+  // 前回合剩 11 點 → 回復 +5 = 16 夾上限 14
+  const prev: KeeperState = { actionPoints: 11, cooldowns: {}, uses: {}, lastCategory: null, lastCardId: null };
   const r = selectKeeperActivations([SUMMON, AGENDA, STATUS, AMBIENT], situation({ aliveEnemies: 0, dramaTier: 'climax' }), prev, p, () => 0);
-  assertEq(r.activations.length, 2);
+  assertEq(r.activations.length, 2); // 每回合至多 2 張
   const spent = r.activations.reduce((s, c) => s + c.action_cost, 0);
-  assertEq(r.state.actionPoints, 6 - spent);
+  assertEq(r.state.actionPoints, 14 - spent); // 16 夾 14 後再扣
 });
 
 test('選卡:首回合行動點 = 基礎值,不雙算(BLOCK 回歸)', () => {
-  const p = defaultKeeperProfile(); // base 3, cap 6
+  const p = defaultKeeperProfile(undefined, 1); // 人數1:base 2, cap 8
   const fresh = initKeeperState(p);
   assertEq(fresh.actionPoints, 0);
-  // 首回合:0 + 3 = 3;只買得起 1 張 cost 2 + 1 張 cost 1
+  // 首回合:0 + 2 = 2(不雙算);#21 強制 AGENDA(費3)夾 0,買不起第二張
   const r = selectKeeperActivations([SUMMON, AGENDA, AMBIENT], situation({ aliveEnemies: 0, dramaTier: 'climax' }), fresh, p, () => 0);
-  const spent = r.activations.reduce((s, c) => s + c.action_cost, 0);
-  assertEq(spent <= 3, true, '首回合最多花 3 點');
-  assertEq(r.state.actionPoints, 3 - spent);
+  assertEq(r.activations.some((c) => c.id === 'agenda'), true);
+  assertEq(r.state.actionPoints, 0, '首回合 2 點被費 3 議程夾 0');
+});
+
+test('人數加成:4 人隊城主在末日推進外還能再放一張(不再 AP 餓死)', () => {
+  const p = defaultKeeperProfile({ keeper_action_per_player: 2 }, 4); // base 5
+  // 首回合 5 點:#21 強制 AGENDA(3) + 剩 2 點 → 貪婪再放一張 cost≤2
+  const r = selectKeeperActivations([SUMMON, AGENDA, STATUS, AMBIENT], situation({ aliveEnemies: 2, dramaTier: 'climax' }), initKeeperState(p), p, () => 0);
+  assertEq(r.activations.length, 2, '末日推進 + 1 張');
+  assertEq(r.activations.some((c) => c.id === 'agenda'), true, '末日推進仍每回合強制');
 });
 
 test('選卡:非 reusable 用過即不再選', () => {

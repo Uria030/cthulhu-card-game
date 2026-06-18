@@ -418,7 +418,8 @@ export function buildSetupFromBootstrap(
     actData: (bootstrap.stage.act_cards ?? []) as unknown as ActCardData[],
     agendaData: (bootstrap.stage.agenda_cards ?? []) as unknown as AgendaCardData[],
     mythosCards: (bootstrap.mythos_cards ?? []) as unknown as MythosCardData[],
-    keeperProfile: defaultKeeperProfile(bootstrap.keeper_settings, 2),
+    // 城主能量隨人數加成(玩家本人 + 落地的 AI 隊友);base = 人數+1、上限 = 6+2×人數
+    keeperProfile: defaultKeeperProfile(bootstrap.keeper_settings, 1 + aiMembers.length),
     // 劇本 Part3 §2.4 三段式登場(先聽聲 → 見人 → 揭真相);未來移入 DB 敘事欄位
     bossIntro: {
       G1_deep_one_slit_mouth: [

@@ -462,7 +462,9 @@ export function enumerateCandidates(
     {
       const mod = inv.attributes.strength;
       const p = estimateSuccessChance(mod + vis, dc);
-      if (p >= profile.weights.riskTolerance * 0.5 || isObjective(enemy)) { // 幕目標 boss:再難也徒手拼
+      // 徒手傷害只 1 且命中率近 0 時空揮無意義 → 維持命中閘門(連目標 boss 也別徒手空戳,該去補彈/補刀雜兵/支援)。
+      // 武器攻擊才對 boss 豁免閘門(見上:有彈藥的武器命中率夠、傷害有意義)。
+      if (p >= profile.weights.riskTolerance * 0.5) {
         out.push({
           actionType: 'attack',
           payload: { enemyInstanceId: enemy.instanceId },

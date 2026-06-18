@@ -380,6 +380,12 @@ export function TestScenarioScreen() {
   return <BattleBoard key={setup.stageId} setup={setup} />;
 }
 
+/** Uria 六項檢查數據(關卡結束在結算畫面顯示;定義同 headless 模擬 sim-slit-3ai,數字一致):
+ *  線索 / 造成傷害 / 賺取資源(不含起始 5)/ 抽卡(不含起手)= 行動效果累計;
+ *  承受傷害 / 承受恐懼 = 每回合邊界 HP/SAN 淨損。*/
+type SixMetric = { clues: number; damage: number; resources: number; draws: number; hp: number; san: number };
+const makeSixMetric = (): SixMetric => ({ clues: 0, damage: 0, resources: 0, draws: 0, hp: 0, san: 0 });
+
 function BattleBoard({ setup }: { setup: GameSetup }) {
   const navigate = useNavigate();
   const locMeta = setup.locMeta;
@@ -437,6 +443,43 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [zoom, setZoom] = useState(1);
 
   const append = (s: string) => setLog((l) => [...l.slice(-50), s]);
+
+  // === Uria 六項檢查數據:累計於 ref,結局時在結算畫面渲染(不觸發 re-render;outcome set 時讀到的即最終值) ===
+  const statsRef = useRef<Record<string, SixMetric>>({});
+  const prevVitalRef = useRef<Record<string, { hp: number; san: number }>>({});
+  if (Object.keys(statsRef.current).length === 0) {
+    const seed = (inv: InvestigatorState) => {
+      statsRef.current[inv.investigatorId] = makeSixMetric();
+      prevVitalRef.current[inv.investigatorId] = { hp: inv.hp, san: inv.san };
+    };
+    seed(setup.investigator);
+    for (const m of setup.aiMembers) seed(m.investigator);
+  }
+  // 本人行動產生的效果:線索 / 造成傷害 / 賺取資源(不含起始 5)/ 抽卡(不含起手)。承受量不在此(走 checkpointVitals)。
+  const tallyActor = (id: string, effects: ResultEffect[]) => {
+    const s = statsRef.current[id];
+    if (!s) return;
+    for (const eff of effects) {
+      const p = eff.params as Record<string, unknown>;
+      if (eff.type === 'gain_clue') s.clues += Number(p.amount ?? 1);
+      else if (eff.type === 'attack_hit') s.damage += Number(p.damage ?? 0);
+      else if (eff.type === 'gain_resource' || eff.type === 'upkeep_income') s.resources += Number(p.amount ?? 1);
+      else if (eff.type === 'draw_card' || eff.type === 'upkeep_draw') s.draws += 1;
+    }
+  };
+  // 承受傷害 / 恐懼:每回合邊界 HP/SAN 淨損(來源不拘——怪攻 / 恐懼 / 燃燒都算;場內被救回血會略低估,與模擬同口徑)
+  const checkpointVitals = (inv: InvestigatorState, aiArr: (InvestigatorState | null)[]) => {
+    for (const m of [inv, ...aiArr]) {
+      if (!m) continue;
+      const s = statsRef.current[m.investigatorId];
+      const prev = prevVitalRef.current[m.investigatorId];
+      if (!s || !prev) continue;
+      s.hp += Math.max(0, prev.hp - m.hp);
+      s.san += Math.max(0, prev.san - m.san);
+      prev.hp = m.hp;
+      prev.san = m.san;
+    }
+  };
 
   /**
    * 進度檢查:每次狀態變化後跑幕/議程推進,處理場景切換與結局。
@@ -588,6 +631,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         append('  └ ' + describeEffect(eff, locMeta).split('你').join(m.profile.name_zh));
       }
     }
+    // 六項:AI 本人這回合的線索/傷害/資源/抽卡(被駁回的動作不計)
+    tallyActor(ai.investigatorId, r.steps.filter((s) => s.outcome !== 'rejected').flatMap((s) => s.effects));
     // v0 AI auto-policy:把 AI 本回合自身受到的可分配傷害自動塞給自己的盟友(不跳 Modal)
     settleAITeamAllocatable(r.steps.flatMap((s) => s.effects), aiArr, inv0.investigatorId);
     if (r.steps.length === 0) append(`[${m.profile.name_zh}] 按兵不動,觀察著四周。`);
@@ -627,7 +672,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setInvestigator(next.inv);
     setAiMembers(next.aiArr); // 用 applyProgress 回傳的最終陣列(含場景轉場落點),非 res.aiArr
     next.logs.forEach((l) => append(l)); // AI 動作無玩家演出 → 進度敘事即時進 Log
-    if (next.outcome) setOutcome(next.outcome);
+    if (next.outcome) { checkpointVitals(next.inv, next.aiArr); setOutcome(next.outcome); }
     if (actedId) setAiActedThisTurn((s) => (s.includes(actedId) ? s : [...s, actedId]));
     // 僅依 aiTick 觸發;其餘狀態刻意讀 fresh 閉包(這正是杜絕舊值寫入的關鍵)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -723,6 +768,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     const out = resolveIntent(intent, ctx);
     bus.publish(out.result);
     if (out.result.outcome === 'accepted') {
+      tallyActor(investigator.investigatorId, out.result.effects ?? []); // 六項:玩家本動作的線索/傷害/資源/抽卡
       // 倒地同步(閃避失敗/藉機攻擊可能把自己打趴)— 不即時 append,收成 syncLogs 排在主效果之後
       const sync = syncDownedState(out.newState?.investigator ?? investigator);
       const syncLogs = sync.effects.map((eff) => '[結算] ' + describeEffect(eff, locMeta));
@@ -764,7 +810,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         // 純記帳動作(拿資源/抽卡)不跳演出 → 主效果 + 後續行即時進 Log(無演出可同步)
         for (const eff of out.result.effects ?? []) append('[結算] ' + describeEffect(eff, locMeta));
         for (const l of cascadeLogs) append(l);
-        if (next.outcome) setOutcome(next.outcome);
+        if (next.outcome) { checkpointVitals(next.inv, next.aiArr); setOutcome(next.outcome); }
         if (pendingDamageAlloc) setDamageAlloc(pendingDamageAlloc);
       }
     }
@@ -813,7 +859,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       for (const l of actionPlay.cascadeLogs) append(l);
     }
     setActionPlay(null);
-    if (pendingOutcome) setOutcome(pendingOutcome);
+    if (pendingOutcome) { checkpointVitals(investigator, aiMembers); setOutcome(pendingOutcome); }
     if (pending) setDamageAlloc(pending);
   };
   // 檢定拍擲骰動畫(節奏窗口 ~700ms:重量感 + 遮蔽未來延遲載入)
@@ -968,6 +1014,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       });
     }
 
+    // 六項:回合邊界 HP/SAN 淨損結算(調查員階段 + 神話階段全部傷害,救人回血後的淨值)— 每回合一次,落在結局判定前
+    checkpointVitals(inv, updatedAIs);
+
     // ④ 全滅檢查(§9:全員死亡才終局;倒地者還有瀕死檢定的機會)
     const party: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
     for (const ai of updatedAIs) if (ai) party[ai.investigatorId] = ai;
@@ -995,6 +1044,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setAiActedThisTurn([]); // 新回合:AI 隊友計時器重新開放(同時行動)
     // 回合結束階段(ch2 §2.4):每人抽 1 卡 + 1 資源 + 手牌上限 8(教學關卡跳過)
     if (!setup.tutorial) {
+      // 六項:回合結束補給(資源/抽卡)— 純預算一次供統計(runTurnEndUpkeep 為純函式 → 與下方 updater 同值),不動既有流程
+      tallyActor(investigator.investigatorId, runTurnEndUpkeep(investigator).effects);
+      for (const ai of aiMembers) if (ai) tallyActor(ai.investigatorId, runTurnEndUpkeep(ai).effects);
       setInvestigator((i) => {
         const up = runTurnEndUpkeep(i);
         for (const eff of up.effects) append('[回合結束] ' + describeEffect(eff, locMeta));
@@ -1811,6 +1863,35 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             <div className="outcome-title">{setup.title}</div>
             <hr className="modal-divider" />
             <div className="outcome-narrative">{outcome.narrative_text}</div>
+            <hr className="modal-divider" />
+            <div className="outcome-stats">
+              <div className="outcome-stats-title">調查員數據統計</div>
+              <table className="outcome-stats-table">
+                <thead>
+                  <tr>
+                    <th>調查員</th><th>線索</th><th>造成傷害</th><th>賺取資源</th><th>抽卡</th><th>承受傷害</th><th>承受恐懼</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[{ id: setup.investigator.investigatorId, name: setup.investigatorName },
+                    ...setup.aiMembers.map((m) => ({ id: m.investigator.investigatorId, name: m.profile.name_zh })),
+                  ].map((row) => {
+                    const s = statsRef.current[row.id] ?? makeSixMetric();
+                    return (
+                      <tr key={row.id}>
+                        <td className="outcome-stats-name">{row.name}</td>
+                        <td>{s.clues}</td>
+                        <td>{s.damage}</td>
+                        <td>{s.resources}</td>
+                        <td>{s.draws}</td>
+                        <td>{s.hp}</td>
+                        <td>{s.san}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
             <hr className="modal-divider" />
             {(outcome.flag_sets ?? []).length > 0 && (
               <div className="outcome-flags">

@@ -1285,6 +1285,40 @@
 
 .outcome-actions button:hover { background: rgba(201, 168, 76, 0.28); }
 
+/* 六項檢查數據表(結算畫面) */
+.outcome-stats { text-align: left; }
+.outcome-stats-title {
+  font: 700 13px "Noto Serif TC", serif;
+  letter-spacing: 0.15em;
+  color: #C9A84C;
+  margin-bottom: 8px;
+}
+.outcome-defeat .outcome-stats-title { color: #f0a0a0; }
+.outcome-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 400 13px "Noto Sans TC", sans-serif;
+}
+.outcome-stats-table th {
+  font-weight: 600;
+  color: var(--text-tertiary, #9a968c);
+  padding: 4px 5px;
+  text-align: center;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.25);
+  white-space: nowrap;
+}
+.outcome-stats-table td {
+  padding: 5px;
+  text-align: center;
+  color: var(--text-primary, #E8E4D9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.outcome-stats-table .outcome-stats-name {
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* === 城主威脅區(open-hand 武器庫)=== */
 .threat-grid {
   display: grid;

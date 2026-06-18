@@ -1286,7 +1286,7 @@ FROM mythos_cards WHERE code='mc_deep_call'
   AND NOT EXISTS (SELECT 1 FROM mythos_card_effects WHERE mythos_card_id = mythos_cards.id);
 
 INSERT INTO mythos_card_effects (mythos_card_id, action_code, action_params, description_zh, sort_order)
-SELECT id, 'advance_agenda', '{"doom_tokens":2}'::jsonb, '議程牌堆放置 2 個毀滅標記', 0
+SELECT id, 'advance_agenda', '{"doom_tokens":1}'::jsonb, '議程牌堆放置 1 個毀滅標記', 0
 FROM mythos_cards WHERE code='mc_doom_advance'
   AND NOT EXISTS (SELECT 1 FROM mythos_card_effects WHERE mythos_card_id = mythos_cards.id);
 

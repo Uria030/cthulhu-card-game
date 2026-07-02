@@ -21,7 +21,22 @@
 
 PATH 註記:此機 PowerShell 沒把 npm 全域目錄入 PATH,`claude` 裸指令找不到——用上面的絕對路徑(`claude.cmd` 在 `C:\Users\user\AppData\Roaming\npm\`)。
 
-注意:方式二是接續守燈人的記憶開分支執行 review,結果會寫回 handoff 檔;若該 session 正在使用中,以方式一為準。
+注意:方式二是接續守燈人的記憶開分支執行 review,結果會寫回 handoff 檔;**若該 session 正在使用中,resume 不可靠——改用方式三**。
+
+方式三(**自動化首選**:開新 session 當守燈人代理,不依賴本尊 session 狀態):
+
+```bash
+& "C:\Users\user\AppData\Roaming\npm\claude.cmd" -p "你是守燈人代理,對 Codex 交件執行 review。讀 docs/_codex_handoff/README.md 的『代理 review checklist』與 AGENTS.md 工程協作模式,review 本機未推送的 commit(handoff 檔:docs/_codex_handoff/<檔名>)。結論寫回該 handoff 的 ## Review 節;PASS 才 git push origin main,否則不 push 並列修訂意見。" --permission-mode acceptEdits
+```
+
+## 代理 review checklist(方式三的新 session 照此執行)
+
+1. `git log origin/main..HEAD` 確認 Codex 本機 commit;`git show --stat` 對 handoff 檔案清單一致。
+2. diff 逐檔審:範圍不得超出工單;禁碰區(規則書 docs/v07*/凍結資料)零觸碰。
+3. 複跑:受影響 package 測試 + `packages/client npx tsc --noEmit`(嚴格編 shared)。
+4. 涉引擎:跑 `scripts/g1-sandbox/sim-slit-3ai.ts` 至少 1 種子確認不崩。
+5. 歷史紅線:多人一致性(updatedAllies 管線)/計時器競態防護(不得在 setTimeout 閉包寫 state)/腳本冪等。
+6. 結論寫回 handoff `## Review` 節(PASS/BLOCK+意見);PASS → push;任何不確定 → 不 push,標「留守燈人本尊複核」。
 
 ## Done 定義
 

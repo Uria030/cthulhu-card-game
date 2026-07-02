@@ -29,20 +29,29 @@
 
 ---
 
-# 工程協作模式(Codex 寫碼 × Claude review)
+# 工程協作 Gate(Codex 寫碼 × Claude review)
 
-M1 起,遊戲本體程式碼由 Codex 實作、Claude 主 session review。流程:
+M1 起,遊戲本體程式碼由 Codex 實作、Claude 主 session review。這不是參考流程,而是 E 系列 / 本體工作包交付的必過 Gate。未通過 Gate 前,不得宣稱工作包完成。
 
-## 交付規約(Codex 遵守)
+## 必過 Gate(Codex 遵守)
 
-1. **接工單**:實作規格在 `docs/M1規劃_一關玩到完整_v0_1_26070208.md` 的工作包章節(或 Claude 另出的規格檔)。只做工單範圍,範圍外的問題記進 handoff 不順手改。
-2. **實作紀律**:
+1. **讀權威文件**:先讀本檔、`docs/工作分軌_資料庫填補×本體工作包_v0_1_26070209.md` 或指定工作包規格、相關 docs / tests。舊 M1 規劃只能作背景,不得推翻較新的分軌文件。
+2. **鎖定範圍**:只做工單範圍。範圍外問題記進 handoff 的風險/後續,不得順手改。
+3. **實作紀律**:
    - 測試先行或同行:改引擎必附回歸測試(測試檔模式照 `packages/shared/src/game/*.test.ts` 既有自跑式風格)
-   - 跑過:受影響 package 的測試 + `npx tsc --noEmit`(client 的嚴格建置會編 shared,兩邊都要過)
+   - 跑過:受影響 package 的測試 + `tsc --noEmit`(shared/server/client 視影響範圍都要過)
+   - 本機 `pnpm.cmd` / `npx` 不可假設可用;優先使用各 package `node_modules\.bin\*.CMD` 工具
    - 禁碰:`docs/v07_當前版本_26042606/`(規則書)、凍結期的關卡/城主資料、任何 Uria 裁定範圍外的行為變更
-3. **交件**:本機 commit(**不 push**,commit message 註明工作包編號),並寫 handoff 檔 `docs/_codex_handoff/<工作包>-<日期碼>.md`:變更摘要/動過的檔案/測試結果貼上/自知的風險與範圍外發現。
-4. push 由 reviewer(Claude)在 review 通過後執行。
+4. **Codex 交件 Gate**:本機 commit(**不 push**,commit message 註明工作包編號),並寫 handoff 檔 `docs/_codex_handoff/<工作包>-<日期碼>.md`:變更摘要/動過的檔案/測試結果貼上/自知的風險與範圍外發現。
+5. **Review 送審 Gate**:交件後必須送守燈人 review。Codex 可用 `docs/_codex_handoff/README.md` 的絕對路徑 `claude.cmd` 指令呼叫;若 session 正在使用或不可呼叫,就把精確的 handoff 路徑與 review 指令回報給 Uria 接手。
+6. **完成定義**:Codex 端完成只等於「實作 + 測試 + 本機 commit + handoff + 已送審/可送審」。專案完成必須等守燈人 review PASS 並 push;若 review 回 BLOCK/WARN,Codex 依同一 handoff 修訂後重跑 Gate。
 
 ## Review 關卡(Claude 執行)
 
 diff 逐檔審 + 測試全綠複跑 + sim 行為驗證(涉引擎時)+ 規則書條文對賬 + 既有回歸紅線(多人一致性/競態防護/冪等)。通過 → push;退回 → review 意見寫進同一 handoff 檔,Codex 修訂再交。
+
+E11 已確立的 workflow 修正一併納入 Gate:
+
+- prod smoke 若依賴尚未部署的 server 變更,屬部署順序問題,需在 handoff / review 中標明,不得誤判成程式缺陷或偷改 smoke。
+- `crossTest=true` 暫時可走 public route,但 M5 真人上線前必須收斂。
+- 守燈人呼叫使用 `C:\Users\user\AppData\Roaming\npm\claude.cmd`;此機 PowerShell 的 PATH 不保證找到裸 `claude`。

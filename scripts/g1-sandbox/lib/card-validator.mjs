@@ -121,15 +121,58 @@ export function normalizeCardText(text) {
 // 2026-07-02 MOD-11 試產品管修正:黑名單原條目誤傷動詞 follow 用法
 const GEN_VERB_SUFFIX = /^[了著上隨蹤到進去來丟不]/;
 
-export function scanForbiddenTerms(text) {
+// 文體級條目(卡面文字風格規則,對「敘事散文」欄位不適用):
+// 及/跟(連接詞)、否則/反之(卡面句型規則)、我的(卡面視角規則;敘事引語合法)。
+// 硬紅線(程式詞/簡體/機制詞如橫置/扣血)不在此列,所有欄位照擋。
+// 2026-07-02 品質主管裁定:ENTP-4 personality 被「及」三連擋,屬誤傷。
+export const NARRATIVE_STYLE_EXEMPT = new Set(['及', '跟', '否則', '反之', '我的']);
+
+// 「及」的合法複合詞(以及/及時/普及...):這些不是連接詞違規,掃描與改寫都要放過
+// 2026-07-02 三連敗改善第一層:黑名單三級制(自動改寫級/退回級/敘事豁免級)
+const JI_BEFORE_OK = /[以來普波顧涉企遍提論兼危殃]/; // ○及(複合詞尾)
+const JI_AFTER_OK = /[時格第早]/;                    // 及○(複合詞頭)
+function jiIsCompound(text, idx) {
+  return (idx > 0 && JI_BEFORE_OK.test(text[idx - 1])) || JI_AFTER_OK.test(text.slice(idx + 1, idx + 2));
+}
+
+/**
+ * 自動改寫級(替換規則明確、零語意風險;沿用 s06 §7.1「低風險自動修正」既有先例):
+ * gate 不退回,直接改寫+記 log。機制訊號詞(橫置/扣血/程式詞)不在此列,照舊退回。
+ */
+export function autoRewriteSafeTerms(text) {
+  if (!text || typeof text !== 'string') return { text, fixes: [] };
+  const fixes = [];
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '及' && !jiIsCompound(text, i)) { out += '與'; fixes.push('及→與'); continue; }
+    if (ch === '跟' && !GEN_VERB_SUFFIX.test(text.slice(i + 1, i + 2))) { out += '和'; fixes.push('跟→和'); continue; }
+    out += ch;
+  }
+  if (out.includes('該玩家')) { out = out.split('該玩家').join('你'); fixes.push('該玩家→你'); }
+  if (out.includes('我方')) { out = out.split('我方').join('你的'); fixes.push('我方→你的'); }
+  // 相鄰重複標籤 dedupe(【行動】【行動】→【行動】)
+  const before = out;
+  out = out.replace(/(【(?:行動|免費行動|反應|被動|強制|加值|消費)】)(?:\s*\1)+/g, '$1');
+  if (out !== before) fixes.push('重複標籤 dedupe');
+  return { text: out, fixes };
+}
+
+export function scanForbiddenTerms(text, opts = {}) {
   if (!text || typeof text !== 'string') return [];
+  const narrative = opts.narrative === true; // 敘事散文欄位(personality/backstory/design_concerns)
   const warnings = [];
   for (const [bad, good] of Object.entries(CARD_TEXT_FORBIDDEN_TERMS)) {
+    if (narrative && NARRATIVE_STYLE_EXEMPT.has(bad)) continue;
     let idx = text.indexOf(bad);
     while (idx !== -1) {
       if (bad === '跟' && GEN_VERB_SUFFIX.test(text.slice(idx + 1, idx + 2))) {
         idx = text.indexOf(bad, idx + bad.length);
         continue; // 動詞用法,放行
+      }
+      if (bad === '及' && jiIsCompound(text, idx)) {
+        idx = text.indexOf(bad, idx + bad.length);
+        continue; // 以及/及時等複合詞,放行
       }
       warnings.push({ term: bad, suggestion: good, index: idx });
       idx = text.indexOf(bad, idx + bad.length);

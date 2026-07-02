@@ -26,3 +26,23 @@
 - `C:\Ug\docs\生產線Agent計畫_v0_1_26070204.md` — 兩個 Agent 定義 × N 份派工單的架構
 - `C:\Ug\docs\品管三層制_Agent化量產品管計畫_v0_1_26070203.md` — validator/品管 Agent/主 context 三層權限
 - `docs/regulation_index_v0_2_26050302.md` — 全專案規範地圖(§3.1 術語黑名單必看)
+
+---
+
+# 工程協作模式(Codex 寫碼 × Claude review)
+
+M1 起,遊戲本體程式碼由 Codex 實作、Claude 主 session review。流程:
+
+## 交付規約(Codex 遵守)
+
+1. **接工單**:實作規格在 `docs/M1規劃_一關玩到完整_v0_1_26070208.md` 的工作包章節(或 Claude 另出的規格檔)。只做工單範圍,範圍外的問題記進 handoff 不順手改。
+2. **實作紀律**:
+   - 測試先行或同行:改引擎必附回歸測試(測試檔模式照 `packages/shared/src/game/*.test.ts` 既有自跑式風格)
+   - 跑過:受影響 package 的測試 + `npx tsc --noEmit`(client 的嚴格建置會編 shared,兩邊都要過)
+   - 禁碰:`docs/v07_當前版本_26042606/`(規則書)、凍結期的關卡/城主資料、任何 Uria 裁定範圍外的行為變更
+3. **交件**:本機 commit(**不 push**,commit message 註明工作包編號),並寫 handoff 檔 `docs/_codex_handoff/<工作包>-<日期碼>.md`:變更摘要/動過的檔案/測試結果貼上/自知的風險與範圍外發現。
+4. push 由 reviewer(Claude)在 review 通過後執行。
+
+## Review 關卡(Claude 執行)
+
+diff 逐檔審 + 測試全綠複跑 + sim 行為驗證(涉引擎時)+ 規則書條文對賬 + 既有回歸紅線(多人一致性/競態防護/冪等)。通過 → push;退回 → review 意見寫進同一 handoff 檔,Codex 修訂再交。

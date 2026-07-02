@@ -418,6 +418,10 @@ function evaluateTalismanForEncounter(
   }
 
   const tollCost = TOLL_FUNCTIONS[timing](strength, encounterSubroutineCount(encounter));
+  const testAttribute = timing === 'test' ? normaliseBreakTestAttribute(talisman.break_test_attribute) : null;
+  if (timing === 'test' && !testAttribute) {
+    return { canUse: false, reason: 'missing_test_attribute', timing, tollCost, payment: null, usesLeft: null, threatTypes: encounterThreats };
+  }
   const maxUses = cardMaxUses(talisman);
   const state = investigator.assetState?.[cardInstanceId];
   const usesLeft = state?.usesLeft ?? maxUses;
@@ -430,15 +434,11 @@ function evaluateTalismanForEncounter(
       payment: 'charges',
       usesLeft: Number(usesLeft),
       threatTypes: encounterThreats,
-      testAttribute: normaliseBreakTestAttribute(talisman.break_test_attribute) ?? undefined,
+      testAttribute: testAttribute ?? undefined,
     };
   }
 
   if (timing === 'test') {
-    const testAttribute = normaliseBreakTestAttribute(talisman.break_test_attribute);
-    if (!testAttribute) {
-      return { canUse: false, reason: 'missing_test_attribute', timing, tollCost, payment: null, usesLeft: null, threatTypes: encounterThreats };
-    }
     return {
       canUse: investigator.actionPoints >= tollCost,
       reason: investigator.actionPoints >= tollCost ? undefined : 'insufficient_action_points',
@@ -447,7 +447,7 @@ function evaluateTalismanForEncounter(
       payment: 'action_points',
       usesLeft: null,
       threatTypes: encounterThreats,
-      testAttribute,
+      testAttribute: testAttribute ?? undefined,
     };
   }
 

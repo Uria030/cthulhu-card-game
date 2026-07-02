@@ -219,6 +219,21 @@ test('法器檢定型:失敗時費用照扣,遭遇卡照常觸發', () => {
   assertEq(r.investigator.san, 7, '失敗套用 fallback failure_effects');
 });
 
+test('法器檢定型:缺 break_test_attribute 時不可出現在可用候選,且不扣費', () => {
+  const brokenLookup: CardDataLookup = {
+    broken_badge: { ...TALISMANS.test_badge, break_test_attribute: null },
+  };
+  const inv = makeInv({
+    assetsInPlay: ['broken_badge'],
+    assetState: { broken_badge: { usesLeft: 3, exhausted: false } },
+  });
+  assertEq(availableTalismansForEncounter(inv, brokenLookup, CARD).length, 0);
+  const r = resolveEncounterWithTalisman('broken_badge', brokenLookup.broken_badge, CARD, inv, makeScenario(), ENEMY);
+  assertEq(r.outcome, 'unavailable');
+  assertEq(r.reason, 'missing_test_attribute');
+  assertEq(r.investigator.assetState?.broken_badge.usesLeft, 3);
+});
+
 test('法器儲蓄型:f(S,N)=S,用累積計量直接破除', () => {
   const inv = makeInv({
     assetsInPlay: ['stockpile_crystal'],

@@ -17,7 +17,7 @@ import type { ScenarioState, InvestigatorState } from './state';
 import { spawnEnemy } from './monsterActions';
 import type { EnemyDataLookup } from './monsterActions';
 
-// ─── 神話卡資料(bootstrap mythos_cards,MIGRATION_035 後含 open-hand 欄位)──
+// ─── 神話卡資料(bootstrap mythos_cards,MIGRATION_029/037 後含 open-hand 欄位)──
 export interface MythosCardData {
   id: string;
   code?: string;
@@ -29,7 +29,11 @@ export interface MythosCardData {
   intensity_tag: string;
   activation_timing?: string;
   reusable?: boolean;
+  /** Canonical E2 field. Older rows/routes may still expose cooldown_rounds. */
+  cooldown_turns?: number | null;
   cooldown_rounds?: number | null;
+  /** Canonical E2 field. Older rows/routes may still expose max_uses_per_stage. */
+  max_uses?: number | null;
   max_uses_per_stage?: number | null;
   effects?: Array<{ action_code: string; action_params: Record<string, unknown> | null }>;
 }
@@ -140,6 +144,46 @@ export function isCardExecutable(card: MythosCardData): boolean {
   return fx.length > 0 && fx.some((f) => SUPPORTED_MYTHOS_ACTIONS.has(f.action_code));
 }
 
+function nonNegativeInt(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.floor(n);
+}
+
+export function mythosCooldownTurns(card: MythosCardData): number {
+  return nonNegativeInt(card.cooldown_turns ?? card.cooldown_rounds) ?? 0;
+}
+
+export function mythosMaxUses(card: MythosCardData): number | null {
+  return nonNegativeInt(card.max_uses ?? card.max_uses_per_stage);
+}
+
+export function mythosCooldownRemaining(card: MythosCardData, state: KeeperState): number {
+  return nonNegativeInt(state.cooldowns[card.id]) ?? 0;
+}
+
+export function mythosUseCount(card: MythosCardData, state: KeeperState): number {
+  return nonNegativeInt(state.uses[card.id]) ?? 0;
+}
+
+export function mythosUsesRemaining(card: MythosCardData, state: KeeperState): number | null {
+  const used = mythosUseCount(card, state);
+  const max = mythosMaxUses(card);
+  if (max !== null) return Math.max(0, max - used);
+  if (!card.reusable) return Math.max(0, 1 - used);
+  return null;
+}
+
+export function isMythosUsedUp(card: MythosCardData, state: KeeperState): boolean {
+  const remaining = mythosUsesRemaining(card, state);
+  return remaining !== null && remaining <= 0;
+}
+
+export function isMythosOnCooldown(card: MythosCardData, state: KeeperState): boolean {
+  return mythosCooldownRemaining(card, state) > 0;
+}
+
 // ─── 評分(規格 §4.2 + §4.2A 戲劇曲線 + 避免單調)────
 export function scoreCard(
   card: MythosCardData,
@@ -150,10 +194,8 @@ export function scoreCard(
   // 不可用判定
   if (!isCardExecutable(card)) return null;
   if (card.action_cost > state.actionPoints) return null;
-  if ((state.cooldowns[card.id] ?? 0) > 0) return null;
-  const used = state.uses[card.id] ?? 0;
-  if (!card.reusable && used >= 1) return null;
-  if (card.max_uses_per_stage != null && used >= card.max_uses_per_stage) return null;
+  if (isMythosOnCooldown(card, state)) return null;
+  if (isMythosUsedUp(card, state)) return null;
 
   // 戲劇曲線守門(§4.2A):鋪陳期只放小強度「氛圍類」;升壓期 small/medium;高潮全開
   const intensity = String(card.intensity_tag ?? 'small');
@@ -179,6 +221,9 @@ export function scoreCard(
 
   // 效益比(強度/費用)
   score += INTENSITY_VALUE[intensity] / Math.max(1, card.action_cost);
+
+  // 冷卻機會成本(E2):長冷卻可重用卡需要更好的局勢理由才會被打出。
+  if (card.reusable) score -= mythosCooldownTurns(card) * 0.35;
 
   // 避免單調(G4 驗收)
   if (state.lastCategory === cat) score -= 3;
@@ -221,10 +266,8 @@ export function selectKeeperActivations(
   // 取費用最低的可用 advance_agenda 卡(時鐘要穩定能放);不夠費用也放(夾 0),可被後續貪婪多放。
   const doomReady = (c: MythosCardData): boolean => {
     if (!(c.effects ?? []).some((f) => f.action_code === 'advance_agenda')) return false;
-    if ((state.cooldowns[c.id] ?? 0) > 0) return false;
-    const used = state.uses[c.id] ?? 0;
-    if (!c.reusable && used >= 1) return false;
-    if (c.max_uses_per_stage != null && used >= c.max_uses_per_stage) return false;
+    if (isMythosOnCooldown(c, state)) return false;
+    if (isMythosUsedUp(c, state)) return false;
     return true;
   };
   const doomPool = cards.filter(doomReady);
@@ -232,12 +275,13 @@ export function selectKeeperActivations(
     const minCost = Math.min(...doomPool.map((c) => c.action_cost));
     const cheapest = doomPool.filter((c) => c.action_cost === minCost);
     const pick = cheapest[Math.floor(rng() * cheapest.length)];
+    const cooldownTurns = mythosCooldownTurns(pick);
     activations.push(pick);
     state = {
       actionPoints: Math.max(0, state.actionPoints - pick.action_cost),
       cooldowns: {
         ...state.cooldowns,
-        ...(pick.reusable && Number(pick.cooldown_rounds ?? 0) > 0 ? { [pick.id]: Number(pick.cooldown_rounds) } : {}),
+        ...(pick.reusable && cooldownTurns > 0 ? { [pick.id]: cooldownTurns } : {}),
       },
       uses: { ...state.uses, [pick.id]: (state.uses[pick.id] ?? 0) + 1 },
       lastCategory: String(pick.card_category ?? 'general'),
@@ -253,14 +297,15 @@ export function selectKeeperActivations(
     const best = Math.max(...scored.map((x) => x.score));
     const top = scored.filter((x) => x.score >= best - 1e-9);
     const pick = top[Math.floor(rng() * top.length)].card;
+    const cooldownTurns = mythosCooldownTurns(pick);
 
     activations.push(pick);
     state = {
       actionPoints: state.actionPoints - pick.action_cost,
       cooldowns: {
         ...state.cooldowns,
-        ...(pick.reusable && Number(pick.cooldown_rounds ?? 0) > 0
-          ? { [pick.id]: Number(pick.cooldown_rounds) }
+        ...(pick.reusable && cooldownTurns > 0
+          ? { [pick.id]: cooldownTurns }
           : {}),
       },
       uses: { ...state.uses, [pick.id]: (state.uses[pick.id] ?? 0) + 1 },

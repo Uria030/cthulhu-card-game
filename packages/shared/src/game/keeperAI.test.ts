@@ -9,6 +9,8 @@ import {
   selectKeeperActivations,
   executeMythosCard,
   isCardExecutable,
+  mythosCooldownTurns,
+  mythosMaxUses,
   attachmentTestModifier,
   runAttachmentUpkeep,
 } from './keeperAI';
@@ -131,6 +133,50 @@ test('無怪 → summon +3;蟄伏卡不可選;冷卻中不可選', () => {
   assertEq(scoreCard(DORMANT, situation(), st, p), null, '無可執行效果 = 蟄伏');
   const cooled: KeeperState = { ...st, cooldowns: { summon: 2 } };
   assertEq(scoreCard(SUMMON, situation(), cooled, p), null);
+});
+
+test('E2 欄位相容:cooldown_turns/max_uses 優先,舊 cooldown_rounds/max_uses_per_stage 仍可讀', () => {
+  const canonical = card({ id: 'canonical', cooldown_turns: 2, cooldown_rounds: 9, max_uses: 3, max_uses_per_stage: 9 });
+  const legacy = card({ id: 'legacy', cooldown_rounds: 4, max_uses_per_stage: 2 });
+  assertEq(mythosCooldownTurns(canonical), 2);
+  assertEq(mythosMaxUses(canonical), 3);
+  assertEq(mythosCooldownTurns(legacy), 4);
+  assertEq(mythosMaxUses(legacy), 2);
+});
+
+test('E2 冷卻/次數:canonical cooldown_turns + max_uses 驅動 open-hand 可用性', () => {
+  const p = defaultKeeperProfile(undefined, 1);
+  const c = card({ id: 'canonical-usable', cooldown_turns: 2, max_uses: 2, action_cost: 1, reusable: true });
+  const r1 = selectKeeperActivations([c], situation({ dramaTier: 'rising' }), initKeeperState(p), p, () => 0);
+  assertEq(r1.activations.length, 1, '首回合可用');
+  assertEq(r1.state.cooldowns['canonical-usable'], 2, '使用後進 cooldown_turns');
+  assertEq(r1.state.uses['canonical-usable'], 1, '記錄已用次數');
+
+  const blocked = selectKeeperActivations([c], situation({ dramaTier: 'rising' }), r1.state, p, () => 0);
+  assertEq(blocked.activations.length, 0, '冷卻第 1 回合不可用');
+
+  const r2 = selectKeeperActivations([c], situation({ dramaTier: 'rising' }), blocked.state, p, () => 0);
+  assertEq(r2.activations.length, 1, '冷卻歸零後可再次使用');
+  assertEq(r2.state.uses['canonical-usable'], 2);
+
+  const exhausted = selectKeeperActivations(
+    [c],
+    situation({ dramaTier: 'rising' }),
+    { ...r2.state, cooldowns: {} },
+    p,
+    () => 0,
+  );
+  assertEq(exhausted.activations.length, 0, '達 max_uses 後用盡');
+});
+
+test('E2 評分:長冷卻 reusable 卡承擔機會成本', () => {
+  const p = defaultKeeperProfile();
+  const st = funded(p);
+  const fast = card({ id: 'fast-cooldown', name_zh: '短冷卻', cooldown_turns: 1, reusable: true, action_cost: 1 });
+  const slow = card({ id: 'slow-cooldown', name_zh: '長冷卻', cooldown_turns: 4, reusable: true, action_cost: 1 });
+  const fastScore = scoreCard(fast, situation({ dramaTier: 'rising' }), st, p);
+  const slowScore = scoreCard(slow, situation({ dramaTier: 'rising' }), st, p);
+  assertEq(fastScore !== null && slowScore !== null && fastScore > slowScore, true);
 });
 
 test('encounter mythos:無效果仍可由城主啟動以觸發遭遇池', () => {

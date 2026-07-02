@@ -29,6 +29,14 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
     );
   }
 
+  function mythosCooldownInput(body: any) {
+    return body.cooldown_turns ?? body.cooldown_rounds ?? null;
+  }
+
+  function mythosMaxUsesInput(body: any) {
+    return body.max_uses ?? body.max_uses_per_stage ?? null;
+  }
+
   // ════════════════════════════════════════════
   //  批次操作 — 必須在 /:id 之前
   // ════════════════════════════════════════════
@@ -331,19 +339,21 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
     try {
       const body = request.body as any;
       if (!body.code || !body.name_zh) return reply.status(400).send({ error: 'missing_required' });
+      const cooldownTurns = mythosCooldownInput(body);
+      const maxUses = mythosMaxUsesInput(body);
       const result = await pool.query(`
         INSERT INTO mythos_cards (code, name_zh, name_en, description_zh, description_en,
           action_cost, activation_timing, card_category, intensity_tag, response_trigger,
           flavor_text_zh, flavor_text_en, art_url, design_notes, design_status,
-          reusable, cooldown_rounds, max_uses_per_stage, axis_tag,
+          reusable, cooldown_rounds, max_uses_per_stage, cooldown_turns, max_uses, axis_tag,
           persistence_mode, attachment_target, has_chain_trigger, has_self_dedupe,
           threat_type, attack_surfaces, faction_pressure, complexity_tier,
           dv_average, dv_peak, dv_peak_target)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-          $16, $17, $18, $19::jsonb,
-          $20, $21, $22, $23,
-          $24::jsonb, $25::jsonb, $26::jsonb, $27,
-          $28, $29, $30)
+          $16, $17, $18, $19, $20, $21::jsonb,
+          $22, $23, $24, $25,
+          $26::jsonb, $27::jsonb, $28::jsonb, $29,
+          $30, $31, $32)
         RETURNING *
       `, [
         body.code, body.name_zh, body.name_en || '',
@@ -354,7 +364,7 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
         body.flavor_text_zh || null, body.flavor_text_en || null,
         body.art_url || null, body.design_notes || null,
         body.design_status || 'draft',
-        body.reusable ?? false, body.cooldown_rounds ?? null, body.max_uses_per_stage ?? null,
+        body.reusable ?? false, cooldownTurns, maxUses, cooldownTurns, maxUses,
         JSON.stringify(body.axis_tag || []),
         body.persistence_mode || 'instant', body.attachment_target ?? null,
         body.has_chain_trigger ?? false, body.has_self_dedupe ?? false,
@@ -404,6 +414,8 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
           });
         }
       }
+      const cooldownTurns = mythosCooldownInput(body);
+      const maxUses = mythosMaxUsesInput(body);
 
       const result = await pool.query(`
         UPDATE mythos_cards SET
@@ -424,18 +436,20 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
           reusable = COALESCE($16, reusable),
           cooldown_rounds = $17,
           max_uses_per_stage = $18,
-          axis_tag = COALESCE($19::jsonb, axis_tag),
-          persistence_mode = COALESCE($20, persistence_mode),
-          attachment_target = $21,
-          has_chain_trigger = COALESCE($22, has_chain_trigger),
-          has_self_dedupe = COALESCE($23, has_self_dedupe),
-          threat_type = COALESCE($24::jsonb, threat_type),
-          attack_surfaces = COALESCE($25::jsonb, attack_surfaces),
-          faction_pressure = COALESCE($26::jsonb, faction_pressure),
-          complexity_tier = $27,
-          dv_average = $28,
-          dv_peak = $29,
-          dv_peak_target = $30,
+          cooldown_turns = $19,
+          max_uses = $20,
+          axis_tag = COALESCE($21::jsonb, axis_tag),
+          persistence_mode = COALESCE($22, persistence_mode),
+          attachment_target = $23,
+          has_chain_trigger = COALESCE($24, has_chain_trigger),
+          has_self_dedupe = COALESCE($25, has_self_dedupe),
+          threat_type = COALESCE($26::jsonb, threat_type),
+          attack_surfaces = COALESCE($27::jsonb, attack_surfaces),
+          faction_pressure = COALESCE($28::jsonb, faction_pressure),
+          complexity_tier = $29,
+          dv_average = $30,
+          dv_peak = $31,
+          dv_peak_target = $32,
           updated_at = NOW()
         WHERE id = $1
         RETURNING *
@@ -443,7 +457,7 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
           body.action_cost, body.activation_timing, body.card_category, body.intensity_tag,
           body.response_trigger, body.flavor_text_zh, body.flavor_text_en,
           body.art_url, body.design_notes, body.design_status,
-          body.reusable, body.cooldown_rounds, body.max_uses_per_stage,
+          body.reusable, cooldownTurns, maxUses, cooldownTurns, maxUses,
           body.axis_tag !== undefined ? JSON.stringify(body.axis_tag) : null,
           body.persistence_mode, body.attachment_target,
           body.has_chain_trigger, body.has_self_dedupe,

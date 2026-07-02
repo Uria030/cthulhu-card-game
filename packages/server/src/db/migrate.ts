@@ -3226,6 +3226,73 @@ UPDATE stages
    AND encounter_trigger_config = '{}'::jsonb;
 `;
 
+// Migration 037: E2 canonical mythos open-hand field aliases.
+// MIGRATION_029 already introduced cooldown_rounds/max_uses_per_stage; E2 work package
+// names these cooldown_turns/max_uses. Keep both readable/writable during the transition.
+export const MIGRATION_037_SQL = `
+ALTER TABLE mythos_cards
+  ADD COLUMN IF NOT EXISTS cooldown_turns INTEGER,
+  ADD COLUMN IF NOT EXISTS max_uses INTEGER;
+
+UPDATE mythos_cards
+   SET cooldown_turns = cooldown_rounds
+ WHERE cooldown_turns IS NULL
+   AND cooldown_rounds IS NOT NULL;
+
+UPDATE mythos_cards
+   SET max_uses = max_uses_per_stage
+ WHERE max_uses IS NULL
+   AND max_uses_per_stage IS NOT NULL;
+
+UPDATE mythos_cards
+   SET cooldown_rounds = cooldown_turns
+ WHERE cooldown_rounds IS NULL
+   AND cooldown_turns IS NOT NULL;
+
+UPDATE mythos_cards
+   SET max_uses_per_stage = max_uses
+ WHERE max_uses_per_stage IS NULL
+   AND max_uses IS NOT NULL;
+
+DO $$ BEGIN
+  ALTER TABLE mythos_cards ADD CONSTRAINT mythos_cooldown_turns_nonnegative
+    CHECK (cooldown_turns IS NULL OR cooldown_turns >= 0) NOT VALID;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE mythos_cards ADD CONSTRAINT mythos_max_uses_nonnegative
+    CHECK (max_uses IS NULL OR max_uses >= 0) NOT VALID;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE OR REPLACE FUNCTION sync_mythos_open_hand_aliases()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.cooldown_turns IS NULL THEN
+    NEW.cooldown_turns := NEW.cooldown_rounds;
+  END IF;
+  IF NEW.cooldown_rounds IS NULL THEN
+    NEW.cooldown_rounds := NEW.cooldown_turns;
+  END IF;
+  IF NEW.max_uses IS NULL THEN
+    NEW.max_uses := NEW.max_uses_per_stage;
+  END IF;
+  IF NEW.max_uses_per_stage IS NULL THEN
+    NEW.max_uses_per_stage := NEW.max_uses;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sync_mythos_open_hand_aliases ON mythos_cards;
+CREATE TRIGGER trg_sync_mythos_open_hand_aliases
+BEFORE INSERT OR UPDATE ON mythos_cards
+FOR EACH ROW EXECUTE FUNCTION sync_mythos_open_hand_aliases();
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3444,6 +3511,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_034', MIGRATION_034_SQL);
     await runOne('MIGRATION_035', MIGRATION_035_SQL);
     await runOne('MIGRATION_036', MIGRATION_036_SQL);
+    await runOne('MIGRATION_037', MIGRATION_037_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

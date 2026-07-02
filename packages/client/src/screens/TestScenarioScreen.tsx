@@ -16,6 +16,11 @@ import {
   executeMythosCard,
   runAttachmentUpkeep,
   isCardExecutable,
+  mythosCooldownRemaining,
+  mythosMaxUses,
+  mythosUseCount,
+  mythosUsesRemaining,
+  isMythosUsedUp,
   AI_INVESTIGATOR_ROSTER,
   initInvestigatorAIState,
   runInvestigatorAITurn,
@@ -1947,19 +1952,28 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                 <div className="cond-title">✦ 城主威脅區(神話卡武器庫)✦</div>
                 <div className="threat-grid">
                   {setup.mythosCards.map((mc) => {
-                    const onCooldown = (keeperState.cooldowns[mc.id] ?? 0) > 0;
-                    const usedUp =
-                      (!mc.reusable && (keeperState.uses[mc.id] ?? 0) >= 1) ||
-                      (mc.max_uses_per_stage != null && (keeperState.uses[mc.id] ?? 0) >= mc.max_uses_per_stage);
+                    const cooldownLeft = mythosCooldownRemaining(mc, keeperState);
+                    const onCooldown = cooldownLeft > 0;
+                    const usedUp = isMythosUsedUp(mc, keeperState);
                     const dormant = !isCardExecutable(mc);
-                    const stateLabel = dormant ? '蟄伏' : usedUp ? '已用盡' : onCooldown ? `冷卻 ${keeperState.cooldowns[mc.id]}` : null;
+                    const used = mythosUseCount(mc, keeperState);
+                    const maxUses = mythosMaxUses(mc);
+                    const remaining = mythosUsesRemaining(mc, keeperState);
+                    const stateParts = [String(mc.card_category ?? 'general'), String(mc.intensity_tag ?? 'small')];
+                    if (dormant) stateParts.push('蟄伏');
+                    else if (usedUp) stateParts.push('已用盡');
+                    else if (onCooldown) stateParts.push(`冷卻 ${cooldownLeft}`);
+                    if (maxUses !== null) stateParts.push(`剩餘 ${remaining}/${maxUses}`);
+                    else if (!mc.reusable) stateParts.push(`剩餘 ${remaining}/1`);
+                    else if (used > 0) stateParts.push(`已用 ${used}`);
+                    else stateParts.push('可重複');
                     return (
                       <div key={mc.id} className={'threat-card' + (dormant || usedUp || onCooldown ? ' threat-card-inactive' : '')}>
                         <div className="threat-card-head">
                           <span className="threat-card-name">{mc.name_zh}</span>
                           <span className="threat-card-cost">{mc.action_cost} 點</span>
                         </div>
-                        <div className="threat-card-meta">{mc.card_category} · {mc.intensity_tag}{stateLabel ? ' · ' + stateLabel : ''}</div>
+                        <div className="threat-card-meta">{stateParts.join(' · ')}</div>
                         {mc.description_zh && <div className="threat-card-desc">{mc.description_zh}</div>}
                       </div>
                     );

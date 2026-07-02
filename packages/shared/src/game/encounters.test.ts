@@ -1,7 +1,13 @@
 /**
  * G-08 遭遇卡引擎測試 — 觸發/結算/AI 選項(合成內容,等 Gemini 量產接上)
  */
-import { drawEncounter, resolveEncounterOption, chooseEncounterOption } from './encounters';
+import {
+  drawEncounter,
+  drawTriggeredEncounter,
+  normaliseEncounterTriggerConfig,
+  resolveEncounterOption,
+  chooseEncounterOption,
+} from './encounters';
 import type { EncounterCardData } from './encounters';
 import type { InvestigatorState, ScenarioState } from './state';
 import type { EnemyDataLookup } from './monsterActions';
@@ -59,6 +65,30 @@ test('抽卡:從牌堆抽 1 張,不洗回(抽完即無)', () => {
   assertEq(d.card?.id, 'ec1');
   assertEq(d.remaining.length, 1);
   assertEq(drawEncounter([], roll(1)).card, null);
+});
+
+test('觸發:四條路徑都能抽遭遇', () => {
+  const cfg = normaliseEncounterTriggerConfig({
+    draw_on_turn_end: true,
+    trigger_locations: ['B'],
+    trigger_actions: ['search'],
+  });
+  assertEq(drawTriggeredEncounter([CARD], cfg, { path: 'turn_end' }, roll(1)).triggered, true);
+  assertEq(drawTriggeredEncounter([CARD], cfg, { path: 'chaos_headline', chaosTokenType: 'headline' }, roll(1)).triggered, true);
+  assertEq(drawTriggeredEncounter([CARD], cfg, { path: 'keeper_mythos', mythosCardCategory: 'encounter' }, roll(1)).triggered, true);
+  assertEq(drawTriggeredEncounter([CARD], cfg, { path: 'player_action', locationId: 'B' }, roll(1)).triggered, true);
+  assertEq(drawTriggeredEncounter([CARD], cfg, { path: 'player_action', actionType: 'search' }, roll(1)).triggered, true);
+});
+
+test('觸發:未命中條件時不消耗牌堆', () => {
+  const deck = [CARD];
+  const d = drawTriggeredEncounter(deck, normaliseEncounterTriggerConfig({ trigger_locations: ['B'] }), {
+    path: 'player_action',
+    locationId: 'A',
+  }, roll(1));
+  assertEq(d.triggered, false);
+  assertEq(d.card, null);
+  assertEq(d.remaining.length, 1);
 });
 
 test('結算:檢定成功 → success_effects(得線索)', () => {

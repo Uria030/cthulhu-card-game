@@ -298,8 +298,8 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
         `INSERT INTO stages (chapter_id, code, name_zh, name_en, stage_type, narrative,
                               entry_condition, completion_flags, scaling_rules,
                               return_parent_id, return_overrides, return_stage_number,
-                              side_signature_card_id, design_status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10,$11::jsonb,$12,$13,$14)
+                              side_signature_card_id, design_status, encounter_trigger_config)
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10,$11::jsonb,$12,$13,$14,$15::jsonb)
          RETURNING *`,
         [
           b.stage_type === 'main' ? b.chapter_id : null,
@@ -316,6 +316,7 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
           b.return_stage_number || null,
           b.side_signature_card_id || null,
           'draft',
+          JSON.stringify(b.encounter_trigger_config || {}),
         ],
       );
       const stage = sRes.rows[0];
@@ -407,6 +408,7 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
       if (b.entry_condition !== undefined) push('entry_condition', b.entry_condition, true);
       if (b.completion_flags !== undefined) push('completion_flags', b.completion_flags, true);
       if (b.scaling_rules !== undefined) push('scaling_rules', b.scaling_rules, true);
+      if (b.encounter_trigger_config !== undefined) push('encounter_trigger_config', b.encounter_trigger_config, true);
       if (b.return_overrides !== undefined) push('return_overrides', b.return_overrides, true);
       push('return_stage_number', b.return_stage_number);
       push('side_signature_card_id', b.side_signature_card_id);
@@ -505,8 +507,9 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
           `INSERT INTO scenarios
              (stage_id, scenario_order, name_zh, name_en, narrative,
               initial_location_codes, initial_connections,
-              investigator_spawn_location, initial_environment, initial_enemies)
-           VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,$10::jsonb)
+              investigator_spawn_location, initial_environment, initial_enemies,
+              encounter_trigger_config)
+           VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,$10::jsonb,$11::jsonb)
            RETURNING *`,
           [
             stageId,
@@ -519,6 +522,7 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
             b.investigator_spawn_location || null,
             JSON.stringify(b.initial_environment || {}),
             JSON.stringify(b.initial_enemies || []),
+            JSON.stringify(b.encounter_trigger_config || {}),
           ],
         );
         return reply.status(201).send({ success: true, data: res.rows[0] });
@@ -596,6 +600,7 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
       if (b.initial_environment !== undefined)
         push('initial_environment', b.initial_environment, true);
       if (b.initial_enemies !== undefined) push('initial_enemies', b.initial_enemies, true);
+      if (b.encounter_trigger_config !== undefined) push('encounter_trigger_config', b.encounter_trigger_config, true);
 
       if (sets.length === 0) {
         return reply.status(400).send({ success: false, error: '沒有可更新的欄位' });

@@ -903,6 +903,16 @@
   padding: 0 var(--sp-md);
   font-style: italic;
 }
+.encounter-option-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-sm);
+}
+.encounter-option-row button {
+  width: 100%;
+  white-space: normal;
+  text-align: left;
+}
 .modal-progress-text {
   font-family: var(--font-typewriter);
   font-size: 14px;

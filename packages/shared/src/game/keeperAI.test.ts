@@ -8,6 +8,7 @@ import {
   scoreCard,
   selectKeeperActivations,
   executeMythosCard,
+  isCardExecutable,
   attachmentTestModifier,
   runAttachmentUpkeep,
 } from './keeperAI';
@@ -66,6 +67,7 @@ const AGENDA = card({ id: 'agenda', name_zh: '末日推進', card_category: 'age
 const STATUS = card({ id: 'status', name_zh: '恐懼侵襲', card_category: 'status', action_cost: 2, intensity_tag: 'medium', effects: [{ action_code: 'horror_damage', action_params: { amount: 2, cap_to_one_at_limit: true } }] });
 const AMBIENT = card({ id: 'ambient', name_zh: '黑暗滲出', card_category: 'general', action_cost: 1 });
 const DORMANT = card({ id: 'dormant', name_zh: '線索篡改', card_category: 'narrative', action_cost: 2, effects: [] }); // 無可執行效果 = 蟄伏
+const ENCOUNTER = card({ id: 'encounter', name_zh: '報紙上的紅字', card_category: 'encounter', action_cost: 1, effects: [] });
 
 function situation(over: Partial<ReturnType<typeof snapshotSituation>> = {}) {
   return { aliveEnemies: 0, sanPct: 100, hpPct: 100, playerProgressPct: 0, dramaTier: 'rising' as const, turnNumber: 3, ...over };
@@ -129,6 +131,14 @@ test('無怪 → summon +3;蟄伏卡不可選;冷卻中不可選', () => {
   assertEq(scoreCard(DORMANT, situation(), st, p), null, '無可執行效果 = 蟄伏');
   const cooled: KeeperState = { ...st, cooldowns: { summon: 2 } };
   assertEq(scoreCard(SUMMON, situation(), cooled, p), null);
+});
+
+test('encounter mythos:無效果仍可由城主啟動以觸發遭遇池', () => {
+  const p = defaultKeeperProfile(undefined, 1);
+  const fresh = initKeeperState(p);
+  assertEq(isCardExecutable(ENCOUNTER), true);
+  const r = selectKeeperActivations([ENCOUNTER], situation({ dramaTier: 'rising' }), fresh, p, () => 0);
+  assertEq(r.activations.some((c) => c.id === 'encounter'), true);
 });
 
 test('避免單調:同類別連用扣分', () => {

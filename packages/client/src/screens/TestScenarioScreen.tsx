@@ -31,6 +31,8 @@ import {
   runDeathSave,
   isDowned,
   allInvestigatorsDead,
+  drawTriggeredEncounter,
+  resolveEncounterOption,
   CURRENT_MESSAGE_SCHEMA_VERSION,
 } from '@cthulhu/shared';
 import type {
@@ -49,6 +51,9 @@ import type {
   RuleContext,
   ResultEffect,
   EnemyInstance,
+  EncounterCardData,
+  EncounterOption,
+  EncounterTriggerContext,
 } from '@cthulhu/shared';
 import { applyDamageAllocation, autoAllocateDamage } from '@cthulhu/shared';
 import type { AllocatableTarget } from '@cthulhu/shared';
@@ -141,6 +146,9 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'effect_unsupported': return 'ℹ 部分卡面效果引擎尚未支援:' + ((p.codes as string[]) ?? []).join('、');
     case 'fear_check': return '😨 恐懼檢定 vs ' + (p.enemy as string) + ':d20 ' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '穩住了' : '失敗') + ')';
     case 'fear_damage': return '😱 ' + (p.narrative as string) + '(SAN -' + (p.amount as number) + ')';
+    case 'encounter_check': return '遭遇檢定:' + (p.attribute as string) + ' d20=' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '成功' : '失敗') + ')';
+    case 'encounter_narrative': return String(p.narrative ?? '');
+    case 'encounter_damage': return '遭遇傷害:' + ((p.narrative as string) || '') + '(HP -' + (p.amount as number) + ')';
     case 'monster_attack': return '👹 ' + (p.enemy as string) + ' 使出【' + (p.move as string) + '】— 你的' + (p.defenseAttribute as string) + '防禦:' + (p.total as number) + ' vs DC ' + (p.dc as number);
     case 'monster_attack_hit': return '💥 ' + (p.narrative as string) + '(HP -' + (p.physical as number) + (Number(p.horror) > 0 ? ' / SAN -' + (p.horror as number) : '') + ')';
     case 'monster_attack_missed': return '💨 ' + (p.narrative as string);
@@ -227,6 +235,10 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
 // 純演出層:引擎/狀態/Log 流程不變(效果照舊經 bus 進 Log),Modal 只重播同批效果讓動作有重量感。
 type ActionBeat = 1 | 2 | 3;
 interface PendingDamageAlloc { physical: number; horror: number; targets: AllocatableTarget[] }
+interface PendingEncounterTrigger {
+  sourceLabel: string;
+  context: EncounterTriggerContext;
+}
 interface ActionPlay {
   beat: ActionBeat;
   title: string;
@@ -247,6 +259,20 @@ interface ActionPlay {
   /** 後續行(倒地同步 + 進度/場景/結局敘事):同樣延到「完成」拍進 Log,排在主效果之後(不先於演出暴雷)*/
   cascadeLogs: string[];
   /** 進度檢查若判定結局:延到「完成」拍才覆蓋結算畫面(否則結局畫面會蓋掉沒播完的演出)*/
+  pendingOutcome: OutcomeData | null;
+  /** Accepted action can draw an encounter after this action modal closes. */
+  pendingEncounter: PendingEncounterTrigger | null;
+}
+
+type EncounterBeat = 1 | 2 | 3;
+interface EncounterPlay {
+  beat: EncounterBeat;
+  card: EncounterCardData;
+  sourceLabel: string;
+  resultLines: string[];
+  effects: ResultEffect[];
+  pendingDamageAlloc: PendingDamageAlloc | null;
+  cascadeLogs: string[];
   pendingOutcome: OutcomeData | null;
 }
 
@@ -289,6 +315,7 @@ function buildActionPlay(
   pendingDamageAlloc: PendingDamageAlloc | null,
   cascadeLogs: string[],
   pendingOutcome: OutcomeData | null,
+  pendingEncounter: PendingEncounterTrigger | null,
 ): ActionPlay {
   const checkLines: string[] = [];
   const resultLines: string[] = [];
@@ -309,6 +336,7 @@ function buildActionPlay(
     effects,
     cascadeLogs,
     pendingOutcome,
+    pendingEncounter,
   };
 }
 
@@ -427,6 +455,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [damageAlloc, setDamageAlloc] = useState<{ physical: number; horror: number; targets: AllocatableTarget[] } | null>(null);
   // Phase2 C:玩家自己動作的三段演出 Modal(敘述→檢定→結果);其他人動作只進 Log
   const [actionPlay, setActionPlay] = useState<ActionPlay | null>(null);
+  const [encounterDeck, setEncounterDeck] = useState<EncounterCardData[]>(() => setup.encounterCards);
+  const [encounterPlay, setEncounterPlay] = useState<EncounterPlay | null>(null);
   // 手牌放大檢視:點手牌卡 → 放大看內容,下方打出/消耗/投入按鈕(刻意慢一拍提升體驗)
   const [zoomCard, setZoomCard] = useState<CardDisplay | null>(null);
   const [panel, setPanel] = useState<PanelType>(null);
@@ -585,6 +615,75 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     }
   };
 
+  const triggerEncounter = useCallback((pending: PendingEncounterTrigger | null): boolean => {
+    if (!pending || encounterPlay || encounterDeck.length === 0) return false;
+    const draw = drawTriggeredEncounter(
+      encounterDeck,
+      setup.encounterTriggerConfig,
+      pending.context,
+    );
+    if (!draw.triggered || !draw.card) return false;
+    setEncounterDeck(draw.remaining);
+    setEncounterPlay({
+      beat: 1,
+      card: draw.card,
+      sourceLabel: pending.sourceLabel,
+      resultLines: [],
+      effects: [],
+      pendingDamageAlloc: null,
+      cascadeLogs: [],
+      pendingOutcome: null,
+    });
+    append('[遭遇] ' + pending.sourceLabel + '抽到「' + draw.card.name_zh + '」。');
+    return true;
+  }, [encounterDeck, encounterPlay, setup.encounterTriggerConfig]);
+
+  const advanceEncounterPlay = () => {
+    setEncounterPlay((ep) => {
+      if (!ep) return ep;
+      if (ep.beat === 1) return { ...ep, beat: 2 };
+      return ep;
+    });
+  };
+
+  const chooseEncounterOption = (option: EncounterOption) => {
+    if (!encounterPlay) return;
+    const r = resolveEncounterOption(option, investigator, scenario, setup.enemyStats);
+    tallyActor(investigator.investigatorId, r.effects);
+    const sync = syncDownedState(r.investigator);
+    const syncLogs = sync.effects.map((eff) => '[結算] ' + describeEffect(eff, locMeta));
+    const next = applyProgress(r.scenario, sync.investigator, aiMembers);
+    setScenario(next.sc);
+    setInvestigator(next.inv);
+    setAiMembers(next.aiArr);
+    const da = r.effects.find((e) => e.type === 'damage_allocatable' && e.targetId === investigator.investigatorId);
+    const dp = da?.params as { physical?: number; horror?: number; targets?: AllocatableTarget[] } | undefined;
+    const pendingDamageAlloc: PendingDamageAlloc | null = dp
+      ? { physical: Number(dp.physical ?? 0), horror: Number(dp.horror ?? 0), targets: dp.targets ?? [] }
+      : null;
+    setEncounterPlay({
+      ...encounterPlay,
+      beat: 3,
+      resultLines: r.effects.filter((e) => e.type !== 'damage_allocatable').map((e) => describeEffect(e, locMeta)),
+      effects: r.effects,
+      pendingDamageAlloc,
+      cascadeLogs: [...syncLogs, ...next.logs],
+      pendingOutcome: next.outcome,
+    });
+  };
+
+  const completeEncounterPlay = () => {
+    const pending = encounterPlay?.pendingDamageAlloc ?? null;
+    const pendingOutcome = encounterPlay?.pendingOutcome ?? null;
+    if (encounterPlay) {
+      for (const eff of encounterPlay.effects) append('[遭遇] ' + describeEffect(eff, locMeta));
+      for (const l of encounterPlay.cascadeLogs) append(l);
+    }
+    setEncounterPlay(null);
+    if (pendingOutcome) { checkpointVitals(investigator, aiMembers); setOutcome(pendingOutcome); }
+    if (pending) setDamageAlloc(pending);
+  };
+
   // 跑單一 AI 隊友的一回合(邏輯同 enterMythosPhase ⓪;抽出供「計時器同時行動」與「結束階段補跑」共用)。
   // 純計算式:吃 (idx, sc, inv, aiArr) 回新的三者,只 append Log、不直接 setState(commit 由呼叫端負責)。
   const stepAITeammate = (
@@ -676,7 +775,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // 連階段判斷都用 fresh 閉包(不靠落後的 ref)。單執行緒下無交錯,故無 lost update。
   const aiHasUnacted = aiMembers.some((ai) =>
     !!ai && !ai.dead && !ai.permanentlyDead && !isDowned(ai) && !aiActedThisTurn.includes(ai.investigatorId));
-  const aiPaused = !!(setup.tutorial || phase !== 'investigator' || outcome || actionPlay || damageAlloc);
+  const aiPaused = !!(setup.tutorial || phase !== 'investigator' || outcome || actionPlay || encounterPlay || damageAlloc);
   // 計時器:只發訊號,不碰遊戲狀態。aiActedThisTurn 入 deps → 每位 AI 行動完都重新武裝下一個計時器
   // (否則 aiHasUnacted 仍為 true 時 deps 不變,序列會在第一位之後停住)。
   useEffect(() => {
@@ -687,7 +786,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // 執行:tick 變動 → 用「當下已 commit 的最新 state」跑一位 AI(fresh 閉包,杜絕舊值寫入)
   useEffect(() => {
     if (aiTick === 0) return;
-    if (setup.tutorial || phase !== 'investigator' || outcome || actionPlay || damageAlloc) return;
+    if (setup.tutorial || phase !== 'investigator' || outcome || actionPlay || encounterPlay || damageAlloc) return;
     const idx = aiMembers.findIndex((ai) =>
       !!ai && !ai.dead && !ai.permanentlyDead && !isDowned(ai) && !aiActedThisTurn.includes(ai.investigatorId));
     if (idx < 0) return;
@@ -825,22 +924,40 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       }
       // 後續行(倒地同步 + 進度/場景/結局敘事):一律排在主效果「之後」。
       const cascadeLogs = [...syncLogs, ...next.logs];
+      const effects = out.result.effects ?? [];
+      const moveEff = effects.find((e) => e.type === 'move');
+      const moveTo = moveEff ? String((moveEff.params as { to?: unknown }).to ?? '') : '';
+      const headlinePending = effects.some((e) => e.type === 'headline_drawn');
+      const pendingEncounter: PendingEncounterTrigger = headlinePending
+        ? {
+            sourceLabel: '混沌頭條',
+            context: { path: 'chaos_headline', chaosTokenType: 'headline' },
+          }
+        : {
+            sourceLabel: actionType === 'move' ? '進入地點' : '行動條件',
+            context: {
+              path: 'player_action',
+              actionType,
+              locationId: moveTo || next.inv.currentLocationId || investigator.currentLocationId,
+            },
+          };
       // Phase2 C:玩家自己的動作跳三段演出 Modal(敘述→檢定→結果)。方向 A 完整收斂 —
       // 主效果 + 後續行(cascadeLogs)+ 結局(outcome)全部延到演出「完成」拍才生效:
       // 演出期間 Log 不暴雷、結局畫面不蓋掉沒播完的演出。純記帳動作(取資源/抽卡)不跳,維持輕快。
       if (!ACTION_PLAY_SKIP.has(actionType)) {
         const locId = investigator.currentLocationId;
         const locName = (locId && setup.locMeta[locId]?.name) || locId || '此地';
-        setActionPlay(buildActionPlay(actionType, out.result.effects ?? [], locName, locMeta, pendingDamageAlloc, cascadeLogs, next.outcome));
+        setActionPlay(buildActionPlay(actionType, effects, locName, locMeta, pendingDamageAlloc, cascadeLogs, next.outcome, pendingEncounter));
       } else {
         // 純記帳動作(拿資源/抽卡)不跳演出 → 主效果 + 後續行即時進 Log(無演出可同步)
-        for (const eff of out.result.effects ?? []) append('[結算] ' + describeEffect(eff, locMeta));
+        for (const eff of effects) append('[結算] ' + describeEffect(eff, locMeta));
         for (const l of cascadeLogs) append(l);
         if (next.outcome) { checkpointVitals(next.inv, next.aiArr); setOutcome(next.outcome); }
         if (pendingDamageAlloc) setDamageAlloc(pendingDamageAlloc);
+        if (!next.outcome && !pendingDamageAlloc) triggerEncounter(pendingEncounter);
       }
     }
-  }, [bus, investigator, scenario, turnNumber, phase, setup, flags, locMeta]);
+  }, [bus, investigator, scenario, turnNumber, phase, setup, flags, locMeta, triggerEncounter]);
 
   /** 檢定類動作:自動帶上目前的加值選擇 */
   const submitCheckIntent = useCallback((
@@ -878,6 +995,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const completeActionPlay = () => {
     const pending = actionPlay?.pendingDamageAlloc ?? null;
     const pendingOutcome = actionPlay?.pendingOutcome ?? null;
+    const pendingEncounter = actionPlay?.pendingEncounter ?? null;
     // 方向 A 完整收斂:演出走完才一次放 Log — 主效果 → 後續行(倒地同步 + 進度/場景/結局敘事),
     // 順序固定、單一來源、不先於演出暴雷。結局畫面也等到此刻才覆蓋(不蓋掉沒播完的演出)。
     if (actionPlay) {
@@ -887,6 +1005,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setActionPlay(null);
     if (pendingOutcome) { checkpointVitals(investigator, aiMembers); setOutcome(pendingOutcome); }
     if (pending) setDamageAlloc(pending);
+    if (!pendingOutcome && !pending) triggerEncounter(pendingEncounter);
   };
   // 檢定拍擲骰動畫(節奏窗口 ~700ms:重量感 + 遮蔽未來延遲載入)
   useEffect(() => {
@@ -962,6 +1081,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     );
     const selection = selectKeeperActivations(setup.mythosCards, situation, keeperState, setup.keeperProfile);
     setKeeperState(selection.state);
+    let pendingKeeperEncounter: PendingEncounterTrigger | null = null;
     for (const card of selection.activations) {
       const keeperParty: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
       for (const ai of updatedAIs) if (ai) keeperParty[ai.investigatorId] = ai;
@@ -984,6 +1104,12 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         };
       }
       for (const eff of exec.effects) append('[城主] ' + describeEffect(eff, locMeta));
+      if (!pendingKeeperEncounter && String(card.card_category ?? '') === 'encounter') {
+        pendingKeeperEncounter = {
+          sourceLabel: '城主遭遇',
+          context: { path: 'keeper_mythos', mythosCardCategory: String(card.card_category ?? '') },
+        };
+      }
       // 召喚後恐懼掃描(§7.6 怪物進入半徑;玩家與 AI 隊友都掃)
       if (exec.effects.some((e) => e.type === 'enemy_spawned')) {
         const fear = runFearChecks(inv, sc, setup.enemyStats);
@@ -1061,6 +1187,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setAiMembers(next.aiArr); // 一律用 applyProgress 回傳的最終陣列(含可能的轉場落點)
     next.logs.forEach((l) => append(l)); // 神話階段無玩家演出 → 進度敘事即時進 Log
     if (next.outcome) setOutcome(next.outcome);
+    if (!next.outcome) triggerEncounter(pendingKeeperEncounter);
   };
   const endTurn = () => {
     // 敵人階段 → 回合結束 → 下一回合的調查員階段(三階段:advance ×2)
@@ -1110,6 +1237,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     // 場景回合數同步(戲劇曲線/行為腳本 turn_count 觸發都依賴它)
     setScenario((s) => ({ ...s, turnNumber: s.turnNumber + 1 }));
     setKeeperEnergy((e) => Math.min(12, e + 1));
+    triggerEncounter({
+      sourceLabel: '回合結束',
+      context: { path: 'turn_end', locationId: investigator.currentLocationId },
+    });
   };
 
   // ─── 浮層互動 ──────────────────
@@ -1711,6 +1842,56 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                 <hr className="modal-divider" />
                 <div className="action-row">
                   <button onClick={completeActionPlay}>✓ 完成</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {encounterPlay && (
+        <div className="modal-backdrop active">
+          <div className="modal-frame modal-action-play">
+            <div className="modal-title">遭遇 · {encounterPlay.card.name_zh} · {encounterPlay.beat === 1 ? '敘事' : encounterPlay.beat === 2 ? '選項' : '結算'}</div>
+            {encounterPlay.beat === 1 && (
+              <>
+                <div className="modal-illustration">遭遇</div>
+                <hr className="modal-divider" />
+                <div className="modal-narrative">
+                  <div>{encounterPlay.sourceLabel}</div>
+                  <div>{encounterPlay.card.scenario_text_zh || '一段不該在此刻出現的異常插入了調查。'}</div>
+                </div>
+                <hr className="modal-divider" />
+                <div className="action-row">
+                  <button onClick={advanceEncounterPlay}>查看選項 →</button>
+                </div>
+              </>
+            )}
+            {encounterPlay.beat === 2 && (
+              <>
+                <div className="modal-illustration">選項</div>
+                <hr className="modal-divider" />
+                <div className="action-row encounter-option-row">
+                  {encounterPlay.card.options.map((opt, i) => (
+                    <button key={i} onClick={() => chooseEncounterOption(opt)}>
+                      {(opt.option_label ? opt.option_label + ' · ' : '') + (opt.option_text_zh || '面對它')}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {encounterPlay.beat === 3 && (
+              <>
+                <div className="modal-illustration">結算</div>
+                <hr className="modal-divider" />
+                <div className="modal-narrative">
+                  {encounterPlay.resultLines.length > 0
+                    ? encounterPlay.resultLines.map((l, i) => <div key={i}>{l}</div>)
+                    : <div>(無額外結果)</div>}
+                </div>
+                <hr className="modal-divider" />
+                <div className="action-row">
+                  <button onClick={completeEncounterPlay}>✓ 完成</button>
                 </div>
               </>
             )}

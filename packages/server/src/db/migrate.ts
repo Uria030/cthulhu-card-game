@@ -3209,6 +3209,23 @@ ALTER TABLE monster_variants ADD CONSTRAINT chk_mv_move_pattern CHECK (move_patt
 ALTER TABLE monster_variants ADD COLUMN IF NOT EXISTS behavior_script JSONB NOT NULL DEFAULT '{}'::jsonb;
 `;
 
+// Migration 036: encounter trigger config for stage/scenario bootstrap.
+export const MIGRATION_036_SQL = `
+ALTER TABLE stages ADD COLUMN IF NOT EXISTS encounter_trigger_config JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS encounter_trigger_config JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+UPDATE stages
+   SET encounter_trigger_config = '{
+     "draw_on_turn_end": false,
+     "trigger_locations": ["g_slit_mouth_loc_brick_wall"],
+     "trigger_actions": ["search", "investigate_hidden"],
+     "chaos_headline": true,
+     "keeper_mythos": true
+   }'::jsonb
+ WHERE code = 'g_slit_mouth_legend_st1'
+   AND encounter_trigger_config = '{}'::jsonb;
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3426,6 +3443,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_033', MIGRATION_033_SQL);
     await runOne('MIGRATION_034', MIGRATION_034_SQL);
     await runOne('MIGRATION_035', MIGRATION_035_SQL);
+    await runOne('MIGRATION_036', MIGRATION_036_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

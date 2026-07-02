@@ -135,6 +135,7 @@ export const SUPPORTED_MYTHOS_ACTIONS = new Set([
 ]);
 
 export function isCardExecutable(card: MythosCardData): boolean {
+  if (String(card.card_category ?? '') === 'encounter') return true;
   const fx = card.effects ?? [];
   return fx.length > 0 && fx.some((f) => SUPPORTED_MYTHOS_ACTIONS.has(f.action_code));
 }
@@ -173,6 +174,7 @@ export function scoreCard(
     if (cat === 'cancel') score += 2;
   }
   if (cat === 'general') score += 1; // 環境鋪陳預設小加分
+  if (cat === 'encounter') score += 2;
   if (situation.dramaTier === 'climax' && (intensity === 'large' || intensity === 'epic')) score += 1;
 
   // 效益比(強度/費用)

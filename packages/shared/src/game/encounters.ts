@@ -55,11 +55,115 @@ export interface EncounterCardData {
   options: EncounterOption[];
 }
 
+export type EncounterTriggerPath =
+  | 'turn_end'
+  | 'chaos_headline'
+  | 'keeper_mythos'
+  | 'player_action';
+
+export interface EncounterTriggerConfig {
+  /** Draw one encounter when the round moves through turn_end. */
+  draw_on_turn_end?: boolean;
+  /** Location codes that draw after a player enters them. */
+  trigger_locations?: string[];
+  /** Player action codes that draw after accepted resolution. */
+  trigger_actions?: string[];
+  /** Draw when a spell chaos token resolves as headline. Defaults to true for headline tokens. */
+  chaos_headline?: boolean;
+  /** Draw when the keeper activates a mythos card with card_category='encounter'. Defaults to true. */
+  keeper_mythos?: boolean;
+}
+
+export interface EncounterTriggerContext {
+  path: EncounterTriggerPath;
+  locationId?: string | null;
+  actionType?: string | null;
+  mythosCardCategory?: string | null;
+  chaosTokenType?: string | null;
+}
+
+export interface EncounterTriggerDecision {
+  shouldDraw: boolean;
+  reason: string;
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+}
+
+export function normaliseEncounterTriggerConfig(raw: unknown): EncounterTriggerConfig {
+  if (!raw || typeof raw !== 'object') return {};
+  const src = raw as Record<string, unknown>;
+  const out: EncounterTriggerConfig = {};
+  if (typeof src.draw_on_turn_end === 'boolean') out.draw_on_turn_end = src.draw_on_turn_end;
+  if (typeof src.chaos_headline === 'boolean') out.chaos_headline = src.chaos_headline;
+  if (typeof src.keeper_mythos === 'boolean') out.keeper_mythos = src.keeper_mythos;
+  const locations = stringList(src.trigger_locations);
+  const actions = stringList(src.trigger_actions);
+  if (locations.length > 0) out.trigger_locations = locations;
+  if (actions.length > 0) out.trigger_actions = actions;
+  return out;
+}
+
+export function mergeEncounterTriggerConfigs(
+  ...configs: Array<EncounterTriggerConfig | null | undefined>
+): EncounterTriggerConfig {
+  const merged: EncounterTriggerConfig = {};
+  for (const cfg of configs) {
+    if (!cfg) continue;
+    if (cfg.draw_on_turn_end !== undefined) merged.draw_on_turn_end = cfg.draw_on_turn_end;
+    if (cfg.chaos_headline !== undefined) merged.chaos_headline = cfg.chaos_headline;
+    if (cfg.keeper_mythos !== undefined) merged.keeper_mythos = cfg.keeper_mythos;
+    if (cfg.trigger_locations) {
+      merged.trigger_locations = [...new Set([...(merged.trigger_locations ?? []), ...cfg.trigger_locations])];
+    }
+    if (cfg.trigger_actions) {
+      merged.trigger_actions = [...new Set([...(merged.trigger_actions ?? []), ...cfg.trigger_actions])];
+    }
+  }
+  return merged;
+}
+
+export function shouldDrawEncounter(
+  config: EncounterTriggerConfig,
+  context: EncounterTriggerContext,
+): EncounterTriggerDecision {
+  switch (context.path) {
+    case 'turn_end':
+      return { shouldDraw: config.draw_on_turn_end === true, reason: 'turn_end' };
+    case 'chaos_headline':
+      return {
+        shouldDraw: context.chaosTokenType === 'headline' && config.chaos_headline !== false,
+        reason: 'chaos_headline',
+      };
+    case 'keeper_mythos':
+      return {
+        shouldDraw: context.mythosCardCategory === 'encounter' && config.keeper_mythos !== false,
+        reason: 'keeper_mythos',
+      };
+    case 'player_action': {
+      const byLocation = !!context.locationId && (config.trigger_locations ?? []).includes(context.locationId);
+      const byAction = !!context.actionType && (config.trigger_actions ?? []).includes(context.actionType);
+      return {
+        shouldDraw: byLocation || byAction,
+        reason: byLocation ? 'player_action_location' : 'player_action_code',
+      };
+    }
+    default:
+      return { shouldDraw: false, reason: 'unsupported_trigger' };
+  }
+}
+
 // ─── 觸發:進入新地點抽 1 張(技術債最快解鎖路)────
 export interface EncounterDraw {
   card: EncounterCardData | null;
   /** 抽走後剩餘的牌堆(不洗回,抽完即無) */
   remaining: EncounterCardData[];
+}
+
+export interface TriggeredEncounterDraw extends EncounterDraw {
+  triggered: boolean;
+  reason: string;
 }
 
 /**
@@ -71,6 +175,20 @@ export function drawEncounter(deck: EncounterCardData[], rng: () => number = Mat
   const idx = Math.floor(rng() * deck.length);
   const card = deck[idx];
   return { card, remaining: deck.filter((_, i) => i !== idx) };
+}
+
+export function drawTriggeredEncounter(
+  deck: EncounterCardData[],
+  config: EncounterTriggerConfig,
+  context: EncounterTriggerContext,
+  rng: () => number = Math.random,
+): TriggeredEncounterDraw {
+  const decision = shouldDrawEncounter(config, context);
+  if (!decision.shouldDraw) {
+    return { triggered: false, reason: decision.reason, card: null, remaining: deck };
+  }
+  const draw = drawEncounter(deck, rng);
+  return { triggered: draw.card !== null, reason: decision.reason, ...draw };
 }
 
 // ─── 結算:選一個選項,跑檢定(若需要),施加結構化效果 ────

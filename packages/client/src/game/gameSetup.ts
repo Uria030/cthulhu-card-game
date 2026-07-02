@@ -5,7 +5,11 @@
  *
  * 戰鬥板元件只認 GameSetup,不關心資料來源。
  */
-import { buildGameFromBootstrap } from '@cthulhu/shared';
+import {
+  buildGameFromBootstrap,
+  mergeEncounterTriggerConfigs,
+  normaliseEncounterTriggerConfig,
+} from '@cthulhu/shared';
 import type {
   InvestigatorState,
   ScenarioState,
@@ -18,6 +22,8 @@ import type {
   AgendaCardData,
   OutcomeData,
   MythosCardData,
+  EncounterCardData,
+  EncounterTriggerConfig,
   KeeperProfile,
   InvestigatorAIProfile,
 } from '@cthulhu/shared';
@@ -86,6 +92,10 @@ export interface GameSetup {
   agendaData: AgendaCardData[];
   /** 城主 open-hand 武器庫 + 設定檔(風格即資料) */
   mythosCards: MythosCardData[];
+  /** Encounter cards available to draw during this stage. */
+  encounterCards: EncounterCardData[];
+  /** Stage/scenario trigger config that decides when encounterCards are drawn. */
+  encounterTriggerConfig: EncounterTriggerConfig;
   keeperProfile: KeeperProfile;
   /** 頭目登場演出(劇本 Part3 §2.4 三段式;key = variant code) */
   bossIntro: Record<string, string[]>;
@@ -216,6 +226,8 @@ export function makeTestSetup(): GameSetup {
     actData: [],
     agendaData: [],
     mythosCards: [],
+    encounterCards: [],
+    encounterTriggerConfig: {},
     keeperProfile: defaultKeeperProfile(),
     bossIntro: {},
     outcomes: [],
@@ -236,6 +248,13 @@ export function buildSetupFromBootstrap(
   aiBootstraps: StageBootstrap[] = [],
 ): GameSetup {
   const built = buildGameFromBootstrap(bootstrap);
+  const bootstrapScenario =
+    bootstrap.stage.scenarios.find((s) => s.id === built.scenario.scenarioId) ??
+    bootstrap.stage.scenarios[0];
+  const encounterTriggerConfig = mergeEncounterTriggerConfigs(
+    normaliseEncounterTriggerConfig(bootstrap.stage.encounter_trigger_config),
+    normaliseEncounterTriggerConfig(bootstrapScenario?.encounter_trigger_config),
+  );
 
   // ── AI 隊友落地:名冊(名字/自由配點/熟練)疊上模板 bootstrap ──
   const aiMembers: GameSetup['aiMembers'] = [];
@@ -418,6 +437,8 @@ export function buildSetupFromBootstrap(
     actData: (bootstrap.stage.act_cards ?? []) as unknown as ActCardData[],
     agendaData: (bootstrap.stage.agenda_cards ?? []) as unknown as AgendaCardData[],
     mythosCards: (bootstrap.mythos_cards ?? []) as unknown as MythosCardData[],
+    encounterCards: (bootstrap.encounter_cards ?? []) as unknown as EncounterCardData[],
+    encounterTriggerConfig,
     // 城主能量隨人數加成(玩家本人 + 落地的 AI 隊友);base = 人數+1、上限 = 6+2×人數
     keeperProfile: defaultKeeperProfile(bootstrap.keeper_settings, 1 + aiMembers.length),
     // 劇本 Part3 §2.4 三段式登場(先聽聲 → 見人 → 揭真相);未來移入 DB 敘事欄位

@@ -16,6 +16,7 @@ export * from './monsterActions';
 export * from './gameProgress';
 export * from './keeperAI';
 export * from './investigatorAI';
+export * from './investigatorCommand';
 export * from './upkeep';
 export * from './dying';
 export * from './encounters';

@@ -326,8 +326,8 @@ function getObjective(ctx: InvestigatorAIContext): AIObjective {
   return { kind: 'none' };
 }
 
-/** 武器攻擊的期望屬性修正:對風格池逐卡平均(屬性 + 武器對應屬性加成) */
-function weaponExpectedModifier(
+/** 武器攻擊的期望屬性修正:對風格池逐卡平均(屬性 + 武器對應屬性加成)。指揮層需求估算共用。 */
+export function weaponExpectedModifier(
   inv: InvestigatorState,
   weaponId: string,
   cardLookup: CardDataLookup,

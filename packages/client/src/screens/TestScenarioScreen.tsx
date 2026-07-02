@@ -20,6 +20,10 @@ import {
   initInvestigatorAIState,
   runInvestigatorAITurn,
   deriveObjective,
+  commandTick,
+  assignRoles,
+  objectiveForAssignment,
+  cumulativeDoom,
   runTurnEndUpkeep,
   runTurnStartUpkeep,
   runShortRest,
@@ -597,20 +601,42 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     const aiArr = [...aiArr0];
     const allies: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
     for (const [j, other] of aiArr.entries()) if (j !== idx && other) allies[other.investigatorId] = other;
-    // 當前 ACT 目標(資料驅動):讓 AI 專注做這幕的勝利條件——數線索型達標即停、殺目標型聚攏集火
-    const curAct = [...setup.actData].sort((a, b) => a.card_order - b.card_order)[sc.actIndex ?? 0];
+    // 指揮層接管目標(企畫書 P2/P3):勝利解析 → 時間預算 → 緊急分值 U → 隊伍指派。
+    // 玩家席也在指派矩陣裡(能力入帳、梯隊假設玩家配合;AI 拿自己的指派行動,不指揮玩家)。
     const partySize = 1 + setup.aiMembers.length;
-    const objective = deriveObjective(
+    const party: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
+    for (const other of aiArr) if (other) party[other.investigatorId] = other;
+    const cmdCtx = {
+      scenario: sc, investigators: party,
+      actCards: setup.actData, agendaCards: setup.agendaData,
+      enemyData: setup.enemyStats, locationStats: setup.locationStats,
+      cardLookup: setup.cardLookup, stylePools: setup.stylePools,
+      playerCount: partySize,
+      // 城主毀滅速率 = 累積毀滅 ÷ 已過回合(動態觀測,不寫死;開局未知 → 預算無上限)
+      observedDoomRate: turnNumber > 1 ? cumulativeDoom(sc, setup.agendaData) / (turnNumber - 1) : null,
+    };
+    const trace = commandTick(cmdCtx);
+    const myRole = assignRoles(trace, cmdCtx).find((rr) => rr.investigatorId === ai.investigatorId);
+    // 回退:指揮層無指派(全幕完成/無 ACT 資料)→ 沿用當前幕條件推導
+    const curAct = [...setup.actData].sort((a, b) => a.card_order - b.card_order)[sc.actIndex ?? 0];
+    const objective = objectiveForAssignment(myRole, trace.chain) ?? deriveObjective(
       curAct?.front_advance_condition as Record<string, unknown> | undefined,
       partySize,
       setup.enemyStats,
     );
+    // 軌跡進戰役紀錄(驗證計畫乙:dry run 時看得到每個 AI 為什麼做那件事)
+    if (myRole) {
+      const kindLabel = { clues: '湊線索', kill: '殺敵', escape: '撤離', survive: '撐住', none: '自由' }[myRole.kind] ?? myRole.kind;
+      const postureLabel = trace.posture === 'calm' ? '從容' : trace.posture === 'urgent' ? '告急' : '背水';
+      append(`⚑ [指揮] ${m.profile.name_zh} → ${kindLabel}${myRole.role === 'prepare' ? '(組陣備戰)' : ''} | U=${Number.isFinite(trace.urgency) ? trace.urgency.toFixed(2) : '∞'}(${postureLabel})`);
+    }
     const r = runInvestigatorAITurn(
       {
         scenario: sc, investigator: ai, allies, turnNumber,
         locationStats: setup.locationStats, enemyStats: setup.enemyStats,
         cardLookup: setup.cardLookup, stylePools: setup.stylePools,
         objective,
+        urgency: Number.isFinite(trace.urgency) ? trace.urgency : 1,
       },
       m.profile,
       aiStatesRef.current[idx],

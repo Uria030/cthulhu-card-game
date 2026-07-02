@@ -16,7 +16,6 @@
  * - 議程翻面毀滅「扣門檻進下一張」→ 判負空間 = 剩餘各張門檻總和 − 當前累積。
  */
 import type { ScenarioState, InvestigatorState } from './state';
-import type { AttributeKey } from './checks';
 import type { CardDataLookup, StyleCardData } from './ruleEngine';
 import type { EnemyDataLookup } from './monsterActions';
 import type { ActCardData, AgendaCardData } from './gameProgress';

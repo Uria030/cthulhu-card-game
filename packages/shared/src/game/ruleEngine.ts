@@ -36,7 +36,7 @@ import {
 } from './checks';
 import type { AttributeKey, CommitIcons } from './checks';
 import { executeCardEffects, passiveTestModifier } from './effectsExecutor';
-import { runFearChecks, applyAttackOfOpportunity, spawnEnemy, enemyDamageAfterDefense, resolveDeathKeywords, applyHaunting, reviveHaunting } from './monsterActions';
+import { runFearChecks, applyAttackOfOpportunity, spawnEnemy, enemyDamageAfterDefense, resolveDeathKeywords, applyHaunting, reviveHaunting, STUNNED } from './monsterActions';
 import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import { attachmentTestModifier } from './keeperAI';
 import { isDowned, applyStabilize } from './dying';
@@ -996,11 +996,14 @@ function resolveEvade(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
   const newInv = evadeAd.investigator;
   const newScenario: ScenarioState = {
     ...ctx.scenario,
-    enemies: ctx.scenario.enemies.map((e) =>
-      e.instanceId === enemyId
-        ? { ...e, engagedWith: e.engagedWith.filter((id) => id !== ctx.investigator.investigatorId) }
-        : e,
-    ),
+    enemies: ctx.scenario.enemies.map((e) => {
+      if (e.instanceId !== enemyId) return e;
+      const disengaged = { ...e, engagedWith: e.engagedWith.filter((id) => id !== ctx.investigator.investigatorId) };
+      // §7.4 閃避成功 = 敵人被絆倒(= stun_enemy 標準詞:失去下次行動;s04 記 2V)
+      return success && !disengaged.modifiers.includes(STUNNED)
+        ? { ...disengaged, modifiers: [...disengaged.modifiers, STUNNED] }
+        : disengaged;
+    }),
   };
   const effects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
@@ -1009,6 +1012,7 @@ function resolveEvade(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
     success
       ? { type: 'evade_success', params: { narrative: '你側身一滾,牠撲空絆倒。你脫離了交戰。' }, targetId: enemyId }
       : { type: 'evade_fail', params: { damage: damageTaken, narrative: '你掙脫了,但牠的爪子在你身上留下一道口子。' }, targetId: enemyId },
+    ...(success ? [{ type: 'enemy_stunned' as const, params: { narrative: '牠撲空的重心還沒收回來 — 下一輪牠將無法行動。' }, targetId: enemyId }] : []),
     ...evadeAd.effects,
   ];
   return accept(intent, effects, { investigator: newInv, scenario: newScenario });

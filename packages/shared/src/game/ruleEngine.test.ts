@@ -363,6 +363,14 @@ test('evade:失敗也脫離交戰但受敵人物理傷害(§7.4)', () => {
   assertEq(r.newState?.investigator?.hp, 5);
 });
 
+test('evade:成功敵人被絆倒 = stunned 失去下次行動;失敗不絆倒(§7.4 + ch3 stun_enemy)', () => {
+  const ok = resolveIntent(makeIntent('evade'), makeCombatCtx({ roll: 15, engaged: true, visibility: 'day' }));
+  assertEq(ok.newState?.scenario?.enemies[0].modifiers.includes('stunned'), true, '成功 → 絆倒標記');
+  assertEq(ok.result.effects?.some((e) => e.type === 'enemy_stunned'), true, '成功 → 絆倒敘事');
+  const fail = resolveIntent(makeIntent('evade'), makeCombatCtx({ roll: 2, engaged: true, enemyDamage: 2, visibility: 'day' }));
+  assertEq(fail.newState?.scenario?.enemies[0].modifiers.includes('stunned'), false, '失敗 → 不絆倒');
+});
+
 test('evade:黑暗中 +2(§12.1)', () => {
   // roll 6 + 反應 3 = 9 < 10;黑暗 +2 → 11 ≥ 10 success
   const dark = resolveIntent(makeIntent('evade'), makeCombatCtx({ roll: 6, engaged: true, visibility: 'darkness' }));

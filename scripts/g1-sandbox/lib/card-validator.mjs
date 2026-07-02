@@ -117,12 +117,20 @@ export function normalizeCardText(text) {
 }
 
 // ─── 掃禁用詞（s06 Part 1 §3-5）─────────────────────────────────
+// 「跟」只禁連接詞句型(A 跟 B),放過動詞用法(跟了上去/跟著/跟隨/跟蹤/跟上/跟到/跟進/跟去/跟來/跟丟/跟不上)
+// 2026-07-02 MOD-11 試產品管修正:黑名單原條目誤傷動詞 follow 用法
+const GEN_VERB_SUFFIX = /^[了著上隨蹤到進去來丟不]/;
+
 export function scanForbiddenTerms(text) {
   if (!text || typeof text !== 'string') return [];
   const warnings = [];
   for (const [bad, good] of Object.entries(CARD_TEXT_FORBIDDEN_TERMS)) {
     let idx = text.indexOf(bad);
     while (idx !== -1) {
+      if (bad === '跟' && GEN_VERB_SUFFIX.test(text.slice(idx + 1, idx + 2))) {
+        idx = text.indexOf(bad, idx + bad.length);
+        continue; // 動詞用法,放行
+      }
       warnings.push({ term: bad, suggestion: good, index: idx });
       idx = text.indexOf(bad, idx + bad.length);
     }

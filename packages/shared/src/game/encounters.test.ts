@@ -2,15 +2,19 @@
  * G-08 遭遇卡引擎測試 — 觸發/結算/AI 選項(合成內容,等 Gemini 量產接上)
  */
 import {
+  availableTalismansForEncounter,
   drawEncounter,
   drawTriggeredEncounter,
   normaliseEncounterTriggerConfig,
   resolveEncounterOption,
+  resolveEncounterWithTalisman,
+  talismanTollCost,
   chooseEncounterOption,
 } from './encounters';
 import type { EncounterCardData } from './encounters';
 import type { InvestigatorState, ScenarioState } from './state';
 import type { EnemyDataLookup } from './monsterActions';
+import type { CardDataLookup } from './ruleEngine';
 
 type TestFn = () => void;
 const tests: { name: string; fn: TestFn }[] = [];
@@ -43,6 +47,10 @@ const roll = (n: number) => () => (n - 1) / 20;
 // 合成遭遇卡(資料形狀對齊 DB,內容是測試用)
 const CARD: EncounterCardData = {
   id: 'ec1', name_zh: '磚牆異響', threat_type: 'mental', threat_strength: 2,
+  subroutines: [
+    { id: 'sr1', encounter_card_id: 'ec1', sub_order: 1, effect_description: '低語鑽入', mechanics: {} },
+    { id: 'sr2', encounter_card_id: 'ec1', sub_order: 2, effect_description: '影子追上', mechanics: {} },
+  ],
   options: [
     {
       option_label: 'A', requires_check: true, check_attribute: 'willpower', check_dc: 13,
@@ -57,6 +65,39 @@ const CARD: EncounterCardData = {
       no_check_effects: [{ effect_code: 'place_doom', amount: 1 }],
     },
   ],
+};
+
+const TALISMANS: CardDataLookup = {
+  instant_amulet: {
+    name_zh: '銀製護身符',
+    card_type: 'asset',
+    is_talisman: true,
+    target_threat_types: ['mental'],
+    break_timing: 'instant',
+    break_strength_max: 5,
+    break_charge_label: '神聖度',
+    break_charge_max: 5,
+  },
+  test_badge: {
+    name_zh: '警徽',
+    card_type: 'asset',
+    is_talisman: true,
+    target_threat_types: ['mental'],
+    break_timing: 'test',
+    break_strength_max: 5,
+    break_charge_label: '共鳴',
+    break_charge_max: 3,
+    break_test_attribute: 'willpower',
+  },
+  stockpile_crystal: {
+    name_zh: '預兆水晶',
+    card_type: 'asset',
+    is_talisman: true,
+    target_threat_types: ['mental'],
+    break_timing: 'stockpile',
+    break_charge_label: '預兆',
+    break_charge_max: 6,
+  },
 };
 
 test('抽卡:從牌堆抽 1 張,不洗回(抽完即無)', () => {
@@ -126,6 +167,67 @@ test('AI 選項:高意志選檢定(賭得過),低意志選繞道避傷', () => {
   // 意志 1 vs DC18:成功率極低,失敗吃 2 恐懼 → 繞道(B 只推 1 毀滅,對個人無傷)
   const weak = chooseEncounterOption(hardCard, makeInv({ attributes: { ...makeInv().attributes, willpower: 1 } }));
   assertEq(weak, 1);
+});
+
+test('法器即時型:過路費 f(S,N)=ceil(S/2)+N,破除遭遇但不吃通用解懲罰', () => {
+  const inv = makeInv({ assetsInPlay: ['instant_amulet'], assetState: { instant_amulet: { usesLeft: 5, exhausted: false } } });
+  assertEq(talismanTollCost(TALISMANS.instant_amulet, CARD), 3);
+  assertEq(availableTalismansForEncounter(inv, TALISMANS, CARD).length, 1);
+
+  const r = resolveEncounterWithTalisman('instant_amulet', TALISMANS.instant_amulet, CARD, inv, makeScenario(), ENEMY, {
+    fallbackOption: CARD.options[1],
+  });
+  assertEq(r.outcome, 'broken');
+  assertEq(r.investigator.assetState?.instant_amulet.usesLeft, 2);
+  assertEq(r.scenario.agendaProgress, 0, '法器破除不推通用解毀滅');
+  assertEq(r.effects.some((e) => e.type === 'talisman_break_success'), true);
+
+  const generic = resolveEncounterOption(CARD.options[1], makeInv(), makeScenario(), ENEMY, roll(10));
+  assertEq(generic.scenario.agendaProgress, 1, '通用解會推 1 毀滅');
+});
+
+test('法器檢定型:固定付 1 費用,成功時完全破除', () => {
+  const inv = makeInv({
+    assetsInPlay: ['test_badge'],
+    assetState: { test_badge: { usesLeft: 3, exhausted: false } },
+  });
+  const r = resolveEncounterWithTalisman('test_badge', TALISMANS.test_badge, CARD, inv, makeScenario(), ENEMY, {
+    fallbackOption: CARD.options[0],
+    rng: roll(19),
+  });
+  assertEq(r.outcome, 'broken');
+  assertEq(r.tollCost, 1);
+  assertEq(r.investigator.assetState?.test_badge.usesLeft, 2);
+  assertEq(r.check?.outcome, 'success');
+  assertEq(r.effects.some((e) => e.type === 'talisman_check'), true);
+  assertEq(r.investigator.san, 9);
+});
+
+test('法器檢定型:失敗時費用照扣,遭遇卡照常觸發', () => {
+  const inv = makeInv({
+    attributes: { ...makeInv().attributes, willpower: 0 },
+    assetsInPlay: ['test_badge'],
+    assetState: { test_badge: { usesLeft: 3, exhausted: false } },
+  });
+  const r = resolveEncounterWithTalisman('test_badge', TALISMANS.test_badge, CARD, inv, makeScenario(), ENEMY, {
+    fallbackOption: CARD.options[0],
+    rng: roll(1),
+  });
+  assertEq(r.outcome, 'failed');
+  assertEq(r.investigator.assetState?.test_badge.usesLeft, 2);
+  assertEq(r.check?.outcome, 'fail');
+  assertEq(r.investigator.san, 7, '失敗套用 fallback failure_effects');
+});
+
+test('法器儲蓄型:f(S,N)=S,用累積計量直接破除', () => {
+  const inv = makeInv({
+    assetsInPlay: ['stockpile_crystal'],
+    assetState: { stockpile_crystal: { usesLeft: 6, exhausted: false } },
+  });
+  const r = resolveEncounterWithTalisman('stockpile_crystal', TALISMANS.stockpile_crystal, CARD, inv, makeScenario(), ENEMY);
+  assertEq(r.outcome, 'broken');
+  assertEq(r.tollCost, 2);
+  assertEq(r.investigator.assetState?.stockpile_crystal.usesLeft, 4);
 });
 
 // ─── runner ─────────────────────────────────

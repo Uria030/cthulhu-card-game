@@ -38,6 +38,8 @@ import {
   allInvestigatorsDead,
   drawTriggeredEncounter,
   resolveEncounterOption,
+  resolveEncounterWithTalisman,
+  availableTalismansForEncounter,
   CURRENT_MESSAGE_SCHEMA_VERSION,
 } from '@cthulhu/shared';
 import type {
@@ -154,6 +156,11 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'encounter_check': return '遭遇檢定:' + (p.attribute as string) + ' d20=' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '成功' : '失敗') + ')';
     case 'encounter_narrative': return String(p.narrative ?? '');
     case 'encounter_damage': return '遭遇傷害:' + ((p.narrative as string) || '') + '(HP -' + (p.amount as number) + ')';
+    case 'talisman_toll_paid': return '法器「' + (p.name as string) + '」支付 ' + (p.cost as number) + ' ' + (p.resource as string) + '(剩 ' + (p.left as number) + ')';
+    case 'talisman_check': return '法器檢定:' + (p.attribute as string) + ' d20=' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '成功' : '失敗') + ')';
+    case 'talisman_break_success': return '法器「' + (p.name as string) + '」破除「' + (p.encounter as string) + '」';
+    case 'talisman_break_failed': return '法器「' + (p.name as string) + '」破除失敗,遭遇照常觸發';
+    case 'talisman_unavailable': return '法器不可用:' + String(p.reason ?? '');
     case 'monster_attack': return '👹 ' + (p.enemy as string) + ' 使出【' + (p.move as string) + '】— 你的' + (p.defenseAttribute as string) + '防禦:' + (p.total as number) + ' vs DC ' + (p.dc as number);
     case 'monster_attack_hit': return '💥 ' + (p.narrative as string) + '(HP -' + (p.physical as number) + (Number(p.horror) > 0 ? ' / SAN -' + (p.horror as number) : '') + ')';
     case 'monster_attack_missed': return '💨 ' + (p.narrative as string);
@@ -285,7 +292,7 @@ interface EncounterPlay {
 const AI_ACTION_INTERVAL_MS = 1600;
 
 // 檢定拍效果型別(擲骰/檢定);其餘效果歸結果拍
-const CHECK_EFFECT_TYPES = new Set(['roll_d20', 'fear_check', 'death_save']);
+const CHECK_EFFECT_TYPES = new Set(['roll_d20', 'fear_check', 'death_save', 'talisman_check']);
 // 純記帳動作不跳演出 Modal(取資源/抽卡:頻繁且無重量,跳 Modal 反而擾民)
 const ACTION_PLAY_SKIP = new Set(['gain_resource', 'draw_card']);
 const ACTION_PLAY_TITLE: Record<string, string> = {
@@ -654,6 +661,40 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const chooseEncounterOption = (option: EncounterOption) => {
     if (!encounterPlay) return;
     const r = resolveEncounterOption(option, investigator, scenario, setup.enemyStats);
+    tallyActor(investigator.investigatorId, r.effects);
+    const sync = syncDownedState(r.investigator);
+    const syncLogs = sync.effects.map((eff) => '[結算] ' + describeEffect(eff, locMeta));
+    const next = applyProgress(r.scenario, sync.investigator, aiMembers);
+    setScenario(next.sc);
+    setInvestigator(next.inv);
+    setAiMembers(next.aiArr);
+    const da = r.effects.find((e) => e.type === 'damage_allocatable' && e.targetId === investigator.investigatorId);
+    const dp = da?.params as { physical?: number; horror?: number; targets?: AllocatableTarget[] } | undefined;
+    const pendingDamageAlloc: PendingDamageAlloc | null = dp
+      ? { physical: Number(dp.physical ?? 0), horror: Number(dp.horror ?? 0), targets: dp.targets ?? [] }
+      : null;
+    setEncounterPlay({
+      ...encounterPlay,
+      beat: 3,
+      resultLines: r.effects.filter((e) => e.type !== 'damage_allocatable').map((e) => describeEffect(e, locMeta)),
+      effects: r.effects,
+      pendingDamageAlloc,
+      cascadeLogs: [...syncLogs, ...next.logs],
+      pendingOutcome: next.outcome,
+    });
+  };
+
+  const chooseEncounterTalisman = (cardInstanceId: string) => {
+    if (!encounterPlay) return;
+    const r = resolveEncounterWithTalisman(
+      cardInstanceId,
+      setup.cardLookup[cardInstanceId],
+      encounterPlay.card,
+      investigator,
+      scenario,
+      setup.enemyStats,
+      { fallbackOption: encounterPlay.card.options[0] },
+    );
     tallyActor(investigator.investigatorId, r.effects);
     const sync = syncDownedState(r.investigator);
     const syncLogs = sync.effects.map((eff) => '[結算] ' + describeEffect(eff, locMeta));
@@ -1364,6 +1405,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const isLocationUnlocked = (id: string) => scenario.unlockedLocations.includes(id);
   const currentLocInstance = scenario.locations.find((l) => l.locationDefinitionId === investigator.currentLocationId);
   const moveTargets = currentLocInstance ? currentLocInstance.connectedTo : [];
+  const encounterTalismanOptions = encounterPlay
+    ? availableTalismansForEncounter(investigator, setup.cardLookup, encounterPlay.card)
+    : [];
 
   // 地圖 grid:依地點數動態決定列數(<=3 用 1 行,4-9 用 3×3,>9 用 4×N)
   const locCount = scenario.locations.length;
@@ -1883,6 +1927,18 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                     </button>
                   ))}
                 </div>
+                {encounterTalismanOptions.length > 0 && (
+                  <>
+                    <hr className="modal-divider" />
+                    <div className="action-row encounter-option-row">
+                      {encounterTalismanOptions.map((opt) => (
+                        <button key={opt.cardInstanceId} onClick={() => chooseEncounterTalisman(opt.cardInstanceId)}>
+                          {'法器 · ' + opt.name + ' · ' + (opt.timing === 'instant' ? '即時' : opt.timing === 'test' ? '檢定' : '儲蓄') + ' · 費用 ' + opt.tollCost}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </>
             )}
             {encounterPlay.beat === 3 && (

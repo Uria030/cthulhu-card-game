@@ -16,9 +16,13 @@ import type { ScenarioState, InvestigatorState } from './state';
 import { resolveCheck } from './checks';
 import { modifyIncomingDamage, applyCheckStatus } from './statusEffects';
 import { applyIncomingDamageToPlayer } from './ally';
-import type { AttributeKey } from './checks';
+import type { AttributeKey, CheckResult } from './checks';
 import { spawnEnemy } from './monsterActions';
 import type { EnemyDataLookup } from './monsterActions';
+import { cardMaxUses } from './ruleEngine';
+import type { CardData, CardDataLookup } from './ruleEngine';
+import { TOLL_FUNCTIONS } from '../types/talisman';
+import type { BreakTiming, BreakTestAttribute, EncounterSubroutine, ThreatTypeCode } from '../types/talisman';
 
 // ─── 遭遇卡資料(bootstrap encounter_cards rows + options)────
 export interface EncounterEffect {
@@ -51,7 +55,13 @@ export interface EncounterCardData {
   scenario_text_zh?: string | null;
   encounter_type?: string;
   threat_type?: string | null;
+  threat_type_array?: unknown;
   threat_strength?: number | null;
+  designer_dv?: number | null;
+  dv_average?: number | null;
+  option_count?: number | null;
+  subroutine_count?: number | null;
+  subroutines?: EncounterSubroutine[];
   options: EncounterOption[];
 }
 
@@ -201,6 +211,51 @@ export interface EncounterResolveResult {
 const VALID_ATTRS = new Set<AttributeKey>([
   'strength', 'agility', 'constitution', 'reflex', 'intellect', 'willpower', 'perception', 'charisma',
 ]);
+const VALID_THREATS = new Set<ThreatTypeCode>(['mental', 'physical', 'ritual']);
+
+export interface EncounterTalismanCandidate {
+  cardInstanceId: string;
+  name: string;
+  timing: BreakTiming;
+  tollCost: number;
+  payment: 'charges' | 'action_points';
+  usesLeft: number | null;
+  threatTypes: ThreatTypeCode[];
+  testAttribute?: BreakTestAttribute;
+}
+
+export interface TalismanCheckSummary {
+  attribute: BreakTestAttribute;
+  roll: number;
+  total: number;
+  dc: number;
+  outcome: 'success' | 'fail';
+}
+
+export interface TalismanResolveResult extends EncounterResolveResult {
+  outcome: 'broken' | 'failed' | 'unavailable';
+  timing: BreakTiming | null;
+  tollCost: number;
+  check?: TalismanCheckSummary;
+  reason?: string;
+}
+
+export interface ResolveEncounterWithTalismanOptions {
+  /** 檢定型法器失敗時,套用此通用解的失敗/無檢定後果。 */
+  fallbackOption?: EncounterOption;
+  rng?: () => number;
+}
+
+interface TalismanEvaluation {
+  canUse: boolean;
+  reason?: string;
+  timing: BreakTiming | null;
+  tollCost: number;
+  payment: 'charges' | 'action_points' | null;
+  usesLeft: number | null;
+  threatTypes: ThreatTypeCode[];
+  testAttribute?: BreakTestAttribute;
+}
 
 function applyEncounterEffects(
   list: EncounterEffect[] | undefined,
@@ -263,6 +318,332 @@ function applyEncounterEffects(
     }
   }
   return { investigator: inv, scenario: sc, effects };
+}
+
+function listFromUnknown(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+      } catch {
+        return [];
+      }
+    }
+    return trimmed.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function normaliseThreatList(value: unknown): ThreatTypeCode[] {
+  return listFromUnknown(value)
+    .map((s) => s.toLowerCase())
+    .filter((s): s is ThreatTypeCode => VALID_THREATS.has(s as ThreatTypeCode));
+}
+
+function normaliseBreakTiming(value: unknown): BreakTiming | null {
+  const v = String(value ?? '').toLowerCase();
+  if (v === 'instant' || v === 'immediate') return 'instant';
+  if (v === 'test' || v === 'check') return 'test';
+  if (v === 'stockpile' || v === 'stored' || v === 'saving' || v === 'savings' || v === 'reserve') return 'stockpile';
+  return null;
+}
+
+function normaliseBreakTestAttribute(value: unknown): BreakTestAttribute | null {
+  const v = String(value ?? '') as AttributeKey;
+  return VALID_ATTRS.has(v) ? (v as BreakTestAttribute) : null;
+}
+
+export function encounterThreatTypes(card: EncounterCardData): ThreatTypeCode[] {
+  const arr = normaliseThreatList(card.threat_type_array);
+  if (arr.length > 0) return arr;
+  return normaliseThreatList(card.threat_type);
+}
+
+export function encounterThreatStrength(card: EncounterCardData): number {
+  const raw = Number(card.threat_strength ?? card.dv_average ?? card.designer_dv ?? 1);
+  return Math.max(1, Math.ceil(Number.isFinite(raw) ? raw : 1));
+}
+
+export function encounterSubroutineCount(card: EncounterCardData): number {
+  const subroutineCount = Array.isArray(card.subroutines) ? card.subroutines.length : 0;
+  const raw = subroutineCount || Number(card.subroutine_count ?? card.option_count ?? card.options?.length ?? 1);
+  return Math.max(1, Math.ceil(Number.isFinite(raw) ? raw : 1));
+}
+
+export function talismanTollCost(talisman: CardData | undefined, encounter: EncounterCardData): number | null {
+  const timing = normaliseBreakTiming(talisman?.break_timing);
+  if (!timing) return null;
+  return TOLL_FUNCTIONS[timing](encounterThreatStrength(encounter), encounterSubroutineCount(encounter));
+}
+
+function evaluateTalismanForEncounter(
+  cardInstanceId: string,
+  talisman: CardData | undefined,
+  encounter: EncounterCardData,
+  investigator: InvestigatorState,
+): TalismanEvaluation {
+  if (!talisman?.is_talisman) {
+    return { canUse: false, reason: 'not_talisman', timing: null, tollCost: 0, payment: null, usesLeft: null, threatTypes: [] };
+  }
+  if (!investigator.assetsInPlay.includes(cardInstanceId)) {
+    return { canUse: false, reason: 'not_in_play', timing: null, tollCost: 0, payment: null, usesLeft: null, threatTypes: [] };
+  }
+
+  const timing = normaliseBreakTiming(talisman.break_timing);
+  if (!timing) {
+    return { canUse: false, reason: 'missing_break_timing', timing: null, tollCost: 0, payment: null, usesLeft: null, threatTypes: [] };
+  }
+
+  const encounterThreats = encounterThreatTypes(encounter);
+  if (encounterThreats.length === 0) {
+    return { canUse: false, reason: 'encounter_missing_threat_type', timing, tollCost: 0, payment: null, usesLeft: null, threatTypes: [] };
+  }
+  const targetThreats = normaliseThreatList(talisman.target_threat_types);
+  if (targetThreats.length === 0) {
+    return { canUse: false, reason: 'missing_target_threat_types', timing, tollCost: 0, payment: null, usesLeft: null, threatTypes: encounterThreats };
+  }
+  const matchesThreat = encounterThreats.some((t) => targetThreats.includes(t));
+  if (!matchesThreat) {
+    return { canUse: false, reason: 'threat_type_mismatch', timing, tollCost: 0, payment: null, usesLeft: null, threatTypes: encounterThreats };
+  }
+
+  const strength = encounterThreatStrength(encounter);
+  const strengthMax = talisman.break_strength_max == null ? null : Number(talisman.break_strength_max);
+  if (strengthMax != null && Number.isFinite(strengthMax) && strength > strengthMax) {
+    return { canUse: false, reason: 'strength_too_high', timing, tollCost: 0, payment: null, usesLeft: null, threatTypes: encounterThreats };
+  }
+
+  const tollCost = TOLL_FUNCTIONS[timing](strength, encounterSubroutineCount(encounter));
+  const maxUses = cardMaxUses(talisman);
+  const state = investigator.assetState?.[cardInstanceId];
+  const usesLeft = state?.usesLeft ?? maxUses;
+  if (usesLeft != null) {
+    return {
+      canUse: Number(usesLeft) >= tollCost,
+      reason: Number(usesLeft) >= tollCost ? undefined : 'insufficient_charges',
+      timing,
+      tollCost,
+      payment: 'charges',
+      usesLeft: Number(usesLeft),
+      threatTypes: encounterThreats,
+      testAttribute: normaliseBreakTestAttribute(talisman.break_test_attribute) ?? undefined,
+    };
+  }
+
+  if (timing === 'test') {
+    const testAttribute = normaliseBreakTestAttribute(talisman.break_test_attribute);
+    if (!testAttribute) {
+      return { canUse: false, reason: 'missing_test_attribute', timing, tollCost, payment: null, usesLeft: null, threatTypes: encounterThreats };
+    }
+    return {
+      canUse: investigator.actionPoints >= tollCost,
+      reason: investigator.actionPoints >= tollCost ? undefined : 'insufficient_action_points',
+      timing,
+      tollCost,
+      payment: 'action_points',
+      usesLeft: null,
+      threatTypes: encounterThreats,
+      testAttribute,
+    };
+  }
+
+  return { canUse: false, reason: 'missing_charge_pool', timing, tollCost, payment: null, usesLeft: null, threatTypes: encounterThreats };
+}
+
+export function availableTalismansForEncounter(
+  investigator: InvestigatorState,
+  cardLookup: CardDataLookup,
+  encounter: EncounterCardData,
+): EncounterTalismanCandidate[] {
+  const candidates: EncounterTalismanCandidate[] = [];
+  for (const cardInstanceId of investigator.assetsInPlay) {
+    const data = cardLookup[cardInstanceId];
+    const ev = evaluateTalismanForEncounter(cardInstanceId, data, encounter, investigator);
+    if (!ev.canUse || !ev.timing || !ev.payment) continue;
+    candidates.push({
+      cardInstanceId,
+      name: data?.name_zh ?? cardInstanceId,
+      timing: ev.timing,
+      tollCost: ev.tollCost,
+      payment: ev.payment,
+      usesLeft: ev.usesLeft,
+      threatTypes: ev.threatTypes,
+      testAttribute: ev.testAttribute,
+    });
+  }
+  return candidates;
+}
+
+function spendTalismanToll(
+  investigator: InvestigatorState,
+  cardInstanceId: string,
+  talisman: CardData,
+  ev: TalismanEvaluation,
+): { investigator: InvestigatorState; effects: ResultEffect[] } {
+  if (ev.payment === 'charges') {
+    const state = investigator.assetState?.[cardInstanceId] ?? { usesLeft: cardMaxUses(talisman), exhausted: false };
+    const left = Math.max(0, Number(state.usesLeft ?? 0) - ev.tollCost);
+    return {
+      investigator: {
+        ...investigator,
+        assetState: {
+          ...(investigator.assetState ?? {}),
+          [cardInstanceId]: { ...state, usesLeft: left },
+        },
+      },
+      effects: [{
+        type: 'talisman_toll_paid',
+        params: {
+          cardInstanceId,
+          name: talisman.name_zh ?? '',
+          cost: ev.tollCost,
+          resource: talisman.break_charge_label ?? '充能',
+          left,
+        },
+      }],
+    };
+  }
+
+  if (ev.payment === 'action_points') {
+    return {
+      investigator: { ...investigator, actionPoints: Math.max(0, investigator.actionPoints - ev.tollCost) },
+      effects: [{
+        type: 'talisman_toll_paid',
+        params: { cardInstanceId, name: talisman.name_zh ?? '', cost: ev.tollCost, resource: '行動點', left: Math.max(0, investigator.actionPoints - ev.tollCost) },
+      }],
+    };
+  }
+
+  return { investigator, effects: [] };
+}
+
+function applyTalismanFailureFallback(
+  option: EncounterOption | undefined,
+  investigator: InvestigatorState,
+  scenario: ScenarioState,
+  enemyData: EnemyDataLookup,
+): EncounterResolveResult {
+  if (!option) return { investigator, scenario, effects: [] };
+  const effects: ResultEffect[] = [];
+  const narrative = option.requires_check ? option.failure_narrative_zh : option.no_check_narrative_zh;
+  if (narrative) effects.push({ type: 'encounter_narrative', params: { narrative } });
+  const applied = applyEncounterEffects(option.requires_check ? option.failure_effects : option.no_check_effects, investigator, scenario, enemyData);
+  return { investigator: applied.investigator, scenario: applied.scenario, effects: [...effects, ...applied.effects] };
+}
+
+function talismanCheckSummary(attr: BreakTestAttribute, check: CheckResult): TalismanCheckSummary {
+  return {
+    attribute: attr,
+    roll: check.roll,
+    total: check.total,
+    dc: check.dc,
+    outcome: check.outcome,
+  };
+}
+
+export function resolveEncounterWithTalisman(
+  cardInstanceId: string,
+  talisman: CardData | undefined,
+  encounter: EncounterCardData,
+  investigator: InvestigatorState,
+  scenario: ScenarioState,
+  enemyData: EnemyDataLookup,
+  options: ResolveEncounterWithTalismanOptions = {},
+): TalismanResolveResult {
+  const ev = evaluateTalismanForEncounter(cardInstanceId, talisman, encounter, investigator);
+  if (!ev.canUse || !ev.timing || !talisman) {
+    return {
+      investigator,
+      scenario,
+      effects: [{
+        type: 'talisman_unavailable',
+        params: { cardInstanceId, name: talisman?.name_zh ?? cardInstanceId, reason: ev.reason ?? 'unavailable' },
+      }],
+      outcome: 'unavailable',
+      timing: ev.timing,
+      tollCost: ev.tollCost,
+      reason: ev.reason,
+    };
+  }
+
+  const paid = spendTalismanToll(investigator, cardInstanceId, talisman, ev);
+  let inv = paid.investigator;
+  let sc = scenario;
+  const effects: ResultEffect[] = [...paid.effects];
+  let checkSummary: TalismanCheckSummary | undefined;
+
+  if (ev.timing === 'test') {
+    const attr = ev.testAttribute;
+    if (!attr) {
+      return {
+        investigator,
+        scenario,
+        effects: [{ type: 'talisman_unavailable', params: { cardInstanceId, name: talisman.name_zh ?? cardInstanceId, reason: 'missing_test_attribute' } }],
+        outcome: 'unavailable',
+        timing: ev.timing,
+        tollCost: ev.tollCost,
+        reason: 'missing_test_attribute',
+      };
+    }
+    const cs = applyCheckStatus(inv.statusEffects);
+    const check = resolveCheck(encounterThreatStrength(encounter), { attribute: inv.attributes[attr] ?? 0 }, options.rng ?? Math.random, cs.rollMode);
+    inv = { ...inv, statusEffects: cs.statusEffects };
+    checkSummary = talismanCheckSummary(attr, check);
+    effects.push({
+      type: 'talisman_check',
+      params: {
+        cardInstanceId,
+        name: talisman.name_zh ?? '',
+        attribute: attr,
+        roll: check.roll,
+        total: check.total,
+        dc: check.dc,
+        outcome: check.outcome,
+      },
+    });
+    if (check.outcome !== 'success') {
+      effects.push({
+        type: 'talisman_break_failed',
+        params: { cardInstanceId, name: talisman.name_zh ?? '', timing: ev.timing, encounter: encounter.name_zh },
+      });
+      const fallback = applyTalismanFailureFallback(options.fallbackOption, inv, sc, enemyData);
+      return {
+        investigator: fallback.investigator,
+        scenario: fallback.scenario,
+        effects: [...effects, ...fallback.effects],
+        outcome: 'failed',
+        timing: ev.timing,
+        tollCost: ev.tollCost,
+        check: checkSummary,
+      };
+    }
+  }
+
+  effects.push({
+    type: 'talisman_break_success',
+    params: {
+      cardInstanceId,
+      name: talisman.name_zh ?? '',
+      timing: ev.timing,
+      encounter: encounter.name_zh,
+      threatStrength: encounterThreatStrength(encounter),
+      subroutines: encounterSubroutineCount(encounter),
+    },
+  });
+
+  return {
+    investigator: inv,
+    scenario: sc,
+    effects,
+    outcome: 'broken',
+    timing: ev.timing,
+    tollCost: ev.tollCost,
+    check: checkSummary,
+  };
 }
 
 /**

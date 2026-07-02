@@ -43,6 +43,7 @@ import { isDowned, applyStabilize } from './dying';
 import { revealOnEnter, revealOnGeneralSuccess, claimHiddenReward } from './hiddenInvestigation';
 import { modifyIncomingDamage, modifyOutgoingDamage, applyCheckStatus, attackHitModifier, clearStealth, isMeleeStyle, moveCostBonus, canUseAssetAttack, canCastSpell } from './statusEffects';
 import { applyIncomingDamageToPlayer } from './ally';
+import type { BreakTestAttribute, BreakTiming, ThreatTypeCode } from '../types/talisman';
 
 // ─── 卡片實例資料(容器由 bootstrap cardIndex 餵入)──
 export interface CardData {
@@ -67,6 +68,16 @@ export interface CardData {
   ammo?: number | null;
   /** 一般使用次數(消耗品/法術充能) */
   uses?: number | null;
+  /** 法器破除軸(s09):三時機 + 威脅類型 + 充能/計量。 */
+  is_talisman?: boolean;
+  talisman_type?: string | null;
+  target_threat_types?: ThreatTypeCode[] | string | null;
+  break_timing?: BreakTiming | null;
+  break_strength_max?: number | null;
+  break_charge_label?: string | null;
+  break_charge_max?: number | null;
+  break_test_attribute?: BreakTestAttribute | null;
+  stockpile_accumulation_rule?: string | null;
   /** 三合一消費用途(ch3 §2.2;資料未配置時為 false/null) */
   consume_enabled?: boolean;
   consume_effect?: Record<string, unknown> | null;
@@ -86,6 +97,7 @@ export function cardMaxUses(data: CardData | undefined): number | null {
   if (!data) return null;
   if (data.ammo != null) return Number(data.ammo);
   if (data.uses != null) return Number(data.uses);
+  if (data.is_talisman && data.break_charge_max != null) return Number(data.break_charge_max);
   return null;
 }
 export type CardDataLookup = Record<string, CardData>;

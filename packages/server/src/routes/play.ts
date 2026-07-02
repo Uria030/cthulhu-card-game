@@ -145,7 +145,7 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
       const encounterIds = (stage.encounter_pool || []).map((p: any) => p.encounter_card_id).filter(Boolean);
       const familyCodes = (stage.monster_pool || []).map((p: any) => p.family_code).filter(Boolean);
 
-      const [mythosRes, mythosFxRes, encRes, encOptRes, monsterRes] = await Promise.all([
+      const [mythosRes, mythosFxRes, encRes, encOptRes, encSubRes, monsterRes] = await Promise.all([
         mythosIds.length
           ? pool.query('SELECT * FROM mythos_cards WHERE id = ANY($1)', [mythosIds])
           : Promise.resolve({ rows: [] as any[] }),
@@ -163,6 +163,13 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
           ? pool.query(
               `SELECT * FROM encounter_card_options
                 WHERE encounter_card_id = ANY($1) ORDER BY encounter_card_id, sort_order`,
+              [encounterIds],
+            )
+          : Promise.resolve({ rows: [] as any[] }),
+        encounterIds.length
+          ? pool.query(
+              `SELECT * FROM encounter_subroutines
+                WHERE encounter_card_id = ANY($1) ORDER BY encounter_card_id, sub_order`,
               [encounterIds],
             )
           : Promise.resolve({ rows: [] as any[] }),
@@ -187,6 +194,7 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
       const encounterCards = encRes.rows.map((ec: any) => ({
         ...ec,
         options: encOptRes.rows.filter((o: any) => o.encounter_card_id === ec.id),
+        subroutines: encSubRes.rows.filter((s: any) => s.encounter_card_id === ec.id),
       }));
 
       // ── 怪物招式卡(變體 move_pool 引用的方式庫卡)──

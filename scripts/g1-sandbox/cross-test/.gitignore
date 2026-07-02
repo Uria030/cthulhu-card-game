@@ -1,0 +1,9 @@
+.cache/
+results.jsonl
+results.jsonl.err.log
+summary.md
+.tmp-*.json
+.tmp-*.jsonl
+.tmp-*.err.log
+.tmp-*.jsonl.err.log
+.tmp-*.md

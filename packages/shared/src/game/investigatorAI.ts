@@ -160,6 +160,63 @@ export function rosterProfileForTemplate(templateId: string): InvestigatorAIProf
   return AI_INVESTIGATOR_ROSTER.find((p) => p.templateId === templateId) ?? null;
 }
 
+export interface GenericAIProfileTemplate {
+  id: string;
+  code?: string | null;
+  mbti_code?: string | null;
+  faction_code?: string | null;
+  name_zh?: string | null;
+  name_en?: string | null;
+  title_zh?: string | null;
+  proficiency_ids?: string[] | null;
+}
+
+export const NEUTRAL_INVESTIGATOR_AI_WEIGHTS: InvestigatorAIProfile['weights'] = {
+  clueFocus: 1,
+  combatFocus: 1,
+  protectAllies: 1,
+  riskTolerance: 0.5,
+  cardPlayAffinity: 1,
+};
+
+/**
+ * E11 交叉測試用泛用人格:64 位 preset 已是完成態屬性與牌組,只需要
+ * 從模板資料補出 AI profile。四位舊名冊仍由 rosterProfileForTemplate 優先接管。
+ */
+export function genericProfileForTemplate(
+  template: GenericAIProfileTemplate,
+  fallbackCombatStyle = '',
+): InvestigatorAIProfile {
+  const templateCode = String(template.code ?? template.mbti_code ?? template.id);
+  const combatStyle = String(template.proficiency_ids?.[0] ?? fallbackCombatStyle ?? '');
+  const title = String(template.title_zh ?? '');
+  const nameZh = String(template.name_zh || title || templateCode);
+  return {
+    rosterCode: `template_${templateCode}`,
+    name_zh: nameZh,
+    name_en: String(template.name_en ?? templateCode),
+    title_zh: title,
+    templateCode,
+    templateId: template.id,
+    freeAttributePoints: {},
+    combatStyle,
+    specializations: [],
+    weights: { ...NEUTRAL_INVESTIGATOR_AI_WEIGHTS },
+    sanRetreatPct: 35,
+    hpRetreatPct: 35,
+    temperature: 0.1,
+    introLine: '',
+  };
+}
+
+/** 舊四人名冊優先;其餘 preset 走 E11 泛用中性 profile。 */
+export function profileForTemplate(
+  template: GenericAIProfileTemplate,
+  fallbackCombatStyle = '',
+): InvestigatorAIProfile {
+  return rosterProfileForTemplate(template.id) ?? genericProfileForTemplate(template, fallbackCombatStyle);
+}
+
 /**
  * 名冊落地:bootstrap 出來的模板調查員 + 名冊零件 → 完成的 AI 調查員。
  * 自由 4 點疊上去(單項上限 5,規則書 ch6 §2.2)、風格/專精接上、改掛 AI 席位。

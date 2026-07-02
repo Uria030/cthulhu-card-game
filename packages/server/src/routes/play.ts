@@ -57,7 +57,7 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
   // ═══════════════════════════════════════════
   app.get<{
     Params: { id: string };
-    Querystring: { investigator?: string };
+    Querystring: { investigator?: string; crossTest?: string | boolean };
   }>('/api/play/stages/:id/bootstrap', async (request, reply) => {
     try {
       const stage = await loadFullStage(request.params.id);
@@ -216,16 +216,37 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
         '77fb726a-7c12-4197-af19-12262588f475', // INTJ-4 退役軍官 馬庫斯·韋恩萊特
       ];
       const invId = request.query.investigator;
+      const crossTestMode = request.query.crossTest === true || request.query.crossTest === 'true';
       const invRes = invId
         ? await pool.query(
-            'SELECT * FROM investigator_templates WHERE id = $1 AND (is_completed = TRUE OR id = ANY($2))',
-            [invId, AI_ROSTER_TEMPLATE_IDS],
+            `SELECT * FROM investigator_templates
+              WHERE id = $1
+                AND (is_completed = TRUE OR id = ANY($2) OR ($3::boolean AND is_preset = TRUE))`,
+            [invId, AI_ROSTER_TEMPLATE_IDS, crossTestMode],
           )
         : await pool.query(
             'SELECT * FROM investigator_templates WHERE is_completed = TRUE ORDER BY mbti_code LIMIT 1',
           );
       const investigator: any = invRes.rows[0] || null;
       if (investigator) {
+        const rawProficiencies = Array.isArray(investigator.proficiency_ids)
+          ? investigator.proficiency_ids.map((p: unknown) => String(p)).filter(Boolean)
+          : [];
+        if (rawProficiencies.length > 0) {
+          const profRes = await pool.query(
+            `SELECT id::text AS id, code
+               FROM combat_styles
+              WHERE id::text = ANY($1::text[]) OR code = ANY($1::text[])`,
+            [rawProficiencies],
+          );
+          const styleByToken = new Map<string, string>();
+          for (const row of profRes.rows) {
+            styleByToken.set(String(row.id), String(row.code));
+            styleByToken.set(String(row.code), String(row.code));
+          }
+          investigator.proficiency_ids = rawProficiencies.map((p: string) => styleByToken.get(p) ?? p);
+        }
+
         const [deckRes, sigRes, weakRes] = await Promise.all([
           pool.query(
             `SELECT d.id AS deck_entry_id, d.quantity, d.slot_order,

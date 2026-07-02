@@ -4,6 +4,9 @@
 import {
   AI_INVESTIGATOR_ROSTER,
   rosterProfileForTemplate,
+  genericProfileForTemplate,
+  profileForTemplate,
+  NEUTRAL_INVESTIGATOR_AI_WEIGHTS,
   materializeAIInvestigator,
   initInvestigatorAIState,
   estimateSuccessChance,
@@ -117,6 +120,34 @@ test('名冊:四位 INTJ,自由配點各 +4,模板綁定可反查', () => {
   }
 });
 
+test('E11 泛用 profile:非名冊 preset 用模板資料與中性權重', () => {
+  const profile = genericProfileForTemplate({
+    id: 'tpl-1',
+    code: 'ENFP-2',
+    name_zh: '',
+    title_zh: '流亡記者',
+    name_en: null,
+    proficiency_ids: ['shooting'],
+  });
+  assertEq(profile.rosterCode, 'template_ENFP-2');
+  assertEq(profile.name_zh, '流亡記者');
+  assertEq(profile.templateCode, 'ENFP-2');
+  assertEq(profile.templateId, 'tpl-1');
+  assertEq(profile.combatStyle, 'shooting');
+  assertEq(Object.keys(profile.freeAttributePoints).length, 0);
+  assertEq(profile.weights.clueFocus, NEUTRAL_INVESTIGATOR_AI_WEIGHTS.clueFocus);
+  assertEq(profile.weights.combatFocus, NEUTRAL_INVESTIGATOR_AI_WEIGHTS.combatFocus);
+});
+
+test('E11 profile 選擇:舊四人名冊優先,其他模板走泛用', () => {
+  const roster = profileForTemplate({ id: ELIAS.templateId, code: 'INTJ-1', title_zh: '私家偵探' });
+  assertEq(roster.rosterCode, ELIAS.rosterCode);
+
+  const generic = profileForTemplate({ id: 'tpl-2', code: 'ENTP-4', title_zh: '騙子魔術師', proficiency_ids: ['assassin'] });
+  assertEq(generic.rosterCode, 'template_ENTP-4');
+  assertEq(generic.combatStyle, 'assassin');
+});
+
 test('名冊落地:INTJ 基底 14 + 自由 4 = 18,單項上限 5,改掛 AI 席位', () => {
   for (const p of AI_INVESTIGATOR_ROSTER) {
     // INTJ 模板基底 1/2/2/1/4/2/1/1 = 14(資料庫實值)
@@ -133,6 +164,19 @@ test('名冊落地:INTJ 基底 14 + 自由 4 = 18,單項上限 5,改掛 AI 席�
     assertEq(done.hpMax, done.attributes.constitution * 2 + 5, p.name_zh + ' HP 公式');
     assertEq(done.sanMax, done.attributes.willpower * 2 + 5, p.name_zh + ' SAN 公式');
   }
+});
+
+test('E11 泛用落地:模板屬性已是完成態,不再額外配點', () => {
+  const built = makeInv({
+    attributes: { strength: 4, agility: 2, constitution: 2, reflex: 2, intellect: 3, willpower: 2, perception: 2, charisma: 1 },
+    combatStyle: 'shooting',
+  });
+  const profile = genericProfileForTemplate({ id: 'tpl-3', code: 'ESTP-1', title_zh: '地下拳手', proficiency_ids: ['brawl'] });
+  const done = materializeAIInvestigator(built, profile);
+  const sum = Object.values(done.attributes).reduce((a, b) => a + b, 0);
+  assertEq(sum, 18);
+  assertEq(done.combatStyle, 'brawl');
+  assertEq(done.ownerPlayerId, 'ai');
 });
 
 // ─── 成功率估算 ──────────────────────────────

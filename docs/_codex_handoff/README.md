@@ -29,7 +29,18 @@ PATH 註記:此機 PowerShell 沒把 npm 全域目錄入 PATH,`claude` 裸指令
 & "C:\Users\user\AppData\Roaming\npm\claude.cmd" -p "你是守燈人代理,對 Codex 交件執行 review。讀 docs/_codex_handoff/README.md 的『代理 review checklist』與 AGENTS.md 工程協作模式,review 本機未推送的 commit(handoff 檔:docs/_codex_handoff/<檔名>)。結論寫回該 handoff 的 ## Review 節;PASS 才 git push origin main,否則不 push 並列修訂意見。" --permission-mode acceptEdits
 ```
 
-## 代理 review checklist(方式三的新 session 照此執行)
+方式四(**hub 管線,自動化正解**——走 GAS Hub 的現成審查請求機制,全程可視於 hub LINE UI):
+
+```bash
+node C:\gas\hub\.tools\hub-review.mjs --to claude --file <handoff 絕對路徑> --title "<工作包編號> review 請求" --wait-decision 900 --out <裁決結果檔>
+```
+
+- 前置:hub 在跑(`hub-daemon.ps1`;`node C:\gas\hub\.tools\hub-talk.mjs status` 確認 pty.claude running)。
+- **handoff 檔開頭必須加一行**:「你是守燈人代理,照 `C:\Ug\cthulhu-card-game\docs\_codex_handoff\README.md` 的『代理 review checklist』執行,結論以 PASS/WARN/BLOCK 開頭回覆。」(hub 的 Claude PTY 記憶空間是 c:\gas,不帶本專案脈絡,brief 必須自足指路。)
+- 裁決回流:hub-review 會等 PASS/WARN/BLOCK 並寫進 --out;PASS → 由守燈人代理(hub Claude)push;BLOCK/WARN → Codex 照意見修訂再送。
+- 優先序:方式四(hub)> 方式三(headless 新 session)> 方式一(Uria 轉手,重大工作包建議仍走這條讓本尊審)。
+
+## 代理 review checklist(方式三/方式四的代理照此執行)
 
 1. `git log origin/main..HEAD` 確認 Codex 本機 commit;`git show --stat` 對 handoff 檔案清單一致。
 2. diff 逐檔審:範圍不得超出工單;禁碰區(規則書 docs/v07*/凍結資料)零觸碰。

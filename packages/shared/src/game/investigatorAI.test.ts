@@ -463,17 +463,46 @@ test('交戰低血時不站著存錢(Raviel BLOCK 回歸):閃避壓過存錢', (
   }
 });
 
-test('救援優先:同地點隊友瀕死 → 全員放下手邊事先穩定', () => {
+test('救援優先(2026-07-02 改帳面):無怪時全員先穩定;有怪駐守則不白救(先處理威脅)', () => {
   const downedAlly = makeAlly({ currentLocationId: 'A', hp: 0, downed: true });
-  const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 4, engagedWith: [], modifiers: [] };
-  const c = ctx({
-    scenario: makeScenario({ enemies: [enemy] }),
-    allies: { 'p1-inv': downedAlly },
-  });
+  // 情境一:無怪 → 救援輾壓日常行動,全員先穩定
+  const safe = ctx({ allies: { 'p1-inv': downedAlly } });
   for (const p of AI_INVESTIGATOR_ROSTER) {
-    const pick = planNextAction({ ...c, rng: () => 0.99 }, { ...p, temperature: 0 }, initInvestigatorAIState());
-    assertEq(pick?.actionType, 'stabilize', p.name_zh + ' 該先救人(實際:' + pick?.actionType + ')');
+    const pick = planNextAction({ ...safe, rng: () => 0.99 }, { ...p, temperature: 0 }, initInvestigatorAIState());
+    assertEq(pick?.actionType, 'stabilize', p.name_zh + ' 無威脅該先救人(實際:' + pick?.actionType + ')');
   }
+  // 情境二:怪駐守倒地者身邊(時鐘未逼近)→ 穩定=白救(站起1HP又倒),正解是不把穩定當首選
+  const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 4, engagedWith: [], modifiers: [] };
+  const camped = ctx({ scenario: makeScenario({ enemies: [enemy] }), allies: { 'p1-inv': downedAlly } });
+  const pick = planNextAction({ ...camped, rng: () => 0.99 }, { ...MARCUS, temperature: 0 }, initInvestigatorAIState());
+  assert(pick?.actionType !== 'stabilize', '有怪駐守不白救,先處理威脅(實際:' + pick?.actionType + ')');
+});
+
+test('救援帳:白救閘門 — 怪在倒地者身邊且時鐘未逼近 → 穩定分大降(先清怪)', () => {
+  const downed = makeAlly({ hp: 0, downed: true, currentLocationId: 'A', deathSaveFailures: 0 });
+  const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 4, engagedWith: ['p1-inv'], modifiers: [] };
+  const safe = ctx({ allies: { 'p1-inv': makeAlly({ hp: 0, downed: true, currentLocationId: 'A' }) } });
+  const camped = ctx({ scenario: makeScenario({ enemies: [enemy] }), allies: { 'p1-inv': downed } });
+  const sSafe = enumerateCandidates(safe, MARCUS, initInvestigatorAIState()).find((x) => x.actionType === 'stabilize')?.score ?? 0;
+  const sCamped = enumerateCandidates(camped, MARCUS, initInvestigatorAIState()).find((x) => x.actionType === 'stabilize')?.score ?? 0;
+  assert(sSafe > 2, `無怪時救援高價值(${sSafe.toFixed(2)})`);
+  assert(sCamped < 1, `有怪駐守時白救折價(${sCamped.toFixed(2)})`);
+});
+
+test('救援帳:死亡時鐘 2 失敗 → 差一口就死,必救浮現(壓過白救閘門)', () => {
+  const dying = makeAlly({ hp: 0, downed: true, currentLocationId: 'A', deathSaveFailures: 2 });
+  const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 4, engagedWith: ['p1-inv'], modifiers: [] };
+  const c = ctx({ scenario: makeScenario({ enemies: [enemy] }), allies: { 'p1-inv': dying } });
+  const s = enumerateCandidates(c, MARCUS, initInvestigatorAIState()).find((x) => x.actionType === 'stabilize')?.score ?? 0;
+  assert(s > 2, `瀕死邊緣必救(${s.toFixed(2)})`);
+});
+
+test('救援帳:兩級優先權 — 成形隊友(場上有武器)倒地,救援分高於白板隊友', () => {
+  const plain = makeAlly({ hp: 0, downed: true, currentLocationId: 'A' });
+  const formed = makeAlly({ hp: 0, downed: true, currentLocationId: 'A', assetsInPlay: ['weapon'] });
+  const s0 = enumerateCandidates(ctx({ allies: { 'p1-inv': plain } }), MARCUS, initInvestigatorAIState()).find((x) => x.actionType === 'stabilize')?.score ?? 0;
+  const s1 = enumerateCandidates(ctx({ allies: { 'p1-inv': formed } }), MARCUS, initInvestigatorAIState()).find((x) => x.actionType === 'stabilize')?.score ?? 0;
+  assert(s1 > s0, `成形隊友更該救(白板 ${s0.toFixed(2)} vs 成形 ${s1.toFixed(2)})`);
 });
 
 test('救援移動:隊友在隔壁倒地 → 趕過去', () => {

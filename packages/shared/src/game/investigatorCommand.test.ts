@@ -10,6 +10,8 @@ import {
   estimateSubgoalDemand,
   commandTick,
   formatCommandTrace,
+  assignRoles,
+  objectiveForAssignment,
 } from './investigatorCommand';
 import type { CommandContext } from './investigatorCommand';
 import type { ScenarioState, InvestigatorState } from './state';
@@ -235,6 +237,39 @@ test('formatCommandTrace:含鏈/需求/預算/U(人讀對帳)', () => {
   assert(s.includes('牆上的真相'), '鏈含 ACT1');
   assert(s.includes('U='), '含 U 值');
   assert(s.includes('從容'), '含姿態');
+});
+
+// ─── 第 4 層:隊伍指派(P2)──────────────────────────
+test('指派:從容的線索幕 → 梯隊分工(感知優勢者收割,武器手為 ACT2 組陣)', () => {
+  const c = baseCtx();
+  const t = commandTick(c);
+  const roles = assignRoles(t, c);
+  assertEq(roles.length, 3);
+  const byId = Object.fromEntries(roles.map((r) => [r.investigatorId, r]));
+  assertEq(byId.i2.kind, 'clues', '感知 4 → 收割線索');
+  assertEq(byId.i2.role, 'harvest');
+  assertEq(byId.i3.kind, 'kill', '步槍手 → 為殺 boss 組陣');
+  assertEq(byId.i3.role, 'prepare');
+  const obj = objectiveForAssignment(byId.i3, t.chain);
+  assertEq(obj?.kind, 'kill', '指派可換出第 5 層用的 objective');
+});
+
+test('指派:告急 → 梯隊收攏,全員壓當前幕', () => {
+  const c = baseCtx({ scenario: makeScenario({ agendaProgress: 10 }) });
+  const t = commandTick(c);
+  assertEq(t.posture, 'urgent');
+  const roles = assignRoles(t, c);
+  assert(roles.every((r) => r.kind === 'clues' && r.role === 'harvest'), '告急時無人組陣');
+});
+
+test('指派:當前幕是 kill → 全員集火;指派不讀個性(輸入根本沒有 weights)', () => {
+  const c = baseCtx({ scenario: makeScenario({ actIndex: 1 }) });
+  const t = commandTick(c);
+  const roles = assignRoles(t, c);
+  assert(roles.every((r) => r.kind === 'kill'), '殺敵幕全員 kill');
+  // 決定性:同輸入兩次結果一致(平手用 id 定序)
+  const again = assignRoles(t, c);
+  assertEq(JSON.stringify(roles), JSON.stringify(again));
 });
 
 // ─── runner ───────────────────────────────────

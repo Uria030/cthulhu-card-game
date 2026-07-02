@@ -248,6 +248,74 @@ export function estimateSubgoalDemand(subgoal: VictorySubgoal, ctx: CommandConte
   }
 }
 
+// ─── 第 4 層:隊伍角色指派(P2)─────────────────────
+// 明令(企畫書原則三):指派只讀客觀能力,不讀 weights——四人個性全設相同,指派必須不變。
+export interface TeamAssignment {
+  investigatorId: string;
+  /** 指到 chain 的哪個子目標 */
+  subgoalIndex: number;
+  kind: AIObjective['kind'];
+  /** harvest = 收割當前幕;prepare = 為後續幕組陣(§3.6 梯隊分工) */
+  role: 'harvest' | 'prepare';
+}
+
+/** kill 子目標的參照 DC(取目標代碼中最高 DC;未指定回 10) */
+function killDcFor(subgoal: VictorySubgoal, enemyData: EnemyDataLookup): number {
+  let dc = 0;
+  for (const code of subgoal.objective.enemyCodes ?? []) dc = Math.max(dc, Number(enemyData[code]?.dc ?? 10));
+  return dc || 10;
+}
+
+/**
+ * 依「客觀能力對子目標的適配度」分工:
+ * - 當前幕 = 數線索且從容:比較優勢高的一半去收割線索,其餘為下一個 kill 幕組陣(梯隊)。
+ * - 告急/不可行、或當前幕非線索型:全員壓當前幕(折現自動收攏梯隊,企畫書 §3.6)。
+ */
+export function assignRoles(trace: CommandTrace, ctx: CommandContext): TeamAssignment[] {
+  const chain = trace.chain;
+  const curIdx = chain.findIndex((s) => s.status === 'current');
+  if (curIdx < 0) return [];
+  const cur = chain[curIdx];
+  const standing = Object.entries(ctx.investigators)
+    .filter(([, i]) => !i.permanentlyDead && isStanding(i));
+  if (standing.length === 0) return [];
+  const nextKillIdx = chain.findIndex((s, i) => i > curIdx && s.status === 'pending' && s.objective.kind === 'kill');
+
+  const all = (idx: number, kind: AIObjective['kind']): TeamAssignment[] =>
+    standing.map(([id]) => ({ investigatorId: id, subgoalIndex: idx, kind, role: 'harvest' as const }));
+
+  if (cur.objective.kind !== 'clues' || trace.posture !== 'calm' || nextKillIdx < 0) {
+    return all(curIdx, cur.objective.kind);
+  }
+
+  // 從容的數線索幕 + 後面有 kill 幕 → 梯隊分工(能力比較優勢,與個性無關)
+  const { p: bestP, shroud } = bestInvestigateChance(standing.map(([, i]) => i), ctx.scenario, ctx.locationStats);
+  const dc = killDcFor(chain[nextKillIdx], ctx.enemyData);
+  const caps = standing.map(([id, inv]) => ({
+    id,
+    clue: estimateSuccessChance(inv.attributes.perception ?? 0, shroud),
+    kill: bestDamagePerAction(inv, dc, ctx.cardLookup, ctx.stylePools),
+  }));
+  const maxClue = Math.max(...caps.map((c) => c.clue), 0.01);
+  const maxKill = Math.max(...caps.map((c) => c.kill), 0.01);
+  const ranked = caps
+    .map((c) => ({ ...c, advantage: c.clue / maxClue - c.kill / maxKill }))
+    .sort((a, b) => b.advantage - a.advantage || a.id.localeCompare(b.id)); // 平手用 id 定序(決定性)
+  const harvestCount = Math.max(1, Math.ceil(ranked.length / 2));
+  void bestP;
+  return ranked.map((c, i) => (
+    i < harvestCount
+      ? { investigatorId: c.id, subgoalIndex: curIdx, kind: 'clues' as const, role: 'harvest' as const }
+      : { investigatorId: c.id, subgoalIndex: nextKillIdx, kind: 'kill' as const, role: 'prepare' as const }
+  ));
+}
+
+/** 指派 → 該調查員本回合追的目標(餵給第 5 層執行引擎的 objective,評分尺自動切換) */
+export function objectiveForAssignment(a: TeamAssignment | undefined, chain: VictorySubgoal[]): AIObjective | undefined {
+  if (!a || !chain[a.subgoalIndex]) return undefined;
+  return chain[a.subgoalIndex].objective;
+}
+
 /** 指揮層主入口:每 tick 呼叫,回傳第 1–3 層完整軌跡(P1 只記錄,不接管行為)。 */
 export function commandTick(ctx: CommandContext): CommandTrace {
   const chain = deriveVictoryChain(ctx.actCards, ctx.scenario, ctx.playerCount, ctx.enemyData);

@@ -503,18 +503,31 @@ export function enumerateCandidates(
     });
   }
 
-  // ── 穩定救援(§9.5):同地點有瀕死隊友 → 最高優先級之一(見死不救不是選項)──
+  // ── 穩定救援(§9.5)— 帳面計算(Uria 2026-07-02 裁定,取代寫死必救)──
+  // 不讀個性(原則二):救援價值 = 倒地者產出率 + 死亡時鐘壓力,扣白救折價。
+  //   白救閘門:怪在他身邊且時鐘未逼近 → 站起 1HP 下輪又倒,穩定期望產出≈0(正解:先清怪,
+  //   protectBonus/絆倒帳會把火力自然導向纏著倒地者的怪);時鐘 2 失敗 = 差一口就死 → 必救浮現。
+  //   兩級優先權:成形隊友(場上可用資產多)產出率 > 自己 → 救援升級壓過日常產出。
+  const outputRate = (a: InvestigatorState): number =>
+    1 + a.assetsInPlay.filter((id) => {
+      const d = cardLookup[id];
+      const usesLeft = a.assetState?.[id]?.usesLeft;
+      return (d?.effects ?? []).some((f) => f.trigger_type === 'action') && (usesLeft == null || usesLeft > 0);
+    }).length * 0.5;
   for (const ally of otherAllies) {
     if (!isDowned(ally)) continue;
-    if (ally.currentLocationId === inv.currentLocationId) {
-      out.push({
-        actionType: 'stabilize',
-        payload: { targetInvestigatorId: ally.investigatorId },
-        // 基礎分高到壓過日常行動;守護型(馬庫斯)再往上疊
-        score: 1.8 + profile.weights.protectAllies * 1.2,
-        intentNarrative: '撲到倒下的隊友身邊壓住傷勢',
-      });
-    }
+    if (ally.currentLocationId !== inv.currentLocationId) continue;
+    const failures = ally.deathSaveFailures ?? 0;
+    const enemiesAtAlly = scenario.enemies.filter((e) => e.hp > 0 && e.locationId === ally.currentLocationId);
+    const clockDanger = failures >= 2 ? 2.2 : failures === 1 ? 0.9 : 0;
+    const futile = enemiesAtAlly.length > 0 && failures < 2;
+    const mustSave = outputRate(ally) > outputRate(inv) ? 1.2 : 0;
+    out.push({
+      actionType: 'stabilize',
+      payload: { targetInvestigatorId: ally.investigatorId },
+      score: futile ? 0.4 + clockDanger : 2.2 + outputRate(ally) * 0.6 + clockDanger + mustSave,
+      intentNarrative: '撲到倒下的隊友身邊壓住傷勢',
+    });
   }
 
   // ── 嘲諷(把纏住隊友的怪拉到自己身上;鐵壁的本能)──
@@ -608,11 +621,9 @@ export function enumerateCandidates(
         (a) => a.currentLocationId === targetId && a.engagedWith.length > 0,
       );
       if (allyInDanger) value += profile.weights.protectAllies * 1.5;
-      // 救援:隊友在隔壁倒地 → 趕過去(比纏鬥支援更急)
-      const allyDownedThere = otherAllies.some(
-        (a) => isDowned(a) && a.currentLocationId === targetId,
-      );
-      if (allyDownedThere) value += 2.0 + profile.weights.protectAllies * 1.2;
+      // 救援:隊友在隔壁倒地 → 趕過去(帳面:倒地者越成形越急;有怪駐守也要去——過去清怪/穩定)
+      const downedThere = otherAllies.find((a) => isDowned(a) && a.currentLocationId === targetId);
+      if (downedThere) value += 1.6 + outputRate(downedThere) * 0.4;
       // 調查:隔壁更好查(shroud 更低)
       const hereShroud = locationStats[inv.currentLocationId ?? '']?.shroud ?? 10;
       const thereShroud = locationStats[targetId]?.shroud ?? 10;

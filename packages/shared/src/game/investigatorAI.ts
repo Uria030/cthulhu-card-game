@@ -312,6 +312,8 @@ export interface InvestigatorAIContext {
   chaosMarkerEffects?: Record<string, string>;
   /** 當前 ACT 目標(資料驅動;呼叫端用 deriveObjective 由幕條件算出傳入)。 */
   objective?: AIObjective;
+  /** 緊急分值 U(指揮層第 3 層;P3 折現用:U 高 → 投資型出牌價值被壓低)。未傳視為中性 0.35。 */
+  urgency?: number;
   /** @deprecated 舊版只帶擊敗目標;改用 objective。仍接受以相容舊呼叫端。 */
   objectiveEnemyCodes?: string[];
   rng: () => number;
@@ -349,6 +351,52 @@ export function weaponExpectedModifier(
   const p = (attackFx?.effect_params ?? {}) as Record<string, unknown>;
   const damage = Number(p.damage ?? 2) + Number(p.damage_bonus ?? 0);
   return { modifier: sum / pool.length, damage };
+}
+
+// ─── P3 牌組戰術藍圖(企畫書 §3.5)──────────────────
+// 開局讀自己整副牌(場上+手上+牌庫),用引擎實效值窮舉出「最大價值戰術」。
+// 不寫死任何 combo:換牌組藍圖自動不同(人格即資料同哲學)。
+export interface DeckBlueprint {
+  /** 成形後最佳持續輸出(每 AP 期望傷害,對參照 DC) */
+  bestRatePerAp: number;
+  /** 關鍵卡 instance ids(含還在牌庫的 → 抽卡/搜牌的挖牌方向) */
+  keyCards: string[];
+  /** 人讀描述(sim/戰役紀錄對帳用) */
+  description: string;
+}
+
+export function computeDeckBlueprint(
+  inv: InvestigatorState,
+  cardLookup: CardDataLookup,
+  stylePools: Record<string, StyleCardData[]>,
+  refDc: number,
+): DeckBlueprint {
+  const all = [...inv.assetsInPlay, ...inv.hand, ...inv.deck];
+  let best: { id: string; rate: number; name: string } | null = null;
+  const bursts: { id: string; amt: number; name: string }[] = [];
+  for (const id of all) {
+    const d = cardLookup[id];
+    if (!d || d.card_type === 'weakness') continue;
+    const fx = (d.effects ?? []).filter((f) => f.trigger_type === 'action');
+    if (fx.some((f) => String(f.effect_code) === 'attack')) {
+      const expect = weaponExpectedModifier(inv, id, cardLookup, stylePools);
+      if (expect) {
+        const rate = estimateSuccessChance(expect.modifier, refDc) * expect.damage;
+        if (!best || rate > best.rate) best = { id, rate, name: String(d.name_zh ?? id) };
+      }
+    }
+    // 必中傷害(deal_damage/deal_horror 免檢定):對高 DC 目標的爆發手段
+    const amt = fx
+      .filter((f) => /^deal_(damage|horror)/.test(String(f.effect_code).replace(/\(.*\)$/, '')))
+      .reduce((s, f) => s + Number((f.effect_params as Record<string, unknown> | undefined)?.amount ?? 1), 0);
+    if (amt >= 2) bursts.push({ id, amt, name: String(d.name_zh ?? id) });
+  }
+  const keyCards = [...(best ? [best.id] : []), ...bursts.map((b) => b.id)];
+  const description = [
+    best ? `主軸:${best.name}(${best.rate.toFixed(2)}傷/AP vs DC${refDc})` : '無武器主軸',
+    bursts.length > 0 ? `爆發:${bursts.map((b) => `${b.name}必中${b.amt}`).join('、')}` : '',
+  ].filter(Boolean).join(';');
+  return { bestRatePerAp: best?.rate ?? 0, keyCards, description };
 }
 
 /** 退守判定:HP/SAN 任一低於名冊線 → 保守模式 */
@@ -450,11 +498,38 @@ export function enumerateCandidates(
       const p = estimateSuccessChance(expect.modifier + vis, dc);
       // 命中率太低就不攻擊 —— 但幕目標 boss 例外:再難也要打(否則高 DC boss 永遠不被生成攻擊候選 → 打不掉)
       if (p < profile.weights.riskTolerance * 0.5 && !isObjective(enemy)) continue;
+      // §4.2 投入加值(P3 告急行為):對幕目標的高 DC 攻擊,檢定前 commit 技能卡疊修正拉命中。
+      // 圖示價值取「對風格池各屬性的平均」(抽到哪張風格卡都有期望增益;純單屬性圖示自然折半)。
+      let commitIds: string[] = [];
+      let pWith = p;
+      if (isObjective(enemy) && p < 0.6) {
+        const pool = stylePools[String(cardLookup[weaponId]?.combat_style ?? '')] ?? [];
+        const commitCands = inv.hand
+          .filter((id) => cardLookup[id]?.card_type === 'skill')
+          .map((id) => ({
+            id,
+            avg: pool.length > 0
+              ? pool.reduce((s, scd) => s + commitValueFor(scd.check_attribute as AttributeKey, [cardLookup[id]?.commit_icons ?? {}]), 0) / pool.length
+              : 0,
+          }))
+          .filter((c) => c.avg >= 0.5)
+          .sort((a, b) => b.avg - a.avg);
+        let mod = expect.modifier + vis;
+        for (const cd of commitCands) {
+          if (commitIds.length >= 2 || estimateSuccessChance(mod, dc) >= 0.75) break;
+          commitIds.push(cd.id);
+          mod += cd.avg;
+        }
+        pWith = estimateSuccessChance(mod, dc);
+        if (commitIds.length > 0 && pWith <= p) commitIds = []; // 投了沒增益就收回
+      }
       out.push({
         actionType: 'execute_card_action',
-        payload: { cardInstanceId: weaponId, enemyInstanceId: enemy.instanceId },
-        // 卡片動作:基底 CARD_ACTION_BONUS(>1V)+ 戰意×命中×傷害 + 護援/補刀/目標集火
-        score: (CARD_ACTION_BONUS + profile.weights.combatFocus * p * (1 + expect.damage * 0.3) + protectBonus + finishBonus + objectiveBonus) * retreatMul,
+        payload: commitIds.length > 0
+          ? { cardInstanceId: weaponId, enemyInstanceId: enemy.instanceId, commitCardIds: commitIds }
+          : { cardInstanceId: weaponId, enemyInstanceId: enemy.instanceId },
+        // 卡片動作:基底 CARD_ACTION_BONUS(>1V)+ 戰意×命中(含投入)×傷害 + 護援/補刀/目標集火
+        score: (CARD_ACTION_BONUS + profile.weights.combatFocus * pWith * (1 + expect.damage * 0.3) + protectBonus + finishBonus + objectiveBonus) * retreatMul,
         intentNarrative: `舉起${cardLookup[weaponId]?.name_zh ?? '武器'}攻擊`,
       });
     }
@@ -488,9 +563,11 @@ export function enumerateCandidates(
     const p = estimateSuccessChance(inv.attributes.reflex + vis, dc);
     const threat = (Number(tt?.damage_physical ?? 0) + Number(tt?.damage_horror ?? 0))
       * Math.max(1, Number(tt?.attacks_per_round ?? 1));
-    // 目標 boss 纏住是要打的,不給解鎖分(留在戰位);非目標怪卡人 → 脫身恢復產出
-    const unlock = isObjective(target) ? 0 : 1.0;
-    const tripValue = p * threat * 0.4;                       // 絆倒:免掉牠下一輪全額輸出
+    // 目標 boss 纏住是要打的,不給解鎖分(留在戰位);非目標怪卡人 → 脫身恢復產出。
+    // 多敵糾纏:閃掉一隻還有下一隻咬著 → 解鎖只在「最後一隻」全額(防閃避迴圈)
+    const unlock = isObjective(target) ? 0 : (engaged.length === 1 ? 1.0 : 0.35);
+    const alreadyStunned = target.modifiers?.includes('stunned') ?? false;
+    const tripValue = alreadyStunned ? 0 : p * threat * 0.4;  // 絆倒:免掉牠下一輪全額輸出(已絆倒不重複計)
     const dodgeValue = (retreating ? 0.9 : 0.4) * threat * 0.4; // 脫離:不再站著挨打
     const failCost = (1 - p) * Number(tt?.damage_physical ?? 0) * 0.3;
     const score = unlock + tripValue + dodgeValue - failCost + (retreating ? 1.2 : 0);
@@ -545,10 +622,22 @@ export function enumerateCandidates(
     }
   }
 
-  // ── 出牌(資產鋪場/相關事件)──
-  // 設計裁定(Uria 2026-06-12):卡片的價值永遠比單純動作高 —
-  // 打得出的卡加固定優先分;打不起的好卡讓「拿資源」繼承折扣分(存錢買刀)。
+  // ── 出牌 — P3 卡牌經濟(企畫書 §3.2-3.5):逐卡實算引擎實效值 + 緊急折現 ──
+  // 卡牌總值 = 立即推進值(本回合兌現)+ 投資值(未來每 AP 效率 × 回收窗口)× 折現(U)。
+  // 取代扁平常數:實測價差 1x~50x(必中傷害事件對 DC20 目標是王牌),常數會抹平 50 倍。
   const CARD_FIRST_BONUS = 1.0;
+  const DMG_V = 0.8; // 1 點傷害的分數當量(與調查/攻擊既有幣值對齊)
+  const discount = Math.max(0.15, 1 - (ctx.urgency ?? 0.35)); // U 高 → 未來不值錢
+  // 參照 DC:指派 kill 目標(未生成也算,為下一幕投資)> 本地敵人 > 12
+  let refDc = 0;
+  for (const code of objectiveCodes) refDc = Math.max(refDc, Number(enemyStats[code]?.dc ?? 0));
+  if (refDc === 0) for (const e of enemiesHere) refDc = Math.max(refDc, Number(enemyStats[e.enemyDefinitionId]?.dc ?? 0));
+  if (refDc === 0) refDc = 12;
+  const armed = inv.assetsInPlay.some((id) =>
+    (cardLookup[id]?.effects ?? []).some((f) => f.trigger_type === 'action' && f.effect_code === 'attack')
+    && ((inv.assetState?.[id]?.usesLeft ?? 1) > 0),
+  );
+  const normCode = (f: { effect_code?: unknown }) => String(f.effect_code ?? '').replace(/\(.*\)$/, '');
   let bestUnaffordable = 0;
   for (const cardId of inv.hand) {
     const data = cardLookup[cardId];
@@ -556,46 +645,57 @@ export function enumerateCandidates(
     if (!data || !data.card_type || data.card_type === 'skill' || data.card_type === 'weakness') continue;
     const cost = Number(data.cost ?? 0);
     const fx = data.effects ?? [];
+    const actionFx = fx.filter((f) => f.trigger_type === 'action');
     let value = 0;
     let narrative = `打出「${data.name_zh ?? ''}」`;
     const isArcaneSpell = String(data.combat_style ?? '') === 'arcane';
-    if (fx.some((f) => f.trigger_type === 'action' && f.effect_code === 'attack')) {
-      // 武器:場上沒武器且場上有威脅時鋪場價值高
-      const armed = inv.assetsInPlay.some((id) =>
-        (cardLookup[id]?.effects ?? []).some((f) => f.trigger_type === 'action' && f.effect_code === 'attack'),
-      );
-      value = aliveEnemies.length > 0 && !armed ? 2.4 : 0.8;
-    } else if (isArcaneSpell) {
-      // 施法事件(ch2 §8.4 神秘攻擊):一定命中、穿透抗性,但抽混沌袋有 SAN 風險。
-      // 有目標才打;戰意權重 × 命中保證(法術不擲骰),SAN 低時謹慎(玩火不玩命)。
-      const hasDamage = fx.some((f) => /deal_(damage|horror)/.test(String(f.effect_code)));
-      const sanPct = inv.sanMax > 0 ? (inv.san / inv.sanMax) * 100 : 0;
-      const sanCaution = sanPct < profile.sanRetreatPct + 15 ? 0.5 : 1;
-      value = hasDamage && enemiesHere.length > 0 ? profile.weights.combatFocus * 1.6 * sanCaution : 0;
+    const sanPct = inv.sanMax > 0 ? (inv.san / inv.sanMax) * 100 : 0;
+    const sanCaution = isArcaneSpell && sanPct < profile.sanRetreatPct + 15 ? 0.5 : 1; // 玩火不玩命
+    const hasAttackAction = actionFx.some((f) => normCode(f) === 'attack');
+    const autoDmg = actionFx
+      .filter((f) => /^deal_(damage|horror)$/.test(normCode(f)))
+      .reduce((s, f) => s + Number((f.effect_params as Record<string, unknown> | undefined)?.amount ?? 1), 0);
+    const clueAmt = actionFx
+      .filter((f) => normCode(f) === 'discover_clue')
+      .reduce((s, f) => s + Number((f.effect_params as Record<string, unknown> | undefined)?.amount ?? 1), 0);
+
+    if (hasAttackAction && data.card_type !== 'event') {
+      // 武器:每次使用期望值 = 命中率 × 引擎實效傷害(effect params.damage ?? 2,卡面欄位不參與)
+      const expect = weaponExpectedModifier(inv, cardId, cardLookup, stylePools);
+      if (expect) {
+        const evPerUse = estimateSuccessChance(expect.modifier, refDc) * expect.damage * DMG_V;
+        const usesNow = enemiesHere.length > 0 ? Math.min(Math.max(0, inv.actionPoints - 1), 2) : 0; // #1 價值鏈
+        const futureUses = Math.min(3, Number((data as { ammo?: unknown }).ammo ?? (data as { uses?: unknown }).uses ?? 3));
+        const investMul = armed ? 0.3 : 1; // 已有武器 → 第二把邊際遞減
+        value = usesNow * evPerUse + futureUses * evPerUse * discount * investMul;
+        if (usesNow > 0) narrative += '(接著就能用它)';
+      }
+    } else if (autoDmg > 0) {
+      // 必中傷害(施法/事件):引擎 deal_damage 免檢定全額入帳 — 對高 DC 目標是全牌庫最高效輸出
+      const objHere = enemiesHere.some(isObjective);
+      value = enemiesHere.length > 0 ? autoDmg * DMG_V * (objHere ? 1.3 : 1) * sanCaution : 0;
+    } else if (clueAmt > 0 && data.card_type === 'event') {
+      value = clueAmt * (cluesNeeded ? 1.6 : 0.2);
     } else if (data.card_type === 'event') {
-      // 事件:效果碼相關性(打傷害要有目標/補給通用)
-      const codes = new Set(fx.filter((f) => f.trigger_type === 'action').map((f) => String(f.effect_code).replace(/\(.*\)$/, '')));
-      if (codes.has('deal_damage')) value = enemiesHere.length > 0 ? 1.8 : 0;
-      else if (codes.has('discover_clue')) value = profile.weights.clueFocus * 0.6;
-      else if (codes.has('draw_card') || codes.has('gain_resource') || codes.has('search_deck')) value = 1.0;
+      const codes = new Set(actionFx.map(normCode));
+      if (codes.has('draw_card') || codes.has('gain_resource') || codes.has('search_deck')) value = 1.0;
       else if (codes.size > 0) value = 0.7;
+    } else if (actionFx.length > 0) {
+      // 其他可重複行動資產(工具/控場):通用每次價值 × 本回合可用次數(#1 價值鏈)+ 投資
+      const perUse = clueAmt > 0 ? clueAmt * (cluesNeeded ? 1.2 : 0.2) : 1.2;
+      const needsEnemy = actionFx.every((f) => /attack|deal_damage|stun_enemy|taunt/.test(normCode(f)));
+      const usesNow = (!needsEnemy || enemiesHere.length > 0) ? Math.min(Math.max(0, inv.actionPoints - 1), 2) : 0;
+      value = usesNow * perUse + Math.min(3, Number((data as { uses?: unknown }).uses ?? 3)) * perUse * 0.3 * discount;
+      if (usesNow > 0) narrative += '(接著就能用它)';
     } else {
-      // 資產/盟友:鋪場通用價值(被動會在檢定管線自動聚合)
-      value = 1.2;
+      // 被動資產/盟友:鋪場通用價值(被動在檢定管線自動聚合;盟友加攻擊力)
+      value = 1.0 + (data.card_type === 'ally' ? Number((data as { damage?: unknown }).damage ?? 0) * 0.3 : 0);
     }
     if (value <= 0) continue;
-    // 整回合三行動價值鏈(Uria #1):打出有「行動效果」的資產後,本回合還能用它(每次 ≥ CARD_ACTION_BONUS=1.6V > 1V 基本動作)。
-    // 「一動打牌鋪場 + 後續用牌」整回合產出 > 3 個基本動作 → AI 為了 combo 而鋪場(通用,不限武器;武器是其特例)。
-    const usableActions = fx.filter((f) => f.trigger_type === 'action');
-    if (usableActions.length > 0 && data.card_type !== 'event') {
-      const usesThisTurn = Math.min(Math.max(0, inv.actionPoints - 1), 2); // 鋪場花 1AP,剩餘可用次數(本回合上限 2)
-      const needsEnemy = usableActions.every((f) => /attack|deal_damage|stun_enemy|taunt/.test(String(f.effect_code)));
-      if (usesThisTurn > 0 && (!needsEnemy || enemiesHere.length > 0)) {
-        value += usesThisTurn * CARD_ACTION_BONUS;
-        narrative += '(接著就能用它)';
-      }
-    }
-    const score = (value + CARD_FIRST_BONUS) * profile.weights.cardPlayAffinity;
+    // §3.6 適配度:被指派殺敵且目標已在場 → 非輸出型鋪場(經濟/被動)折價,火力優先
+    const isDamageCard = hasAttackAction || autoDmg > 0;
+    const killFit = objective.kind === 'kill' && objectiveAlive && !isDamageCard ? 0.6 : 1;
+    const score = value * killFit + CARD_FIRST_BONUS * profile.weights.cardPlayAffinity * (killFit === 1 ? 1 : 0.8);
     if (cost > inv.resources) {
       bestUnaffordable = Math.max(bestUnaffordable, score);
       continue;
@@ -663,15 +763,23 @@ export function enumerateCandidates(
     const resourceValue = calm ? Math.max(0.2, bestUnaffordable * 0.5) : 0;
     out.push({ actionType: 'gain_resource', payload: {}, score: resourceValue, intentNarrative: '整理隨身物資' });
     if (inv.deck.length > 0) {
-      const drawValue = inv.hand.length < 2 ? 0.6 : 0.25;
+      let drawValue = inv.hand.length < 2 ? 0.6 : 0.25;
+      // 藍圖挖牌(§3.5):牌組戰術藍圖的關鍵卡還在牌庫 → 抽卡是有方向的投資(照樣吃緊急折現)
+      if (calm) {
+        const bp = computeDeckBlueprint(inv, cardLookup, stylePools, refDc);
+        const keysInDeck = bp.keyCards.filter((id) => inv.deck.includes(id)).length;
+        if (keysInDeck > 0) drawValue += Math.min(0.8, 0.3 * keysInDeck) * discount;
+      }
       out.push({ actionType: 'draw_card', payload: {}, score: drawValue, intentNarrative: '翻找更多手段' });
     }
   }
 
-  // 避免單調:補給類連發遞減(調查/攻擊連發是正常戰術,不罰)
+  // 避免單調:補給/閃避連發遞減(調查/攻擊連發是正常戰術,不罰;
+  // 閃避連發 = 被多怪輪流糾纏的迴圈訊號 → 遞減逼出「離開/開打」的替代解)
   for (const c of out) {
-    if (c.actionType === aiState.lastActionType && (c.actionType === 'gain_resource' || c.actionType === 'draw_card')) {
-      c.score -= 0.5;
+    if (c.actionType === aiState.lastActionType
+      && (c.actionType === 'gain_resource' || c.actionType === 'draw_card' || c.actionType === 'evade')) {
+      c.score -= c.actionType === 'evade' ? 1.0 : 0.5;
     }
   }
   return out;
@@ -767,7 +875,12 @@ export function scoreState(
   for (const e of scenario.enemies) {
     if (e.hp <= 0) continue;
     const isObj = objectiveCodes.includes(e.enemyDefinitionId);
-    s -= e.hp * w.combatFocus * (isObj ? 1.2 : (objBossAlive ? 0.12 : 0.4));
+    // 雜兵權重隨威脅度浮動(2026-07-02 威脅帳):高輸出雜兵放著 = 每回合持續失血+潮汐回血燃料,
+    // 清掉 = 永久絆倒;boss 集火仍靠 isObj×1.2 壓陣(低威脅雜兵維持 0.12 不引走火力)
+    const tt = ctx.enemyStats[e.enemyDefinitionId];
+    const threat = (Number(tt?.damage_physical ?? 0) + Number(tt?.damage_horror ?? 0)) * Math.max(1, Number(tt?.attacks_per_round ?? 1));
+    const minionW = Math.min(0.35, 0.06 + threat * 0.07);
+    s -= e.hp * w.combatFocus * (isObj ? 1.2 : (objBossAlive ? minionW : 0.4));
     // 絆倒入帳(§7.4/stun_enemy):被絆倒的怪下一輪不啟動 → 免掉的期望輸出是真價值,
     // 讓 beam search 看得見「閃避成功/控場卡」的終局分(否則絆倒步被當廢步剪掉)。
     if (e.modifiers?.includes('stunned')) {

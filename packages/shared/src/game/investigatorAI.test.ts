@@ -14,6 +14,7 @@ import {
   scoreState,
   deriveObjective,
   runInvestigatorAITurn,
+  computeDeckBlueprint,
 } from './investigatorAI';
 import type { InvestigatorAIProfile, InvestigatorAIContext } from './investigatorAI';
 import type { ScenarioState, InvestigatorState } from './state';
@@ -64,6 +65,7 @@ function makeScenario(over: Partial<ScenarioState> = {}): ScenarioState {
 const ENEMY_DATA: EnemyDataLookup = {
   rev_t1: { name_zh: '深潛者亡靈', tier: 1, hp_base: 4, dc: 10, damage_physical: 1, keywords: [] },
   brute_t2: { name_zh: '磨坊看守', tier: 2, hp_base: 6, dc: 10, damage_physical: 3, attacks_per_round: 1, keywords: [] },
+  boss_t3: { name_zh: '測試頭目', tier: 3, hp_base: 20, dc: 20, damage_physical: 4, keywords: [] },
 };
 
 const STYLE_POOL: Record<string, StyleCardData[]> = {
@@ -285,6 +287,63 @@ test('整回合價值鏈(通用 #1):非武器資產(有行動效果)也含 combo
   const pNoAp = noAp.find((x) => x.actionType === 'play_card' && x.payload.cardInstanceId === 'tool');
   assert(!!pCombo && !!pNoAp, '兩情境都該有鋪資產候選');
   assert((pCombo?.score ?? 0) > (pNoAp?.score ?? 0), '能接著用工具時,鋪場價值含 combo 加成(通用,不限武器)');
+});
+
+// ─── P3 卡牌經濟:逐卡實算 + 折現 + 藍圖 ─────────────────
+test('P3 必中傷害事件:量大者分高(逐卡實算,不再吃扁平常數)', () => {
+  const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 8, engagedWith: [], modifiers: [] };
+  const cards = {
+    ...CARDS,
+    nuke: { name_zh: '大爆發', card_type: 'event', cost: 2, effects: [{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount: 5 } }] },
+  };
+  const c = ctx({ scenario: makeScenario({ enemies: [enemy] }), investigator: makeInv({ hand: ['dmg_event', 'nuke'], resources: 5 }), cardLookup: cards });
+  const cands = enumerateCandidates(c, ELIAS, initInvestigatorAIState());
+  const small = cands.find((x) => x.payload.cardInstanceId === 'dmg_event')?.score ?? 0;
+  const big = cands.find((x) => x.payload.cardInstanceId === 'nuke')?.score ?? 0;
+  assert(big > small + 1, `必中 5 傷要顯著高於必中 2 傷(${small.toFixed(2)} vs ${big.toFixed(2)})`);
+});
+
+test('P3 緊急折現:告急(U 高)時純投資鋪場價值被壓低', () => {
+  // 無怪在場的武器鋪場 = 純投資 → U=0.95 的分數應低於 U=0.1
+  const mk = (urgency: number) => {
+    const c = ctx({ investigator: makeInv({ hand: ['weapon'], resources: 3 }), urgency });
+    return enumerateCandidates(c, ELIAS, initInvestigatorAIState()).find((x) => x.payload.cardInstanceId === 'weapon')?.score ?? 0;
+  };
+  const calm = mk(0.1);
+  const crunch = mk(0.95);
+  assert(calm > crunch, `從容投資 > 告急投資(${calm.toFixed(2)} vs ${crunch.toFixed(2)})`);
+});
+
+test('P3 藍圖:讀整副牌找出主軸武器與必中爆發;關鍵卡在牌庫 → 抽卡加值', () => {
+  const cards = {
+    ...CARDS,
+    nuke: { name_zh: '大爆發', card_type: 'event', cost: 2, effects: [{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount: 4 } }] },
+  };
+  const inv = makeInv({ deck: ['weapon', 'nuke'], hand: [] });
+  const bp = computeDeckBlueprint(inv, cards, STYLE_POOL, 12);
+  assert(bp.keyCards.includes('weapon'), '主軸武器入藍圖');
+  assert(bp.keyCards.includes('nuke'), '必中爆發入藍圖');
+  assert(bp.bestRatePerAp > 0, '成形後產出率 > 0');
+  // 關鍵卡在牌庫 → 抽卡分數高於空牌庫關鍵卡
+  const withKeys = ctx({ investigator: inv, cardLookup: cards });
+  const noKeys = ctx({ investigator: makeInv({ deck: ['dk1'], hand: [] }) });
+  const d1 = enumerateCandidates(withKeys, ELIAS, initInvestigatorAIState()).find((x) => x.actionType === 'draw_card')?.score ?? 0;
+  const d0 = enumerateCandidates(noKeys, ELIAS, initInvestigatorAIState()).find((x) => x.actionType === 'draw_card')?.score ?? 0;
+  assert(d1 > d0, `挖藍圖關鍵卡的抽卡更值錢(${d0.toFixed(2)} vs ${d1.toFixed(2)})`);
+});
+
+test('P3 投入加值(§4.2):對高 DC 幕目標的武器攻擊,自動 commit 技能卡疊修正', () => {
+  const boss = { instanceId: 'b1', enemyDefinitionId: 'boss_t3', locationId: 'A', hp: 20, engagedWith: [], modifiers: [] };
+  const c = ctx({
+    scenario: makeScenario({ enemies: [boss] }),
+    investigator: makeInv({ assetsInPlay: ['weapon'], hand: ['skill_all', 'skill_per'], assetState: { weapon: { usesLeft: null, exhausted: false } } }),
+    objectiveEnemyCodes: ['boss_t3'],
+  });
+  const atk = enumerateCandidates(c, MARCUS, initInvestigatorAIState())
+    .find((x) => x.actionType === 'execute_card_action');
+  assert(!!atk, '該有武器攻擊候選');
+  const ids = (atk?.payload.commitCardIds as string[] | undefined) ?? [];
+  assert(ids.includes('skill_all'), `全域圖示技能卡該被投入(實際:${JSON.stringify(ids)})`);
 });
 
 // ─── #2 模擬-評分 整回合規劃器(planTurn / scoreState)─────────────

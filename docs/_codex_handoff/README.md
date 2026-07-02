@@ -14,8 +14,10 @@
 方式二(Codex 直接呼叫,無需 Uria 轉手):
 
 ```bash
-claude --resume f075f2c2-afb2-4889-8e4a-15622c595c26 -p "守燈人,Codex 交件:<工作包編號>,handoff 在 docs/_codex_handoff/<檔名>。請 review。"
+& "C:\Users\user\AppData\Roaming\npm\claude.cmd" --resume f075f2c2-afb2-4889-8e4a-15622c595c26 -p "守燈人,Codex 交件:<工作包編號>,handoff 在 docs/_codex_handoff/<檔名>。請 review。"
 ```
+
+PATH 註記:此機 PowerShell 沒把 npm 全域目錄入 PATH,`claude` 裸指令找不到——用上面的絕對路徑(`claude.cmd` 在 `C:\Users\user\AppData\Roaming\npm\`)。
 
 注意:方式二是接續守燈人的記憶開分支執行 review,結果會寫回 handoff 檔;若該 session 正在使用中,以方式一為準。
 

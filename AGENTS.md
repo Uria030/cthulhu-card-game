@@ -55,3 +55,14 @@ E11 已確立的 workflow 修正一併納入 Gate:
 - prod smoke 若依賴尚未部署的 server 變更,屬部署順序問題,需在 handoff / review 中標明,不得誤判成程式缺陷或偷改 smoke。
 - `crossTest=true` 暫時可走 public route,但 M5 真人上線前必須收斂。
 - 守燈人呼叫使用 `C:\Users\user\AppData\Roaming\npm\claude.cmd`;此機 PowerShell 的 PATH 不保證找到裸 `claude`。
+
+## 雙向互審默契(本機鐵則,2026-07-02 Uria 明定)
+
+工作分「討論 → 送審 → Review」階段;**誰寫的就送對面審,絕不自審**:
+
+| 作者 | Reviewer | 管線 |
+|---|---|---|
+| Codex 寫的(E 系列等) | 守燈人 / Hammon(hub Claude PTY) | handoff + hub-review --to claude(README 方式四) |
+| Claude 寫的(守燈人親寫引擎碼) | Raviel(hub Codex PTY) | hub-review --to codex --file <brief>(brief 照 docs/_hub_brief_* 慣例) |
+
+**push 紀律(2026-07-02 事故教訓)**:任何人 push 前必跑 `git log origin/main..HEAD`,清單裡有未經對面審查的 commit 就不推。E1 曾被守燈人推 README 時無意帶上線——鍋在推的人,不在寫的人。

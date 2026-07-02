@@ -63,6 +63,7 @@ function makeScenario(over: Partial<ScenarioState> = {}): ScenarioState {
 
 const ENEMY_DATA: EnemyDataLookup = {
   rev_t1: { name_zh: '深潛者亡靈', tier: 1, hp_base: 4, dc: 10, damage_physical: 1, keywords: [] },
+  brute_t2: { name_zh: '磨坊看守', tier: 2, hp_base: 6, dc: 10, damage_physical: 3, attacks_per_round: 1, keywords: [] },
 };
 
 const STYLE_POOL: Record<string, StyleCardData[]> = {
@@ -180,6 +181,28 @@ test('退守:HP 低 → 壓攻擊、抬閃避', () => {
   });
   const pick = planNextAction(c, MARCUS, initInvestigatorAIState());
   assertEq(pick?.actionType, 'evade', '瀕危的老兵也知道何時撤(實際:' + pick?.actionType + ')');
+});
+
+test('閃避帳面計算:同 DC 下,怪越危險閃避分越高(絆倒價值線性放大)', () => {
+  const mk = (def: string) => {
+    const enemy = { instanceId: 'e1', enemyDefinitionId: def, locationId: 'A', hp: 4, engagedWith: ['ai-1'], modifiers: [] };
+    const c = ctx({ scenario: makeScenario({ enemies: [enemy] }), investigator: makeInv({ engagedWith: ['e1'] }) });
+    return enumerateCandidates(c, MARCUS, initInvestigatorAIState()).find((x) => x.actionType === 'evade')?.score ?? 0;
+  };
+  const weak = mk('rev_t1');   // 物傷 1
+  const brute = mk('brute_t2'); // 物傷 3
+  assert(weak > 0 && brute > 0, '兩者都該有閃避候選');
+  assert(brute > weak + 0.5, `危險怪的閃避分要顯著更高(弱 ${weak.toFixed(2)} vs 兇 ${brute.toFixed(2)})`);
+});
+
+test('scoreState:被絆倒的怪入帳(免掉的期望輸出),前瞻看得見絆倒價值', () => {
+  const inv = makeInv();
+  const base = makeScenario({ enemies: [{ instanceId: 'e1', enemyDefinitionId: 'brute_t2', locationId: 'A', hp: 6, engagedWith: [], modifiers: [] }] });
+  const stunned = makeScenario({ enemies: [{ instanceId: 'e1', enemyDefinitionId: 'brute_t2', locationId: 'A', hp: 6, engagedWith: [], modifiers: ['stunned'] }] });
+  const c = ctx();
+  const s0 = scoreState(inv, base, { ...c, scenario: base }, MARCUS);
+  const s1 = scoreState(inv, stunned, { ...c, scenario: stunned }, MARCUS);
+  assert(s1 > s0, `絆倒中的怪要加分(${s0.toFixed(2)} → ${s1.toFixed(2)})`);
 });
 
 test('風險容忍:艾達(0.3)不碰絕望檢定,黑暗高 DC 攻擊直接出局', () => {

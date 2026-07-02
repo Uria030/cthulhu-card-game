@@ -475,21 +475,30 @@ export function enumerateCandidates(
     }
   }
 
-  // ── 閃避(交戰中;退守時權重大增)──
-  if (engaged.length > 0) {
-    const target = engaged[0];
-    const dc = enemyStats[target.enemyDefinitionId]?.dc ?? 10;
+  // ── 閃避(§7.4:成敗都脫離交戰;成功附帶絆倒 = 該怪失去下次行動)──
+  // 帳面計算(Uria 2026-07-02 裁定):不設常數,逐怪算 ——
+  //   絆倒價值 = 該怪每輪期望輸出(物+恐 × 攻次),怪越危險絆倒越值錢(線性放大);
+  //   解鎖價值 = 脫離交戰鎖(§7.2 藉機攻擊封鎖非戰鬥行動)→ 恢復基準產出;
+  //   躲擊價值 = 不再站著挨牠打(退守時保命權重放大);
+  //   失敗代價 = (1-p) × 該怪物傷(§7.4 失敗挨一下,但仍脫離)。
+  for (const target of engaged) {
+    const tt = enemyStats[target.enemyDefinitionId];
+    const dc = tt?.dc ?? 10;
     const vis = here?.visibility === 'night' || here?.visibility === 'darkness' ? 2 : 0;
     const p = estimateSuccessChance(inv.attributes.reflex + vis, dc);
-    // 避免承受傷害(Uria):被「非目標」會傷人的怪纏住 → 閃避脫離,別站著挨打;目標 boss 則留著打
-    const tt = enemyStats[target.enemyDefinitionId];
-    const dmgThreat = Number(tt?.damage_physical ?? 0) + Number(tt?.damage_horror ?? 0);
-    const shedThreat = !isObjective(target) && dmgThreat > 0;
-    const urgency = retreating ? 2.5 : (shedThreat ? 1.6 : 0.6);
+    const threat = (Number(tt?.damage_physical ?? 0) + Number(tt?.damage_horror ?? 0))
+      * Math.max(1, Number(tt?.attacks_per_round ?? 1));
+    // 目標 boss 纏住是要打的,不給解鎖分(留在戰位);非目標怪卡人 → 脫身恢復產出
+    const unlock = isObjective(target) ? 0 : 1.0;
+    const tripValue = p * threat * 0.4;                       // 絆倒:免掉牠下一輪全額輸出
+    const dodgeValue = (retreating ? 0.9 : 0.4) * threat * 0.4; // 脫離:不再站著挨打
+    const failCost = (1 - p) * Number(tt?.damage_physical ?? 0) * 0.3;
+    const score = unlock + tripValue + dodgeValue - failCost + (retreating ? 1.2 : 0);
+    if (score <= 0) continue;
     out.push({
       actionType: 'evade',
       payload: { enemyInstanceId: target.instanceId },
-      score: urgency * (0.4 + p * 0.6),
+      score,
       intentNarrative: '側身脫離糾纏',
     });
   }
@@ -748,6 +757,13 @@ export function scoreState(
     if (e.hp <= 0) continue;
     const isObj = objectiveCodes.includes(e.enemyDefinitionId);
     s -= e.hp * w.combatFocus * (isObj ? 1.2 : (objBossAlive ? 0.12 : 0.4));
+    // 絆倒入帳(§7.4/stun_enemy):被絆倒的怪下一輪不啟動 → 免掉的期望輸出是真價值,
+    // 讓 beam search 看得見「閃避成功/控場卡」的終局分(否則絆倒步被當廢步剪掉)。
+    if (e.modifiers?.includes('stunned')) {
+      const tt = ctx.enemyStats[e.enemyDefinitionId];
+      s += (Number(tt?.damage_physical ?? 0) + Number(tt?.damage_horror ?? 0))
+        * Math.max(1, Number(tt?.attacks_per_round ?? 1)) * 0.4;
+    }
   }
   // 朝殺目標靠近也加分:模擬前瞻深度有限,看不到「一步步走過去打」的價值 → 給距離項,
   // 否則遠處 boss 永遠不去(走一步不改終局分),全隊在原地鋪場/救人。離目標越遠扣越多 → 驅動穿圖集火。

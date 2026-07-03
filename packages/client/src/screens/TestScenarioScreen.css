@@ -1376,9 +1376,104 @@
   border: 1px solid rgba(201, 168, 76, 0.35);
   border-radius: 6px;
   background: rgba(201, 168, 76, 0.08);
-  color: var(--text-tertiary, #9a968c);
+  color: #C9A84C;
   font: 700 13px "Noto Sans TC", sans-serif;
   padding: 7px 14px;
+  cursor: pointer;
+}
+
+.preparation-entry-row button:hover:not(:disabled),
+.preparation-entry-row button.active {
+  background: rgba(201, 168, 76, 0.2);
+  border-color: #C9A84C;
+}
+
+.preparation-entry-row button:disabled {
+  color: var(--text-tertiary, #9a968c);
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.talent-panel {
+  margin-top: 10px;
+  border: 1px solid rgba(201, 168, 76, 0.24);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px;
+}
+
+.talent-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.talent-panel-title {
+  font: 700 15px "Noto Serif TC", serif;
+  color: #C9A84C;
+}
+
+.talent-panel-meta {
+  margin-top: 3px;
+  font: 400 12px "Noto Sans TC", sans-serif;
+  color: var(--text-tertiary, #9a968c);
+}
+
+.talent-node-list {
+  display: grid;
+  gap: 8px;
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+.talent-node-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.talent-node-card.talent-node-unlocked {
+  border-color: rgba(201, 168, 76, 0.5);
+  background: rgba(201, 168, 76, 0.08);
+}
+
+.talent-node-name {
+  font: 700 14px "Noto Serif TC", serif;
+}
+
+.talent-node-meta {
+  margin-top: 3px;
+  font: 400 11px "Noto Sans TC", sans-serif;
+  color: var(--text-tertiary, #9a968c);
+}
+
+.talent-node-desc {
+  margin-top: 4px;
+  font: 400 12px/1.5 "Noto Sans TC", sans-serif;
+  color: var(--text-secondary, #c9c1b0);
+}
+
+.talent-node-card button {
+  min-width: 92px;
+  border: 1px solid #C9A84C;
+  border-radius: 6px;
+  background: rgba(201, 168, 76, 0.12);
+  color: #C9A84C;
+  font: 700 12px "Noto Sans TC", sans-serif;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.talent-node-card button:disabled {
+  border-color: rgba(154, 150, 140, 0.45);
+  color: var(--text-tertiary, #9a968c);
+  background: rgba(255, 255, 255, 0.04);
   cursor: not-allowed;
 }
 

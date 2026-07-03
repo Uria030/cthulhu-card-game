@@ -28,6 +28,7 @@ import type {
   InvestigatorAIProfile,
   CampaignProgress,
   PreparationCardDefinition,
+  TalentTreeDefinition,
 } from '@cthulhu/shared';
 import {
   defaultKeeperProfile,
@@ -111,6 +112,10 @@ export interface GameSetup {
   chaosMarkerEffects: Record<string, string>;
   /** 整備期購買卡池(唯讀卡面) */
   upgradeCards: PreparationCardDefinition[];
+  /** 所選調查員陣營的天賦樹(唯讀;整備期投資用) */
+  talentTree: TalentTreeDefinition | null;
+  /** 天賦節點可解鎖或分支限定的卡面 */
+  talentCards: PreparationCardDefinition[];
   /** 讀檔/整備後的戰役進度;null = 新戰役開局 */
   campaignProgress: CampaignProgress | null;
 }
@@ -241,6 +246,8 @@ export function makeTestSetup(): GameSetup {
     aiMembers: [],
     chaosMarkerEffects: {},
     upgradeCards: [],
+    talentTree: null,
+    talentCards: [],
     campaignProgress: null,
   };
 }
@@ -477,6 +484,8 @@ export function buildSetupFromBootstrap(
       ]),
     ),
     upgradeCards: (bootstrap.upgrade_cards ?? []) as PreparationCardDefinition[],
+    talentTree: bootstrap.talent_tree ?? null,
+    talentCards: (bootstrap.talent_cards ?? []) as PreparationCardDefinition[],
     campaignProgress,
   };
 }

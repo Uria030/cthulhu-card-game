@@ -48,6 +48,8 @@ import {
   preparationCardXpCost,
   canPurchasePreparationCard,
   purchasePreparationCard,
+  canUnlockTalentNode,
+  unlockTalentNode,
   CURRENT_MESSAGE_SCHEMA_VERSION,
 } from '@cthulhu/shared';
 import type {
@@ -60,6 +62,7 @@ import type {
   ScenarioReward,
   StageBootstrap,
   PreparationCardDefinition,
+  TalentNodeDefinition,
 } from '@cthulhu/shared';
 import type {
   IntentMessage,
@@ -430,9 +433,25 @@ function purchaseBlockLabel(reason?: string): string {
     case 'source_not_purchaseable': return '來源限制';
     case 'special_card_not_purchaseable': return '特殊卡';
     case 'unique_already_owned': return '獨特已擁有';
+    case 'talent_level_locked': return '天賦等級不足';
+    case 'talent_branch_locked': return '分支未解鎖';
     case 'not_enough_xp': return 'XP 不足';
     case 'investigator_not_registered': return '未建檔';
     default: return '不可購買';
+  }
+}
+
+function talentUnlockBlockLabel(reason?: string): string {
+  switch (reason) {
+    case 'already_unlocked': return '已解鎖';
+    case 'not_enough_talent_points': return '天賦點不足';
+    case 'missing_prerequisite':
+    case 'missing_previous_level': return '前置未滿';
+    case 'talent_branch_locked': return '分支已鎖';
+    case 'talent_branch_required': return '先選分支';
+    case 'missing_talent_tree': return '無資料';
+    case 'missing_talent_node': return '無節點';
+    default: return '不可解鎖';
   }
 }
 
@@ -560,6 +579,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [campaignProgress, setCampaignProgress] = useState<CampaignProgress>(() => ensureCampaignProgressForSetup(setup));
   const [campaignSettlement, setCampaignSettlement] = useState<CampaignSettlement | null>(null);
   const [preparationOpen, setPreparationOpen] = useState(false);
+  const [talentPanelOpen, setTalentPanelOpen] = useState(false);
   const [locationBarId, setLocationBarId] = useState<string | null>(null);
   const [logCollapsed, setLogCollapsed] = useState(true);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
@@ -1510,6 +1530,30 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     append('[整備] 花費 ' + result.xpCost + ' XP 購買「' + String(card.name_zh ?? card.code ?? card.id) + '」。');
   }, [campaignProgress, investigator.investigatorDefinitionId]);
 
+  const investTalentNode = useCallback((nodeId: string) => {
+    if (!setup.talentTree) {
+      append('[整備] 此調查員尚無可用天賦樹資料。');
+      return;
+    }
+    const result = unlockTalentNode(
+      campaignProgress,
+      investigator.investigatorDefinitionId,
+      setup.talentTree,
+      nodeId,
+      setup.talentCards,
+    );
+    if (!result.ok) {
+      append('[整備] 無法解鎖天賦:' + talentUnlockBlockLabel(result.reason));
+      return;
+    }
+    setCampaignProgress(result.progress);
+    append(
+      '[整備] 花費 ' + result.cost + ' 天賦點解鎖「' +
+      String(result.node?.name_zh ?? result.node?.node_type ?? nodeId) + '」' +
+      (result.addedCardId ? ',天賦卡已加入牌組。' : '。'),
+    );
+  }, [campaignProgress, investigator.investigatorDefinitionId, setup.talentCards, setup.talentTree]);
+
   // ─── 衍生資料 ──────────────────────
   const handCards = investigator.hand.map((id) => cardMeta[id]).filter((x): x is CardDisplay => !!x);
   const enemyHere: EnemyInstance | undefined = scenario.enemies.find((e) => e.locationId === investigator.currentLocationId && e.hp > 0);
@@ -1557,6 +1601,13 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     ? (campaignSettlement?.reward ?? scenarioRewardFromOutcome(outcome, scenario.hiddenPoints ?? [], [investigator.investigatorId]))
     : {};
   const visibleUpgradeCards = setup.upgradeCards.slice(0, 24);
+  const visibleTalentNodes: TalentNodeDefinition[] = (setup.talentTree?.nodes ?? [])
+    .slice()
+    .sort((a, b) =>
+      Number(a.level ?? 0) - Number(b.level ?? 0) ||
+      Number(a.branch_index ?? 0) - Number(b.branch_index ?? 0) ||
+      Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0),
+    );
 
   return (
     <div className="bg-root">
@@ -2322,12 +2373,58 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             <div className="modal-title">❖ 整備模式 ❖</div>
             <div className="preparation-summary">
               <div><span>可用 XP</span><strong>{playerCarry?.xp ?? 0}</strong></div>
+              <div><span>天賦點</span><strong>{playerCarry?.talentPoints ?? 0}</strong></div>
               <div><span>牌組組成</span><strong>{playerCarry?.deck.length ?? 0}</strong></div>
               <div><span>凝聚力</span><strong>{campaignProgress.cohesion}</strong></div>
             </div>
             <div className="preparation-entry-row">
-              <button disabled>天賦樹</button>
+              <button
+                disabled={!setup.talentTree}
+                className={talentPanelOpen ? 'active' : ''}
+                onClick={() => setTalentPanelOpen((v) => !v)}
+              >
+                天賦樹
+              </button>
             </div>
+            {talentPanelOpen && (
+              <div className="talent-panel">
+                <div className="talent-panel-head">
+                  <div>
+                    <div className="talent-panel-title">{setup.talentTree?.name_zh ?? '天賦樹'}</div>
+                    <div className="talent-panel-meta">
+                      已解鎖 {playerCarry?.talents?.unlockedNodeIds?.length ?? 0} / {visibleTalentNodes.length}
+                    </div>
+                  </div>
+                </div>
+                <div className="talent-node-list">
+                  {visibleTalentNodes.length === 0 && (
+                    <div className="preparation-empty">目前沒有天賦節點資料。</div>
+                  )}
+                  {visibleTalentNodes.map((node) => {
+                    const unlocked = playerCarry?.talents?.unlockedNodeIds?.includes(node.id) ?? false;
+                    const check = canUnlockTalentNode(playerCarry, setup.talentTree, node);
+                    const branchLabel = node.branch_index ? `分支 ${node.branch_index}` : '主幹';
+                    return (
+                      <div
+                        className={'talent-node-card' + (unlocked ? ' talent-node-unlocked' : '')}
+                        key={node.id}
+                      >
+                        <div>
+                          <div className="talent-node-name">{node.name_zh ?? node.node_type}</div>
+                          <div className="talent-node-meta">
+                            Lv.{node.level} · {branchLabel} · {node.node_type} · {node.talent_point_cost ?? 1} 點
+                          </div>
+                          {node.description_zh && <div className="talent-node-desc">{node.description_zh}</div>}
+                        </div>
+                        <button disabled={!check.ok} onClick={() => investTalentNode(node.id)}>
+                          {check.ok ? '解鎖' : talentUnlockBlockLabel(check.reason)}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <hr className="modal-divider" />
             <div className="preparation-list">
               {visibleUpgradeCards.length === 0 && (

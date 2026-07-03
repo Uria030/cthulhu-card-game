@@ -13,7 +13,7 @@
  * 數值原則:長休息 +1 凝聚力是規則書明定(ch4 §6.1,固定不按人數縮放);其餘獎勵量(XP/天賦點)
  * 一律由呼叫端帶入(來自 chapter_outcomes 等資料),引擎不自創平衡數字。
  */
-import type { InvestigatorState, Trauma } from './state';
+import type { InvestigatorState, InvestigatorTalentEffect, Trauma } from './state';
 import type { ResultEffect } from './messages';
 import type { HiddenPoint } from './hiddenInvestigation';
 import type { OutcomeData } from './gameProgress';
@@ -41,6 +41,8 @@ export interface InvestigatorCarryover {
   xp: number;
   /** 累積天賦點(整備期投天賦樹用) */
   talentPoints: number;
+  /** 天賦樹投資進度(跨章持續,下一場 bootstrap 注入調查員狀態) */
+  talents: InvestigatorTalentProgress;
   /** 上限歸 0 → 永久死亡(角色資料刪除;ch2 §9.6) */
   permanentlyDead: boolean;
 }
@@ -79,6 +81,8 @@ export interface PreparationCardDefinition {
   faction?: string | null;
   starting_xp?: number | string | null;
   xp_cost?: number | string | null;
+  cost?: number | string | null;
+  description_zh?: string | null;
   card_source?: string | null;
   is_unique?: boolean | null;
   is_signature?: boolean | null;
@@ -87,12 +91,100 @@ export interface PreparationCardDefinition {
   is_exceptional?: boolean | null;
   is_permanent?: boolean | null;
   is_extra?: boolean | null;
+  talent_branch_lock?: string | null;
+  effects?: Array<Record<string, unknown>>;
 }
 
 export interface PreparationPurchaseResult {
   ok: boolean;
   progress: CampaignProgress;
   xpCost: number;
+  reason?: string;
+}
+
+export type TalentAttributeKey = keyof InvestigatorState['attributes'];
+
+export interface TalentNodeEffectDefinition {
+  id?: string | null;
+  node_id?: string | null;
+  effect_code: string;
+  effect_params?: Record<string, unknown> | null;
+  effect_desc_zh?: string | null;
+  effect_desc_en?: string | null;
+  effect_value?: number | string | null;
+  sort_order?: number | string | null;
+}
+
+export interface TalentBranchDefinition {
+  id: string;
+  tree_id?: string;
+  branch_index: number | string;
+  name_zh?: string | null;
+  description_zh?: string | null;
+  theme_keywords?: string | null;
+  color_hex?: string | null;
+}
+
+export interface TalentNodeDefinition {
+  id: string;
+  tree_id?: string;
+  branch_id?: string | null;
+  branch_index?: number | string | null;
+  level: number | string;
+  is_trunk?: boolean | null;
+  node_type: string;
+  name_zh?: string | null;
+  description_zh?: string | null;
+  boost_attribute?: string | null;
+  boost_amount?: number | string | null;
+  talent_card_code?: string | null;
+  prerequisites?: unknown;
+  talent_point_cost?: number | string | null;
+  sort_order?: number | string | null;
+  design_status?: string | null;
+  effects?: TalentNodeEffectDefinition[];
+}
+
+export interface TalentTreeDefinition {
+  id: string;
+  faction_code: string;
+  name_zh?: string | null;
+  description_zh?: string | null;
+  primary_attribute?: string | null;
+  secondary_attribute?: string | null;
+  branches?: TalentBranchDefinition[];
+  nodes: TalentNodeDefinition[];
+}
+
+export interface InvestigatorTalentProgress {
+  /** 已投資節點 id */
+  unlockedNodeIds: string[];
+  /** key = faction code,value = 已投資最高等級 */
+  factionLevels: Record<string, number>;
+  /** key = faction code,value = 已選分支 index */
+  selectedBranches: Record<string, number>;
+  /** 天賦樹永久屬性加成,下一場 bootstrap 套進屬性與 HP/SAN 公式 */
+  attributeBonuses: Partial<Record<TalentAttributeKey, number>>;
+  /** 被動/里程碑/終極/熟練等效果快照;未硬解效果碼前先掛角色供 UI/後續引擎觀察 */
+  passiveEffects: InvestigatorTalentEffect[];
+  /** 已由天賦節點加入跨章牌組的 card_def id */
+  talentCardIds: string[];
+  /** 已解鎖但資料庫尚未能對到卡面的 talent_card_code */
+  talentCardCodes: string[];
+}
+
+export interface TalentUnlockResult {
+  ok: boolean;
+  progress: CampaignProgress;
+  cost: number;
+  reason?: string;
+  node?: TalentNodeDefinition;
+  addedCardId?: string | null;
+}
+
+export interface TalentUnlockCheck {
+  ok: boolean;
+  cost: number;
   reason?: string;
 }
 
@@ -103,6 +195,174 @@ function finiteNumber(value: unknown, fallback = 0): number {
 
 function nonNegativeInt(value: unknown): number {
   return Math.max(0, Math.floor(finiteNumber(value, 0)));
+}
+
+function positiveInt(value: unknown, fallback = 1): number {
+  return Math.max(1, Math.floor(finiteNumber(value, fallback)));
+}
+
+const FACTION_CODES = new Set(['E', 'I', 'S', 'N', 'T', 'F', 'J', 'P']);
+const ATTRIBUTE_KEYS = new Set<TalentAttributeKey>([
+  'strength',
+  'agility',
+  'constitution',
+  'reflex',
+  'intellect',
+  'willpower',
+  'perception',
+  'charisma',
+]);
+
+function normalizeFactionCode(value: unknown): string | null {
+  const v = String(value ?? '').trim().toUpperCase();
+  return FACTION_CODES.has(v) ? v : null;
+}
+
+function cardFactionCode(card: PreparationCardDefinition): string | null {
+  const raw = String(card.faction ?? '').trim();
+  const upper = raw.toUpperCase();
+  if (!upper || upper === 'NEUTRAL' || upper === 'N0' || upper === 'N/A' || upper === 'NONE') return null;
+  return normalizeFactionCode(raw);
+}
+
+function normalizeAttributeKey(value: unknown): TalentAttributeKey | null {
+  const key = String(value ?? '').trim() as TalentAttributeKey;
+  return ATTRIBUTE_KEYS.has(key) ? key : null;
+}
+
+export function emptyTalentProgress(): InvestigatorTalentProgress {
+  return {
+    unlockedNodeIds: [],
+    factionLevels: {},
+    selectedBranches: {},
+    attributeBonuses: {},
+    passiveEffects: [],
+    talentCardIds: [],
+    talentCardCodes: [],
+  };
+}
+
+export function cloneTalentProgress(
+  talents: Partial<InvestigatorTalentProgress> | null | undefined,
+): InvestigatorTalentProgress {
+  const src = talents ?? {};
+  const attributeBonuses: Partial<Record<TalentAttributeKey, number>> = {};
+  for (const [key, value] of Object.entries(src.attributeBonuses ?? {})) {
+    const attr = normalizeAttributeKey(key);
+    if (attr) attributeBonuses[attr] = finiteNumber(value, 0);
+  }
+  const factionLevels: Record<string, number> = {};
+  for (const [key, value] of Object.entries(src.factionLevels ?? {})) {
+    const faction = String(key).toUpperCase();
+    if (FACTION_CODES.has(faction)) factionLevels[faction] = nonNegativeInt(value);
+  }
+  const selectedBranches: Record<string, number> = {};
+  for (const [key, value] of Object.entries(src.selectedBranches ?? {})) {
+    const faction = String(key).toUpperCase();
+    const branch = nonNegativeInt(value);
+    if (FACTION_CODES.has(faction) && branch >= 1 && branch <= 3) selectedBranches[faction] = branch;
+  }
+  return {
+    unlockedNodeIds: Array.isArray(src.unlockedNodeIds) ? [...new Set(src.unlockedNodeIds.map(String))] : [],
+    factionLevels,
+    selectedBranches,
+    attributeBonuses,
+    passiveEffects: Array.isArray(src.passiveEffects)
+      ? src.passiveEffects.map((e) => ({
+          nodeId: String(e.nodeId),
+          factionCode: String(e.factionCode),
+          branchIndex: e.branchIndex ?? null,
+          nodeType: String(e.nodeType),
+          name_zh: e.name_zh ?? null,
+          effectCode: String(e.effectCode),
+          effectParams: e.effectParams && typeof e.effectParams === 'object' ? { ...e.effectParams } : {},
+          description_zh: e.description_zh ?? null,
+        }))
+      : [],
+    talentCardIds: Array.isArray(src.talentCardIds) ? [...new Set(src.talentCardIds.map(String))] : [],
+    talentCardCodes: Array.isArray(src.talentCardCodes) ? [...new Set(src.talentCardCodes.map(String))] : [],
+  };
+}
+
+function carryTalents(carry: InvestigatorCarryover | undefined): InvestigatorTalentProgress {
+  return cloneTalentProgress(carry?.talents);
+}
+
+function nodeLevel(node: TalentNodeDefinition): number {
+  return positiveInt(node.level, 1);
+}
+
+function nodeCost(node: TalentNodeDefinition): number {
+  return positiveInt(node.talent_point_cost, 1);
+}
+
+function nodeBranchIndex(node: TalentNodeDefinition): number | null {
+  if (node.branch_index == null) return null;
+  const idx = nonNegativeInt(node.branch_index);
+  return idx >= 1 && idx <= 3 ? idx : null;
+}
+
+function parseTalentBranchLock(lock: unknown): { faction: string; branchIndex: number } | null {
+  const m = String(lock ?? '').trim().toUpperCase().match(/^([EISNTFJP])_([123])$/);
+  return m ? { faction: m[1], branchIndex: Number(m[2]) } : null;
+}
+
+function prerequisiteNodeIds(node: TalentNodeDefinition): string[] {
+  const raw = node.prerequisites;
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.flatMap((item) => {
+      if (typeof item === 'string') return [item];
+      if (item && typeof item === 'object') {
+        const obj = item as Record<string, unknown>;
+        const id = obj.node_id ?? obj.nodeId ?? obj.id;
+        return id ? [String(id)] : [];
+      }
+      return [];
+    });
+  }
+  if (typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>;
+    const ids = obj.node_ids ?? obj.nodeIds ?? obj.all_of ?? obj.requires;
+    if (Array.isArray(ids)) return ids.map(String);
+    const id = obj.node_id ?? obj.nodeId ?? obj.id;
+    return id ? [String(id)] : [];
+  }
+  return [];
+}
+
+function maxUnlockedLevel(tree: TalentTreeDefinition, unlocked: Set<string>): number {
+  let max = 0;
+  for (const n of tree.nodes) {
+    if (unlocked.has(n.id)) max = Math.max(max, nodeLevel(n));
+  }
+  return max;
+}
+
+function talentEffectSnapshots(tree: TalentTreeDefinition, node: TalentNodeDefinition): InvestigatorTalentEffect[] {
+  const factionCode = String(tree.faction_code ?? '').toUpperCase();
+  const base = {
+    nodeId: node.id,
+    factionCode,
+    branchIndex: nodeBranchIndex(node),
+    nodeType: String(node.node_type),
+    name_zh: node.name_zh ?? null,
+    description_zh: node.description_zh ?? null,
+  };
+  const effects = node.effects ?? [];
+  if (effects.length === 0) {
+    return [{
+      ...base,
+      effectCode: `talent_node:${node.node_type}`,
+      effectParams: {},
+    }];
+  }
+  return effects.map((e) => ({
+    ...base,
+    effectCode: String(e.effect_code),
+    effectParams: e.effect_params && typeof e.effect_params === 'object' ? { ...e.effect_params } : {},
+    description_zh: e.effect_desc_zh ?? node.description_zh ?? null,
+  }));
 }
 
 function rewardNumber(rewards: Record<string, unknown>, keys: string[]): number {
@@ -163,9 +423,48 @@ export function preparationCardXpCost(card: PreparationCardDefinition): number {
   return base * (card.is_exceptional ? 2 : 1);
 }
 
+export function startingXpLimitForTalentLevel(level: number): number {
+  if (level <= 0) return -1;
+  if (level <= 1) return 0;
+  if (level <= 3) return 1;
+  if (level <= 5) return 2;
+  if (level <= 7) return 3;
+  if (level <= 9) return 4;
+  return 5;
+}
+
+export function talentLevelForCard(carry: InvestigatorCarryover | undefined, card: PreparationCardDefinition): number {
+  const talents = carryTalents(carry);
+  const faction = cardFactionCode(card);
+  if (faction) return talents.factionLevels[faction] ?? 0;
+  return Math.max(0, ...Object.values(talents.factionLevels));
+}
+
+export function canAcquireCardByTalent(
+  carry: InvestigatorCarryover | undefined,
+  card: PreparationCardDefinition,
+): { ok: boolean; reason?: string } {
+  if (!carry) return { ok: false, reason: 'investigator_not_registered' };
+
+  const talents = carryTalents(carry);
+  const startingXp = nonNegativeInt(card.starting_xp);
+  const level = talentLevelForCard(carry, card);
+  if (startingXp > startingXpLimitForTalentLevel(level)) {
+    return { ok: false, reason: 'talent_level_locked' };
+  }
+
+  const lock = parseTalentBranchLock(card.talent_branch_lock);
+  if (lock && talents.selectedBranches[lock.faction] !== lock.branchIndex) {
+    return { ok: false, reason: 'talent_branch_locked' };
+  }
+
+  return { ok: true };
+}
+
 export function canPurchasePreparationCard(
   carry: InvestigatorCarryover | undefined,
   card: PreparationCardDefinition,
+  options: { enforceTalentLocks?: boolean } = {},
 ): { ok: boolean; reason?: string; xpCost: number } {
   const xpCost = preparationCardXpCost(card);
   const source = String(card.card_source ?? 'standard');
@@ -180,6 +479,10 @@ export function canPurchasePreparationCard(
   if (card.is_unique && carry.deck.includes(card.id)) {
     return { ok: false, reason: 'unique_already_owned', xpCost };
   }
+  if (options.enforceTalentLocks !== false) {
+    const talentCheck = canAcquireCardByTalent(carry, card);
+    if (!talentCheck.ok) return { ok: false, reason: talentCheck.reason, xpCost };
+  }
   if (carry.xp < xpCost) return { ok: false, reason: 'not_enough_xp', xpCost };
   return { ok: true, xpCost };
 }
@@ -189,9 +492,10 @@ export function purchasePreparationCard(
   prev: CampaignProgress,
   investigatorDefinitionId: string,
   card: PreparationCardDefinition,
+  options: { enforceTalentLocks?: boolean } = {},
 ): PreparationPurchaseResult {
   const carry = prev.investigators[investigatorDefinitionId];
-  const check = canPurchasePreparationCard(carry, card);
+  const check = canPurchasePreparationCard(carry, card, options);
   if (!check.ok || !carry) return { ok: false, progress: prev, xpCost: check.xpCost, reason: check.reason };
   const nextCarry: InvestigatorCarryover = {
     ...carry,
@@ -205,6 +509,111 @@ export function purchasePreparationCard(
       investigators: { ...prev.investigators, [investigatorDefinitionId]: nextCarry },
     },
     xpCost: check.xpCost,
+  };
+}
+
+export function canUnlockTalentNode(
+  carry: InvestigatorCarryover | undefined,
+  tree: TalentTreeDefinition | null | undefined,
+  node: TalentNodeDefinition | null | undefined,
+): TalentUnlockCheck {
+  const cost = node ? nodeCost(node) : 0;
+  if (!carry) return { ok: false, cost, reason: 'investigator_not_registered' };
+  if (!tree) return { ok: false, cost, reason: 'missing_talent_tree' };
+  if (!node) return { ok: false, cost, reason: 'missing_talent_node' };
+  if (!tree.nodes.some((n) => n.id === node.id)) return { ok: false, cost, reason: 'node_not_in_tree' };
+
+  const talents = carryTalents(carry);
+  const unlocked = new Set(talents.unlockedNodeIds);
+  if (unlocked.has(node.id)) return { ok: false, cost, reason: 'already_unlocked' };
+  if (carry.talentPoints < cost) return { ok: false, cost, reason: 'not_enough_talent_points' };
+
+  const factionCode = String(tree.faction_code ?? '').toUpperCase();
+  const branchIndex = nodeBranchIndex(node);
+  const selectedBranch = talents.selectedBranches[factionCode];
+  if (branchIndex && !node.is_trunk) {
+    if (node.node_type === 'branch_choice') {
+      if (selectedBranch != null && selectedBranch !== branchIndex) {
+        return { ok: false, cost, reason: 'talent_branch_locked' };
+      }
+    } else if (selectedBranch !== branchIndex) {
+      return { ok: false, cost, reason: 'talent_branch_required' };
+    }
+  }
+
+  const prereqs = prerequisiteNodeIds(node);
+  if (prereqs.length > 0 && prereqs.some((id) => !unlocked.has(id))) {
+    return { ok: false, cost, reason: 'missing_prerequisite' };
+  }
+  if (prereqs.length === 0 && nodeLevel(node) > 1 && maxUnlockedLevel(tree, unlocked) < nodeLevel(node) - 1) {
+    return { ok: false, cost, reason: 'missing_previous_level' };
+  }
+
+  return { ok: true, cost };
+}
+
+export function unlockTalentNode(
+  prev: CampaignProgress,
+  investigatorDefinitionId: string,
+  tree: TalentTreeDefinition,
+  nodeId: string,
+  talentCards: PreparationCardDefinition[] = [],
+): TalentUnlockResult {
+  const carry = prev.investigators[investigatorDefinitionId];
+  const node = tree.nodes.find((n) => n.id === nodeId);
+  const check = canUnlockTalentNode(carry, tree, node);
+  if (!check.ok || !carry || !node) {
+    return { ok: false, progress: prev, cost: check.cost, reason: check.reason, node };
+  }
+
+  const talents = carryTalents(carry);
+  const factionCode = String(tree.faction_code ?? '').toUpperCase();
+  const branchIndex = nodeBranchIndex(node);
+  talents.unlockedNodeIds.push(node.id);
+  talents.factionLevels[factionCode] = Math.max(talents.factionLevels[factionCode] ?? 0, nodeLevel(node));
+  if (node.node_type === 'branch_choice' && branchIndex) talents.selectedBranches[factionCode] = branchIndex;
+
+  const attr = normalizeAttributeKey(node.boost_attribute);
+  if (node.node_type === 'attribute_boost' && attr) {
+    talents.attributeBonuses[attr] = (talents.attributeBonuses[attr] ?? 0) + positiveInt(node.boost_amount, 1);
+  }
+
+  const existingEffectKeys = new Set(talents.passiveEffects.map((e) => `${e.nodeId}:${e.effectCode}`));
+  for (const effect of talentEffectSnapshots(tree, node)) {
+    const key = `${effect.nodeId}:${effect.effectCode}`;
+    if (!existingEffectKeys.has(key)) talents.passiveEffects.push(effect);
+  }
+
+  let addedCardId: string | null = null;
+  const talentCardCode = String(node.talent_card_code ?? '').trim();
+  if (node.node_type === 'talent_card' && talentCardCode) {
+    if (!talents.talentCardCodes.includes(talentCardCode)) talents.talentCardCodes.push(talentCardCode);
+    const card = talentCards.find((c) => String(c.code ?? '').trim() === talentCardCode);
+    if (card?.id && !talents.talentCardIds.includes(card.id)) {
+      talents.talentCardIds.push(card.id);
+      addedCardId = card.id;
+    }
+  }
+
+  const nextDeck = addedCardId && !carry.deck.includes(addedCardId)
+    ? [...carry.deck, addedCardId]
+    : [...carry.deck];
+  const nextCarry: InvestigatorCarryover = {
+    ...carry,
+    talentPoints: carry.talentPoints - check.cost,
+    talents,
+    deck: nextDeck,
+  };
+
+  return {
+    ok: true,
+    progress: {
+      ...prev,
+      investigators: { ...prev.investigators, [investigatorDefinitionId]: nextCarry },
+    },
+    cost: check.cost,
+    node,
+    addedCardId,
   };
 }
 
@@ -242,6 +651,7 @@ export function registerInvestigator(
     specializations: [...init.specializations],
     xp: 0,
     talentPoints: 0,
+    talents: emptyTalentProgress(),
     permanentlyDead: false,
   };
   return { ...progress, investigators: { ...progress.investigators, [init.investigatorDefinitionId]: carry } };
@@ -269,6 +679,7 @@ export function extractCarryover(
     specializations: [...inv.specializations],
     xp: prev?.xp ?? 0,
     talentPoints: prev?.talentPoints ?? 0,
+    talents: carryTalents(prev),
     permanentlyDead: inv.permanentlyDead,
   };
 }

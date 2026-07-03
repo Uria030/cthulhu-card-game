@@ -333,6 +333,74 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
         }));
       }
 
+      // ── E5 天賦樹(唯讀):玩家所屬陣營一棵樹 + 分支/節點/效果 + 可能被節點解鎖的卡面 ──
+      let talentTree: any = null;
+      let talentCards: any[] = [];
+      const talentFaction = investigator?.faction_code ? String(investigator.faction_code).toUpperCase() : '';
+      if (talentFaction) {
+        const treeRes = await pool.query('SELECT * FROM talent_trees WHERE faction_code = $1', [talentFaction]);
+        const tree = treeRes.rows[0] || null;
+        if (tree) {
+          const [branchesRes, nodesRes] = await Promise.all([
+            pool.query('SELECT * FROM talent_branches WHERE tree_id = $1 ORDER BY branch_index', [tree.id]),
+            pool.query(
+              `SELECT tn.*, tb.branch_index
+                 FROM talent_nodes tn
+                 LEFT JOIN talent_branches tb ON tb.id = tn.branch_id
+                WHERE tn.tree_id = $1
+                ORDER BY tn.level, tn.sort_order`,
+              [tree.id],
+            ),
+          ]);
+          const nodeIds = nodesRes.rows.map((n: any) => n.id).filter(Boolean);
+          const effectsRes = nodeIds.length
+            ? await pool.query(
+                `SELECT * FROM talent_node_effects
+                  WHERE node_id = ANY($1) ORDER BY node_id, sort_order`,
+                [nodeIds],
+              )
+            : { rows: [] as any[] };
+          const nodes = nodesRes.rows.map((n: any) => ({
+            ...n,
+            effects: effectsRes.rows.filter((e: any) => e.node_id === n.id),
+          }));
+          talentTree = { ...tree, branches: branchesRes.rows, nodes };
+
+          const talentCardCodes = nodes
+            .map((n: any) => n.talent_card_code)
+            .filter(Boolean)
+            .map(String);
+          const branchLocks = [1, 2, 3].map((i) => `${talentFaction}_${i}`);
+          const talentDefRes = await pool.query(
+            `SELECT *
+               FROM card_definitions
+              WHERE (
+                    (cardinality($1::text[]) > 0 AND code = ANY($1::text[]))
+                    OR talent_branch_lock = ANY($2::text[])
+              )
+                AND COALESCE(card_source, 'standard') = 'standard'
+                AND COALESCE(is_signature, FALSE) = FALSE
+                AND COALESCE(is_weakness, FALSE) = FALSE
+                AND COALESCE(is_extra, FALSE) = FALSE
+              ORDER BY starting_xp, name_zh
+              LIMIT 80`,
+            [talentCardCodes, branchLocks],
+          );
+          const talentCardIds = talentDefRes.rows.map((c: any) => c.id).filter(Boolean);
+          const talentFxRes = talentCardIds.length
+            ? await pool.query(
+                `SELECT * FROM card_effects
+                  WHERE card_def_id = ANY($1) ORDER BY card_def_id, sort_order`,
+                [talentCardIds],
+              )
+            : { rows: [] as any[] };
+          talentCards = talentDefRes.rows.map((c: any) => ({
+            ...c,
+            effects: talentFxRes.rows.filter((e: any) => e.card_def_id === c.id),
+          }));
+        }
+      }
+
       // ── 戰鬥風格卡池(§8:攻擊時抽卡決定檢定屬性)──
       // 範圍 = 牌組武器用到的風格 + 調查員主熟練;第一層(card_tier=1)公用池
       const styleCodes = new Set<string>();
@@ -383,6 +451,8 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
           keeper_settings: keeperSettings,
           discoverable_cards: discoverableCards,
           upgrade_cards: upgradeCards,
+          talent_tree: talentTree,
+          talent_cards: talentCards,
         },
       });
     } catch (error) {

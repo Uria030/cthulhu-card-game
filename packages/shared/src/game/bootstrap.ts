@@ -26,7 +26,8 @@ import type {
 import { hpMaxFor, sanMaxFor, STARTING_RESOURCES, STARTING_HAND_SIZE } from './upkeep';
 import { hiddenPointFromRow } from './hiddenInvestigation';
 import type { HiddenPoint } from './hiddenInvestigation';
-import type { CampaignProgress } from './campaignProgress';
+import { cloneTalentProgress } from './campaignProgress';
+import type { CampaignProgress, PreparationCardDefinition, TalentTreeDefinition } from './campaignProgress';
 
 // ─── 開局包型別(對齊 /api/play bootstrap 回傳,DB row 原樣 snake_case)──
 export interface BootstrapScenarioRow {
@@ -138,6 +139,10 @@ export interface StageBootstrap {
   discoverable_cards?: Array<Record<string, any>>;
   /** 整備期可購買的玩家卡池(唯讀卡面;D5 池可後續回填,引擎先接組成) */
   upgrade_cards?: Array<Record<string, any>>;
+  /** 玩家調查員所屬陣營的天賦樹(唯讀;整備期投資用) */
+  talent_tree?: TalentTreeDefinition | null;
+  /** 天賦樹可能解鎖/引用的卡面(唯讀;用於 talent_card 入牌組與下一場實例化) */
+  talent_cards?: PreparationCardDefinition[];
 }
 
 // ─── 卡片實例查找表(state 只存實例 id,畫面靠這張表顯示卡面)──
@@ -359,6 +364,7 @@ export function buildGameFromBootstrap(
   for (const src of [
     ...(bootstrap.discoverable_cards ?? []),
     ...(bootstrap.upgrade_cards ?? []),
+    ...(bootstrap.talent_cards ?? []),
   ]) {
     if (src?.id) cardDataByDefId.set(String(src.id), src);
   }
@@ -437,27 +443,33 @@ export function buildGameFromBootstrap(
 
   const spawn = scenarioRow.investigator_spawn_location ?? scenarioRow.initial_location_codes[0];
 
+  const talentProgress = cloneTalentProgress(carry?.talents);
+  const attributes: InvestigatorState['attributes'] = {
+    strength: Number(inv.attr_strength ?? 0) + (talentProgress.attributeBonuses.strength ?? 0),
+    agility: Number(inv.attr_agility ?? 0) + (talentProgress.attributeBonuses.agility ?? 0),
+    constitution: Number(inv.attr_constitution ?? 0) + (talentProgress.attributeBonuses.constitution ?? 0),
+    reflex: Number(inv.attr_reflex ?? 0) + (talentProgress.attributeBonuses.reflex ?? 0),
+    intellect: Number(inv.attr_intellect ?? 0) + (talentProgress.attributeBonuses.intellect ?? 0),
+    willpower: Number(inv.attr_willpower ?? 0) + (talentProgress.attributeBonuses.willpower ?? 0),
+    perception: Number(inv.attr_perception ?? 0) + (talentProgress.attributeBonuses.perception ?? 0),
+    charisma: Number(inv.attr_charisma ?? 0) + (talentProgress.attributeBonuses.charisma ?? 0),
+  };
+
   // HP/SAN 公式(ch6 §3.1):體質 × 2 + 5 / 意志 × 2 + 5(舊版寫死 7 是 bug,
   // ISTP 體質 1 恰好算出 7 把它藏住了)
-  const BASE_HP = hpMaxFor(Number(inv.attr_constitution ?? 1));
-  const BASE_SAN = sanMaxFor(Number(inv.attr_willpower ?? 1));
+  const BASE_HP = hpMaxFor(Number(attributes.constitution ?? 1));
+  const BASE_SAN = sanMaxFor(Number(attributes.willpower ?? 1));
 
   const investigator: InvestigatorState = {
     investigatorId: `pinv_${inv.code}`,
     investigatorDefinitionId: inv.id,
     ownerPlayerId: 'p1',
-    attributes: {
-      strength: inv.attr_strength,
-      agility: inv.attr_agility,
-      constitution: inv.attr_constitution,
-      reflex: inv.attr_reflex,
-      intellect: inv.attr_intellect,
-      willpower: inv.attr_willpower,
-      perception: inv.attr_perception,
-      charisma: inv.attr_charisma,
-    },
+    attributes,
     combatStyle: inv.proficiency_ids?.[0] ?? '',
     specializations: [],
+    talentNodeIds: talentProgress.unlockedNodeIds,
+    talentBranches: talentProgress.selectedBranches,
+    talentEffects: talentProgress.passiveEffects,
     deck,
     hand,
     discardPile: [],

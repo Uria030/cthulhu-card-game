@@ -11,8 +11,12 @@ import {
   preparationCardXpCost,
   canPurchasePreparationCard,
   purchasePreparationCard,
+  emptyTalentProgress,
+  canAcquireCardByTalent,
+  canUnlockTalentNode,
+  unlockTalentNode,
 } from './campaignProgress';
-import type { CampaignProgress } from './campaignProgress';
+import type { CampaignProgress, TalentTreeDefinition } from './campaignProgress';
 import type { InvestigatorState } from './state';
 
 type TestFn = () => void;
@@ -32,6 +36,41 @@ function makeInv(over: Partial<InvestigatorState> = {}): InvestigatorState {
     engagedWith: ['e1'], triggeredHorrorChecks: ['x'], traumas: [], secretTaskState: null,
     permanentlyDead: false, startingXp: 0, statusEffects: { bleed: 2 }, allies: [],
     ...over,
+  };
+}
+
+function makeTalentTree(): TalentTreeDefinition {
+  return {
+    id: 'tree-e',
+    faction_code: 'E',
+    name_zh: '號令天賦',
+    branches: [
+      { id: 'br1', branch_index: 1, name_zh: '指揮' },
+      { id: 'br2', branch_index: 2, name_zh: '外交' },
+    ],
+    nodes: [
+      {
+        id: 'n1', level: 1, is_trunk: true, node_type: 'passive',
+        name_zh: '冷靜指令', talent_point_cost: 1,
+        effects: [{ effect_code: 'passive_team_focus', effect_params: { amount: 1 }, effect_desc_zh: '隊伍保持冷靜。' }],
+      },
+      {
+        id: 'n2', level: 2, is_trunk: true, node_type: 'attribute_boost',
+        name_zh: '觀察訓練', boost_attribute: 'perception', boost_amount: 1, talent_point_cost: 1,
+      },
+      {
+        id: 'b1', level: 3, branch_index: 1, node_type: 'branch_choice',
+        name_zh: '選擇指揮分支', talent_point_cost: 1,
+      },
+      {
+        id: 'b2', level: 3, branch_index: 2, node_type: 'branch_choice',
+        name_zh: '選擇外交分支', talent_point_cost: 1,
+      },
+      {
+        id: 'tc1', level: 9, branch_index: 1, node_type: 'talent_card',
+        name_zh: '指揮專屬卡', talent_card_code: 'TE1-001', prerequisites: ['b1'], talent_point_cost: 1,
+      },
+    ],
   };
 }
 
@@ -173,8 +212,10 @@ test('purchasePreparationCard:扣 XP 並加入跨章牌組組成', () => {
   const prev = registerInvestigator(initCampaignProgress('c'), {
     investigatorDefinitionId: 'elias', deck: ['def_a'], combatStyle: 'pistol', specializations: [], hpMax: 10, sanMax: 8,
   });
-  const withXp: CampaignProgress = { ...prev, investigators: { elias: { ...prev.investigators.elias, xp: 4 } } };
-  const r = purchasePreparationCard(withXp, 'elias', { id: 'def_b', name_zh: '升級卡', starting_xp: 3, card_source: 'standard' });
+  const talents = emptyTalentProgress();
+  talents.factionLevels.E = 6;
+  const withXp: CampaignProgress = { ...prev, investigators: { elias: { ...prev.investigators.elias, xp: 4, talents } } };
+  const r = purchasePreparationCard(withXp, 'elias', { id: 'def_b', name_zh: '升級卡', faction: 'E', starting_xp: 3, card_source: 'standard' });
   assertEq(r.ok, true);
   assertEq(r.progress.investigators.elias.xp, 1);
   assertEq(r.progress.investigators.elias.deck.includes('def_b'), true);
@@ -187,6 +228,69 @@ test('canPurchasePreparationCard:獨特已擁有與書籍/遺跡升級版不可�
   const carry = { ...prev.investigators.elias, xp: 10 };
   assertEq(canPurchasePreparationCard(carry, { id: 'def_unique', starting_xp: 1, is_unique: true }).ok, false);
   assertEq(canPurchasePreparationCard(carry, { id: 'book_up', starting_xp: 5, card_source: 'book_upgrade' }).ok, false);
+});
+
+// ─── E5:天賦樹接入 ───────────────────────────
+test('unlockTalentNode:解鎖節點會扣天賦點、掛被動效果、套屬性加成', () => {
+  let p = registerInvestigator(initCampaignProgress('c'), {
+    investigatorDefinitionId: 'elias', deck: ['def_a'], combatStyle: 'pistol', specializations: [], hpMax: 10, sanMax: 8,
+  });
+  p = { ...p, investigators: { elias: { ...p.investigators.elias, talentPoints: 3 } } };
+  const tree = makeTalentTree();
+  const r1 = unlockTalentNode(p, 'elias', tree, 'n1');
+  assertEq(r1.ok, true);
+  assertEq(r1.progress.investigators.elias.talentPoints, 2);
+  assertEq(r1.progress.investigators.elias.talents.passiveEffects[0].effectCode, 'passive_team_focus');
+
+  const r2 = unlockTalentNode(r1.progress, 'elias', tree, 'n2');
+  assertEq(r2.ok, true);
+  assertEq(r2.progress.investigators.elias.talents.attributeBonuses.perception, 1);
+  assertEq(r2.progress.investigators.elias.talents.factionLevels.E, 2);
+});
+
+test('unlockTalentNode:分支選擇後會鎖住其他分支', () => {
+  let p = registerInvestigator(initCampaignProgress('c'), {
+    investigatorDefinitionId: 'elias', deck: ['def_a'], combatStyle: 'pistol', specializations: [], hpMax: 10, sanMax: 8,
+  });
+  p = { ...p, investigators: { elias: { ...p.investigators.elias, talentPoints: 4 } } };
+  const tree = makeTalentTree();
+  p = unlockTalentNode(p, 'elias', tree, 'n1').progress;
+  p = unlockTalentNode(p, 'elias', tree, 'n2').progress;
+  const b1 = unlockTalentNode(p, 'elias', tree, 'b1');
+  assertEq(b1.ok, true);
+  assertEq(b1.progress.investigators.elias.talents.selectedBranches.E, 1);
+  const b2Check = canUnlockTalentNode(b1.progress.investigators.elias, tree, tree.nodes.find((n) => n.id === 'b2'));
+  assertEq(b2Check.ok, false);
+  assertEq(b2Check.reason, 'talent_branch_locked');
+});
+
+test('unlockTalentNode:talent_card 節點會把對應卡定義加入跨章牌組', () => {
+  let p = registerInvestigator(initCampaignProgress('c'), {
+    investigatorDefinitionId: 'elias', deck: ['def_a'], combatStyle: 'pistol', specializations: [], hpMax: 10, sanMax: 8,
+  });
+  p = { ...p, investigators: { elias: { ...p.investigators.elias, talentPoints: 4 } } };
+  const tree = makeTalentTree();
+  for (const nodeId of ['n1', 'n2', 'b1']) p = unlockTalentNode(p, 'elias', tree, nodeId).progress;
+  const r = unlockTalentNode(p, 'elias', tree, 'tc1', [{ id: 'talent-card-1', code: 'TE1-001', faction: 'E', starting_xp: 0 }]);
+  assertEq(r.ok, true);
+  assertEq(r.addedCardId, 'talent-card-1');
+  assertEq(r.progress.investigators.elias.deck.includes('talent-card-1'), true);
+});
+
+test('canAcquireCardByTalent:天賦等級鎖與分支鎖疊加', () => {
+  const base = registerInvestigator(initCampaignProgress('c'), {
+    investigatorDefinitionId: 'elias', deck: [], combatStyle: 'pistol', specializations: [], hpMax: 10, sanMax: 8,
+  });
+  const noTalent = base.investigators.elias;
+  assertEq(canAcquireCardByTalent(noTalent, { id: 'c0', faction: 'E', starting_xp: 0 }).ok, false, '0XP 派系卡也需要至少等級 1');
+
+  const talents = emptyTalentProgress();
+  talents.factionLevels.E = 4;
+  talents.selectedBranches.E = 1;
+  const carry = { ...noTalent, talents };
+  assertEq(canAcquireCardByTalent(carry, { id: 'c1', faction: 'E', starting_xp: 2, talent_branch_lock: 'E_1' }).ok, true);
+  assertEq(canAcquireCardByTalent(carry, { id: 'c2', faction: 'E', starting_xp: 3 }).reason, 'talent_level_locked');
+  assertEq(canAcquireCardByTalent(carry, { id: 'c3', faction: 'E', starting_xp: 2, talent_branch_lock: 'E_2' }).reason, 'talent_branch_locked');
 });
 
 // ─── runner ─────────────────────────────────

@@ -156,6 +156,12 @@ export interface InvestigatorState {
   /** 戰鬥風格與專精(規則書 §8.9) */
   combatStyle: string;
   specializations: string[];
+  /** 已投資天賦節點(跨章 carryover 注入;場內唯讀) */
+  talentNodeIds?: string[];
+  /** 已選分支 key=faction code,value=branch index */
+  talentBranches?: Record<string, number>;
+  /** 被動/里程碑/終極等天賦效果快照;具體 effect_code 解讀由後續批次接入 */
+  talentEffects?: InvestigatorTalentEffect[];
   /** 牌組相關 */
   deck: string[]; // 卡片實例 ID 陣列
   hand: string[];
@@ -201,6 +207,17 @@ export interface InvestigatorState {
   deathSaveFailures?: number;
   /** 本場死亡(≠ 永久死亡;歸零項上限減至 0 才永久死亡) */
   dead?: boolean;
+}
+
+export interface InvestigatorTalentEffect {
+  nodeId: string;
+  factionCode: string;
+  branchIndex?: number | null;
+  nodeType: string;
+  name_zh?: string | null;
+  effectCode: string;
+  effectParams?: Record<string, unknown>;
+  description_zh?: string | null;
 }
 
 /**

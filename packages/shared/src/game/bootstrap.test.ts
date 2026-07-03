@@ -4,7 +4,7 @@
  */
 import { buildGameFromBootstrap, buildChaosBag, mapEnvironmentToVisibility } from './bootstrap';
 import type { StageBootstrap } from './bootstrap';
-import { initCampaignProgress, registerInvestigator } from './campaignProgress';
+import { emptyTalentProgress, initCampaignProgress, registerInvestigator } from './campaignProgress';
 
 type TestFn = () => void;
 const tests: { name: string; fn: TestFn }[] = [];
@@ -63,6 +63,10 @@ function makeFixture(): StageBootstrap {
     monster_attack_cards: [],
     upgrade_cards: [
       { id: 'c2', name_zh: '老練射擊', card_type: 'skill', cost: 0, effects: [], starting_xp: 2 },
+    ],
+    talent_tree: null,
+    talent_cards: [
+      { id: 'tc1', code: 'TE1-001', name_zh: '戰術預案', card_type: 'skill', cost: 0, effects: [], starting_xp: 0 },
     ],
     investigator: {
       id: 'inv-uuid',
@@ -237,6 +241,40 @@ test('CampaignProgress carryover deck 重建一般牌組,並保留簽名/弱點'
   assertEq(cards.filter((c) => c.sourceId === 'c2').length, 1, '購買卡可由 upgrade_cards 卡池實例化');
   assertEq(cards.some((c) => c.source === 'signature'), true, '簽名卡仍保留');
   assertEq(cards.some((c) => c.source === 'weakness'), true, '弱點仍保留');
+});
+
+// ─── 測試 12:E5 天賦 carryover 生效 ────────────
+test('CampaignProgress talents 注入下一場:屬性加成、被動快照、天賦卡卡面', () => {
+  const fx = makeFixture();
+  const talents = emptyTalentProgress();
+  talents.unlockedNodeIds = ['n1', 'n2'];
+  talents.factionLevels.E = 2;
+  talents.attributeBonuses.constitution = 1;
+  talents.passiveEffects = [{
+    nodeId: 'n1',
+    factionCode: 'E',
+    branchIndex: null,
+    nodeType: 'passive',
+    name_zh: '冷靜指令',
+    effectCode: 'passive_team_focus',
+    effectParams: { amount: 1 },
+    description_zh: '隊伍保持冷靜。',
+  }];
+  let progress = registerInvestigator(initCampaignProgress('camp-1'), {
+    investigatorDefinitionId: 'inv-uuid',
+    deck: ['c1', 'tc1'],
+    combatStyle: 'shooting',
+    specializations: [],
+    hpMax: 11,
+    sanMax: 9,
+  });
+  progress = { ...progress, investigators: { 'inv-uuid': { ...progress.investigators['inv-uuid'], talents } } };
+  const g = buildGameFromBootstrap(fx, { rng: fixedRng, openingHandSize: 20, campaignProgress: progress });
+  assertEq(g.investigator.attributes.constitution, 4, '體質 3 + 天賦 1');
+  assertEq(g.investigator.hpMax, 13, 'HP 上限吃 boosted constitution');
+  assertEq(g.investigator.talentNodeIds?.includes('n2'), true);
+  assertEq(g.investigator.talentEffects?.[0].effectCode, 'passive_team_focus');
+  assertEq(Object.values(g.cardIndex).some((c) => c.sourceId === 'tc1'), true, '天賦卡由 talent_cards 卡池補卡面');
 });
 
 // ─── runner ─────────────────────────────────

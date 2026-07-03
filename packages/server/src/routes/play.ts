@@ -13,7 +13,7 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
     try {
       const res = await pool.query(
         `SELECT s.id, s.code, s.name_zh, s.stage_type, s.narrative, s.design_status,
-                ch.chapter_number, ch.name_zh AS chapter_name,
+                ch.chapter_number, ch.chapter_code, ch.name_zh AS chapter_name,
                 c.id AS campaign_id, c.code AS campaign_code, c.name_zh AS campaign_name,
                 c.theme, c.cover_narrative, c.difficulty_tier,
                 (SELECT COUNT(*) FROM scenarios WHERE stage_id = s.id)::int AS scenario_count

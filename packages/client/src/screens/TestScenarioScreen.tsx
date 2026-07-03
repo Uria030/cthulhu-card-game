@@ -40,8 +40,6 @@ import {
   resolveEncounterOption,
   resolveEncounterWithTalisman,
   availableTalismansForEncounter,
-  initCampaignProgress,
-  registerInvestigator,
   scenarioRewardFromOutcome,
   settleScenarioEnd,
   applyLongRest,
@@ -60,7 +58,6 @@ import type {
   InvestigatorAIState,
   CampaignProgress,
   ScenarioReward,
-  StageBootstrap,
   PreparationCardDefinition,
   TalentNodeDefinition,
 } from '@cthulhu/shared';
@@ -84,6 +81,11 @@ import { getSelectedInvestigator } from '../game/selectedInvestigator';
 import { getPartyCodes } from '../game/selectedParty';
 import { makeTestSetup, buildSetupFromBootstrap } from '../game/gameSetup';
 import type { GameSetup, LocationDisplay, CardDisplay } from '../game/gameSetup';
+import {
+  ensureCampaignProgressForSetup,
+  loadStoredCampaignProgressFromBootstrap,
+  saveStoredCampaignProgressFromBootstrap,
+} from '../game/campaignProgressStorage';
 import './TestScenarioScreen.css';
 
 /**
@@ -378,56 +380,6 @@ const PHASE_ORDER: TurnPhase[] = ['investigator', 'mythos', 'turn_end'];
 type ModalType = null | 'keeper' | 'act' | 'team';
 type PanelType = null | 'hand' | 'bag';
 
-function campaignProgressStorageKey(bootstrap: StageBootstrap | null | undefined): string | null {
-  const campaignId = bootstrap?.campaign?.id ?? bootstrap?.stage?.id;
-  const investigatorId = bootstrap?.investigator?.id;
-  return campaignId && investigatorId ? `ug_campaign_progress:${campaignId}:${investigatorId}` : null;
-}
-
-function loadStoredCampaignProgress(bootstrap: StageBootstrap): CampaignProgress | null {
-  const key = campaignProgressStorageKey(bootstrap);
-  if (!key) return null;
-  try {
-    const raw = window.sessionStorage.getItem(key);
-    return raw ? JSON.parse(raw) as CampaignProgress : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveStoredCampaignProgress(bootstrap: StageBootstrap | null, progress: CampaignProgress): void {
-  const key = campaignProgressStorageKey(bootstrap);
-  if (!key) return;
-  try {
-    window.sessionStorage.setItem(key, JSON.stringify(progress));
-  } catch {
-    // sessionStorage may be blocked; playable flow still works in memory.
-  }
-}
-
-function deckDefinitionIdsFromBootstrap(bootstrap: StageBootstrap | null): string[] {
-  const ids: string[] = [];
-  for (const entry of bootstrap?.investigator?.starting_deck ?? []) {
-    if (!entry.card_definition_id) continue;
-    for (let i = 0; i < (entry.quantity ?? 1); i += 1) ids.push(String(entry.card_definition_id));
-  }
-  return ids;
-}
-
-function ensureCampaignProgressForSetup(setup: GameSetup): CampaignProgress {
-  const inv = setup.bootstrap?.investigator;
-  const base = setup.campaignProgress ?? initCampaignProgress(setup.bootstrap?.campaign?.id ?? setup.stageId);
-  if (!inv) return base;
-  return registerInvestigator(base, {
-    investigatorDefinitionId: inv.id,
-    deck: deckDefinitionIdsFromBootstrap(setup.bootstrap),
-    combatStyle: setup.investigator.combatStyle,
-    specializations: setup.investigator.specializations,
-    hpMax: setup.investigator.hpMax,
-    sanMax: setup.investigator.sanMax,
-  });
-}
-
 function purchaseBlockLabel(reason?: string): string {
   switch (reason) {
     case 'source_not_purchaseable': return '來源限制';
@@ -492,7 +444,7 @@ export function TestScenarioScreen() {
           setSetup(buildSetupFromBootstrap(
             bootstrap,
             aiBoots.filter((b): b is Boot => b != null),
-            loadStoredCampaignProgress(bootstrap),
+            loadStoredCampaignProgressFromBootstrap(bootstrap),
           ));
         }
       })
@@ -594,12 +546,15 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const append = (s: string) => setLog((l) => [...l.slice(-50), s]);
 
   useEffect(() => {
-    saveStoredCampaignProgress(setup.bootstrap, campaignProgress);
+    saveStoredCampaignProgressFromBootstrap(setup.bootstrap, campaignProgress);
   }, [setup.bootstrap, campaignProgress]);
 
   useEffect(() => {
     if (!outcome || campaignSettlement) return;
-    const reward = scenarioRewardFromOutcome(outcome, scenario.hiddenPoints ?? [], [investigator.investigatorId]);
+    const reward = {
+      ...scenarioRewardFromOutcome(outcome, scenario.hiddenPoints ?? [], [investigator.investigatorId]),
+      stageId: setup.stageId,
+    };
     const settled = settleScenarioEnd(
       campaignProgress,
       { [investigator.investigatorId]: investigator },
@@ -2316,6 +2271,11 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                 <div><span>凝聚力</span><strong>{campaignProgress.cohesion}</strong></div>
                 <div><span>下一章</span><strong>{campaignProgress.currentChapterNumber}</strong></div>
               </div>
+              {rewardPreview.nextChapterVersion && (
+                <div className="campaign-settlement-note">
+                  分歧版本:{rewardPreview.nextChapterVersion}
+                </div>
+              )}
               {campaignSettlement && (
                 <div className="campaign-settlement-note">
                   長休息完成,整備模式已開放。{playerCarry ? `目前可用 XP:${playerCarry.xp}` : ''}
@@ -2450,6 +2410,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             </div>
             <div className="outcome-actions">
               <button onClick={() => setPreparationOpen(false)}>完成整備</button>
+              <button onClick={() => navigate('/departure')}>前往世界地圖</button>
               <button onClick={() => navigate('/lobby')}>前往大廳</button>
             </div>
           </div>

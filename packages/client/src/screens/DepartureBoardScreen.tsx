@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { resolveCampaignStageAccess } from '@cthulhu/shared';
+import type { CampaignProgress, CampaignStageAccess } from '@cthulhu/shared';
 import { fetchPlayStages } from '../api';
 import type { PlayStageListItem } from '../api';
+import { getSelectedInvestigator } from '../game/selectedInvestigator';
+import { loadStoredCampaignProgressFor } from '../game/campaignProgressStorage';
 import './DepartureBoardScreen.css';
 
 /**
@@ -29,6 +33,7 @@ export function DepartureBoardScreen() {
   const [stages, setStages] = useState<PlayStageListItem[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
+  const selectedInvestigatorId = getSelectedInvestigator()?.id ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -39,9 +44,45 @@ export function DepartureBoardScreen() {
   }, []);
 
   const mainline = useMemo(
-    () => (stages ?? []).filter((s) => s.stage_type === 'main').sort((a, b) => a.chapter_number - b.chapter_number),
+    () => (stages ?? [])
+      .filter((s) => s.stage_type === 'main')
+      .sort((a, b) =>
+        a.campaign_code.localeCompare(b.campaign_code) ||
+        a.chapter_number - b.chapter_number ||
+        a.code.localeCompare(b.code),
+      ),
     [stages],
   );
+
+  const accessByStageId = useMemo(() => {
+    const grouped = new Map<string, PlayStageListItem[]>();
+    for (const stage of mainline) {
+      const list = grouped.get(stage.campaign_id) ?? [];
+      list.push(stage);
+      grouped.set(stage.campaign_id, list);
+    }
+    const out = new Map<string, CampaignStageAccess<PlayStageListItem>>();
+    for (const [campaignId, list] of grouped) {
+      const progress = loadStoredCampaignProgressFor(campaignId, selectedInvestigatorId);
+      for (const access of resolveCampaignStageAccess(list, progress)) out.set(access.stage.id, access);
+    }
+    return out;
+  }, [mainline, selectedInvestigatorId]);
+
+  const progressSummary = useMemo(() => {
+    const byCampaign = new Map<string, CampaignProgress | null>();
+    for (const stage of mainline) {
+      if (!byCampaign.has(stage.campaign_id)) {
+        byCampaign.set(stage.campaign_id, loadStoredCampaignProgressFor(stage.campaign_id, selectedInvestigatorId));
+      }
+    }
+    const current = mainline.find((s) => accessByStageId.get(s.id)?.isRecommended);
+    const progress = current ? byCampaign.get(current.campaign_id) : null;
+    if (!selectedInvestigatorId) return '選擇調查員後會顯示戰役進度';
+    if (current && progress) return `${current.campaign_name} · 第 ${progress.currentChapterNumber} 章`;
+    if (current) return `${current.campaign_name} · 尚未開始`;
+    return '尚無可進行主線';
+  }, [accessByStageId, mainline, selectedInvestigatorId]);
 
   const enterStage = (stageId: string) => navigate(`/scenario/${stageId}/briefing`);
 
@@ -89,15 +130,32 @@ export function DepartureBoardScreen() {
           {/* 主線關卡別針 */}
           {mainline.map((s, i) => {
             const spot = MAINLINE_SPOTS[i] ?? { x: 480 + (i % 3) * 60, y: 300 + ((i % 4) - 2) * 50 };
+            const access = accessByStageId.get(s.id);
+            const locked = access?.state === 'locked';
+            const statusLabel = access?.isRecommended
+              ? (access.branchMatched ? '分歧' : '下一章')
+              : access?.state === 'completed' ? '完成'
+                : locked ? '未解鎖' : '可進行';
             return (
-              <g key={s.id} className={'wm-pin' + (hover === s.id ? ' wm-pin-hover' : '')}
+              <g key={s.id}
+                className={[
+                  'wm-pin',
+                  access ? `wm-pin-${access.state}` : '',
+                  access?.isRecommended ? 'wm-pin-recommended' : '',
+                  hover === s.id ? 'wm-pin-hover' : '',
+                ].filter(Boolean).join(' ')}
                 transform={`translate(${spot.x} ${spot.y})`}
                 onMouseEnter={() => setHover(s.id)} onMouseLeave={() => setHover(null)}
-                onClick={() => enterStage(s.id)} role="button" tabIndex={0}>
+                onClick={() => { if (!locked) enterStage(s.id); }}
+                onKeyDown={(e) => { if (!locked && (e.key === 'Enter' || e.key === ' ')) enterStage(s.id); }}
+                role="button"
+                aria-disabled={locked}
+                tabIndex={locked ? -1 : 0}>
                 <path d="M 0 0 C -12 -22 12 -22 0 0 M 0 -14 a 7 7 0 1 0 0.01 0" className="wm-pin-shape" />
                 <circle cx={0} cy={-15} r={4} className="wm-pin-num-bg" />
                 <text x={0} y={-12} textAnchor="middle" className="wm-pin-num">{s.chapter_number}</text>
                 <text x={0} y={16} textAnchor="middle" className="wm-pin-name">{s.name_zh}</text>
+                <text x={0} y={31} textAnchor="middle" className="wm-pin-status">{statusLabel}</text>
               </g>
             );
           })}
@@ -118,7 +176,7 @@ export function DepartureBoardScreen() {
 
       <footer className="wm-footer">
         <button className="wm-back" onClick={() => navigate('/lobby')}>← 回大廳</button>
-        <span className="wm-tip">主線關卡由後台即時供應;隨機地城在 G4 啟用</span>
+        <span className="wm-tip">{progressSummary}</span>
       </footer>
     </div>
   );

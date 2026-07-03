@@ -17,6 +17,7 @@ export interface PlayStageListItem {
   narrative: string | null;
   design_status: string;
   chapter_number: number;
+  chapter_code: string;
   chapter_name: string;
   campaign_id: string;
   campaign_code: string;

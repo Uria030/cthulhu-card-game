@@ -70,9 +70,31 @@
   stroke: rgba(243, 231, 200, 0.9);
   stroke-width: 4px;
 }
+.wm-pin-status {
+  fill: #4d3b24;
+  font: 600 10px 'Noto Sans TC', sans-serif;
+  letter-spacing: 0.08em;
+  paint-order: stroke;
+  stroke: rgba(243, 231, 200, 0.9);
+  stroke-width: 3px;
+}
 .wm-pin-side .wm-pin-shape { fill: #6b6452; }
+.wm-pin-completed .wm-pin-shape { fill: #596f52; }
+.wm-pin-current .wm-pin-shape { fill: #9a3326; }
+.wm-pin-recommended .wm-pin-shape {
+  fill: #c9a84c;
+  stroke-width: 1.8;
+}
+.wm-pin-recommended .wm-pin-status { fill: #6b1f12; }
+.wm-pin-locked {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+.wm-pin-locked .wm-pin-shape { fill: #6b6452; }
 .wm-pin:hover .wm-pin-shape,
 .wm-pin-hover .wm-pin-shape { fill: #c9a84c; }
+.wm-pin-locked:hover .wm-pin-shape,
+.wm-pin-locked.wm-pin-hover .wm-pin-shape { fill: #6b6452; }
 .wm-pin:hover .wm-pin-name,
 .wm-pin-hover .wm-pin-name { fill: #1a140c; }
 

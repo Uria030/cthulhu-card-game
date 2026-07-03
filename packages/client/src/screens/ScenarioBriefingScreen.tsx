@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { StageBootstrap } from '@cthulhu/shared';
+import type { CampaignProgress, ChapterResultRecord } from '@cthulhu/shared';
 import { fetchBootstrap } from '../api';
 import { getSelectedInvestigator } from '../game/selectedInvestigator';
+import { loadStoredCampaignProgressFromBootstrap } from '../game/campaignProgressStorage';
 import './ScenarioBriefingScreen.css';
 
 /**
@@ -20,6 +22,8 @@ interface BriefingContent {
   subtitle: string;
   paragraphs: string[];
   meta: string;
+  branchMeta?: string;
+  locked?: boolean;
 }
 
 const TEST_SCENARIO_BRIEFING: BriefingContent = {
@@ -42,7 +46,19 @@ const DIFFICULTY_LABEL: Record<string, string> = {
   expert: '專家',
 };
 
-function briefingFromBootstrap(bootstrap: StageBootstrap): BriefingContent {
+function chapterNumberFromBootstrap(bootstrap: StageBootstrap): number {
+  const n = Number(bootstrap.chapter?.chapter_number ?? 1);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+function previousChapterResult(
+  progress: CampaignProgress | null | undefined,
+  chapterNumber: number,
+): ChapterResultRecord | undefined {
+  return progress?.chapterResults?.[String(chapterNumber - 1)];
+}
+
+function briefingFromBootstrap(bootstrap: StageBootstrap, progress: CampaignProgress | null = null): BriefingContent {
   // 戰役封面敘事 + 關卡敘事都切段顯示(空行/換行都當段落界)
   const text = [bootstrap.campaign?.cover_narrative, bootstrap.stage.narrative]
     .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
@@ -53,11 +69,23 @@ function briefingFromBootstrap(bootstrap: StageBootstrap): BriefingContent {
     .filter(Boolean);
   const difficulty = DIFFICULTY_LABEL[String(bootstrap.campaign?.difficulty_tier ?? '')] ?? '標準';
   const outcomeCount = bootstrap.chapter?.outcomes?.length ?? 0;
+  const chapterNumber = chapterNumberFromBootstrap(bootstrap);
+  const prevResult = previousChapterResult(progress, chapterNumber);
+  const currentChapterNumber = progress?.currentChapterNumber ?? 1;
+  const locked = chapterNumber > currentChapterNumber;
+  const meta = [
+    outcomeCount > 1 ? `本章有 ${outcomeCount} 種結局` : '',
+    locked ? '尚未解鎖' : '',
+  ].filter(Boolean).join(' · ');
   return {
     title: bootstrap.stage.name_zh,
     subtitle: `${bootstrap.campaign?.name_zh ?? ''} · ${bootstrap.chapter?.name_zh ?? ''} · 難度:${difficulty}`,
     paragraphs: paragraphs.length > 0 ? paragraphs : ['(本關卡尚未填寫前置劇情。)'],
-    meta: outcomeCount > 1 ? `本章有 ${outcomeCount} 種結局 · 你的選擇將決定走向` : '',
+    meta,
+    branchMeta: prevResult
+      ? `上一章結局 ${prevResult.outcomeCode}${prevResult.nextChapterVersion ? ` · 分歧:${prevResult.nextChapterVersion}` : ''}`
+      : undefined,
+    locked,
   };
 }
 
@@ -81,7 +109,9 @@ export function ScenarioBriefingScreen() {
     setContent(null);
     setLoadError(null);
     fetchBootstrap(stageId, getSelectedInvestigator()?.id)
-      .then((b) => { if (!cancelled) setContent(briefingFromBootstrap(b)); })
+      .then((b) => {
+        if (!cancelled) setContent(briefingFromBootstrap(b, loadStoredCampaignProgressFromBootstrap(b)));
+      })
       .catch((e: unknown) => {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
       });
@@ -133,13 +163,18 @@ export function ScenarioBriefingScreen() {
             <hr className="brief-divider" />
 
             {content.meta && <div className="brief-meta">{content.meta}</div>}
+            {content.branchMeta && <div className="brief-branch">{content.branchMeta}</div>}
 
             <footer className="brief-footer">
               <button className="brief-back" onClick={() => navigate('/departure')}>
                 ← 返回出發板
               </button>
-              <button className="brief-enter" onClick={() => navigate(`/scenario/${stageId}`)}>
-                進入關卡 →
+              <button
+                className="brief-enter"
+                disabled={content.locked}
+                onClick={() => navigate(`/scenario/${stageId}`)}
+              >
+                {content.locked ? '尚未解鎖' : '進入關卡 →'}
               </button>
             </footer>
           </>

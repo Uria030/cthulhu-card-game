@@ -15,6 +15,7 @@ import {
   canAcquireCardByTalent,
   canUnlockTalentNode,
   unlockTalentNode,
+  resolveCampaignStageAccess,
 } from './campaignProgress';
 import type { CampaignProgress, TalentTreeDefinition } from './campaignProgress';
 import type { InvestigatorState } from './state';
@@ -123,13 +124,25 @@ test('牌組組成跨「打一場 → 結算」不縮水(回歸 BLOCK:只保留�
 });
 
 // ─── 場景結束結算 ───────────────────────────
-test('settleScenarioEnd:更新存活者狀態 + 發 XP/天賦點 + 寫旗標', () => {
+test('settleScenarioEnd:更新存活者狀態 + 發 XP/天賦點 + 寫旗標 + 章節結果', () => {
   const prev: CampaignProgress = { ...initCampaignProgress('camp1'), investigators: { elias: { ...extractCarryover(makeInv()), xp: 1, talentPoints: 0 } } };
-  const r = settleScenarioEnd(prev, { i1: makeInv({ hp: 3 }) }, { xp: 5, talentPoints: 1, flagSets: [{ flag_code: 'outcome.victory', value: true }] });
+  const r = settleScenarioEnd(prev, { i1: makeInv({ hp: 3 }) }, {
+    xp: 5,
+    talentPoints: 1,
+    flagSets: [{ flag_code: 'outcome.victory', value: true }],
+    outcomeCode: 'A',
+    nextChapterVersion: 'ch2_contact_alive',
+    stageId: 'stage-ch1',
+    resolvedAt: '2026-07-03T00:00:00.000Z',
+  });
   assertEq(r.progress.investigators.elias.hp, 3, '當前 HP 更新');
   assertEq(r.progress.investigators.elias.xp, 6, 'xp 1+5');
   assertEq(r.progress.investigators.elias.talentPoints, 1, '天賦點 0+1');
   assertEq(r.progress.flags['outcome.victory'], true, '旗標寫入');
+  assertEq(r.progress.chapterResults?.['1']?.outcomeCode, 'A', '章節結局寫入');
+  assertEq(r.progress.chapterResults?.['1']?.nextChapterVersion, 'ch2_contact_alive', '下一章版本寫入');
+  assertEq(r.progress.chapterResults?.['1']?.stageId, 'stage-ch1', '完成 stage 寫入');
+  assertEq(r.effects.some((e) => e.type === 'chapter_result_recorded'), true);
   assertEq(r.effects.some((e) => e.type === 'campaign_reward'), true);
 });
 
@@ -174,6 +187,7 @@ test('applyLongRest:+1 凝聚力(ch4 §6.1)+ 進下一章 + 開整備訊號', ()
 test('scenarioRewardFromOutcome:讀 chapter_outcomes.rewards + outcome flag_sets', () => {
   const reward = scenarioRewardFromOutcome({
     outcome_code: 'A',
+    next_chapter_version: 'ch2_contact_alive',
     rewards: { xp: 2, talent_point: 1, cohesion: 1 },
     flag_sets: [{ flag_code: 'outcome.victory', value: true }],
   });
@@ -181,6 +195,50 @@ test('scenarioRewardFromOutcome:讀 chapter_outcomes.rewards + outcome flag_sets
   assertEq(reward.talentPoints, 1);
   assertEq(reward.cohesion, 1);
   assertEq(reward.flagSets?.[0].flag_code, 'outcome.victory');
+  assertEq(reward.outcomeCode, 'A');
+  assertEq(reward.nextChapterVersion, 'ch2_contact_alive');
+});
+
+test('resolveCampaignStageAccess:上一章 next_chapter_version 會推薦對應第二章分歧 stage', () => {
+  const stages = [
+    { id: 'stage-1', code: 'ch1_main', name_zh: '第一章', campaign_id: 'camp1', chapter_number: 1, stage_type: 'main' },
+    { id: 'stage-2a', code: 'ch2_contact_alive', name_zh: '第二章:線人存活', campaign_id: 'camp1', chapter_number: 2, stage_type: 'main' },
+    { id: 'stage-2b', code: 'ch2_contact_dead', name_zh: '第二章:線人死亡', campaign_id: 'camp1', chapter_number: 2, stage_type: 'main' },
+    { id: 'stage-3', code: 'ch3_standard', name_zh: '第三章', campaign_id: 'camp1', chapter_number: 3, stage_type: 'main' },
+  ];
+  const prev: CampaignProgress = {
+    ...initCampaignProgress('camp1'),
+    currentChapterNumber: 2,
+    chapterResults: {
+      '1': { chapterNumber: 1, outcomeCode: 'C', nextChapterVersion: 'ch2_contact_dead', stageId: 'stage-1' },
+    },
+  };
+  const access = resolveCampaignStageAccess(stages, prev);
+  assertEq(access.find((a) => a.stage.id === 'stage-1')?.state, 'completed');
+  assertEq(access.find((a) => a.stage.id === 'stage-2b')?.state, 'current');
+  assertEq(access.find((a) => a.stage.id === 'stage-2b')?.isRecommended, true, '分歧版本被推薦');
+  assertEq(access.find((a) => a.stage.id === 'stage-2b')?.branchMatched, true, '明確匹配分歧');
+  assertEq(access.find((a) => a.stage.id === 'stage-2a')?.isRecommended, false);
+  assertEq(access.find((a) => a.stage.id === 'stage-2a')?.state, 'locked', '非本輪分歧 stage 鎖住');
+  assertEq(access.find((a) => a.stage.id === 'stage-2a')?.lockedReason, 'branch_not_selected');
+  assertEq(access.find((a) => a.stage.id === 'stage-3')?.state, 'locked');
+});
+
+test('resolveCampaignStageAccess:沒有分歧 stage 可匹配時 fallback 到當章第一個 stage', () => {
+  const stages = [
+    { id: 'stage-2b', code: 'ch2_other', name_zh: '第二章 B', campaign_id: 'camp1', chapter_number: 2, stage_type: 'main' },
+    { id: 'stage-2a', code: 'ch2_standard', name_zh: '第二章 A', campaign_id: 'camp1', chapter_number: 2, stage_type: 'main' },
+  ];
+  const prev: CampaignProgress = {
+    ...initCampaignProgress('camp1'),
+    currentChapterNumber: 2,
+    chapterResults: {
+      '1': { chapterNumber: 1, outcomeCode: 'A', nextChapterVersion: 'ch2_contact_alive', stageId: 'stage-1' },
+    },
+  };
+  const access = resolveCampaignStageAccess(stages, prev);
+  assertEq(access.find((a) => a.stage.id === 'stage-2b')?.isRecommended, true, '以 code/id 排序後的第一個當章 stage 作 fallback');
+  assertEq(access.find((a) => a.stage.id === 'stage-2b')?.branchMatched, false);
 });
 
 test('scenarioRewardFromOutcome:隱藏調查只吃明確 XP 欄位,可依調查員過濾', () => {

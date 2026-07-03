@@ -122,6 +122,20 @@
   text-align: center;
 }
 
+.brief-branch {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-top: var(--sp-sm);
+  border: 1px solid rgba(92, 32, 24, 0.35);
+  background: rgba(92, 32, 24, 0.08);
+  color: var(--world-oxblood);
+  padding: 6px 12px;
+  border-radius: var(--r-subtle);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
 .brief-footer {
   margin-top: var(--sp-md);
   display: flex;
@@ -165,6 +179,12 @@
   background: var(--world-deep-walnut);
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+.brief-enter:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  box-shadow: none;
 }
 .brief-enter:active {
   transform: translateY(0);

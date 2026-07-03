@@ -47,6 +47,14 @@ export interface InvestigatorCarryover {
   permanentlyDead: boolean;
 }
 
+export interface ChapterResultRecord {
+  chapterNumber: number;
+  outcomeCode: string;
+  nextChapterVersion: string | null;
+  stageId: string | null;
+  resolvedAt?: string;
+}
+
 /** 戰役存檔的完整內容(後續批次序列化此結構) */
 export interface CampaignProgress {
   campaignId: string;
@@ -58,6 +66,8 @@ export interface CampaignProgress {
   cohesion: number;
   /** 跨章節劇情/結局旗標(ch5 §4 章節結束時設定) */
   flags: Record<string, unknown>;
+  /** key = chapterNumber;保存各章結局與下一章版本,供戰役地圖/提要頁承接分歧 */
+  chapterResults?: Record<string, ChapterResultRecord>;
 }
 
 /** 場景結束時要套到存檔的獎勵(數值來自資料:chapter_outcomes 等,引擎不自創) */
@@ -70,6 +80,34 @@ export interface ScenarioReward {
   cohesion?: number;
   /** 寫入戰役旗標 */
   flagSets?: Array<{ flag_code: string; value: unknown }>;
+  /** chapter_outcomes.outcome_code,用於記錄章節結局 */
+  outcomeCode?: string;
+  /** chapter_outcomes.next_chapter_version,用於下一章分歧 */
+  nextChapterVersion?: string | null;
+  /** 完成的 stage id,用於地圖標示已完成落點 */
+  stageId?: string | null;
+  /** 測試可注入時間;正式畫面預設 Date.now */
+  resolvedAt?: string;
+}
+
+export interface CampaignStageDescriptor {
+  id: string;
+  code?: string | null;
+  name_zh?: string | null;
+  campaign_id: string;
+  chapter_number: number;
+  stage_type?: string | null;
+}
+
+export type CampaignStageAccessState = 'completed' | 'current' | 'locked';
+
+export interface CampaignStageAccess<T extends CampaignStageDescriptor = CampaignStageDescriptor> {
+  stage: T;
+  state: CampaignStageAccessState;
+  isRecommended: boolean;
+  branchMatched: boolean;
+  lockedReason?: string;
+  previousChapterResult?: ChapterResultRecord;
 }
 
 /** 整備期可購買的玩家卡定義切片(card_definitions row 的安全子集) */
@@ -372,6 +410,66 @@ function rewardNumber(rewards: Record<string, unknown>, keys: string[]): number 
   return 0;
 }
 
+function outcomeText(value: unknown): string | null {
+  const text = String(value ?? '').trim();
+  return text.length > 0 ? text : null;
+}
+
+function chapterResultFor(progress: CampaignProgress, chapterNumber: number): ChapterResultRecord | undefined {
+  return progress.chapterResults?.[String(chapterNumber)];
+}
+
+function stageMatchesBranch(stage: CampaignStageDescriptor, nextChapterVersion: string | null | undefined): boolean {
+  const version = outcomeText(nextChapterVersion);
+  if (!version) return false;
+  const haystack = [stage.code, stage.name_zh, stage.id]
+    .map((v) => String(v ?? '').toLowerCase())
+    .join(' ');
+  return haystack.includes(version.toLowerCase());
+}
+
+function recommendedStageIds<T extends CampaignStageDescriptor>(
+  stages: T[],
+  progress: CampaignProgress,
+): Set<string> {
+  const current = progress.currentChapterNumber;
+  const candidates = stages
+    .filter((s) => s.campaign_id === progress.campaignId && s.chapter_number === current)
+    .sort((a, b) => String(a.code ?? a.id).localeCompare(String(b.code ?? b.id)));
+  const ids = new Set<string>();
+  if (candidates.length === 0) return ids;
+
+  const previous = chapterResultFor(progress, current - 1);
+  if (previous?.nextChapterVersion) {
+    for (const stage of candidates) {
+      if (stageMatchesBranch(stage, previous.nextChapterVersion)) ids.add(stage.id);
+    }
+    if (ids.size > 0) return ids;
+  }
+
+  ids.add(candidates[0].id);
+  return ids;
+}
+
+function matchedBranchStageIds<T extends CampaignStageDescriptor>(
+  stages: T[],
+  progress: CampaignProgress,
+): Set<string> {
+  const previous = chapterResultFor(progress, progress.currentChapterNumber - 1);
+  const ids = new Set<string>();
+  if (!previous?.nextChapterVersion) return ids;
+  for (const stage of stages) {
+    if (
+      stage.campaign_id === progress.campaignId &&
+      stage.chapter_number === progress.currentChapterNumber &&
+      stageMatchesBranch(stage, previous.nextChapterVersion)
+    ) {
+      ids.add(stage.id);
+    }
+  }
+  return ids;
+}
+
 /**
  * 隱藏調查加成:只吃 reward_params 明確寫出的 XP 欄位。
  * 不因「有查到隱藏點」自創固定獎勵,避免把平衡數字寫死在引擎。
@@ -407,11 +505,15 @@ export function scenarioRewardFromOutcome(
   const talentPoints = rewardNumber(rewards, ['talentPoints', 'talent_points', 'talent_point']);
   const cohesion = finiteNumber(rewards.cohesion, 0);
   const flagSets = outcome?.flag_sets?.filter((set) => !!set?.flag_code) ?? [];
+  const outcomeCode = outcomeText(outcome?.outcome_code);
+  const nextChapterVersion = outcomeText(outcome?.next_chapter_version);
   return {
     ...(xp > 0 ? { xp } : {}),
     ...(talentPoints > 0 ? { talentPoints } : {}),
     ...(cohesion !== 0 ? { cohesion } : {}),
     ...(flagSets.length > 0 ? { flagSets } : {}),
+    ...(outcomeCode ? { outcomeCode } : {}),
+    ...(nextChapterVersion ? { nextChapterVersion } : {}),
   };
 }
 
@@ -622,6 +724,64 @@ export function initCampaignProgress(campaignId: string): CampaignProgress {
   return { campaignId, currentChapterNumber: 1, investigators: {}, cohesion: 0, flags: {} };
 }
 
+export function resolveCampaignStageAccess<T extends CampaignStageDescriptor>(
+  stages: T[],
+  progress: CampaignProgress | null | undefined,
+): Array<CampaignStageAccess<T>> {
+  if (!progress) {
+    const firstByCampaign = new Map<string, number>();
+    for (const stage of stages) {
+      const current = firstByCampaign.get(stage.campaign_id);
+      if (current == null || stage.chapter_number < current) firstByCampaign.set(stage.campaign_id, stage.chapter_number);
+    }
+    return stages.map((stage) => {
+      const first = firstByCampaign.get(stage.campaign_id) ?? 1;
+      const current = stage.chapter_number === first;
+      return {
+        stage,
+        state: current ? 'current' : 'locked',
+        isRecommended: current,
+        branchMatched: false,
+        lockedReason: current ? undefined : 'future_chapter',
+      };
+    });
+  }
+
+  const recommended = recommendedStageIds(stages, progress);
+  const branchMatchedIds = matchedBranchStageIds(stages, progress);
+  const previous = chapterResultFor(progress, progress.currentChapterNumber - 1);
+  return stages.map((stage) => {
+    if (stage.campaign_id !== progress.campaignId) {
+      return {
+        stage,
+        state: 'locked',
+        isRecommended: false,
+        branchMatched: false,
+        lockedReason: 'different_campaign',
+      };
+    }
+
+    let state: CampaignStageAccessState =
+      stage.chapter_number < progress.currentChapterNumber ? 'completed'
+        : stage.chapter_number === progress.currentChapterNumber ? 'current'
+          : 'locked';
+    let lockedReason = state === 'locked' ? 'future_chapter' : undefined;
+    if (state === 'current' && branchMatchedIds.size > 0 && !branchMatchedIds.has(stage.id)) {
+      state = 'locked';
+      lockedReason = 'branch_not_selected';
+    }
+    const branchMatched = state === 'current' && stageMatchesBranch(stage, previous?.nextChapterVersion);
+    return {
+      stage,
+      state,
+      isRecommended: recommended.has(stage.id),
+      branchMatched,
+      previousChapterResult: previous,
+      lockedReason,
+    };
+  });
+}
+
 /**
  * 開新戰役時把一位調查員註冊進存檔:帶起始牌組組成(**定義 id**)、build、滿血滿智。
  * 這是牌組組成(定義 id)進存檔的唯一來源;之後只在整備期變動。
@@ -733,7 +893,30 @@ export function settleScenarioEnd(
     effects.push({ type: 'campaign_reward', params: { xp: reward.xp ?? 0, talentPoints: reward.talentPoints ?? 0 } });
   }
 
-  return { progress: { ...prev, investigators: nextInvestigators, cohesion, flags }, effects };
+  let chapterResults = prev.chapterResults;
+  if (reward.outcomeCode) {
+    const result: ChapterResultRecord = {
+      chapterNumber: prev.currentChapterNumber,
+      outcomeCode: reward.outcomeCode,
+      nextChapterVersion: reward.nextChapterVersion ?? null,
+      stageId: reward.stageId ?? null,
+      resolvedAt: reward.resolvedAt ?? new Date().toISOString(),
+    };
+    chapterResults = {
+      ...(prev.chapterResults ?? {}),
+      [String(prev.currentChapterNumber)]: result,
+    };
+    effects.push({
+      type: 'chapter_result_recorded',
+      params: {
+        chapter: result.chapterNumber,
+        outcomeCode: result.outcomeCode,
+        nextChapterVersion: result.nextChapterVersion,
+      },
+    });
+  }
+
+  return { progress: { ...prev, investigators: nextInvestigators, cohesion, flags, chapterResults }, effects };
 }
 
 /**

@@ -4,6 +4,7 @@
  */
 import { buildGameFromBootstrap, buildChaosBag, mapEnvironmentToVisibility } from './bootstrap';
 import type { StageBootstrap } from './bootstrap';
+import { initCampaignProgress, registerInvestigator } from './campaignProgress';
 
 type TestFn = () => void;
 const tests: { name: string; fn: TestFn }[] = [];
@@ -60,6 +61,9 @@ function makeFixture(): StageBootstrap {
       { id: 'M1', code: 'mv_rogue_thug', hp_base: 3, hp_per_player: 1 },
     ],
     monster_attack_cards: [],
+    upgrade_cards: [
+      { id: 'c2', name_zh: '老練射擊', card_type: 'skill', cost: 0, effects: [], starting_xp: 2 },
+    ],
     investigator: {
       id: 'inv-uuid',
       code: 'istp_1',
@@ -213,6 +217,26 @@ test('無場景時丟錯', () => {
     threw = true;
   }
   assertEq(threw, true);
+});
+
+// ─── 測試 11:E4 CampaignProgress 牌組組成進下一場 ───
+test('CampaignProgress carryover deck 重建一般牌組,並保留簽名/弱點', () => {
+  const fx = makeFixture();
+  let progress = registerInvestigator(initCampaignProgress('camp-1'), {
+    investigatorDefinitionId: 'inv-uuid',
+    deck: ['c1', 'c2'],
+    combatStyle: 'shooting',
+    specializations: [],
+    hpMax: 11,
+    sanMax: 9,
+  });
+  progress = { ...progress, investigators: { 'inv-uuid': { ...progress.investigators['inv-uuid'], xp: 1 } } };
+  const g = buildGameFromBootstrap(fx, { rng: fixedRng, openingHandSize: 20, campaignProgress: progress });
+  const cards = Object.values(g.cardIndex);
+  assertEq(cards.filter((c) => c.sourceId === 'c1').length, 1, 'carryover deck 控制一般卡副本數');
+  assertEq(cards.filter((c) => c.sourceId === 'c2').length, 1, '購買卡可由 upgrade_cards 卡池實例化');
+  assertEq(cards.some((c) => c.source === 'signature'), true, '簽名卡仍保留');
+  assertEq(cards.some((c) => c.source === 'weakness'), true, '弱點仍保留');
 });
 
 // ─── runner ─────────────────────────────────

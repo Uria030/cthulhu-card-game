@@ -15,6 +15,8 @@
  */
 import type { InvestigatorState, Trauma } from './state';
 import type { ResultEffect } from './messages';
+import type { HiddenPoint } from './hiddenInvestigation';
+import type { OutcomeData } from './gameProgress';
 
 /** 單一調查員跨章節保留的狀態切片 */
 export interface InvestigatorCarryover {
@@ -66,6 +68,144 @@ export interface ScenarioReward {
   cohesion?: number;
   /** 寫入戰役旗標 */
   flagSets?: Array<{ flag_code: string; value: unknown }>;
+}
+
+/** 整備期可購買的玩家卡定義切片(card_definitions row 的安全子集) */
+export interface PreparationCardDefinition {
+  id: string;
+  code?: string | null;
+  name_zh?: string | null;
+  card_type?: string | null;
+  faction?: string | null;
+  starting_xp?: number | string | null;
+  xp_cost?: number | string | null;
+  card_source?: string | null;
+  is_unique?: boolean | null;
+  is_signature?: boolean | null;
+  is_weakness?: boolean | null;
+  is_revelation?: boolean | null;
+  is_exceptional?: boolean | null;
+  is_permanent?: boolean | null;
+  is_extra?: boolean | null;
+}
+
+export interface PreparationPurchaseResult {
+  ok: boolean;
+  progress: CampaignProgress;
+  xpCost: number;
+  reason?: string;
+}
+
+function finiteNumber(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function nonNegativeInt(value: unknown): number {
+  return Math.max(0, Math.floor(finiteNumber(value, 0)));
+}
+
+function rewardNumber(rewards: Record<string, unknown>, keys: string[]): number {
+  for (const key of keys) {
+    if (rewards[key] != null) return nonNegativeInt(rewards[key]);
+  }
+  return 0;
+}
+
+/**
+ * 隱藏調查加成:只吃 reward_params 明確寫出的 XP 欄位。
+ * 不因「有查到隱藏點」自創固定獎勵,避免把平衡數字寫死在引擎。
+ */
+export function hiddenInvestigationXpBonus(
+  points: HiddenPoint[] = [],
+  investigatorIds?: string[],
+): number {
+  const eligible = investigatorIds ? new Set(investigatorIds) : null;
+  let total = 0;
+  for (const point of points) {
+    const claimedCount = point.claimedBy.filter((id) => !eligible || eligible.has(id)).length;
+    if (claimedCount <= 0) continue;
+    const params = point.rewardParams ?? {};
+    const perClaim = rewardNumber(params, ['xp', 'bonus_xp', 'campaign_xp', 'hidden_xp']);
+    total += perClaim * claimedCount;
+  }
+  return total;
+}
+
+/**
+ * chapter_outcomes.rewards → ScenarioReward。
+ * 支援現有種子裡的 talent_point,同時接受前端/後續資料常見的 camelCase。
+ */
+export function scenarioRewardFromOutcome(
+  outcome: OutcomeData | null | undefined,
+  hiddenPoints: HiddenPoint[] = [],
+  investigatorIds?: string[],
+): ScenarioReward {
+  const rewards = (outcome?.rewards && typeof outcome.rewards === 'object') ? outcome.rewards : {};
+  const xp = rewardNumber(rewards, ['xp', 'experience', 'exp']) +
+    hiddenInvestigationXpBonus(hiddenPoints, investigatorIds);
+  const talentPoints = rewardNumber(rewards, ['talentPoints', 'talent_points', 'talent_point']);
+  const cohesion = finiteNumber(rewards.cohesion, 0);
+  const flagSets = outcome?.flag_sets?.filter((set) => !!set?.flag_code) ?? [];
+  return {
+    ...(xp > 0 ? { xp } : {}),
+    ...(talentPoints > 0 ? { talentPoints } : {}),
+    ...(cohesion !== 0 ? { cohesion } : {}),
+    ...(flagSets.length > 0 ? { flagSets } : {}),
+  };
+}
+
+/** 整備期購卡 XP:起始投入 × Exceptional 倍率;永久卡若仍只填舊 xp_cost,用 xp_cost 防止 0 費。 */
+export function preparationCardXpCost(card: PreparationCardDefinition): number {
+  const startingXp = nonNegativeInt(card.starting_xp);
+  const permanentXp = card.is_permanent ? nonNegativeInt(card.xp_cost) : 0;
+  const base = permanentXp > 0 ? permanentXp : startingXp;
+  return base * (card.is_exceptional ? 2 : 1);
+}
+
+export function canPurchasePreparationCard(
+  carry: InvestigatorCarryover | undefined,
+  card: PreparationCardDefinition,
+): { ok: boolean; reason?: string; xpCost: number } {
+  const xpCost = preparationCardXpCost(card);
+  const source = String(card.card_source ?? 'standard');
+  if (!card.id) return { ok: false, reason: 'missing_card_id', xpCost };
+  if (source === 'book_upgrade' || source === 'relic_upgrade') {
+    return { ok: false, reason: 'source_not_purchaseable', xpCost };
+  }
+  if (card.is_signature || card.is_weakness || card.is_extra) {
+    return { ok: false, reason: 'special_card_not_purchaseable', xpCost };
+  }
+  if (!carry) return { ok: false, reason: 'investigator_not_registered', xpCost };
+  if (card.is_unique && carry.deck.includes(card.id)) {
+    return { ok: false, reason: 'unique_already_owned', xpCost };
+  }
+  if (carry.xp < xpCost) return { ok: false, reason: 'not_enough_xp', xpCost };
+  return { ok: true, xpCost };
+}
+
+/** 整備期購買一張卡片副本:扣 XP,把 card_def id 加入跨章牌組組成。 */
+export function purchasePreparationCard(
+  prev: CampaignProgress,
+  investigatorDefinitionId: string,
+  card: PreparationCardDefinition,
+): PreparationPurchaseResult {
+  const carry = prev.investigators[investigatorDefinitionId];
+  const check = canPurchasePreparationCard(carry, card);
+  if (!check.ok || !carry) return { ok: false, progress: prev, xpCost: check.xpCost, reason: check.reason };
+  const nextCarry: InvestigatorCarryover = {
+    ...carry,
+    xp: carry.xp - check.xpCost,
+    deck: [...carry.deck, card.id],
+  };
+  return {
+    ok: true,
+    progress: {
+      ...prev,
+      investigators: { ...prev.investigators, [investigatorDefinitionId]: nextCarry },
+    },
+    xpCost: check.xpCost,
+  };
 }
 
 /** 建空白戰役存檔(開新戰役用;investigators 由 registerInvestigator 逐位加入) */

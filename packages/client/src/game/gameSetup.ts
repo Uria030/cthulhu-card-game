@@ -26,6 +26,8 @@ import type {
   EncounterTriggerConfig,
   KeeperProfile,
   InvestigatorAIProfile,
+  CampaignProgress,
+  PreparationCardDefinition,
 } from '@cthulhu/shared';
 import {
   defaultKeeperProfile,
@@ -107,6 +109,10 @@ export interface GameSetup {
   aiMembers: Array<{ profile: InvestigatorAIProfile; investigator: InvestigatorState }>;
   /** 混沌袋情境標記效果碼(symbol → effect;施法軌場景效果用) */
   chaosMarkerEffects: Record<string, string>;
+  /** 整備期購買卡池(唯讀卡面) */
+  upgradeCards: PreparationCardDefinition[];
+  /** 讀檔/整備後的戰役進度;null = 新戰役開局 */
+  campaignProgress: CampaignProgress | null;
 }
 
 const VALID_RARITIES = new Set(['common', 'uncommon', 'rare', 'legendary']);
@@ -234,6 +240,8 @@ export function makeTestSetup(): GameSetup {
     bootstrap: null,
     aiMembers: [],
     chaosMarkerEffects: {},
+    upgradeCards: [],
+    campaignProgress: null,
   };
 }
 
@@ -246,8 +254,9 @@ const FACTION_LABEL: Record<string, string> = {
 export function buildSetupFromBootstrap(
   bootstrap: StageBootstrap,
   aiBootstraps: StageBootstrap[] = [],
+  campaignProgress: CampaignProgress | null = null,
 ): GameSetup {
-  const built = buildGameFromBootstrap(bootstrap);
+  const built = buildGameFromBootstrap(bootstrap, { campaignProgress });
   const bootstrapScenario =
     bootstrap.stage.scenarios.find((s) => s.id === built.scenario.scenarioId) ??
     bootstrap.stage.scenarios[0];
@@ -392,6 +401,15 @@ export function buildSetupFromBootstrap(
         subtypes: Array.isArray(d.subtypes) ? d.subtypes : [],
         ammo: d.ammo ?? null,
         uses: d.uses ?? null,
+        is_talisman: Boolean(d.is_talisman),
+        talisman_type: d.talisman_type ?? null,
+        target_threat_types: d.target_threat_types ?? null,
+        break_timing: d.break_timing ?? null,
+        break_strength_max: d.break_strength_max ?? null,
+        break_charge_label: d.break_charge_label ?? null,
+        break_charge_max: d.break_charge_max ?? null,
+        break_test_attribute: d.break_test_attribute ?? null,
+        stockpile_accumulation_rule: d.stockpile_accumulation_rule ?? null,
         consume_enabled: Boolean(d.consume_enabled),
         consume_effect: d.consume_effect ?? null,
         effects: Array.isArray(d.effects) ? d.effects : [],
@@ -458,5 +476,7 @@ export function buildSetupFromBootstrap(
         String((spec as { effect?: string })?.effect ?? ''),
       ]),
     ),
+    upgradeCards: (bootstrap.upgrade_cards ?? []) as PreparationCardDefinition[],
+    campaignProgress,
   };
 }

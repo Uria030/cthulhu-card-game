@@ -1,7 +1,17 @@
 /**
  * G-13 戰役進度 / 存檔骨幹測試 — 跨章保留矩陣 + 結算 + 長休息
  */
-import { initCampaignProgress, registerInvestigator, extractCarryover, settleScenarioEnd, applyLongRest } from './campaignProgress';
+import {
+  initCampaignProgress,
+  registerInvestigator,
+  extractCarryover,
+  settleScenarioEnd,
+  applyLongRest,
+  scenarioRewardFromOutcome,
+  preparationCardXpCost,
+  canPurchasePreparationCard,
+  purchasePreparationCard,
+} from './campaignProgress';
 import type { CampaignProgress } from './campaignProgress';
 import type { InvestigatorState } from './state';
 
@@ -119,6 +129,64 @@ test('applyLongRest:+1 凝聚力(ch4 §6.1)+ 進下一章 + 開整備訊號', ()
   assertEq(r.progress.currentChapterNumber, 2, '進下一章');
   assertEq(r.effects.some((e) => e.type === 'long_rest'), true);
   assertEq(r.effects.some((e) => e.type === 'provisioning_open'), true, '開整備模式');
+});
+
+// ─── E4:XP 結算 + 整備購卡 ─────────────────────
+test('scenarioRewardFromOutcome:讀 chapter_outcomes.rewards + outcome flag_sets', () => {
+  const reward = scenarioRewardFromOutcome({
+    outcome_code: 'A',
+    rewards: { xp: 2, talent_point: 1, cohesion: 1 },
+    flag_sets: [{ flag_code: 'outcome.victory', value: true }],
+  });
+  assertEq(reward.xp, 2);
+  assertEq(reward.talentPoints, 1);
+  assertEq(reward.cohesion, 1);
+  assertEq(reward.flagSets?.[0].flag_code, 'outcome.victory');
+});
+
+test('scenarioRewardFromOutcome:隱藏調查只吃明確 XP 欄位,可依調查員過濾', () => {
+  const reward = scenarioRewardFromOutcome(
+    { outcome_code: 'B', rewards: { xp: 1 } },
+    [
+      {
+        id: 'hp1', locationId: 'loc', title: '暗門', description: '', threshold: 4,
+        revealedTo: ['inv-1'], claimedBy: ['inv-1', 'inv-2'], limitedClaimedBy: null,
+        hasLimited: false, rewardType: 'effect', rewardParams: { xp: 1 },
+      },
+      {
+        id: 'hp2', locationId: 'loc', title: '紙條', description: '', threshold: 4,
+        revealedTo: ['inv-1'], claimedBy: ['inv-1'], limitedClaimedBy: null,
+        hasLimited: false, rewardType: 'clue', rewardParams: { amount: 2 },
+      },
+    ],
+    ['inv-1'],
+  );
+  assertEq(reward.xp, 2, 'outcome 1 + hidden xp 1; clue amount 不當 XP');
+});
+
+test('preparationCardXpCost:starting_xp × Exceptional 倍率', () => {
+  assertEq(preparationCardXpCost({ id: 'c1', starting_xp: 3 }), 3);
+  assertEq(preparationCardXpCost({ id: 'c2', starting_xp: 3, is_exceptional: true }), 6);
+});
+
+test('purchasePreparationCard:扣 XP 並加入跨章牌組組成', () => {
+  const prev = registerInvestigator(initCampaignProgress('c'), {
+    investigatorDefinitionId: 'elias', deck: ['def_a'], combatStyle: 'pistol', specializations: [], hpMax: 10, sanMax: 8,
+  });
+  const withXp: CampaignProgress = { ...prev, investigators: { elias: { ...prev.investigators.elias, xp: 4 } } };
+  const r = purchasePreparationCard(withXp, 'elias', { id: 'def_b', name_zh: '升級卡', starting_xp: 3, card_source: 'standard' });
+  assertEq(r.ok, true);
+  assertEq(r.progress.investigators.elias.xp, 1);
+  assertEq(r.progress.investigators.elias.deck.includes('def_b'), true);
+});
+
+test('canPurchasePreparationCard:獨特已擁有與書籍/遺跡升級版不可購買', () => {
+  const prev = registerInvestigator(initCampaignProgress('c'), {
+    investigatorDefinitionId: 'elias', deck: ['def_unique'], combatStyle: 'pistol', specializations: [], hpMax: 10, sanMax: 8,
+  });
+  const carry = { ...prev.investigators.elias, xp: 10 };
+  assertEq(canPurchasePreparationCard(carry, { id: 'def_unique', starting_xp: 1, is_unique: true }).ok, false);
+  assertEq(canPurchasePreparationCard(carry, { id: 'book_up', starting_xp: 5, card_source: 'book_upgrade' }).ok, false);
 });
 
 // ─── runner ─────────────────────────────────

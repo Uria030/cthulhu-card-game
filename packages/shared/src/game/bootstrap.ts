@@ -26,6 +26,7 @@ import type {
 import { hpMaxFor, sanMaxFor, STARTING_RESOURCES, STARTING_HAND_SIZE } from './upkeep';
 import { hiddenPointFromRow } from './hiddenInvestigation';
 import type { HiddenPoint } from './hiddenInvestigation';
+import type { CampaignProgress } from './campaignProgress';
 
 // ─── 開局包型別(對齊 /api/play bootstrap 回傳,DB row 原樣 snake_case)──
 export interface BootstrapScenarioRow {
@@ -135,6 +136,8 @@ export interface StageBootstrap {
   keeper_settings?: Record<string, unknown>;
   /** 可發現卡片資源的卡面(地點 discoverable_card_ids 指向的 card_definitions;支柱6+8 探索獲卡) */
   discoverable_cards?: Array<Record<string, any>>;
+  /** 整備期可購買的玩家卡池(唯讀卡面;D5 池可後續回填,引擎先接組成) */
+  upgrade_cards?: Array<Record<string, any>>;
 }
 
 // ─── 卡片實例查找表(state 只存實例 id,畫面靠這張表顯示卡面)──
@@ -168,6 +171,8 @@ export interface BuildOptions {
   rng?: () => number;
   /** 卡片實例 id 前綴(多調查員同場時防撞;預設空 = 'ci_N') */
   cardInstancePrefix?: string;
+  /** 戰役存檔;若有該調查員 carryover deck,下一場用它重建一般牌組並保留簽名/弱點 */
+  campaignProgress?: CampaignProgress | null;
 }
 
 // ─── 環境敘述 → 視野光照 ──────────────────────
@@ -346,7 +351,35 @@ export function buildGameFromBootstrap(
   const cardIndex: Record<string, CardInstanceInfo> = {};
   const allInstances: string[] = [];
   let cardSeq = 0;
+  const carry = options.campaignProgress?.investigators?.[String(inv.id)];
+  const cardDataByDefId = new Map<string, Record<string, any>>();
   for (const entry of inv.starting_deck ?? []) {
+    if (entry.card_definition_id && entry.card) cardDataByDefId.set(String(entry.card_definition_id), entry.card);
+  }
+  for (const src of [
+    ...(bootstrap.discoverable_cards ?? []),
+    ...(bootstrap.upgrade_cards ?? []),
+  ]) {
+    if (src?.id) cardDataByDefId.set(String(src.id), src);
+  }
+  const specialEntries = (inv.starting_deck ?? []).filter((entry) => entry.signature_card_id || entry.weakness_id);
+  const deckEntries = carry?.deck?.length
+    ? [
+        ...carry.deck.map((cardDefId, i): BootstrapDeckEntry => ({
+          deck_entry_id: `carry_${i}`,
+          quantity: 1,
+          slot_order: i,
+          card_definition_id: cardDefId,
+          signature_card_id: null,
+          weakness_id: null,
+          card: cardDataByDefId.get(String(cardDefId)) ?? null,
+          signature_card: null,
+          weakness: null,
+        })),
+        ...specialEntries,
+      ]
+    : (inv.starting_deck ?? []);
+  for (const entry of deckEntries) {
     const src = entry.card ?? entry.signature_card ?? entry.weakness;
     if (!src) continue;
     const source: CardInstanceInfo['source'] = entry.card

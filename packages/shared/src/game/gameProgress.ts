@@ -42,6 +42,7 @@ export interface OutcomeData {
   outcome_code: string;
   condition_expression?: Record<string, unknown> | null;
   narrative_text?: string;
+  rewards?: Record<string, unknown>;
   flag_sets?: Array<{ flag_code: string; value: unknown }>;
 }
 

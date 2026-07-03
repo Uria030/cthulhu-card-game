@@ -140,6 +140,31 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
         effects: discFxRes.rows.filter((e: any) => e.card_def_id === c.id),
       }));
 
+      // ── 整備期可購買卡池(E4):先提供唯讀卡面,D5 可再回填更精準的升級池篩選 ──
+      const upgradeDefRes = await pool.query(
+        `SELECT *
+           FROM card_definitions
+          WHERE COALESCE(card_source, 'standard') = 'standard'
+            AND COALESCE(is_signature, FALSE) = FALSE
+            AND COALESCE(is_weakness, FALSE) = FALSE
+            AND COALESCE(is_extra, FALSE) = FALSE
+            AND COALESCE(starting_xp, 0) > 0
+          ORDER BY faction, starting_xp, name_zh
+          LIMIT 80`,
+      );
+      const upgradeIds = upgradeDefRes.rows.map((c: any) => c.id).filter(Boolean);
+      const upgradeFxRes = upgradeIds.length
+        ? await pool.query(
+            `SELECT * FROM card_effects
+              WHERE card_def_id = ANY($1) ORDER BY card_def_id, sort_order`,
+            [upgradeIds],
+          )
+        : { rows: [] as any[] };
+      const upgradeCards = upgradeDefRes.rows.map((c: any) => ({
+        ...c,
+        effects: upgradeFxRes.rows.filter((e: any) => e.card_def_id === c.id),
+      }));
+
       // ── 三池完整卡面(loadFullStage 只帶名稱,這裡補全卡內容)──
       const mythosIds = (stage.mythos_pool || []).map((p: any) => p.mythos_card_id).filter(Boolean);
       const encounterIds = (stage.encounter_pool || []).map((p: any) => p.encounter_card_id).filter(Boolean);
@@ -357,6 +382,7 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
           combat_style_pools: stylePools,
           keeper_settings: keeperSettings,
           discoverable_cards: discoverableCards,
+          upgrade_cards: upgradeCards,
         },
       });
     } catch (error) {

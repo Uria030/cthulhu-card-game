@@ -40,6 +40,14 @@ import {
   resolveEncounterOption,
   resolveEncounterWithTalisman,
   availableTalismansForEncounter,
+  initCampaignProgress,
+  registerInvestigator,
+  scenarioRewardFromOutcome,
+  settleScenarioEnd,
+  applyLongRest,
+  preparationCardXpCost,
+  canPurchasePreparationCard,
+  purchasePreparationCard,
   CURRENT_MESSAGE_SCHEMA_VERSION,
 } from '@cthulhu/shared';
 import type {
@@ -48,6 +56,10 @@ import type {
   InvestigatorState,
   KeeperState,
   InvestigatorAIState,
+  CampaignProgress,
+  ScenarioReward,
+  StageBootstrap,
+  PreparationCardDefinition,
 } from '@cthulhu/shared';
 import type {
   IntentMessage,
@@ -363,6 +375,67 @@ const PHASE_ORDER: TurnPhase[] = ['investigator', 'mythos', 'turn_end'];
 type ModalType = null | 'keeper' | 'act' | 'team';
 type PanelType = null | 'hand' | 'bag';
 
+function campaignProgressStorageKey(bootstrap: StageBootstrap | null | undefined): string | null {
+  const campaignId = bootstrap?.campaign?.id ?? bootstrap?.stage?.id;
+  const investigatorId = bootstrap?.investigator?.id;
+  return campaignId && investigatorId ? `ug_campaign_progress:${campaignId}:${investigatorId}` : null;
+}
+
+function loadStoredCampaignProgress(bootstrap: StageBootstrap): CampaignProgress | null {
+  const key = campaignProgressStorageKey(bootstrap);
+  if (!key) return null;
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    return raw ? JSON.parse(raw) as CampaignProgress : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredCampaignProgress(bootstrap: StageBootstrap | null, progress: CampaignProgress): void {
+  const key = campaignProgressStorageKey(bootstrap);
+  if (!key) return;
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(progress));
+  } catch {
+    // sessionStorage may be blocked; playable flow still works in memory.
+  }
+}
+
+function deckDefinitionIdsFromBootstrap(bootstrap: StageBootstrap | null): string[] {
+  const ids: string[] = [];
+  for (const entry of bootstrap?.investigator?.starting_deck ?? []) {
+    if (!entry.card_definition_id) continue;
+    for (let i = 0; i < (entry.quantity ?? 1); i += 1) ids.push(String(entry.card_definition_id));
+  }
+  return ids;
+}
+
+function ensureCampaignProgressForSetup(setup: GameSetup): CampaignProgress {
+  const inv = setup.bootstrap?.investigator;
+  const base = setup.campaignProgress ?? initCampaignProgress(setup.bootstrap?.campaign?.id ?? setup.stageId);
+  if (!inv) return base;
+  return registerInvestigator(base, {
+    investigatorDefinitionId: inv.id,
+    deck: deckDefinitionIdsFromBootstrap(setup.bootstrap),
+    combatStyle: setup.investigator.combatStyle,
+    specializations: setup.investigator.specializations,
+    hpMax: setup.investigator.hpMax,
+    sanMax: setup.investigator.sanMax,
+  });
+}
+
+function purchaseBlockLabel(reason?: string): string {
+  switch (reason) {
+    case 'source_not_purchaseable': return '來源限制';
+    case 'special_card_not_purchaseable': return '特殊卡';
+    case 'unique_already_owned': return '獨特已擁有';
+    case 'not_enough_xp': return 'XP 不足';
+    case 'investigator_not_registered': return '未建檔';
+    default: return '不可購買';
+  }
+}
+
 /**
  * 載入殼:/scenario/test 走教學寫死 setup;
  * /scenario/:stageId(UUID)打 /api/play bootstrap → buildSetupFromBootstrap。
@@ -396,7 +469,13 @@ export function TestScenarioScreen() {
       Promise.all(aiProfiles.map((p) => fetchBootstrap(stageId, p.templateId).catch(() => null))),
     ])
       .then(([bootstrap, aiBoots]) => {
-        if (!cancelled) setSetup(buildSetupFromBootstrap(bootstrap, aiBoots.filter((b): b is Boot => b != null)));
+        if (!cancelled) {
+          setSetup(buildSetupFromBootstrap(
+            bootstrap,
+            aiBoots.filter((b): b is Boot => b != null),
+            loadStoredCampaignProgress(bootstrap),
+          ));
+        }
       })
       .catch((e: unknown) => {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
@@ -429,6 +508,7 @@ export function TestScenarioScreen() {
  *  承受傷害 / 承受恐懼 = 每回合邊界 HP/SAN 淨損。*/
 type SixMetric = { clues: number; damage: number; resources: number; draws: number; hp: number; san: number };
 const makeSixMetric = (): SixMetric => ({ clues: 0, damage: 0, resources: 0, draws: 0, hp: 0, san: 0 });
+type CampaignSettlement = { reward: ScenarioReward; effects: ResultEffect[]; progress: CampaignProgress };
 
 function BattleBoard({ setup }: { setup: GameSetup }) {
   const navigate = useNavigate();
@@ -477,6 +557,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // 戰役旗標(幕翻面/結局寫入)與結算
   const [flags, setFlags] = useState<Record<string, unknown>>({});
   const [outcome, setOutcome] = useState<OutcomeData | null>(null);
+  const [campaignProgress, setCampaignProgress] = useState<CampaignProgress>(() => ensureCampaignProgressForSetup(setup));
+  const [campaignSettlement, setCampaignSettlement] = useState<CampaignSettlement | null>(null);
+  const [preparationOpen, setPreparationOpen] = useState(false);
   const [locationBarId, setLocationBarId] = useState<string | null>(null);
   const [logCollapsed, setLogCollapsed] = useState(true);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
@@ -489,6 +572,24 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [zoom, setZoom] = useState(1);
 
   const append = (s: string) => setLog((l) => [...l.slice(-50), s]);
+
+  useEffect(() => {
+    saveStoredCampaignProgress(setup.bootstrap, campaignProgress);
+  }, [setup.bootstrap, campaignProgress]);
+
+  useEffect(() => {
+    if (!outcome || campaignSettlement) return;
+    const reward = scenarioRewardFromOutcome(outcome, scenario.hiddenPoints ?? [], [investigator.investigatorId]);
+    const settled = settleScenarioEnd(
+      campaignProgress,
+      { [investigator.investigatorId]: investigator },
+      reward,
+    );
+    const rested = applyLongRest(settled.progress);
+    const effects = [...settled.effects, ...rested.effects];
+    setCampaignProgress(rested.progress);
+    setCampaignSettlement({ reward, effects, progress: rested.progress });
+  }, [outcome, campaignSettlement, campaignProgress, investigator, scenario.hiddenPoints]);
 
   // === Uria 六項檢查數據:累計於 ref,結局時在結算畫面渲染(不觸發 re-render;outcome set 時讀到的即最終值) ===
   const statsRef = useRef<Record<string, SixMetric>>({});
@@ -1399,6 +1500,16 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setLocationBarId(locId);
   };
 
+  const buyPreparationCard = useCallback((card: PreparationCardDefinition) => {
+    const result = purchasePreparationCard(campaignProgress, investigator.investigatorDefinitionId, card);
+    if (!result.ok) {
+      append('[整備] 無法購買「' + String(card.name_zh ?? card.code ?? card.id) + '」:' + purchaseBlockLabel(result.reason));
+      return;
+    }
+    setCampaignProgress(result.progress);
+    append('[整備] 花費 ' + result.xpCost + ' XP 購買「' + String(card.name_zh ?? card.code ?? card.id) + '」。');
+  }, [campaignProgress, investigator.investigatorDefinitionId]);
+
   // ─── 衍生資料 ──────────────────────
   const handCards = investigator.hand.map((id) => cardMeta[id]).filter((x): x is CardDisplay => !!x);
   const enemyHere: EnemyInstance | undefined = scenario.enemies.find((e) => e.locationId === investigator.currentLocationId && e.hp > 0);
@@ -1441,6 +1552,11 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // phase dots:目前 4 階段(短休息/調查員/神話/結束)
   const phaseIdx = PHASE_ORDER.indexOf(phase);
   const lastLogText = log[log.length - 1] || '';
+  const playerCarry = campaignProgress.investigators[investigator.investigatorDefinitionId];
+  const rewardPreview: ScenarioReward = outcome
+    ? (campaignSettlement?.reward ?? scenarioRewardFromOutcome(outcome, scenario.hiddenPoints ?? [], [investigator.investigatorId]))
+    : {};
+  const visibleUpgradeCards = setup.upgradeCards.slice(0, 24);
 
   return (
     <div className="bg-root">
@@ -2141,6 +2257,21 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             <hr className="modal-divider" />
             <div className="outcome-narrative">{outcome.narrative_text}</div>
             <hr className="modal-divider" />
+            <div className="outcome-campaign">
+              <div className="outcome-stats-title">戰役結算</div>
+              <div className="campaign-reward-grid">
+                <div><span>XP</span><strong>+{rewardPreview.xp ?? 0}</strong></div>
+                <div><span>天賦點</span><strong>+{rewardPreview.talentPoints ?? 0}</strong></div>
+                <div><span>凝聚力</span><strong>{campaignProgress.cohesion}</strong></div>
+                <div><span>下一章</span><strong>{campaignProgress.currentChapterNumber}</strong></div>
+              </div>
+              {campaignSettlement && (
+                <div className="campaign-settlement-note">
+                  長休息完成,整備模式已開放。{playerCarry ? `目前可用 XP:${playerCarry.xp}` : ''}
+                </div>
+              )}
+            </div>
+            <hr className="modal-divider" />
             <div className="outcome-stats">
               <div className="outcome-stats-title">調查員數據統計</div>
               <table className="outcome-stats-table">
@@ -2176,8 +2307,53 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               </div>
             )}
             <div className="outcome-actions">
+              <button disabled={!campaignSettlement} onClick={() => setPreparationOpen(true)}>進入整備</button>
               <button onClick={() => navigate('/lobby')}>回到大廳</button>
               <button onClick={() => window.location.reload()}>再玩一次</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {preparationOpen && (
+        <div className="preparation-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setPreparationOpen(false); }}>
+          <div className="preparation-frame">
+            <button className="modal-close" onClick={() => setPreparationOpen(false)}>✕</button>
+            <div className="modal-title">❖ 整備模式 ❖</div>
+            <div className="preparation-summary">
+              <div><span>可用 XP</span><strong>{playerCarry?.xp ?? 0}</strong></div>
+              <div><span>牌組組成</span><strong>{playerCarry?.deck.length ?? 0}</strong></div>
+              <div><span>凝聚力</span><strong>{campaignProgress.cohesion}</strong></div>
+            </div>
+            <div className="preparation-entry-row">
+              <button disabled>天賦樹</button>
+            </div>
+            <hr className="modal-divider" />
+            <div className="preparation-list">
+              {visibleUpgradeCards.length === 0 && (
+                <div className="preparation-empty">目前沒有可購買的升級卡池資料。</div>
+              )}
+              {visibleUpgradeCards.map((card) => {
+                const check = canPurchasePreparationCard(playerCarry, card);
+                const cost = preparationCardXpCost(card);
+                return (
+                  <div className="preparation-card" key={card.id}>
+                    <div>
+                      <div className="preparation-card-name">{card.name_zh ?? card.code ?? card.id}</div>
+                      <div className="preparation-card-meta">
+                        {card.faction ?? 'N'} · {card.card_type ?? 'card'} · ★{card.starting_xp ?? 0}{card.is_exceptional ? ' · 卓越' : ''}
+                      </div>
+                    </div>
+                    <button disabled={!check.ok} onClick={() => buyPreparationCard(card)}>
+                      {check.ok ? `${cost} XP` : purchaseBlockLabel(check.reason)}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="outcome-actions">
+              <button onClick={() => setPreparationOpen(false)}>完成整備</button>
+              <button onClick={() => navigate('/lobby')}>前往大廳</button>
             </div>
           </div>
         </div>

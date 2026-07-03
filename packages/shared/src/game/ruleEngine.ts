@@ -214,6 +214,27 @@ function spendAssetUse(inv: InvestigatorState, cardId: string, data: CardData | 
   return { investigator: next, effects };
 }
 
+function enemyName(ctx: RuleContext, enemy: EnemyInstance | undefined, fallback = '目標'): string {
+  if (!enemy) return fallback;
+  return ctx.enemyStats?.[enemy.enemyDefinitionId]?.name_zh ?? enemy.enemyDefinitionId ?? fallback;
+}
+
+function rejectStaleIntent(intent: IntentMessage, narrative: string, suggestion?: string): RuleResolveOutput {
+  return reject(intent, narrative, suggestion ?? '重新觀察場面,改選仍然存在的目標。');
+}
+
+function rejectStaleEnemyIntent(
+  intent: IntentMessage,
+  ctx: RuleContext,
+  enemy: EnemyInstance | undefined,
+  actionText: string,
+): RuleResolveOutput {
+  return rejectStaleIntent(
+    intent,
+    '你正要' + actionText + (enemy ? '「' + enemyName(ctx, enemy) + '」' : '那個目標') + '時,局勢已經變了;像是有人搶先一步處理了它,目標不再可用。',
+  );
+}
+
 // ─── 引擎輸出:結算結果 + 新狀態切片 ──────
 export interface RuleResolveOutput {
   /** 對應的 ResultMessage(供 publish 給訊息匯流排) */
@@ -508,7 +529,7 @@ function resolveStabilize(intent: IntentMessage, ctx: RuleContext): RuleResolveO
     return reject(intent, '隊友不在你所在地點,搆不到他。');
   }
   if (!isDowned(target)) {
-    return reject(intent, '對方還站著,不需要穩定。');
+    return rejectStaleIntent(intent, '你衝到他身邊時,有人已經搶先一步把他扶穩;這次救援意圖失效了。', '改去處理仍然倒地的隊友,或把行動用在當前威脅上。');
   }
   const stabilized = applyStabilize(target);
   const newInv: InvestigatorState = {
@@ -538,6 +559,8 @@ function resolveTaunt(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
     ? candidates.find((e) => e.instanceId === requestedId)
     : candidates[0];
   if (!enemy) {
+    const requestedEnemy = requestedId ? ctx.scenario.enemies.find((e) => e.instanceId === requestedId) : undefined;
+    if (requestedEnemy && requestedEnemy.hp <= 0) return rejectStaleEnemyIntent(intent, ctx, requestedEnemy, '嘲諷');
     return reject(intent, '同地點沒有未與你交戰的敵人');
   }
   // §11.2 巨大 massive:與全地點調查員交戰 → 嘲諷只是「加入」交戰,不從他人手上轉走。
@@ -750,6 +773,9 @@ function resolveSearch(intent: IntentMessage, ctx: RuleContext): RuleResolveOutp
   const pools = ctx.scenario.discoverablePools ?? [];
   const slotIdx = pools.findIndex((s) => s.locationId === locId && s.takenBy === null);
   if (slotIdx < 0) {
+    if (pools.some((s) => s.locationId === locId && s.takenBy !== null)) {
+      return rejectStaleIntent(intent, '你翻到那個藏物處時,有人已經搶先一步把有用的東西帶走;這裡空了。', '換個地點探索,或改做一般調查。');
+    }
     return reject(intent, '這個地點已經沒有可發現的東西了', '換個地點探索,或進行一般調查找線索');
   }
   if (ctx.investigator.actionPoints < 1) {
@@ -832,6 +858,7 @@ function resolveAllyAttack(intent: IntentMessage, ctx: RuleContext): RuleResolve
     ? ctx.scenario.enemies.find((e) => e.instanceId === requestedId)
     : ctx.scenario.enemies.find((e) => e.locationId === ctx.investigator.currentLocationId && e.hp > 0);
   if (!enemy || enemy.hp <= 0) {
+    if (requestedId) return rejectStaleEnemyIntent(intent, ctx, enemy, '指揮盟友攻擊');
     return reject(intent, '附近沒有可攻擊的目標');
   }
   if (enemy.locationId !== ctx.investigator.currentLocationId) {
@@ -896,7 +923,7 @@ function resolveAttack(intent: IntentMessage, ctx: RuleContext): RuleResolveOutp
 function performAttack(intent: IntentMessage, ctx: RuleContext, enemyInstanceId: string): RuleResolveOutput {
   const enemy = ctx.scenario.enemies.find((e) => e.instanceId === enemyInstanceId);
   if (!enemy || enemy.hp <= 0) {
-    return reject(intent, '目標已倒下或不存在');
+    return rejectStaleEnemyIntent(intent, ctx, enemy, '攻擊');
   }
   if (enemy.locationId !== ctx.investigator.currentLocationId) {
     return reject(intent, '目標不在你所在地點');
@@ -967,7 +994,7 @@ function resolveEvade(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
     return reject(intent, '行動點不足:閃避需 1,剩 ' + ctx.investigator.actionPoints);
   }
   if (ctx.investigator.engagedWith.length === 0) {
-    return reject(intent, '你沒有與任何敵人交戰,無需閃避');
+    return rejectStaleIntent(intent, '你正要脫身時,身邊的糾纏已經被解開;沒有敵人還抓著你。', '改用行動移動、攻擊,或支援隊友。');
   }
   const commit = takeCommit(intent, ctx, 'reflex');
   if (commit.error) return reject(intent, commit.error);
@@ -976,7 +1003,14 @@ function resolveEvade(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
   const requestedId = (intent.payload as { enemyInstanceId?: string }).enemyInstanceId;
   const enemyId = requestedId ?? ctx.investigator.engagedWith[0];
   if (!ctx.investigator.engagedWith.includes(enemyId)) {
-    return reject(intent, '你沒有與該敵人交戰:' + enemyId);
+    const enemy = ctx.scenario.enemies.find((e) => e.instanceId === enemyId);
+    return rejectStaleIntent(
+      intent,
+      enemy && enemy.hp <= 0
+        ? '你要閃開的那東西已經倒下;這個閃避意圖失效了。'
+        : '你要閃開的目標已經不再纏著你;這個閃避意圖失效了。',
+      '重新查看目前交戰中的敵人。',
+    );
   }
   const enemy = ctx.scenario.enemies.find((e) => e.instanceId === enemyId);
   const here = ctx.scenario.locations.find(
@@ -1231,6 +1265,7 @@ function performWeaponAttack(
     ? ctx.scenario.enemies.find((e) => e.instanceId === requestedEnemy)
     : ctx.scenario.enemies.find((e) => e.locationId === ctx.investigator.currentLocationId && e.hp > 0);
   if (!enemy || enemy.hp <= 0) {
+    if (requestedEnemy) return rejectStaleEnemyIntent(intent, ctx, enemy, '攻擊');
     return reject(intent, '當前地點沒有可攻擊的目標');
   }
   if (enemy.locationId !== ctx.investigator.currentLocationId) {
@@ -1338,6 +1373,7 @@ function performSpellAttack(
     ? ctx.scenario.enemies.find((e) => e.instanceId === requestedEnemy)
     : ctx.scenario.enemies.find((e) => e.locationId === ctx.investigator.currentLocationId && e.hp > 0);
   if (!enemy || enemy.hp <= 0) {
+    if (requestedEnemy) return rejectStaleEnemyIntent(intent, ctx, enemy, '施法攻擊');
     return reject(intent, '當前地點沒有可施法的目標');
   }
   if (enemy.locationId !== ctx.investigator.currentLocationId) {

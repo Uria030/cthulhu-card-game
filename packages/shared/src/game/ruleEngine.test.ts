@@ -15,6 +15,9 @@ function test(name: string, fn: TestFn): void { tests.push({ name, fn }); }
 function assertEq<T>(actual: T, expected: T, msg?: string): void {
   if (actual !== expected) throw new Error((msg ?? 'assertEq') + ': expected=' + String(expected) + ', actual=' + String(actual));
 }
+function assertIncludes(actual: string, expected: string, msg?: string): void {
+  if (!actual.includes(expected)) throw new Error((msg ?? 'assertIncludes') + ': expected substring=' + expected + ', actual=' + actual);
+}
 
 // ─── 測試固件 ────────────────────────
 function makeInv(overrides: Partial<InvestigatorState> = {}): InvestigatorState {
@@ -106,6 +109,47 @@ test('穩定:隊友不同地點/站著 → 駁回', () => {
   ctx.investigators['inv-3'] = makeInv({ investigatorId: 'inv-3' });
   assertEq(resolveIntent(makeIntent('stabilize', { targetInvestigatorId: 'inv-2' }), ctx).result.outcome, 'rejected');
   assertEq(resolveIntent(makeIntent('stabilize', { targetInvestigatorId: 'inv-3' }), ctx).result.outcome, 'rejected');
+});
+
+test('E10:救援目標已站起時維持駁回,但回饋搶先一步敘事', () => {
+  const ctx = makeCtx();
+  ctx.investigators['inv-2'] = makeInv({ investigatorId: 'inv-2', hp: 3, downed: false });
+  const r = resolveIntent(makeIntent('stabilize', { targetInvestigatorId: 'inv-2' }), ctx);
+  assertEq(r.result.outcome, 'rejected');
+  assertIncludes(r.result.rejection?.narrative ?? '', '搶先一步');
+});
+
+test('E10:指定敵人已倒下時維持駁回,但回饋目標失效敘事', () => {
+  const sc = makeScenario(['loc-a']);
+  sc.enemies = [{ instanceId: 'e1', enemyDefinitionId: 'def-e1', locationId: 'loc-a', hp: 0, engagedWith: [], modifiers: [] }];
+  const inv = makeInv({ currentLocationId: 'loc-a', actionPoints: 3 });
+  const ctx: RuleContext = {
+    scenario: sc,
+    investigator: inv,
+    turn: makeTurn(),
+    investigators: { 'inv-1': inv },
+    enemyStats: { 'def-e1': { name_zh: '裂嘴女' } },
+  };
+  const r = resolveIntent(makeIntent('attack', { enemyInstanceId: 'e1' }), ctx);
+  assertEq(r.result.outcome, 'rejected');
+  assertIncludes(r.result.rejection?.narrative ?? '', '搶先一步');
+});
+
+test('E10:共享物資已被取走時維持駁回,但回饋藏物處已空敘事', () => {
+  const sc = makeScenario(['loc-a']);
+  sc.discoverablePools = [{ id: 'slot-1', locationId: 'loc-a', cardInstanceId: 'c1', takenBy: 'inv-2' }];
+  const inv = makeInv({ currentLocationId: 'loc-a', actionPoints: 3 });
+  const ctx: RuleContext = { scenario: sc, investigator: inv, turn: makeTurn(), investigators: { 'inv-1': inv } };
+  const r = resolveIntent(makeIntent('search'), ctx);
+  assertEq(r.result.outcome, 'rejected');
+  assertIncludes(r.result.rejection?.narrative ?? '', '搶先一步');
+});
+
+test('E10:交戰已解除時維持駁回,但回饋糾纏已解開敘事', () => {
+  const ctx = makeCtx({ engagedWith: [] });
+  const r = resolveIntent(makeIntent('evade'), ctx);
+  assertEq(r.result.outcome, 'rejected');
+  assertIncludes(r.result.rejection?.narrative ?? '', '糾纏已經被解開');
 });
 
 // ─── 倒地同步窗口回歸(review WARN 指定)──

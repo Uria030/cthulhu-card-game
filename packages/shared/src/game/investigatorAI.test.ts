@@ -608,6 +608,62 @@ test('救援帳:兩級優先權 — 成形隊友(場上有武器)倒地,救援�
   assert(s1 > s0, `成形隊友更該救(白板 ${s0.toFixed(2)} vs 成形 ${s1.toFixed(2)})`);
 });
 
+test('救援帳回歸(Raviel WARN 26070203):怪駐守下 failures 0/1/2 三檔行為', () => {
+  const enemy = { instanceId: 'e1', enemyDefinitionId: 'rev_t1', locationId: 'A', hp: 4, engagedWith: ['p1-inv'], modifiers: [] };
+  const scoreAt = (failures: number) => {
+    const ally = makeAlly({ hp: 0, downed: true, currentLocationId: 'A', deathSaveFailures: failures });
+    const c = ctx({ scenario: makeScenario({ enemies: [enemy] }), allies: { 'p1-inv': ally } });
+    return enumerateCandidates(c, MARCUS, initInvestigatorAIState()).find((x) => x.actionType === 'stabilize')?.score ?? 0;
+  };
+  const f0 = scoreAt(0), f1 = scoreAt(1), f2 = scoreAt(2);
+  assert(f0 < 1, `f=0 白救折價(${f0.toFixed(2)})`);
+  assert(f1 > f0, `f=1 時鐘壓力遞增(${f0.toFixed(2)}→${f1.toFixed(2)})`);
+  assert(f2 > 2, `f=2 必救浮現、壓過白救閘門(${f2.toFixed(2)})——不存在永不救援死鎖`);
+});
+
+test('投入加值邊界(Raviel WARN):commit 拉滿即停,不過量投牌', () => {
+  const boss = { instanceId: 'b1', enemyDefinitionId: 'boss_t3', locationId: 'A', hp: 20, engagedWith: [], modifiers: [] };
+  const cards = {
+    ...CARDS,
+    skill_big: { name_zh: '大圖示', card_type: 'skill', cost: 0, commit_icons: { all: 15 }, effects: [] },
+    skill_b2: { name_zh: '大圖示2', card_type: 'skill', cost: 0, commit_icons: { all: 15 }, effects: [] },
+  };
+  const c = ctx({
+    scenario: makeScenario({ enemies: [boss] }),
+    investigator: makeInv({ assetsInPlay: ['weapon'], hand: ['skill_big', 'skill_b2'], assetState: { weapon: { usesLeft: null, exhausted: false } } }),
+    cardLookup: cards,
+    objectiveEnemyCodes: ['boss_t3'],
+  });
+  const atk = enumerateCandidates(c, MARCUS, initInvestigatorAIState()).find((x) => x.actionType === 'execute_card_action');
+  const ids = (atk?.payload.commitCardIds as string[] | undefined) ?? [];
+  assertEq(ids.length, 1, `一張 +9 已拉滿(≥75%),不該投第二張(實際 ${ids.length} 張)`);
+});
+
+test('估值競爭邊界(Raviel WARN):殺敵指派下,必中輸出卡壓過經濟卡;無指派時經濟卡不被壓', () => {
+  const boss = { instanceId: 'b1', enemyDefinitionId: 'boss_t3', locationId: 'A', hp: 20, engagedWith: [], modifiers: [] };
+  const cards = {
+    ...CARDS,
+    econ: { name_zh: '快錢', card_type: 'event', cost: 0, effects: [{ trigger_type: 'action', effect_code: 'gain_resource', effect_params: { amount: 2 } }] },
+  };
+  const mk = (withObjective: boolean) => {
+    const c = ctx({
+      scenario: makeScenario({ enemies: [boss] }),
+      investigator: makeInv({ hand: ['dmg_event', 'econ'], resources: 5 }),
+      cardLookup: cards,
+      ...(withObjective ? { objectiveEnemyCodes: ['boss_t3'] } : {}),
+    });
+    const cands = enumerateCandidates(c, ELIAS, initInvestigatorAIState());
+    return {
+      dmg: cands.find((x) => x.payload.cardInstanceId === 'dmg_event')?.score ?? 0,
+      econ: cands.find((x) => x.payload.cardInstanceId === 'econ')?.score ?? 0,
+    };
+  };
+  const kill = mk(true);
+  assert(kill.dmg > kill.econ, `kill 指派:必中輸出(${kill.dmg.toFixed(2)})> 經濟(${kill.econ.toFixed(2)})`);
+  const free = mk(false);
+  assert(free.econ > kill.econ, `無指派時經濟卡不吃 killFit 折價(${kill.econ.toFixed(2)} → ${free.econ.toFixed(2)})`);
+});
+
 test('救援移動:隊友在隔壁倒地 → 趕過去', () => {
   const downedAlly = makeAlly({ currentLocationId: 'B', hp: 0, downed: true });
   const c = ctx({ allies: { 'p1-inv': downedAlly } });

@@ -23,6 +23,10 @@ export interface CampaignState {
   cohesion: number;
   /** 已解鎖的團隊精神(對應 MOD-04) */
   unlockedTeamSpirits: string[];
+  /** 團隊精神投資深度 key=spirit code */
+  teamSpiritInvestments?: Record<string, { points: number; milestoneUnlocked: boolean }>;
+  /** 團隊精神採用/深度/里程碑效果快照;具體 effect_code 解讀由後續批次接入 */
+  teamSpiritEffects?: TeamSpiritEffect[];
   /** 已解鎖的支線(規則書 §7.2) */
   unlockedSidequests: string[];
   /** 當前章節 ID */
@@ -217,6 +221,18 @@ export interface InvestigatorTalentEffect {
   name_zh?: string | null;
   effectCode: string;
   effectParams?: Record<string, unknown>;
+  description_zh?: string | null;
+}
+
+export interface TeamSpiritEffect {
+  spiritId: string;
+  spiritCode: string;
+  category?: string | null;
+  name_zh?: string | null;
+  depth: number;
+  effectCode: string;
+  effectValue?: number | null;
+  effectFormula?: string | null;
   description_zh?: string | null;
 }
 

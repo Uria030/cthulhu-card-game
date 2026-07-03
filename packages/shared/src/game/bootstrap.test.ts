@@ -4,7 +4,7 @@
  */
 import { buildGameFromBootstrap, buildChaosBag, mapEnvironmentToVisibility } from './bootstrap';
 import type { StageBootstrap } from './bootstrap';
-import { emptyTalentProgress, initCampaignProgress, registerInvestigator } from './campaignProgress';
+import { adoptTeamSpirit, emptyTalentProgress, initCampaignProgress, investTeamSpirit, registerInvestigator } from './campaignProgress';
 
 type TestFn = () => void;
 const tests: { name: string; fn: TestFn }[] = [];
@@ -275,6 +275,27 @@ test('CampaignProgress talents 注入下一場:屬性加成、被動快照、天
   assertEq(g.investigator.talentNodeIds?.includes('n2'), true);
   assertEq(g.investigator.talentEffects?.[0].effectCode, 'passive_team_focus');
   assertEq(Object.values(g.cardIndex).some((c) => c.sourceId === 'tc1'), true, '天賦卡由 talent_cards 卡池補卡面');
+});
+
+// ─── 測試 13:E8 團隊精神 carryover 生效 ─────────
+test('CampaignProgress teamSpirits 注入下一場:已採用精神、深度、效果快照', () => {
+  const spirit = {
+    id: 'spirit-1',
+    code: 'ts_focus_fire',
+    name_zh: '集火協調',
+    category: 'combat',
+    adopt_effect_zh: '隊伍開始演練集火節奏。',
+    depth_effects: [
+      { id: 'd1', depth: 1, effect_desc_zh: '攻擊同一目標時更容易協調。', effect_value: 1 },
+    ],
+  };
+  let progress = adoptTeamSpirit({ ...initCampaignProgress('camp-1'), cohesion: 3 }, spirit).progress;
+  progress = investTeamSpirit(progress, spirit).progress;
+  const g = buildGameFromBootstrap(makeFixture(), { rng: fixedRng, campaignProgress: progress });
+  assertEq(g.campaign.cohesion, 1);
+  assertEq(g.campaign.unlockedTeamSpirits.includes('ts_focus_fire'), true);
+  assertEq(g.campaign.teamSpiritInvestments?.ts_focus_fire.points, 1);
+  assertEq(g.campaign.teamSpiritEffects?.some((e) => e.effectCode === 'team_spirit:depth:1'), true);
 });
 
 // ─── runner ─────────────────────────────────

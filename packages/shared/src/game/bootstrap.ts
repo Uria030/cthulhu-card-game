@@ -26,8 +26,8 @@ import type {
 import { hpMaxFor, sanMaxFor, STARTING_RESOURCES, STARTING_HAND_SIZE } from './upkeep';
 import { hiddenPointFromRow } from './hiddenInvestigation';
 import type { HiddenPoint } from './hiddenInvestigation';
-import { cloneTalentProgress } from './campaignProgress';
-import type { CampaignProgress, PreparationCardDefinition, TalentTreeDefinition } from './campaignProgress';
+import { cloneTalentProgress, cloneTeamSpiritProgress } from './campaignProgress';
+import type { CampaignProgress, PreparationCardDefinition, TalentTreeDefinition, TeamSpiritDefinition } from './campaignProgress';
 
 // ─── 開局包型別(對齊 /api/play bootstrap 回傳,DB row 原樣 snake_case)──
 export interface BootstrapScenarioRow {
@@ -143,6 +143,8 @@ export interface StageBootstrap {
   talent_tree?: TalentTreeDefinition | null;
   /** 天賦樹可能解鎖/引用的卡面(唯讀;用於 talent_card 入牌組與下一場實例化) */
   talent_cards?: PreparationCardDefinition[];
+  /** 團隊精神候選池(唯讀;整備期採用/投入用) */
+  team_spirits?: TeamSpiritDefinition[];
 }
 
 // ─── 卡片實例查找表(state 只存實例 id,畫面靠這張表顯示卡面)──
@@ -335,12 +337,20 @@ export function buildGameFromBootstrap(
   };
 
   // ── 戰役層 ──
+  const teamSpirits = cloneTeamSpiritProgress(options.campaignProgress?.teamSpirits);
   const campaign: CampaignState = {
     campaignId: bootstrap.campaign?.id ?? '',
     campaignDefinitionId: bootstrap.campaign?.code ?? '',
-    flags: {},
-    cohesion: 0,
-    unlockedTeamSpirits: [],
+    flags: { ...(options.campaignProgress?.flags ?? {}) },
+    cohesion: options.campaignProgress?.cohesion ?? 0,
+    unlockedTeamSpirits: Object.keys(teamSpirits.investments),
+    teamSpiritInvestments: Object.fromEntries(
+      Object.entries(teamSpirits.investments).map(([code, investment]) => [
+        code,
+        { points: investment.points, milestoneUnlocked: investment.milestoneUnlocked },
+      ]),
+    ),
+    teamSpiritEffects: teamSpirits.effectSnapshots,
     unlockedSidequests: [],
     currentChapterId: bootstrap.chapter?.id ?? null,
     lastSessionEndedAt: null,

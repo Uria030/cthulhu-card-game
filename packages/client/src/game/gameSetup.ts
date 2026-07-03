@@ -29,6 +29,7 @@ import type {
   CampaignProgress,
   PreparationCardDefinition,
   TalentTreeDefinition,
+  TeamSpiritDefinition,
 } from '@cthulhu/shared';
 import {
   defaultKeeperProfile,
@@ -116,6 +117,8 @@ export interface GameSetup {
   talentTree: TalentTreeDefinition | null;
   /** 天賦節點可解鎖或分支限定的卡面 */
   talentCards: PreparationCardDefinition[];
+  /** 團隊精神候選池(整備期以凝聚力採用/投入) */
+  teamSpirits: TeamSpiritDefinition[];
   /** 讀檔/整備後的戰役進度;null = 新戰役開局 */
   campaignProgress: CampaignProgress | null;
 }
@@ -248,6 +251,7 @@ export function makeTestSetup(): GameSetup {
     upgradeCards: [],
     talentTree: null,
     talentCards: [],
+    teamSpirits: [],
     campaignProgress: null,
   };
 }
@@ -486,6 +490,7 @@ export function buildSetupFromBootstrap(
     upgradeCards: (bootstrap.upgrade_cards ?? []) as PreparationCardDefinition[],
     talentTree: bootstrap.talent_tree ?? null,
     talentCards: (bootstrap.talent_cards ?? []) as PreparationCardDefinition[],
+    teamSpirits: (bootstrap.team_spirits ?? []) as TeamSpiritDefinition[],
     campaignProgress,
   };
 }

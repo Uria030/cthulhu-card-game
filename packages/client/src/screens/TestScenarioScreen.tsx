@@ -48,6 +48,10 @@ import {
   purchasePreparationCard,
   canUnlockTalentNode,
   unlockTalentNode,
+  canAdoptTeamSpirit,
+  canInvestTeamSpirit,
+  adoptTeamSpirit,
+  investTeamSpirit,
   CURRENT_MESSAGE_SCHEMA_VERSION,
 } from '@cthulhu/shared';
 import type {
@@ -60,6 +64,7 @@ import type {
   ScenarioReward,
   PreparationCardDefinition,
   TalentNodeDefinition,
+  TeamSpiritDefinition,
 } from '@cthulhu/shared';
 import type {
   IntentMessage,
@@ -407,6 +412,18 @@ function talentUnlockBlockLabel(reason?: string): string {
   }
 }
 
+function teamSpiritBlockLabel(reason?: string): string {
+  switch (reason) {
+    case 'missing_team_spirit': return '無資料';
+    case 'already_adopted': return '已採用';
+    case 'team_spirit_limit': return '已達上限';
+    case 'team_spirit_not_adopted': return '先採用';
+    case 'team_spirit_maxed': return '已滿';
+    case 'not_enough_cohesion': return '凝聚力不足';
+    default: return '不可投入';
+  }
+}
+
 /**
  * 載入殼:/scenario/test 走教學寫死 setup;
  * /scenario/:stageId(UUID)打 /api/play bootstrap → buildSetupFromBootstrap。
@@ -532,6 +549,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [campaignSettlement, setCampaignSettlement] = useState<CampaignSettlement | null>(null);
   const [preparationOpen, setPreparationOpen] = useState(false);
   const [talentPanelOpen, setTalentPanelOpen] = useState(false);
+  const [teamSpiritPanelOpen, setTeamSpiritPanelOpen] = useState(false);
   const [locationBarId, setLocationBarId] = useState<string | null>(null);
   const [logCollapsed, setLogCollapsed] = useState(true);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
@@ -1509,6 +1527,27 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     );
   }, [campaignProgress, investigator.investigatorDefinitionId, setup.talentCards, setup.talentTree]);
 
+  const adoptSpirit = useCallback((spirit: TeamSpiritDefinition) => {
+    const result = adoptTeamSpirit(campaignProgress, spirit);
+    if (!result.ok) {
+      append('[整備] 無法採用團隊精神「' + String(spirit.name_zh ?? spirit.code) + '」:' + teamSpiritBlockLabel(result.reason));
+      return;
+    }
+    setCampaignProgress(result.progress);
+    append('[整備] 花費 1 凝聚力採用團隊精神「' + String(spirit.name_zh ?? spirit.code) + '」。');
+  }, [campaignProgress]);
+
+  const investSpirit = useCallback((spirit: TeamSpiritDefinition) => {
+    const result = investTeamSpirit(campaignProgress, spirit);
+    if (!result.ok) {
+      append('[整備] 無法投入團隊精神「' + String(spirit.name_zh ?? spirit.code) + '」:' + teamSpiritBlockLabel(result.reason));
+      return;
+    }
+    const points = result.progress.teamSpirits?.investments?.[spirit.code]?.points ?? 0;
+    setCampaignProgress(result.progress);
+    append('[整備] 花費 1 凝聚力強化「' + String(spirit.name_zh ?? spirit.code) + '」至 ' + points + ' 點。');
+  }, [campaignProgress]);
+
   // ─── 衍生資料 ──────────────────────
   const handCards = investigator.hand.map((id) => cardMeta[id]).filter((x): x is CardDisplay => !!x);
   const enemyHere: EnemyInstance | undefined = scenario.enemies.find((e) => e.locationId === investigator.currentLocationId && e.hp > 0);
@@ -1563,6 +1602,15 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       Number(a.branch_index ?? 0) - Number(b.branch_index ?? 0) ||
       Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0),
     );
+  const teamSpiritProgress = campaignProgress.teamSpirits;
+  const adoptedSpiritCount = Object.keys(teamSpiritProgress?.investments ?? {}).length;
+  const visibleTeamSpirits = setup.teamSpirits
+    .slice()
+    .sort((a, b) =>
+      Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0) ||
+      String(a.code).localeCompare(String(b.code)),
+    )
+    .slice(0, 33);
 
   return (
     <div className="bg-root">
@@ -2345,6 +2393,13 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               >
                 天賦樹
               </button>
+              <button
+                disabled={visibleTeamSpirits.length === 0}
+                className={teamSpiritPanelOpen ? 'active' : ''}
+                onClick={() => setTeamSpiritPanelOpen((v) => !v)}
+              >
+                團隊精神
+              </button>
             </div>
             {talentPanelOpen && (
               <div className="talent-panel">
@@ -2379,6 +2434,57 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                         <button disabled={!check.ok} onClick={() => investTalentNode(node.id)}>
                           {check.ok ? '解鎖' : talentUnlockBlockLabel(check.reason)}
                         </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {teamSpiritPanelOpen && (
+              <div className="talent-panel team-spirit-panel">
+                <div className="talent-panel-head">
+                  <div>
+                    <div className="talent-panel-title">團隊精神</div>
+                    <div className="talent-panel-meta">
+                      已採用 {adoptedSpiritCount} / 7 · 效果 {teamSpiritProgress?.effectSnapshots?.length ?? 0}
+                    </div>
+                  </div>
+                </div>
+                <div className="talent-node-list">
+                  {visibleTeamSpirits.length === 0 && (
+                    <div className="preparation-empty">目前沒有團隊精神資料。</div>
+                  )}
+                  {visibleTeamSpirits.map((spirit) => {
+                    const investment = teamSpiritProgress?.investments?.[spirit.code];
+                    const adopted = !!investment;
+                    const points = investment?.points ?? 0;
+                    const adoptCheck = canAdoptTeamSpirit(campaignProgress, spirit);
+                    const investCheck = canInvestTeamSpirit(campaignProgress, spirit);
+                    const depthEffect = (spirit.depth_effects ?? []).find((d) => Number(d.depth) === Math.min(5, points + 1));
+                    return (
+                      <div
+                        className={'talent-node-card team-spirit-card' + (adopted ? ' talent-node-unlocked' : '')}
+                        key={spirit.id}
+                      >
+                        <div>
+                          <div className="talent-node-name">{spirit.name_zh ?? spirit.code}</div>
+                          <div className="talent-node-meta">
+                            {spirit.category ?? 'team'} · {adopted ? `${points}/5` : '未採用'}
+                            {points >= 5 ? ' · 里程碑' : ''}
+                          </div>
+                          <div className="talent-node-desc">
+                            {depthEffect?.effect_desc_zh ?? spirit.description ?? spirit.adopt_effect_zh ?? ''}
+                          </div>
+                        </div>
+                        {!adopted ? (
+                          <button disabled={!adoptCheck.ok} onClick={() => adoptSpirit(spirit)}>
+                            {adoptCheck.ok ? '採用 1' : teamSpiritBlockLabel(adoptCheck.reason)}
+                          </button>
+                        ) : (
+                          <button disabled={!investCheck.ok} onClick={() => investSpirit(spirit)}>
+                            {investCheck.ok ? '投入 1' : teamSpiritBlockLabel(investCheck.reason)}
+                          </button>
+                        )}
                       </div>
                     );
                   })}

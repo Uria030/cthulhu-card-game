@@ -426,6 +426,26 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
           ).rows
         : [];
 
+      // ── E8 團隊精神候選池(唯讀):整備期用凝聚力採用/投入,具體效果先以快照觀察 ──
+      const spiritRes = await pool.query(
+        `SELECT *
+           FROM spirit_definitions
+          ORDER BY sort_order, code`,
+      );
+      const spiritIds = spiritRes.rows.map((s: any) => s.id).filter(Boolean);
+      const spiritDepthRes = spiritIds.length
+        ? await pool.query(
+            `SELECT *
+               FROM spirit_depth_effects
+              WHERE spirit_def_id = ANY($1) ORDER BY spirit_def_id, depth`,
+            [spiritIds],
+          )
+        : { rows: [] as any[] };
+      const teamSpirits = spiritRes.rows.map((s: any) => ({
+        ...s,
+        depth_effects: spiritDepthRes.rows.filter((d: any) => d.spirit_def_id === s.id),
+      }));
+
       // ── 城主行動點設定(keeper_ai_regulation §2.1)──
       const keeperSettings: Record<string, unknown> = {};
       const kbRes = await pool.query(
@@ -453,6 +473,7 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
           upgrade_cards: upgradeCards,
           talent_tree: talentTree,
           talent_cards: talentCards,
+          team_spirits: teamSpirits,
         },
       });
     } catch (error) {

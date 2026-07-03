@@ -16,8 +16,12 @@ import {
   canUnlockTalentNode,
   unlockTalentNode,
   resolveCampaignStageAccess,
+  adoptTeamSpirit,
+  investTeamSpirit,
+  canAdoptTeamSpirit,
+  canInvestTeamSpirit,
 } from './campaignProgress';
-import type { CampaignProgress, TalentTreeDefinition } from './campaignProgress';
+import type { CampaignProgress, TalentTreeDefinition, TeamSpiritDefinition } from './campaignProgress';
 import type { InvestigatorState } from './state';
 
 type TestFn = () => void;
@@ -72,6 +76,25 @@ function makeTalentTree(): TalentTreeDefinition {
         name_zh: '指揮專屬卡', talent_card_code: 'TE1-001', prerequisites: ['b1'], talent_point_cost: 1,
       },
     ],
+  };
+}
+
+function makeTeamSpirit(over: Partial<TeamSpiritDefinition> = {}): TeamSpiritDefinition {
+  return {
+    id: 'spirit-1',
+    code: 'ts_focus_fire',
+    name_zh: '集火協調',
+    category: 'combat',
+    description: '多人攻擊同一目標時觸發聯動加成',
+    adopt_effect_zh: '隊伍開始演練集火節奏。',
+    milestone_name_zh: '戰友的火線默契',
+    milestone_effect_zh: '集火協調達到里程碑。',
+    depth_effects: [
+      { id: 'd1', depth: 1, effect_name_zh: '目標標記', effect_desc_zh: '攻擊同一目標時更容易協調。', effect_value: 1 },
+      { id: 'd2', depth: 2, effect_name_zh: '交叉火線', effect_desc_zh: '集火節奏更加穩定。', effect_value: 2 },
+      { id: 'd5', depth: 5, effect_name_zh: '火線默契', effect_desc_zh: '集火已成為本能。', effect_value: 5 },
+    ],
+    ...over,
   };
 }
 
@@ -349,6 +372,69 @@ test('canAcquireCardByTalent:天賦等級鎖與分支鎖疊加', () => {
   assertEq(canAcquireCardByTalent(carry, { id: 'c1', faction: 'E', starting_xp: 2, talent_branch_lock: 'E_1' }).ok, true);
   assertEq(canAcquireCardByTalent(carry, { id: 'c2', faction: 'E', starting_xp: 3 }).reason, 'talent_level_locked');
   assertEq(canAcquireCardByTalent(carry, { id: 'c3', faction: 'E', starting_xp: 2, talent_branch_lock: 'E_2' }).reason, 'talent_branch_locked');
+});
+
+// ─── E8:團隊精神接入 ───────────────────────────
+test('adoptTeamSpirit:採用新團隊精神會扣凝聚力並寫效果快照', () => {
+  const prev: CampaignProgress = { ...initCampaignProgress('c'), cohesion: 2 };
+  const spirit = makeTeamSpirit();
+  const r = adoptTeamSpirit(prev, spirit, { adoptedAt: '2026-07-03T00:00:00.000Z' });
+  assertEq(r.ok, true);
+  assertEq(r.progress.cohesion, 1);
+  assertEq(r.progress.teamSpirits?.investments.ts_focus_fire.points, 0);
+  assertEq(r.progress.teamSpirits?.investments.ts_focus_fire.adoptedAt, '2026-07-03T00:00:00.000Z');
+  assertEq(r.progress.teamSpirits?.effectSnapshots[0]?.effectCode, 'team_spirit:adopt');
+});
+
+test('investTeamSpirit:投入已採用精神會扣凝聚力、升深度、刷新深度效果', () => {
+  const spirit = makeTeamSpirit();
+  let p = adoptTeamSpirit({ ...initCampaignProgress('c'), cohesion: 3 }, spirit).progress;
+  const r = investTeamSpirit(p, spirit);
+  assertEq(r.ok, true);
+  assertEq(r.progress.cohesion, 1, '採用 1 + 投入 1');
+  assertEq(r.progress.teamSpirits?.investments.ts_focus_fire.points, 1);
+  assertEq(r.progress.teamSpirits?.effectSnapshots.some((e) => e.effectCode === 'team_spirit:depth:1'), true);
+});
+
+test('investTeamSpirit:深度 5 解鎖里程碑,且已滿不可再投入', () => {
+  const spirit = makeTeamSpirit();
+  let p = adoptTeamSpirit({ ...initCampaignProgress('c'), cohesion: 7 }, spirit).progress;
+  for (let i = 0; i < 5; i += 1) p = investTeamSpirit(p, spirit).progress;
+  assertEq(p.cohesion, 1, '採用+五點共花 6');
+  assertEq(p.teamSpirits?.investments.ts_focus_fire.points, 5);
+  assertEq(p.teamSpirits?.investments.ts_focus_fire.milestoneUnlocked, true);
+  assertEq(p.teamSpirits?.effectSnapshots.some((e) => e.effectCode === 'team_spirit:milestone'), true);
+  assertEq(canInvestTeamSpirit(p, spirit).reason, 'team_spirit_maxed');
+});
+
+test('canAdoptTeamSpirit:最多採用 7 種,凝聚力不足會擋', () => {
+  let p: CampaignProgress = { ...initCampaignProgress('c'), cohesion: 7 };
+  for (let i = 0; i < 7; i += 1) {
+    p = adoptTeamSpirit(p, makeTeamSpirit({ id: 'spirit-' + i, code: 'ts_' + i })).progress;
+  }
+  assertEq(canAdoptTeamSpirit(p, makeTeamSpirit({ id: 'spirit-8', code: 'ts_8' })).reason, 'team_spirit_limit');
+  assertEq(canAdoptTeamSpirit({ ...initCampaignProgress('c'), cohesion: 0 }, makeTeamSpirit()).reason, 'not_enough_cohesion');
+});
+
+test('settleScenarioEnd:場景結算會保留團隊精神進度', () => {
+  const spirit = makeTeamSpirit();
+  let p = registerInvestigator({ ...initCampaignProgress('c'), cohesion: 3 }, {
+    investigatorDefinitionId: 'elias',
+    deck: ['c1'],
+    combatStyle: 'pistol',
+    specializations: [],
+    hpMax: 10,
+    sanMax: 8,
+  });
+  p = investTeamSpirit(adoptTeamSpirit(p, spirit).progress, spirit).progress;
+  const settled = settleScenarioEnd(
+    p,
+    { elias: makeInv({ investigatorDefinitionId: 'elias' }) },
+    { xp: 1, cohesion: 1, outcomeCode: 'A', stageId: 'stage-1' },
+  ).progress;
+  assertEq(settled.cohesion, 2, '原 1 + 結算 1');
+  assertEq(settled.teamSpirits?.investments.ts_focus_fire.points, 1);
+  assertEq(settled.teamSpirits?.effectSnapshots.some((e) => e.effectCode === 'team_spirit:depth:1'), true);
 });
 
 // ─── runner ─────────────────────────────────

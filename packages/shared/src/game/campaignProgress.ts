@@ -13,7 +13,7 @@
  * 數值原則:長休息 +1 凝聚力是規則書明定(ch4 §6.1,固定不按人數縮放);其餘獎勵量(XP/天賦點)
  * 一律由呼叫端帶入(來自 chapter_outcomes 等資料),引擎不自創平衡數字。
  */
-import type { InvestigatorState, InvestigatorTalentEffect, Trauma } from './state';
+import type { InvestigatorState, InvestigatorTalentEffect, TeamSpiritEffect, Trauma } from './state';
 import type { ResultEffect } from './messages';
 import type { HiddenPoint } from './hiddenInvestigation';
 import type { OutcomeData } from './gameProgress';
@@ -68,6 +68,8 @@ export interface CampaignProgress {
   flags: Record<string, unknown>;
   /** key = chapterNumber;保存各章結局與下一章版本,供戰役地圖/提要頁承接分歧 */
   chapterResults?: Record<string, ChapterResultRecord>;
+  /** 團隊精神投資進度(隊伍共用;跨章持續,下一場 bootstrap 注入 CampaignState) */
+  teamSpirits?: TeamSpiritProgress;
 }
 
 /** 場景結束時要套到存檔的獎勵(數值來自資料:chapter_outcomes 等,引擎不自創) */
@@ -108,6 +110,64 @@ export interface CampaignStageAccess<T extends CampaignStageDescriptor = Campaig
   branchMatched: boolean;
   lockedReason?: string;
   previousChapterResult?: ChapterResultRecord;
+}
+
+export interface TeamSpiritDepthEffectDefinition {
+  id?: string | null;
+  spirit_def_id?: string | null;
+  depth: number | string;
+  effect_name_zh?: string | null;
+  effect_name_en?: string | null;
+  effect_desc_zh?: string | null;
+  effect_desc_en?: string | null;
+  effect_value?: number | string | null;
+  effect_formula?: string | null;
+}
+
+export interface TeamSpiritDefinition {
+  id: string;
+  code: string;
+  name_zh?: string | null;
+  name_en?: string | null;
+  category?: string | null;
+  description?: string | null;
+  adopt_effect_zh?: string | null;
+  maxed_effect_zh?: string | null;
+  milestone_name_zh?: string | null;
+  milestone_effect_zh?: string | null;
+  effect_tags?: unknown;
+  design_status?: string | null;
+  sort_order?: number | string | null;
+  depth_effects?: TeamSpiritDepthEffectDefinition[];
+}
+
+export interface TeamSpiritInvestment {
+  spiritId: string;
+  code: string;
+  points: number;
+  adoptedAt?: string;
+  milestoneUnlocked: boolean;
+}
+
+export interface TeamSpiritProgress {
+  /** key = team spirit code */
+  investments: Record<string, TeamSpiritInvestment>;
+  /** 已採用/深度/里程碑效果快照;未硬解具體效果碼前掛在 CampaignState 供 UI/後續引擎觀察 */
+  effectSnapshots: TeamSpiritEffect[];
+}
+
+export interface TeamSpiritInvestResult {
+  ok: boolean;
+  progress: CampaignProgress;
+  cost: number;
+  reason?: string;
+  spirit?: TeamSpiritDefinition;
+}
+
+export interface TeamSpiritInvestCheck {
+  ok: boolean;
+  cost: number;
+  reason?: string;
 }
 
 /** 整備期可購買的玩家卡定義切片(card_definitions row 的安全子集) */
@@ -324,6 +384,199 @@ export function cloneTalentProgress(
 
 function carryTalents(carry: InvestigatorCarryover | undefined): InvestigatorTalentProgress {
   return cloneTalentProgress(carry?.talents);
+}
+
+export function emptyTeamSpiritProgress(): TeamSpiritProgress {
+  return { investments: {}, effectSnapshots: [] };
+}
+
+export function cloneTeamSpiritProgress(
+  spirits: Partial<TeamSpiritProgress> | null | undefined,
+): TeamSpiritProgress {
+  const investments: Record<string, TeamSpiritInvestment> = {};
+  for (const [rawCode, raw] of Object.entries(spirits?.investments ?? {})) {
+    const code = String(raw.code ?? rawCode).trim();
+    if (!code) continue;
+    const points = Math.min(5, nonNegativeInt(raw.points));
+    investments[code] = {
+      spiritId: String(raw.spiritId ?? ''),
+      code,
+      points,
+      adoptedAt: raw.adoptedAt ? String(raw.adoptedAt) : undefined,
+      milestoneUnlocked: raw.milestoneUnlocked === true || points >= 5,
+    };
+  }
+  const effectSnapshots = Array.isArray(spirits?.effectSnapshots)
+    ? spirits.effectSnapshots.map((e) => ({
+        spiritId: String(e.spiritId),
+        spiritCode: String(e.spiritCode),
+        category: e.category ?? null,
+        name_zh: e.name_zh ?? null,
+        depth: nonNegativeInt(e.depth),
+        effectCode: String(e.effectCode),
+        effectValue: e.effectValue == null ? null : finiteNumber(e.effectValue, 0),
+        effectFormula: e.effectFormula ?? null,
+        description_zh: e.description_zh ?? null,
+      }))
+    : [];
+  return { investments, effectSnapshots };
+}
+
+function carryTeamSpirits(progress: CampaignProgress): TeamSpiritProgress {
+  return cloneTeamSpiritProgress(progress.teamSpirits);
+}
+
+function teamSpiritCode(spirit: TeamSpiritDefinition | null | undefined): string | null {
+  const code = String(spirit?.code ?? '').trim();
+  return code ? code : null;
+}
+
+function teamSpiritSnapshotBase(spirit: TeamSpiritDefinition) {
+  return {
+    spiritId: String(spirit.id),
+    spiritCode: String(spirit.code),
+    category: spirit.category ?? null,
+    name_zh: spirit.name_zh ?? null,
+  };
+}
+
+function teamSpiritEffectSnapshots(
+  spirit: TeamSpiritDefinition,
+  investment: TeamSpiritInvestment,
+): TeamSpiritEffect[] {
+  const base = teamSpiritSnapshotBase(spirit);
+  const snapshots: TeamSpiritEffect[] = [];
+  if (spirit.adopt_effect_zh) {
+    snapshots.push({
+      ...base,
+      depth: 0,
+      effectCode: 'team_spirit:adopt',
+      description_zh: spirit.adopt_effect_zh,
+    });
+  }
+
+  const depthEffects = [...(spirit.depth_effects ?? [])]
+    .map((e) => ({ ...e, depth: positiveInt(e.depth, 1) }))
+    .filter((e) => e.depth >= 1 && e.depth <= investment.points)
+    .sort((a, b) => a.depth - b.depth);
+  for (const effect of depthEffects) {
+    snapshots.push({
+      ...base,
+      depth: effect.depth,
+      effectCode: `team_spirit:depth:${effect.depth}`,
+      effectValue: effect.effect_value == null ? null : finiteNumber(effect.effect_value, 0),
+      effectFormula: effect.effect_formula ?? null,
+      description_zh: effect.effect_desc_zh ?? effect.effect_name_zh ?? null,
+    });
+  }
+
+  if (investment.points >= 5 && (spirit.milestone_effect_zh || spirit.maxed_effect_zh || spirit.milestone_name_zh)) {
+    snapshots.push({
+      ...base,
+      depth: 5,
+      effectCode: 'team_spirit:milestone',
+      description_zh: spirit.milestone_effect_zh ?? spirit.maxed_effect_zh ?? spirit.milestone_name_zh ?? null,
+    });
+  }
+  return snapshots;
+}
+
+function replaceTeamSpiritSnapshots(
+  progress: TeamSpiritProgress,
+  spirit: TeamSpiritDefinition,
+  investment: TeamSpiritInvestment,
+): TeamSpiritProgress {
+  const code = String(spirit.code);
+  return {
+    investments: {
+      ...progress.investments,
+      [code]: investment,
+    },
+    effectSnapshots: [
+      ...progress.effectSnapshots.filter((e) => e.spiritCode !== code),
+      ...teamSpiritEffectSnapshots(spirit, investment),
+    ],
+  };
+}
+
+export function adoptedTeamSpiritCount(progress: CampaignProgress): number {
+  return Object.keys(carryTeamSpirits(progress).investments).length;
+}
+
+export function canAdoptTeamSpirit(
+  progress: CampaignProgress,
+  spirit: TeamSpiritDefinition | null | undefined,
+): TeamSpiritInvestCheck {
+  if (!teamSpiritCode(spirit)) return { ok: false, cost: 1, reason: 'missing_team_spirit' };
+  const code = teamSpiritCode(spirit)!;
+  const spirits = carryTeamSpirits(progress);
+  if (spirits.investments[code]) return { ok: false, cost: 1, reason: 'already_adopted' };
+  if (Object.keys(spirits.investments).length >= 7) return { ok: false, cost: 1, reason: 'team_spirit_limit' };
+  if (progress.cohesion < 1) return { ok: false, cost: 1, reason: 'not_enough_cohesion' };
+  return { ok: true, cost: 1 };
+}
+
+export function canInvestTeamSpirit(
+  progress: CampaignProgress,
+  spirit: TeamSpiritDefinition | null | undefined,
+): TeamSpiritInvestCheck {
+  if (!teamSpiritCode(spirit)) return { ok: false, cost: 1, reason: 'missing_team_spirit' };
+  const code = teamSpiritCode(spirit)!;
+  const investment = carryTeamSpirits(progress).investments[code];
+  if (!investment) return { ok: false, cost: 1, reason: 'team_spirit_not_adopted' };
+  if (investment.points >= 5) return { ok: false, cost: 1, reason: 'team_spirit_maxed' };
+  if (progress.cohesion < 1) return { ok: false, cost: 1, reason: 'not_enough_cohesion' };
+  return { ok: true, cost: 1 };
+}
+
+export function adoptTeamSpirit(
+  prev: CampaignProgress,
+  spirit: TeamSpiritDefinition,
+  options: { adoptedAt?: string } = {},
+): TeamSpiritInvestResult {
+  const check = canAdoptTeamSpirit(prev, spirit);
+  if (!check.ok) return { ok: false, progress: prev, cost: check.cost, reason: check.reason, spirit };
+  const code = teamSpiritCode(spirit)!;
+  const spirits = carryTeamSpirits(prev);
+  const investment: TeamSpiritInvestment = {
+    spiritId: spirit.id,
+    code,
+    points: 0,
+    adoptedAt: options.adoptedAt ?? new Date().toISOString(),
+    milestoneUnlocked: false,
+  };
+  const teamSpirits = replaceTeamSpiritSnapshots(spirits, spirit, investment);
+  return {
+    ok: true,
+    progress: { ...prev, cohesion: prev.cohesion - check.cost, teamSpirits },
+    cost: check.cost,
+    spirit,
+  };
+}
+
+export function investTeamSpirit(
+  prev: CampaignProgress,
+  spirit: TeamSpiritDefinition,
+): TeamSpiritInvestResult {
+  const check = canInvestTeamSpirit(prev, spirit);
+  if (!check.ok) return { ok: false, progress: prev, cost: check.cost, reason: check.reason, spirit };
+  const code = teamSpiritCode(spirit)!;
+  const spirits = carryTeamSpirits(prev);
+  const current = spirits.investments[code];
+  const investment: TeamSpiritInvestment = {
+    ...current,
+    spiritId: spirit.id,
+    code,
+    points: Math.min(5, current.points + 1),
+    milestoneUnlocked: current.points + 1 >= 5,
+  };
+  const teamSpirits = replaceTeamSpiritSnapshots(spirits, spirit, investment);
+  return {
+    ok: true,
+    progress: { ...prev, cohesion: prev.cohesion - check.cost, teamSpirits },
+    cost: check.cost,
+    spirit,
+  };
 }
 
 function nodeLevel(node: TalentNodeDefinition): number {
@@ -721,7 +974,14 @@ export function unlockTalentNode(
 
 /** 建空白戰役存檔(開新戰役用;investigators 由 registerInvestigator 逐位加入) */
 export function initCampaignProgress(campaignId: string): CampaignProgress {
-  return { campaignId, currentChapterNumber: 1, investigators: {}, cohesion: 0, flags: {} };
+  return {
+    campaignId,
+    currentChapterNumber: 1,
+    investigators: {},
+    cohesion: 0,
+    flags: {},
+    teamSpirits: emptyTeamSpiritProgress(),
+  };
 }
 
 export function resolveCampaignStageAccess<T extends CampaignStageDescriptor>(

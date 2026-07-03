@@ -12,7 +12,7 @@
  * - attack(武器行動)不在這裡 — 走 ruleEngine 武器攻擊路徑(§8 風格卡抽取)
  */
 import type { ResultEffect } from './messages';
-import type { InvestigatorState, ScenarioState } from './state';
+import type { InvestigatorState, ScenarioState, ChaosToken } from './state';
 import type { CardDataLookup } from './ruleEngine';
 import { addStatus, removeStatus, NEGATIVE_STATUSES, elementalDamageBonus } from './statusEffects';
 
@@ -33,6 +33,82 @@ export interface ExecuteResult {
   effects: ResultEffect[];
   /** 引擎不支援的 code(回報給 log,不視為錯誤) */
   unsupported: string[];
+}
+
+function positiveInt(value: unknown, fallback = 1): number {
+  const n = Number(value ?? fallback);
+  return Math.max(1, Math.floor(Number.isFinite(n) ? n : fallback));
+}
+
+function firstString(...values: unknown[]): string | null {
+  for (const v of values) {
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+function chaosTokenValue(type: string, rawValue: unknown): number | null {
+  if (rawValue !== undefined && rawValue !== null && rawValue !== '') {
+    const n = Number(rawValue);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (type === 'bless') return 1;
+  if (type === 'curse') return -1;
+  return null;
+}
+
+function makeChaosToken(sc: ScenarioState, type: string, index: number, value?: unknown): ChaosToken {
+  return {
+    tokenId: `chaos_${type}_${sc.turnNumber}_${sc.chaosBag.length}_${index}`,
+    type,
+    value: chaosTokenValue(type, value),
+  };
+}
+
+function addChaosTokens(sc: ScenarioState, type: string, amount: number, value?: unknown): { scenario: ScenarioState; added: ChaosToken[] } {
+  const added = Array.from({ length: amount }, (_, i) => makeChaosToken(sc, type, i, value));
+  return { scenario: { ...sc, chaosBag: [...sc.chaosBag, ...added] }, added };
+}
+
+function removeChaosTokens(sc: ScenarioState, type: string, amount: number): { scenario: ScenarioState; removed: ChaosToken[] } {
+  const removed: ChaosToken[] = [];
+  const next: ChaosToken[] = [];
+  let remaining = amount;
+  for (const token of sc.chaosBag) {
+    if (remaining > 0 && token.type === type) {
+      removed.push(token);
+      remaining -= 1;
+    } else {
+      next.push(token);
+    }
+  }
+  return { scenario: { ...sc, chaosBag: next }, removed };
+}
+
+function summarizeChaosBag(tokens: ChaosToken[]): Record<string, number> {
+  return tokens.reduce<Record<string, number>>((acc, token) => {
+    acc[token.type] = (acc[token.type] ?? 0) + 1;
+    return acc;
+  }, {});
+}
+
+function resolveLocationParam(p: Record<string, any>, inv: InvestigatorState): string {
+  return firstString(p.location, p.location_code, p.tile, p.tile_code, p.target, p.id) ?? inv.currentLocationId ?? '';
+}
+
+function unlockLocation(sc: ScenarioState, locationId: string): ScenarioState {
+  if (!locationId || !sc.locations.some((l) => l.locationDefinitionId === locationId)) return sc;
+  // unlockedLocations=[] 在現行引擎代表全地點已開,不可只塞單點造成反向上鎖。
+  if (sc.unlockedLocations.length === 0 || sc.unlockedLocations.includes(locationId)) return sc;
+  return { ...sc, unlockedLocations: [...sc.unlockedLocations, locationId] };
+}
+
+function lockLocation(sc: ScenarioState, locationId: string): ScenarioState {
+  if (!locationId || !sc.locations.some((l) => l.locationDefinitionId === locationId)) return sc;
+  const base = sc.unlockedLocations.length > 0
+    ? sc.unlockedLocations
+    : sc.locations.map((l) => l.locationDefinitionId);
+  return { ...sc, unlockedLocations: base.filter((id) => id !== locationId) };
 }
 
 export function executeCardEffects(
@@ -323,7 +399,10 @@ export function executeCardEffects(
         // 棄牌堆回收(P 流影核心):取最近棄置的 N 張回手
         const amount = Math.max(1, Number(p.amount ?? 1));
         const n = Math.min(amount, inv.discardPile.length);
-        if (n === 0) { unsupported.push('retrieve_card'); break; }
+        if (n === 0) {
+          out.push({ type: 'retrieve_card_empty', params: { amount: 0, narrative: '棄牌堆裡沒有可回收的卡。' } });
+          break;
+        }
         const taken = inv.discardPile.slice(inv.discardPile.length - n);
         inv = { ...inv, discardPile: inv.discardPile.slice(0, inv.discardPile.length - n), hand: [...inv.hand, ...taken] };
         out.push({ type: 'retrieve_card', params: { amount: n } });
@@ -520,8 +599,75 @@ export function executeCardEffects(
       case 'reroll':
       case 'auto_success':
       case 'auto_fail':
+      case 'make_test':
         // 檢定反應碼(on_fail/on_success 時機):反應觸發管線待補;action 路徑暫不結算(不報 unsupported 避免洗 log)
+        out.push({ type: 'reaction_effect_deferred', params: { code, trigger: fx.trigger_type } });
         break;
+      case 'add_bless':
+      case 'add_curse': {
+        const type = code === 'add_bless' ? 'bless' : 'curse';
+        const amount = positiveInt(p.amount, 1);
+        const added = addChaosTokens(sc, type, amount, p.value);
+        sc = added.scenario;
+        out.push({
+          type: 'chaos_bag_changed',
+          params: { action: 'add', tokenType: type, amount: added.added.length, counts: summarizeChaosBag(sc.chaosBag) },
+        });
+        break;
+      }
+      case 'remove_bless':
+      case 'remove_curse': {
+        const type = code === 'remove_bless' ? 'bless' : 'curse';
+        const amount = positiveInt(p.amount, 1);
+        const removed = removeChaosTokens(sc, type, amount);
+        sc = removed.scenario;
+        out.push({
+          type: 'chaos_bag_changed',
+          params: { action: 'remove', tokenType: type, amount: removed.removed.length, counts: summarizeChaosBag(sc.chaosBag) },
+        });
+        break;
+      }
+      case 'look_chaos_bag': {
+        const count = positiveInt(p.count ?? p.amount, 3);
+        const seen = sc.chaosBag.slice(0, count).map((t) => ({ type: t.type, value: t.value }));
+        out.push({ type: 'chaos_bag_looked', params: { count: seen.length, seen, total: sc.chaosBag.length, counts: summarizeChaosBag(sc.chaosBag) } });
+        break;
+      }
+      case 'manipulate_chaos_bag': {
+        const action = String(p.action ?? p.operation ?? p.mode ?? '').toLowerCase();
+        const tokenType = firstString(p.token_type, p.tokenType, p.type);
+        const amount = positiveInt(p.amount, 1);
+        if (action === 'remove' && tokenType) {
+          const removed = removeChaosTokens(sc, tokenType, amount);
+          sc = removed.scenario;
+          out.push({ type: 'chaos_bag_manipulated', params: { action, tokenType, amount: removed.removed.length, counts: summarizeChaosBag(sc.chaosBag) } });
+        } else if (action === 'replace' && tokenType && firstString(p.replacement_type, p.replacementType, p.to, p.with)) {
+          const replacementType = firstString(p.replacement_type, p.replacementType, p.to, p.with)!;
+          const removed = removeChaosTokens(sc, tokenType, amount);
+          const added = addChaosTokens(removed.scenario, replacementType, removed.removed.length, p.value);
+          sc = added.scenario;
+          out.push({
+            type: 'chaos_bag_manipulated',
+            params: { action, from: tokenType, to: replacementType, amount: added.added.length, counts: summarizeChaosBag(sc.chaosBag) },
+          });
+        } else if (action === 'reorder' && Array.isArray(p.order)) {
+          const order = p.order.map((x: unknown) => String(x));
+          const rank = new Map(order.map((id: string, idx: number) => [id, idx]));
+          sc = {
+            ...sc,
+            chaosBag: [...sc.chaosBag].sort((a, b) =>
+              (rank.get(a.tokenId) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.tokenId) ?? Number.MAX_SAFE_INTEGER),
+            ),
+          };
+          out.push({ type: 'chaos_bag_manipulated', params: { action, orderApplied: order.length, counts: summarizeChaosBag(sc.chaosBag) } });
+        } else {
+          out.push({
+            type: 'chaos_bag_manipulated',
+            params: { action: action || 'noop', tokenType: tokenType ?? null, amount: 0, reason: '需要 action=remove/replace/reorder 與對應 token_type' },
+          });
+        }
+        break;
+      }
       // ─── P3 環境(光照/火/鬧鬼/連線)— 已被引擎消費的部分 ────
       case 'create_darkness':
       case 'create_fire':
@@ -586,11 +732,48 @@ export function executeCardEffects(
         break;
       }
       case 'reveal_tile':
-      case 'place_tile':
-      case 'remove_tile':
-        // G4 隨機地城 tile 系統尚未建模(場景為固定地點非 tile)→ 明確回報待 G4,不靜默
-        unsupported.push(code);
+      case 'place_tile': {
+        const loc = resolveLocationParam(p, inv);
+        const exists = sc.locations.some((l) => l.locationDefinitionId === loc);
+        if (exists) {
+          sc = unlockLocation(sc, loc);
+          out.push({ type: code, params: { location: loc, mappedTo: 'unlock_location' } });
+        } else {
+          out.push({ type: 'tile_effect_deferred', params: { code, location: loc, reason: 'fixed_location_runtime_no_tile_definition' } });
+        }
         break;
+      }
+      case 'remove_tile': {
+        const loc = resolveLocationParam(p, inv);
+        const exists = sc.locations.some((l) => l.locationDefinitionId === loc);
+        if (exists) {
+          sc = lockLocation(sc, loc);
+          out.push({ type: 'remove_tile', params: { location: loc, mappedTo: 'lock_location' } });
+        } else {
+          out.push({ type: 'tile_effect_deferred', params: { code, location: loc, reason: 'fixed_location_runtime_no_tile_definition' } });
+        }
+        break;
+      }
+      case 'advance_act': {
+        const amount = positiveInt(p.amount, 1);
+        const from = sc.actIndex ?? 0;
+        sc = { ...sc, actIndex: from + amount };
+        out.push({ type: 'act_advanced_by_card', params: { from, to: sc.actIndex, amount } });
+        break;
+      }
+      case 'advance_agenda': {
+        if (p.doom_tokens !== undefined) {
+          const amount = positiveInt(p.doom_tokens, 1);
+          sc = { ...sc, agendaProgress: sc.agendaProgress + amount };
+          out.push({ type: 'doom_added', params: { amount, total: sc.agendaProgress, source: '卡片效果' } });
+          break;
+        }
+        const amount = positiveInt(p.amount, 1);
+        const from = sc.agendaIndex ?? 0;
+        sc = { ...sc, agendaIndex: from + amount, agendaProgress: p.preserve_doom === true ? sc.agendaProgress : 0 };
+        out.push({ type: 'agenda_advanced_by_card', params: { from, to: sc.agendaIndex, amount, doomReset: p.preserve_doom !== true } });
+        break;
+      }
 
       case 'attack':
         // 武器攻擊走 ruleEngine 路徑

@@ -472,6 +472,10 @@ const WEAPON_LOOKUP: RuleContext['cardLookup'] = {
     name_zh: '探長觀察', card_type: 'skill', cost: 0, commit_icons: { perception: 2 },
     effects: [{ trigger_type: 'on_success', effect_code: 'draw_card', effect_params: {}, duration: 'instant' }],
   },
+  fail: {
+    name_zh: '失手備案', card_type: 'skill', cost: 0, commit_icons: { perception: 1 },
+    effects: [{ trigger_type: 'on_fail', effect_code: 'gain_resource', effect_params: { amount: 2 }, duration: 'instant' }],
+  },
 };
 
 const SHOOTING_POOL: NonNullable<RuleContext['stylePools']> = {
@@ -667,6 +671,19 @@ test('武器攻擊:commit 卡 on_success 抽牌(ch3 §3.2)', () => {
   // obs 進棄牌堆 + on_success 抽 1 張(d1 入手)
   assertEq(r.newState?.investigator?.discardPile.includes('obs'), true);
   assertEq(r.newState?.investigator?.hand.includes('d1'), true);
+});
+
+test('武器攻擊:commit 卡 on_fail 失敗後觸發(ch3 §3.2)', () => {
+  // roll 2 + 感知 3 + 武器 1 + commit fail 1 = 7 < 18 → on_fail gain_resource +2
+  const ctx = makeCardCtx({ roll: 2, hand: ['fail'], assets: ['wpn'], enemyDc: 18, resources: 1 });
+  const r = resolveIntent(
+    makeIntent('execute_card_action', { cardInstanceId: 'wpn', commitCardIds: ['fail'] }),
+    ctx,
+  );
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.result.effects?.some((e) => e.type === 'attack_miss'), true);
+  assertEq(r.newState?.investigator?.discardPile.includes('fail'), true);
+  assertEq(r.newState?.investigator?.resources, 3);
 });
 
 test('武器攻擊:風格池為空駁回', () => {

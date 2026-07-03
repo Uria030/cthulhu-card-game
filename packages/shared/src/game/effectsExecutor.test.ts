@@ -181,7 +181,9 @@ test('retrieve_card:棄牌堆回收最近 N 張回手(P 流影)', () => {
   const r = executeCardEffects([fx('retrieve_card', { amount: 2 })], makeInv({ discardPile: ['d1', 'd2', 'd3'] }), makeScenario(), {});
   assertEq(r.investigator.hand.join(','), 'd2,d3');
   assertEq(r.investigator.discardPile.join(','), 'd1');
-  assertEq(executeCardEffects([fx('retrieve_card')], makeInv(), makeScenario(), {}).unsupported.some((u) => u.includes('retrieve_card')), true);
+  const empty = executeCardEffects([fx('retrieve_card')], makeInv(), makeScenario(), {});
+  assertEq(empty.unsupported.some((u) => u.includes('retrieve_card')), false, '空棄牌堆不是 effect_code 不支援');
+  assertEq(empty.effects.some((e) => e.type === 'retrieve_card_empty'), true);
 });
 
 test('return_to_deck:手牌前 N 張回牌庫頂', () => {
@@ -222,9 +224,10 @@ test('steal_resource:自身獲得資源(單人近似)', () => {
   assertEq(executeCardEffects([fx('steal_resource', { amount: 2 })], makeInv({ resources: 1 }), makeScenario(), {}).investigator.resources, 3);
 });
 
-test('wild_attr_boost / reroll 在 action 路徑不報 unsupported(檢定時機)', () => {
-  const r = executeCardEffects([fx('wild_attr_boost', { amount: 2 }), fx('reroll'), fx('auto_success')], makeInv(), makeScenario(), {});
+test('wild_attr_boost / 反應檢定碼在 action 路徑不報 unsupported(檢定時機)', () => {
+  const r = executeCardEffects([fx('wild_attr_boost', { amount: 2 }), fx('reroll'), fx('auto_success'), fx('make_test')], makeInv(), makeScenario(), {});
   assertEq(r.unsupported.length, 0);
+  assertEq(r.effects.filter((e) => e.type === 'reaction_effect_deferred').length, 3);
 });
 
 test('passiveTestModifier:wild_attr_boost 全屬性 + modify_test 限定屬性', () => {
@@ -296,6 +299,47 @@ test('place_doom / remove_doom:議程進度增減(夾 0)', () => {
   assertEq(executeCardEffects([fx('remove_doom', { amount: 5 })], makeInv(), sc, {}).scenario.agendaProgress, 0, '夾 0');
 });
 
+test('add/remove bless/curse:動態修改混沌袋並回報 count', () => {
+  const added = executeCardEffects([fx('add_bless', { amount: 2 }), fx('add_curse')], makeInv(), makeScenario(), {});
+  assertEq(added.scenario.chaosBag.filter((t) => t.type === 'bless').length, 2);
+  assertEq(added.scenario.chaosBag.filter((t) => t.type === 'curse').length, 1);
+  assertEq(added.scenario.chaosBag.find((t) => t.type === 'bless')?.value, 1);
+  const removed = executeCardEffects([fx('remove_bless')], makeInv(), added.scenario, {});
+  assertEq(removed.scenario.chaosBag.filter((t) => t.type === 'bless').length, 1);
+  assertEq((removed.effects.find((e) => e.type === 'chaos_bag_changed')?.params as any).amount, 1);
+});
+
+test('look/manipulate_chaos_bag:可窺探、移除、替換、重排,不報 unsupported', () => {
+  const sc = {
+    ...makeScenario(),
+    chaosBag: [
+      { tokenId: 't1', type: 'curse', value: -1 },
+      { tokenId: 't2', type: 'numeric', value: 0 },
+      { tokenId: 't3', type: 'bless', value: 1 },
+    ],
+  };
+  const looked = executeCardEffects([fx('look_chaos_bag', { count: 2 })], makeInv(), sc, {});
+  assertEq((looked.effects.find((e) => e.type === 'chaos_bag_looked')?.params as any).count, 2);
+  const removed = executeCardEffects([fx('manipulate_chaos_bag', { action: 'remove', token_type: 'curse' })], makeInv(), sc, {});
+  assertEq(removed.scenario.chaosBag.some((t) => t.type === 'curse'), false);
+  const replaced = executeCardEffects([fx('manipulate_chaos_bag', { action: 'replace', token_type: 'curse', replacement_type: 'bless' })], makeInv(), sc, {});
+  assertEq(replaced.scenario.chaosBag.filter((t) => t.type === 'bless').length, 2);
+  const reordered = executeCardEffects([fx('manipulate_chaos_bag', { action: 'reorder', order: ['t3', 't2', 't1'] })], makeInv(), sc, {});
+  assertEq(reordered.scenario.chaosBag[0].tokenId, 't3');
+  assertEq(reordered.unsupported.length, 0);
+});
+
+test('advance_act / advance_agenda:卡片可推進牌堆索引,doom_tokens 走毀滅進度', () => {
+  const act = executeCardEffects([fx('advance_act')], makeInv(), { ...makeScenario(), actIndex: 1 }, {});
+  assertEq(act.scenario.actIndex, 2);
+  assertEq(act.effects.some((e) => e.type === 'act_advanced_by_card'), true);
+  const agenda = executeCardEffects([fx('advance_agenda', { amount: 2 })], makeInv(), { ...makeScenario(), agendaIndex: 1, agendaProgress: 5 }, {});
+  assertEq(agenda.scenario.agendaIndex, 3);
+  assertEq(agenda.scenario.agendaProgress, 0, '直接推 agenda 預設清 doom');
+  const doom = executeCardEffects([fx('advance_agenda', { doom_tokens: 2 })], makeInv(), makeScenario(), {});
+  assertEq(doom.scenario.agendaProgress, 2);
+});
+
 test('add_keyword / remove_keyword:敵人詞綴增減', () => {
   const add = executeCardEffects([fx('add_keyword', { keyword: 'vulnerable_mark' })], makeInv(), locScenario([makeEnemy()]), {});
   assertEq(add.scenario.enemies[0].modifiers.includes('vulnerable_mark'), true);
@@ -336,8 +380,16 @@ test('connect_tiles / disconnect_tiles:雙向連線增減', () => {
   assertEq(d.scenario.locations.find((l) => l.locationDefinitionId === 'B')!.connectedTo.includes('A'), false);
 });
 
-test('reveal_tile:G4 tile 系統未建模 → unsupported', () => {
-  assertEq(executeCardEffects([fx('reveal_tile')], makeInv(), locScenario(), {}).unsupported.includes('reveal_tile'), true);
+test('reveal/place/remove_tile:固定地點模型映射為解鎖/上鎖,未知地點記 deferred 不報 unsupported', () => {
+  const locked = { ...locScenario(), unlockedLocations: ['A'] };
+  const reveal = executeCardEffects([fx('reveal_tile', { location: 'B' })], makeInv(), locked, {});
+  assertEq(reveal.scenario.unlockedLocations.includes('B'), true);
+  assertEq(reveal.unsupported.includes('reveal_tile'), false);
+  const removed = executeCardEffects([fx('remove_tile', { location: 'B' })], makeInv(), reveal.scenario, {});
+  assertEq(removed.scenario.unlockedLocations.includes('B'), false);
+  const unknown = executeCardEffects([fx('place_tile', { location: 'Z' })], makeInv(), locScenario(), {});
+  assertEq(unknown.effects.some((e) => e.type === 'tile_effect_deferred'), true);
+  assertEq(unknown.unsupported.includes('place_tile'), false);
 });
 
 // ─── runner ─────────────────────────

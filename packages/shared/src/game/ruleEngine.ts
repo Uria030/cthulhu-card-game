@@ -637,9 +637,14 @@ function resolveInvestigate(intent: IntentMessage, ctx: RuleContext): RuleResolv
     { type: 'roll_d20', params: { roll: check.roll, attribute: 'perception', modifier: check.total - check.roll, total: check.total, dc, outcome: success ? 'success' : 'fail' } },
   ];
   if (!success) {
+    const after = applyCheckOutcomeCommit(false, commit.committedIds, newInv, ctx.scenario, ctx.cardLookup ?? {});
     // §11.3 鬧鬼:該地點有死亡附著 → 調查失敗驚擾復活
-    const haunt = reviveHaunting(ctx.scenario, locId, ctx.enemyStats ?? {}, Object.keys(ctx.investigators).length || 1);
-    return accept(intent, [...baseEffects, { type: 'investigate_fail', params: { narrative: '你翻找了一圈,什麼線索都沒留下。' } }, ...haunt.effects], { investigator: newInv, scenario: haunt.scenario });
+    const haunt = reviveHaunting(after.scenario, locId, ctx.enemyStats ?? {}, Object.keys(ctx.investigators).length || 1);
+    return accept(
+      intent,
+      [...baseEffects, { type: 'investigate_fail', params: { narrative: '你翻找了一圈,什麼線索都沒留下。' } }, ...after.effects, ...haunt.effects],
+      { investigator: after.investigator, scenario: haunt.scenario },
+    );
   }
   // 成功:在當前地點放 1 線索
   const newScenario: ScenarioState = {
@@ -650,7 +655,7 @@ function resolveInvestigate(intent: IntentMessage, ctx: RuleContext): RuleResolv
       { tokenType: 'clue', locationId: ctx.investigator.currentLocationId || '', amount: 1 },
     ],
   };
-  const after = applyOnSuccessCommit(true, commit.committedIds, newInv, newScenario, ctx.cardLookup ?? {});
+  const after = applyCheckOutcomeCommit(true, commit.committedIds, newInv, newScenario, ctx.cardLookup ?? {});
   // §13.4 低感知碰運氣:一般調查成功時,觸發發現該地點一個尚未揭露的隱藏調查點
   let invScenario = after.scenario;
   const discoverEffects: ResultEffect[] = [];
@@ -728,10 +733,11 @@ function resolveInvestigateHidden(intent: IntentMessage, ctx: RuleContext): Rule
     { type: 'roll_d20', params: { roll: check.roll, attribute: 'perception', modifier: check.total - check.roll, total: check.total, dc, outcome: success ? 'success' : 'fail' } },
   ];
   if (!success) {
+    const after = applyCheckOutcomeCommit(false, commit.committedIds, newInv, ctx.scenario, ctx.cardLookup ?? {});
     return accept(
       intent,
-      [...baseEffects, { type: 'hidden_investigate_fail', params: { narrative: '你翻遍了角落,卻一無所獲——它還在那裡,等著。', pointId } }],
-      { investigator: newInv },
+      [...baseEffects, { type: 'hidden_investigate_fail', params: { narrative: '你翻遍了角落,卻一無所獲——它還在那裡,等著。', pointId } }, ...after.effects],
+      { investigator: after.investigator, scenario: after.scenario },
     );
   }
   const claim = claimHiddenReward(ctx.scenario.hiddenPoints ?? [], pointId, ctx.investigator.investigatorId);
@@ -808,10 +814,11 @@ function resolveSearch(intent: IntentMessage, ctx: RuleContext): RuleResolveOutp
     { type: 'roll_d20', params: { roll: check.roll, attribute: 'perception', modifier: check.total - check.roll, total: check.total, dc, outcome: success ? 'success' : 'fail' } },
   ];
   if (!success) {
+    const after = applyCheckOutcomeCommit(false, commit.committedIds, baseInv, ctx.scenario, ctx.cardLookup ?? {});
     return accept(
       intent,
-      [...baseEffects, { type: 'search_fail', params: { narrative: '你仔細搜了一遍,沒找到有用的東西。' } }],
-      { investigator: baseInv },
+      [...baseEffects, { type: 'search_fail', params: { narrative: '你仔細搜了一遍,沒找到有用的東西。' } }, ...after.effects],
+      { investigator: after.investigator, scenario: after.scenario },
     );
   }
   // 成功:取池中第一張(預製)進棄牌堆,標記該槽位已被拿
@@ -956,7 +963,12 @@ function performAttack(intent: IntentMessage, ctx: RuleContext, enemyInstanceId:
   ];
   // §7.5 自然 1:有交戰隊友時誤傷;單人無隊友 → 純未命中
   if (check.outcome !== 'success' || check.natural1) {
-    return accept(intent, [...baseEffects, { type: 'attack_miss', params: { narrative: check.natural1 ? '你的攻擊完全落空,差點傷到自己。' : '你的攻擊擦身而過,牠仍站在那裡。' }, targetId: enemyInstanceId }], { investigator: newInv });
+    const after = applyCheckOutcomeCommit(false, commit.committedIds, newInv, ctx.scenario, ctx.cardLookup ?? {});
+    return accept(
+      intent,
+      [...baseEffects, { type: 'attack_miss', params: { narrative: check.natural1 ? '你的攻擊完全落空,差點傷到自己。' : '你的攻擊擦身而過,牠仍站在那裡。' }, targetId: enemyInstanceId }, ...after.effects],
+      { investigator: after.investigator, scenario: after.scenario },
+    );
   }
   // 命中:基礎 1 點;自然 20 爆擊 ×2(§7.5)+ 狀態修正(隱蔽傷害/無力近戰;徒手=物理近戰)
   const critBase = check.natural20 ? 2 : 1;
@@ -1320,7 +1332,7 @@ function performWeaponAttack(
 
   if (check.outcome !== 'success' || check.natural1) {
     const miss = [...baseEffects, { type: 'attack_miss', params: { narrative: styleCard.narrative_fail_zh || '你的攻擊落空了。' }, targetId: enemy.instanceId }];
-    const after = applyOnSuccessCommit(false, commit.committedIds, inv, ctx.scenario, ctx.cardLookup ?? {});
+    const after = applyCheckOutcomeCommit(false, commit.committedIds, inv, ctx.scenario, ctx.cardLookup ?? {});
     return accept(intent, [...miss, ...after.effects], { investigator: after.investigator, scenario: after.scenario });
   }
 
@@ -1349,7 +1361,7 @@ function performWeaponAttack(
     deathAllies = dk.updatedAllies;
     sc = dk.scenario;
   }
-  const after = applyOnSuccessCommit(true, commit.committedIds, inv, sc, ctx.cardLookup ?? {});
+  const after = applyCheckOutcomeCommit(true, commit.committedIds, inv, sc, ctx.cardLookup ?? {});
   inv = after.investigator;
   sc = after.scenario;
   return accept(intent, [...effects, ...after.effects], { investigator: inv, scenario: sc, updatedAllies: deathAllies });
@@ -1503,29 +1515,33 @@ function applySpellChaos(
 }
 
 /**
- * 投入檢定的卡片 on_success 效果(ch3 §3.2 技能卡附贈):
- * 檢定成功後,結算所有被 commit 卡片的 on_success 觸發效果(如:成功後抽 1 張)。
+ * 投入檢定的卡片結果觸發(ch3 §3.2 技能卡附贈):
+ * 檢定成功跑 on_success,失敗跑 on_fail。真正從手牌即時打出的 reaction 仍需容器意圖協議。
  */
-function applyOnSuccessCommit(
+function applyCheckOutcomeCommit(
   success: boolean,
   committedIds: string[],
   investigator: InvestigatorState,
   scenario: ScenarioState,
   cardLookup: CardDataLookup,
 ): { investigator: InvestigatorState; scenario: ScenarioState; effects: ResultEffect[] } {
-  if (!success || committedIds.length === 0) {
+  if (committedIds.length === 0) {
     return { investigator, scenario, effects: [] };
   }
   let inv = investigator;
   let sc = scenario;
   const effects: ResultEffect[] = [];
+  const trigger = success ? 'on_success' : 'on_fail';
   for (const id of committedIds) {
-    const onSuccess = (cardLookup[id]?.effects ?? []).filter((f) => f.trigger_type === 'on_success');
-    if (onSuccess.length === 0) continue;
-    const exec = executeCardEffects(onSuccess, inv, sc, cardLookup);
+    const triggered = (cardLookup[id]?.effects ?? []).filter((f) => f.trigger_type === trigger);
+    if (triggered.length === 0) continue;
+    const exec = executeCardEffects(triggered, inv, sc, cardLookup);
     inv = exec.investigator;
     sc = exec.scenario;
     effects.push(...exec.effects);
+    if (exec.unsupported.length > 0) {
+      effects.push({ type: 'effect_unsupported', params: { codes: exec.unsupported } });
+    }
   }
   return { investigator: inv, scenario: sc, effects };
 }

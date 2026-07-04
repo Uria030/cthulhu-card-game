@@ -742,8 +742,8 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
           `INSERT INTO stage_act_cards
              (stage_id, card_order, name_zh, name_en,
               front_narrative, front_objective_types, front_advance_condition, front_scaling,
-              back_narrative, back_flag_sets, back_rewards, back_map_operations, back_resolution_code)
-           VALUES ($1,$2,$3,$4,$5,$6::varchar[],$7::jsonb,$8::jsonb,$9,$10::jsonb,$11::jsonb,$12::jsonb,$13)
+              shared_actions, back_narrative, back_flag_sets, back_rewards, back_map_operations, back_resolution_code)
+           VALUES ($1,$2,$3,$4,$5,$6::varchar[],$7::jsonb,$8::jsonb,$9::jsonb,$10,$11::jsonb,$12::jsonb,$13::jsonb,$14)
            RETURNING *`,
           [
             stageId,
@@ -754,6 +754,7 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
             b.front_objective_types || [],
             JSON.stringify(b.front_advance_condition || {}),
             JSON.stringify(b.front_scaling || {}),
+            JSON.stringify(b.shared_actions || []),
             b.back_narrative || '',
             JSON.stringify(b.back_flag_sets || []),
             JSON.stringify(b.back_rewards || {}),
@@ -841,6 +842,7 @@ export const stageRoutes: FastifyPluginAsync = async (app) => {
       if (b.front_advance_condition !== undefined)
         push('front_advance_condition', b.front_advance_condition, true);
       if (b.front_scaling !== undefined) push('front_scaling', b.front_scaling, true);
+      if (b.shared_actions !== undefined) push('shared_actions', b.shared_actions, true);
       push('back_narrative', b.back_narrative);
       if (b.back_flag_sets !== undefined) push('back_flag_sets', b.back_flag_sets, true);
       if (b.back_rewards !== undefined) push('back_rewards', b.back_rewards, true);

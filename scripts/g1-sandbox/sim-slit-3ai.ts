@@ -382,7 +382,7 @@ async function main() {
       const myRole = roles.find((r) => r.investigatorId === m.inv.investigatorId);
       const curActCond = [...actData].sort((a, b) => a.card_order - b.card_order)[scenario.actIndex ?? 0]?.front_advance_condition;
       const objective = objectiveForAssignment(myRole, trace.chain) ?? deriveObjective(curActCond, members.length, L.enemyStats);
-      const aiCtx = { scenario, investigator: m.inv, allies, turnNumber: t, locationStats: L.locationStats, enemyStats: L.enemyStats, cardLookup, stylePools, chaosMarkerEffects: L.chaosMarkerEffects, objective, urgency: trace.urgency, rng };
+      const aiCtx = { scenario, investigator: m.inv, allies, turnNumber: t, locationStats: L.locationStats, enemyStats: L.enemyStats, cardLookup, stylePools, chaosMarkerEffects: L.chaosMarkerEffects, actCards: actData, objective, urgency: trace.urgency, rng };
       if (myRole) { m.assignedKind = myRole.kind; }
       const bossHere = scenario.enemies.find((e) => e.hp > 0 && e.enemyDefinitionId === bossCode && e.locationId === m.inv.currentLocationId);
       if (bossHere && t >= 7) {
@@ -398,13 +398,13 @@ async function main() {
       }
       const accepted = r.steps.filter((s) => s.outcome === 'accepted');
       for (const s of accepted) m.acted[s.actionType] = (m.acted[s.actionType] ?? 0) + 1;
-      // 指派對齊率(丙):只評「主動產出型」行動(investigate/attack/execute_card_action)
+      // 指派對齊率(丙):只評「主動產出型」行動(investigate/attack/execute_card_action/use_shared_action)
       for (const s of accepted) {
-        const productive = s.actionType === 'investigate' || s.actionType === 'attack' || s.actionType === 'execute_card_action';
+        const productive = s.actionType === 'investigate' || s.actionType === 'attack' || s.actionType === 'execute_card_action' || s.actionType === 'use_shared_action';
         if (!productive || !m.assignedKind) continue;
         m.judged += 1;
         const fit = (m.assignedKind === 'clues' && s.actionType === 'investigate')
-          || (m.assignedKind === 'kill' && (s.actionType === 'attack' || s.actionType === 'execute_card_action'));
+          || (m.assignedKind === 'kill' && (s.actionType === 'attack' || s.actionType === 'execute_card_action' || s.actionType === 'use_shared_action'));
         if (fit) m.aligned += 1;
       }
       // 卡片層級稽核
@@ -427,6 +427,7 @@ async function main() {
         if (eff.type === 'chaos_token_drawn') console.log(`   🌑 ${m.label} 抽混沌袋:${p.sequence}`);
         if (eff.type === 'spell_strain') console.log(`   ${(p.delta < 0 ? '😖' : '✨')} ${m.label} 施法${p.delta < 0 ? '反噬' : '受護'}(SAN ${p.delta > 0 ? '+' : ''}${p.delta})`);
         if (eff.type === 'chaos_scene_effect') console.log(`   🕳 ${m.label} 觸發場景效果:${p.code}`);
+        if (eff.type === 'shared_action_used') console.log(`   📜 ${m.label} ${p.name ?? p.code}:棄${p.amount}線索→${p.damage}傷`);
       }
       const kills = accepted.flatMap((s) => s.effects).filter((e) => e.type === 'enemy_defeated').length;
       const detail = accepted.map((s) => {
@@ -437,6 +438,10 @@ async function main() {
         if (s.actionType === 'execute_card_action') {
           const sw = s.effects.find((e) => e.type === 'style_card_drawn');
           return `武器攻擊(${(sw?.params as any)?.name ?? '卡行動'})`;
+        }
+        if (s.actionType === 'use_shared_action') {
+          const sa = s.effects.find((e) => e.type === 'shared_action_used');
+          return `use_shared_action【${(sa?.params as any)?.name ?? (s.payload as any).code ?? '?'}】`;
         }
         return s.actionType;
       });

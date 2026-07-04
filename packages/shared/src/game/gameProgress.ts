@@ -15,12 +15,14 @@ import type { ResultEffect } from './messages';
 import type { ScenarioState, InvestigatorState } from './state';
 import { spawnEnemy } from './monsterActions';
 import type { EnemyDataLookup } from './monsterActions';
+import type { SharedActAction } from './sharedActions';
 
 export interface ActCardData {
   card_order: number;
   name_zh: string;
   front_narrative?: string;
   front_advance_condition?: Record<string, unknown> | null;
+  shared_actions?: SharedActAction[];
   back_narrative?: string;
   back_flag_sets?: Array<{ flag_code: string; value: unknown }>;
   back_map_operations?: Array<{ verb?: string; type?: string; params?: Record<string, unknown> }>;

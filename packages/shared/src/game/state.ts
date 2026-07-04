@@ -12,6 +12,7 @@
  * 本檔只定義 type 骨架,不含業務邏輯。
  */
 import type { HiddenPoint } from './hiddenInvestigation';
+import type { SharedActionUseState } from './sharedActions';
 
 // ─── 戰役層 ──────────────────────────────────
 export interface CampaignState {
@@ -85,6 +86,8 @@ export interface ScenarioState {
   chaosBag: ChaosToken[];
   /** 當前回合數 */
   turnNumber: number;
+  /** Team-scoped ACT shared action usage for the current turn. */
+  sharedActionUses?: Record<string, SharedActionUseState>;
   /** 當前階段(ch2 §2.1 三階段:investigator/mythos(敵人)/turn_end) */
   phase: 'investigator' | 'mythos' | 'turn_end';
 }

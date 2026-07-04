@@ -664,6 +664,72 @@ test('估值競爭邊界(Raviel WARN):殺敵指派下,必中輸出卡壓過經�
   assert(free.econ > kill.econ, `無指派時經濟卡不吃 killFit 折價(${kill.econ.toFixed(2)} → ${free.econ.toFixed(2)})`);
 });
 
+test('E12 AI:ACT2 有線索與 boss 時列出並執行揭穿傳說,本回合用過後消失', () => {
+  const boss = { instanceId: 'boss-1', enemyDefinitionId: 'boss_t3', locationId: 'A', hp: 3, engagedWith: [], modifiers: [] };
+  const sharedAct = {
+    card_order: 1,
+    shared_actions: [{
+      code: 'expose_legend',
+      name_zh: '揭穿傳說',
+      target_variant: 'boss_t3',
+      ratio: 1,
+      team_limit_per_turn: 1,
+    }],
+  };
+  const c = ctx({
+    scenario: makeScenario({ objectiveProgress: 5, enemies: [boss] }),
+    actCards: [sharedAct],
+    objective: { kind: 'kill', enemyCodes: ['boss_t3'] },
+    rng: () => 0.5,
+  });
+  const candidates = enumerateCandidates(c, ELIAS, initInvestigatorAIState());
+  const expose = candidates.find((x) => x.actionType === 'use_shared_action');
+  assert(expose != null, '應列出 use_shared_action 候選');
+  assertEq(expose?.payload.code, 'expose_legend');
+  assertEq(expose?.payload.amount, 3, 'amount=min(pool,ceil(hp/ratio)),不過量');
+  const unarmed = candidates.find((x) => x.actionType === 'attack');
+  assert((expose?.score ?? 0) > (unarmed?.score ?? 0), `必中線索轉傷應高於同局面徒手攻擊(${expose?.score} > ${unarmed?.score})`);
+
+  const run = runInvestigatorAITurn(c, ELIAS, initInvestigatorAIState());
+  assertEq(run.steps[0]?.actionType, 'use_shared_action', '前瞻規劃應實際採用共用動作');
+  assertEq(run.steps[0]?.effects.some((e) => e.type === 'shared_action_used'), true, '實戰 RuleContext 有帶 actCards');
+  const spent = run.steps[0]?.effects.find((e) => e.type === 'clues_spent');
+  assertEq((spent?.params as any)?.amount, 3, '第一步共用動作棄 3 線索');
+  assertEq(run.scenario.enemies[0].hp, 0, 'AI 使用後 boss 受傷倒地');
+
+  const usedThisTurn = enumerateCandidates(
+    {
+      ...c,
+      scenario: {
+        ...c.scenario,
+        sharedActionUses: { expose_legend: { turnNumber: c.scenario.turnNumber, count: 1 } },
+      },
+    },
+    ELIAS,
+    initInvestigatorAIState(),
+  );
+  assert(!usedThisTurn.some((x) => x.actionType === 'use_shared_action'), 'team limit 用過後候選消失');
+});
+
+test('E12 AI:ACT2 沒有線索時,揭穿傳說讓新調查仍有殺敵價值', () => {
+  const boss = { instanceId: 'boss-1', enemyDefinitionId: 'boss_t3', locationId: 'B', hp: 8, engagedWith: [], modifiers: [] };
+  const sharedAct = {
+    card_order: 1,
+    shared_actions: [{ code: 'expose_legend', name_zh: '揭穿傳說', target_variant: 'boss_t3', ratio: 1, team_limit_per_turn: 1 }],
+  };
+  const base = ctx({
+    scenario: makeScenario({ objectiveProgress: 0, enemies: [boss] }),
+    objective: { kind: 'kill', enemyCodes: ['boss_t3'] },
+    rng: () => 0.5,
+  });
+  const withShared = enumerateCandidates({ ...base, actCards: [sharedAct] }, ELIAS, initInvestigatorAIState())
+    .find((x) => x.actionType === 'investigate');
+  const withoutShared = enumerateCandidates(base, ELIAS, initInvestigatorAIState())
+    .find((x) => x.actionType === 'investigate');
+  assert(withShared != null, '有揭穿傳說時應仍考慮調查');
+  assert((withShared?.score ?? 0) > ((withoutShared?.score ?? 0) * 3), `線索可轉傷時調查分數應明顯高於純 kill 幕(${withShared?.score} > ${withoutShared?.score})`);
+});
+
 test('救援移動:隊友在隔壁倒地 → 趕過去', () => {
   const downedAlly = makeAlly({ currentLocationId: 'B', hp: 0, downed: true });
   const c = ctx({ allies: { 'p1-inv': downedAlly } });

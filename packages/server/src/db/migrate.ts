@@ -2375,6 +2375,7 @@ CREATE TABLE IF NOT EXISTS stage_act_cards (
   front_objective_types    VARCHAR(32)[] NOT NULL DEFAULT '{}',
   front_advance_condition  JSONB NOT NULL DEFAULT '{}'::jsonb,
   front_scaling            JSONB NOT NULL DEFAULT '{}'::jsonb,
+  shared_actions           JSONB NOT NULL DEFAULT '[]'::jsonb,
   back_narrative           TEXT NOT NULL DEFAULT '',
   back_flag_sets           JSONB NOT NULL DEFAULT '[]'::jsonb,
   back_rewards             JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -3293,6 +3294,29 @@ BEFORE INSERT OR UPDATE ON mythos_cards
 FOR EACH ROW EXECUTE FUNCTION sync_mythos_open_hand_aliases();
 `;
 
+// Migration 038: E12 ACT shared action for "揭穿傳說".
+export const MIGRATION_038_SQL = `
+ALTER TABLE stage_act_cards
+  ADD COLUMN IF NOT EXISTS shared_actions JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+UPDATE stage_act_cards ac
+   SET shared_actions = jsonb_build_array(
+     jsonb_build_object(
+       'code', 'expose_legend',
+       'name_zh', '揭穿傳說',
+       'target_variant', 'G1_deep_one_slit_mouth',
+       'ratio', 1,
+       'team_limit_per_turn', 1,
+       'narrative', '你們把線索拼成完整的真相——傳說最怕被人看穿。'
+     )
+   )
+  FROM stages s
+ WHERE ac.stage_id = s.id
+   AND s.code = 'g_slit_mouth_legend_st1'
+   AND ac.card_order = 2
+   AND COALESCE(jsonb_array_length(ac.shared_actions), 0) = 0;
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3512,6 +3536,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_035', MIGRATION_035_SQL);
     await runOne('MIGRATION_036', MIGRATION_036_SQL);
     await runOne('MIGRATION_037', MIGRATION_037_SQL);
+    await runOne('MIGRATION_038', MIGRATION_038_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

@@ -1003,6 +1003,121 @@ test('卡片 engage_enemy 對 massive:不誤清多人交戰(Raviel BLOCK 回歸)
   assertEq(e1.engagedWith.includes('inv-1'), true, 'massive 也納入拉怪者');
 });
 
+test('E12 揭穿傳說:棄隊伍線索造成傷害,消耗 AP 並走怪物防禦', () => {
+  const sc = makeScenario(['loc-a']);
+  sc.actIndex = 1;
+  sc.objectiveProgress = 3;
+  sc.enemies = [{ instanceId: 'boss-1', enemyDefinitionId: 'boss_t3', locationId: 'loc-b', hp: 10, engagedWith: [], modifiers: [] }];
+  const inv = makeInv({ actionPoints: 2 });
+  const ctx: RuleContext = {
+    scenario: sc,
+    investigator: inv,
+    turn: makeTurn(),
+    investigators: { 'inv-1': inv },
+    actCards: [
+      { card_order: 1, shared_actions: [] },
+      {
+        card_order: 2,
+        shared_actions: [{
+          code: 'expose_legend',
+          name_zh: '揭穿傳說',
+          target_variant: 'boss_t3',
+          ratio: 2,
+          damage_type: 'physical',
+          team_limit_per_turn: 1,
+          narrative: '傳說最怕被人看穿。',
+        }],
+      },
+    ],
+    enemyStats: { boss_t3: { name_zh: '裂嘴女', resistance_values: { physical: 1 } } },
+  };
+  const r = resolveIntent(makeIntent('use_shared_action', { code: 'expose_legend', amount: 3 }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState!.investigator!.actionPoints, 1, '消耗 1 AP');
+  assertEq(r.newState!.scenario!.objectiveProgress, 0, '棄 3 線索');
+  assertEq(r.newState!.scenario!.enemies[0].hp, 5, '3×2 傷害再扣 physical resistance 1');
+  assertEq(r.newState!.scenario!.sharedActionUses?.expose_legend?.count, 1, '記錄本回合使用次數');
+  assertEq(r.result.effects!.some((e) => e.type === 'shared_action_used'), true, '有共用動作 log');
+  assertEq(r.result.effects!.some((e) => e.type === 'clues_spent'), true, '有棄線索 log');
+  assertEq((r.result.effects!.find((e) => e.type === 'attack_hit')?.params as any)?.damage, 5, 'attack_hit 對帳傷害');
+});
+
+test('E12 揭穿傳說:資格不成立與池不足會駁回,擊殺會觸發 enemy_defeated', () => {
+  const inv = makeInv({ actionPoints: 3 });
+  const sc = makeScenario(['loc-a']);
+  sc.objectiveProgress = 2;
+  sc.enemies = [{ instanceId: 'boss-1', enemyDefinitionId: 'boss_t3', locationId: 'loc-b', hp: 2, engagedWith: [], modifiers: [] }];
+  const actCards = [{
+    card_order: 1,
+    shared_actions: [{ code: 'expose_legend', name_zh: '揭穿傳說', target_variant: 'boss_t3', ratio: 1, team_limit_per_turn: 1 }],
+  }];
+  const base: RuleContext = {
+    scenario: sc,
+    investigator: inv,
+    turn: makeTurn(),
+    investigators: { 'inv-1': inv },
+    actCards,
+    enemyStats: { boss_t3: { name_zh: '裂嘴女' } },
+  };
+
+  assertEq(
+    resolveIntent(makeIntent('use_shared_action', { code: 'expose_legend', amount: 1 }), { ...base, actCards: [] }).result.outcome,
+    'rejected',
+    '幕無 shared action 駁回',
+  );
+  assertEq(
+    resolveIntent(makeIntent('use_shared_action', { code: 'expose_legend', amount: 3 }), base).result.outcome,
+    'rejected',
+    '池不足駁回',
+  );
+  const noTarget = { ...sc, enemies: sc.enemies.map((e) => ({ ...e, hp: 0 })) };
+  assertEq(
+    resolveIntent(makeIntent('use_shared_action', { code: 'expose_legend', amount: 1 }), { ...base, scenario: noTarget }).result.outcome,
+    'rejected',
+    '目標不在場或已倒駁回',
+  );
+
+  const kill = resolveIntent(makeIntent('use_shared_action', { code: 'expose_legend', amount: 2 }), base);
+  assertEq(kill.result.outcome, 'accepted');
+  assertEq(kill.result.effects!.some((e) => e.type === 'enemy_defeated'), true, '擊殺觸發 enemy_defeated');
+});
+
+test('E12 揭穿傳說:team limit 同回合擋第二人,跨回合自動解鎖', () => {
+  const sc = makeScenario(['loc-a']);
+  sc.actIndex = 0;
+  sc.turnNumber = 7;
+  sc.objectiveProgress = 4;
+  sc.enemies = [{ instanceId: 'boss-1', enemyDefinitionId: 'boss_t3', locationId: 'loc-b', hp: 8, engagedWith: [], modifiers: [] }];
+  const inv1 = makeInv({ investigatorId: 'inv-1', actionPoints: 3 });
+  const inv2 = makeInv({ investigatorId: 'inv-2', actionPoints: 3 });
+  const baseCtx: RuleContext = {
+    scenario: sc,
+    investigator: inv1,
+    turn: makeTurn(),
+    investigators: { 'inv-1': inv1, 'inv-2': inv2 },
+    actCards: [{
+      card_order: 1,
+      shared_actions: [{ code: 'expose_legend', target_variant: 'boss_t3', ratio: 1, team_limit_per_turn: 1 }],
+    }],
+    enemyStats: { boss_t3: { name_zh: '裂嘴女' } },
+  };
+  const first = resolveIntent(makeIntent('use_shared_action', { code: 'expose_legend', amount: 1 }), baseCtx);
+  assertEq(first.result.outcome, 'accepted');
+  const sameTurn = resolveIntent(
+    makeIntent('use_shared_action', { code: 'expose_legend', amount: 1 }),
+    { ...baseCtx, scenario: first.newState!.scenario!, investigator: inv2 },
+  );
+  assertEq(sameTurn.result.outcome, 'rejected', '同 turnNumber 的 team limit 擋住第二次');
+  assertIncludes(sameTurn.result.rejection?.narrative ?? '', '已經用過', '多人搶用回饋應是情境訊息');
+
+  const nextTurnScenario = { ...first.newState!.scenario!, turnNumber: 8 };
+  const nextTurn = resolveIntent(
+    makeIntent('use_shared_action', { code: 'expose_legend', amount: 1 }),
+    { ...baseCtx, scenario: nextTurnScenario, investigator: inv2, turn: makeTurn() },
+  );
+  assertEq(nextTurn.result.outcome, 'accepted', 'turnNumber 變更後使用紀錄自動過期');
+});
+
 // ─── runner ─────────────────────────
 let passed = 0;
 let failed = 0;

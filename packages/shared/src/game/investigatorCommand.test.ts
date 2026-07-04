@@ -210,6 +210,37 @@ test('需求:手上未鋪的武器也算能力(投資窗口的客觀基礎)', ()
   assertClose(d.apNeeded, 23 / 0.9, 0.05, '手上有槍 = 隊伍有此輸出能力');
 });
 
+test('E12 需求:pending kill 把 ACT shared action 的線索轉傷折入 AP', () => {
+  const sharedActs: ActCardData[] = [
+    ACTS[0],
+    {
+      ...ACTS[1],
+      shared_actions: [{
+        code: 'expose_legend',
+        name_zh: '揭穿傳說',
+        target_variant: BOSS,
+        ratio: 1,
+        team_limit_per_turn: 1,
+      }],
+    },
+  ];
+  const scenario = makeScenario({ objectiveProgress: 5 });
+  const chain = deriveVictoryChain(sharedActs, scenario, 3, ENEMY_DATA);
+  const noShared = estimateSubgoalDemand(chain[1], baseCtx({ scenario }));
+  const withShared = estimateSubgoalDemand(chain[1], baseCtx({ scenario, actCards: sharedActs }));
+
+  assert(withShared.apNeeded < noShared.apNeeded, `shared action 應降低殺敵需求(${withShared.apNeeded} < ${noShared.apNeeded})`);
+  assertClose(withShared.apNeeded, 1 + (23 - 5) / 0.9, 0.05, '5 線索先折 5 傷 + 1AP,剩餘 HP 再用武器期望換算');
+  assert(withShared.detail.includes('線索折抵:揭穿傳說轉傷5(1AP)'), 'detail 要寫出折抵來源');
+
+  const usedScenario = {
+    ...scenario,
+    sharedActionUses: { expose_legend: { turnNumber: scenario.turnNumber, count: 1 } },
+  };
+  const used = estimateSubgoalDemand(chain[1], baseCtx({ scenario: usedScenario, actCards: sharedActs }));
+  assertClose(used.apNeeded, noShared.apNeeded, 0.05, '本回合 team limit 用過後不再折抵');
+});
+
 // ─── 緊急分值與整合 ────────────────────────────────
 test('U 值:總需求÷預算;從容/告急/不可行分檔', () => {
   // 從容:速率 1、空間 14 → 預算 126;需求 ≈ 8.57+25.56 ≈ 34.1 → U≈0.27

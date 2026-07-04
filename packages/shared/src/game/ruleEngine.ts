@@ -44,6 +44,13 @@ import { revealOnEnter, revealOnGeneralSuccess, claimHiddenReward } from './hidd
 import { modifyIncomingDamage, modifyOutgoingDamage, applyCheckStatus, attackHitModifier, clearStealth, isMeleeStyle, moveCostBonus, canUseAssetAttack, canCastSpell } from './statusEffects';
 import { applyIncomingDamageToPlayer } from './ally';
 import type { BreakTestAttribute, BreakTiming, ThreatTypeCode } from '../types/talisman';
+import {
+  findSharedActionForScenario,
+  recordSharedActionUse,
+  sharedActionLimit,
+  sharedActionUseCount,
+} from './sharedActions';
+import type { SharedActionActCard } from './sharedActions';
 
 // ─── 卡片實例資料(容器由 bootstrap cardIndex 餵入)──
 export interface CardData {
@@ -123,6 +130,8 @@ export interface RuleContext {
   investigators: Record<string, InvestigatorState>;
   /** 卡片實例資料查找(commit_icons/effects 等) */
   cardLookup?: CardDataLookup;
+  /** Current stage ACT cards, including data-driven shared actions. */
+  actCards?: SharedActionActCard[];
   /** 地點統計(調查難度 shroud;key = locationDefinitionId) */
   locationStats?: Record<string, { shroud?: number }>;
   /** 敵人定義統計(key = enemyDefinitionId,來自 bootstrap monsters) */
@@ -292,6 +301,8 @@ export function resolveIntent(intent: IntentMessage, ctx: RuleContext): RuleReso
       out = resolvePlayCard(intent, ctx); break;
     case 'execute_card_action':
       out = resolveExecuteCardAction(intent, ctx); break;
+    case 'use_shared_action':
+      out = resolveUseSharedAction(intent, ctx); break;
     case 'taunt':
       out = resolveTaunt(intent, ctx); break;
     case 'stabilize':
@@ -904,6 +915,104 @@ function resolveAllyAttack(intent: IntentMessage, ctx: RuleContext): RuleResolve
  * 命中 → 怪物 hp -1
  * 未實作:戰鬥風格卡 / 武器加值 / 三層修正 / 自然 20/1 特殊處理
  */
+/**
+ * ACT shared action: spend team clues to deal damage to the scripted boss.
+ * Payload: { code, amount }.
+ */
+function resolveUseSharedAction(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
+  if (ctx.investigator.actionPoints < 1) {
+    return reject(intent, '行動點不足:共用動作需 1,剩 ' + ctx.investigator.actionPoints);
+  }
+  const payload = intent.payload as { code?: unknown; amount?: unknown };
+  const code = typeof payload.code === 'string' ? payload.code : '';
+  const amount = Math.floor(Number(payload.amount ?? 0));
+  if (!code) return reject(intent, '共用動作缺 code');
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return reject(intent, '共用動作需指定正整數線索數');
+  }
+  const action = findSharedActionForScenario(ctx.actCards, ctx.scenario, code);
+  if (!action) return reject(intent, '當前 ACT 沒有可用的共用動作:' + code);
+  if (amount > ctx.scenario.objectiveProgress) {
+    return reject(intent, '隊伍線索池不足:需要 ' + amount + ',目前 ' + ctx.scenario.objectiveProgress);
+  }
+  const limit = sharedActionLimit(action);
+  const used = sharedActionUseCount(ctx.scenario, action.code);
+  if (used >= limit) {
+    return reject(intent, (action.name_zh ?? action.code) + '本回合已經用過');
+  }
+  if (!action.target_variant) {
+    return reject(intent, '共用動作缺 target_variant:' + action.code);
+  }
+  const enemy = ctx.scenario.enemies.find(
+    (e) => e.hp > 0 && e.enemyDefinitionId === action.target_variant,
+  );
+  if (!enemy) {
+    return rejectStaleIntent(intent, '傳說已經沒有可揭穿的目標;目標不在場或已被擊倒。');
+  }
+
+  const rawDamage = amount * Math.max(0, Number(action.ratio ?? 1));
+  const damage = enemyDamageAfterDefense(
+    ctx.enemyStats?.[enemy.enemyDefinitionId],
+    action.damage_type ?? 'arcane',
+    rawDamage,
+  );
+  const newHp = enemy.hp - damage;
+  const actionName = action.name_zh ?? action.code;
+  let sc = recordSharedActionUse(
+    {
+      ...ctx.scenario,
+      objectiveProgress: Math.max(0, ctx.scenario.objectiveProgress - amount),
+      enemies: ctx.scenario.enemies.map((e) => (
+        e.instanceId === enemy.instanceId ? { ...e, hp: newHp } : e
+      )),
+    },
+    action.code,
+  );
+  const newInv: InvestigatorState = {
+    ...ctx.investigator,
+    actionPoints: ctx.investigator.actionPoints - 1,
+    statusEffects: clearStealth(ctx.investigator.statusEffects),
+  };
+  const effects: ResultEffect[] = [
+    { type: 'spend_action_point', params: { amount: 1 } },
+    {
+      type: 'shared_action_used',
+      params: {
+        code: action.code,
+        name: actionName,
+        amount,
+        damage,
+        narrative: action.narrative ?? '',
+      },
+      targetId: enemy.instanceId,
+    },
+    { type: 'clues_spent', params: { amount, source: actionName } },
+    {
+      type: 'attack_hit',
+      params: {
+        damage,
+        critical: false,
+        weapon: actionName,
+        narrative: '線索被拼成真相,' + enemyName(ctx, enemy) + '承受 ' + damage + ' 點傷害。',
+      },
+      targetId: enemy.instanceId,
+    },
+  ];
+  let deathAllies: Record<string, InvestigatorState> = {};
+  if (newHp <= 0) {
+    effects.push({
+      type: 'enemy_defeated',
+      params: { narrative: '傳說被揭穿後,怪物失去了最後的藏身處。' },
+      targetId: enemy.instanceId,
+    });
+    const dk = deathKeywordOutcome(enemy, ctx, sc);
+    effects.push(...dk.effects);
+    deathAllies = dk.updatedAllies;
+    sc = dk.scenario;
+  }
+  return accept(intent, effects, { investigator: newInv, scenario: sc, updatedAllies: deathAllies });
+}
+
 function resolveAttack(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
   if (ctx.investigator.actionPoints < 1) {
     return reject(intent, '行動點不足:攻擊需 1,剩 ' + ctx.investigator.actionPoints);

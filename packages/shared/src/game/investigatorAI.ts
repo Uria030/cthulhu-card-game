@@ -29,6 +29,14 @@ import { attachmentTestModifier } from './keeperAI';
 import { hpMaxFor, sanMaxFor } from './upkeep';
 import { isDowned, isStanding } from './dying';
 import { stepToward, locationDistance } from './monsterBehavior';
+import {
+  sharedActionsForCurrentAct,
+  sharedActionLimit,
+  sharedActionUseCount,
+} from './sharedActions';
+import type { SharedActionActCard } from './sharedActions';
+
+const DMG_V = 0.8; // 1 damage value, shared with card/attack economy scoring.
 
 // ─── 人格即資料:調查員 AI 設定檔 ─────────────────────
 export interface InvestigatorAIProfile {
@@ -367,6 +375,8 @@ export interface InvestigatorAIContext {
   stylePools: Record<string, StyleCardData[]>;
   /** 混沌袋情境標記效果碼(施法軌場景效果用;傳給 resolveIntent) */
   chaosMarkerEffects?: Record<string, string>;
+  /** ACT shared action cards,例如 E12「揭穿傳說」。未傳即無共用動作候選。 */
+  actCards?: SharedActionActCard[];
   /** 當前 ACT 目標(資料驅動;呼叫端用 deriveObjective 由幕條件算出傳入)。 */
   objective?: AIObjective;
   /** 緊急分值 U(指揮層第 3 層;P3 折現用:U 高 → 投資型出牌價值被壓低)。未傳視為中性 0.35。 */
@@ -383,6 +393,12 @@ function getObjective(ctx: InvestigatorAIContext): AIObjective {
     return { kind: 'kill', enemyCodes: ctx.objectiveEnemyCodes };
   }
   return { kind: 'none' };
+}
+
+function sharedActionDamageAmount(pool: number, targetHp: number, ratio: number): number {
+  if (pool <= 0 || targetHp <= 0) return 0;
+  const perClue = Math.max(0.0001, Number(ratio) || 1);
+  return Math.max(1, Math.min(pool, Math.ceil(targetHp / perClue)));
 }
 
 /** 武器攻擊的期望屬性修正:對風格池逐卡平均(屬性 + 武器對應屬性加成)。指揮層需求估算共用。 */
@@ -484,9 +500,20 @@ export function enumerateCandidates(
   const objectiveCodes = objective.kind === 'kill' ? (objective.enemyCodes ?? []) : [];
   const isObjective = (e: { enemyDefinitionId: string }) => objectiveCodes.includes(e.enemyDefinitionId);
   const objectiveAlive = aliveEnemies.some(isObjective);
-  // 還需要線索嗎?數線索型未達門檻 / 無幕資料 → 需要;殺目標·走位·撐回合型 → 洗線索對「贏」零貢獻
+  const sharedDamageActions = sharedActionsForCurrentAct(ctx.actCards, scenario)
+    .filter((action) => {
+      if (!action.target_variant) return false;
+      if (sharedActionUseCount(scenario, action.code) >= sharedActionLimit(action)) return false;
+      return aliveEnemies.some((e) => e.enemyDefinitionId === action.target_variant);
+    });
+  const sharedCluesCanDamageObjective = objective.kind === 'kill'
+    && sharedDamageActions.some((action) => action.target_variant != null && objectiveCodes.includes(action.target_variant));
+  // 還需要線索嗎?數線索型未達門檻 / ACT 共享動作可把線索轉傷 / 無幕資料 → 需要;
+  // 其他殺目標·走位·撐回合型 → 洗線索對「贏」零貢獻。
   const cluesNeeded = objective.kind === 'clues'
     ? (objective.clueTarget == null || scenario.objectiveProgress < objective.clueTarget)
+    : objective.kind === 'kill'
+      ? sharedCluesCanDamageObjective
     : objective.kind === 'none';
   // 殺目標型且目標不在腳下 → 算朝最近目標前進的下一步(多跳導航:目標在遠處也要穿過地圖去集火)
   let stepToObjective: string | null = null;
@@ -509,6 +536,28 @@ export function enumerateCandidates(
     .filter((e): e is NonNullable<typeof e> => !!e && e.hp > 0);
   const otherAllies = Object.values(allies).filter((a) => a.investigatorId !== inv.investigatorId && !a.permanentlyDead);
 
+  // ── ACT 共用動作(E12:揭穿傳說)──
+  // 資料驅動:只有當前 ACT 配置 shared_actions 時才生成候選;未配置關卡零行為變化。
+  for (const action of sharedDamageActions) {
+    if (!action.target_variant) continue;
+    const target = aliveEnemies.find((e) => e.enemyDefinitionId === action.target_variant);
+    if (!target) continue;
+    const amount = sharedActionDamageAmount(
+      scenario.objectiveProgress,
+      target.hp,
+      Number(action.ratio ?? 1),
+    );
+    if (amount <= 0) continue;
+    const expectedDamage = amount * Number(action.ratio ?? 1);
+    const objectiveBonus = isObjective(target) ? 5.0 : 0;
+    out.push({
+      actionType: 'use_shared_action',
+      payload: { code: action.code, amount },
+      score: objectiveBonus + expectedDamage * DMG_V,
+      intentNarrative: `${action.name_zh ?? action.code}:棄掉${amount}線索揭穿傳說`,
+    });
+  }
+
   // ── 調查(感知 vs shroud)──
   {
     const dc = locationStats[inv.currentLocationId ?? '']?.shroud ?? 10;
@@ -518,11 +567,12 @@ export function enumerateCandidates(
     if (p >= profile.weights.riskTolerance * 0.6) {
       // 交戰中調查會吃藉機攻擊(§7.2)→ 重罰
       const engagedPenalty = engaged.length > 0 ? 0.2 : 1;
+      const objectivePressure = objectiveAlive ? (sharedCluesCanDamageObjective ? 0.85 : 0.2) : 1;
       out.push({
         actionType: 'investigate',
         // 目標 boss 還活著 → 搜線索退居其次;線索已達門檻(或非數線索幕)→ 幾乎不再搜(對贏零貢獻)
         payload: commit.length > 0 ? { commitCardIds: commit } : {},
-        score: profile.weights.clueFocus * p * engagedPenalty * (objectiveAlive ? 0.2 : 1) * (cluesNeeded ? 1 : 0.15),
+        score: profile.weights.clueFocus * p * engagedPenalty * objectivePressure * (cluesNeeded ? 1 : 0.15),
         intentNarrative: '在這裡仔細搜查',
       });
     }
@@ -683,7 +733,6 @@ export function enumerateCandidates(
   // 卡牌總值 = 立即推進值(本回合兌現)+ 投資值(未來每 AP 效率 × 回收窗口)× 折現(U)。
   // 取代扁平常數:實測價差 1x~50x(必中傷害事件對 DC20 目標是王牌),常數會抹平 50 倍。
   const CARD_FIRST_BONUS = 1.0;
-  const DMG_V = 0.8; // 1 點傷害的分數當量(與調查/攻擊既有幣值對齊)
   const discount = Math.max(0.15, 1 - (ctx.urgency ?? 0.35)); // U 高 → 未來不值錢
   // 參照 DC:指派 kill 目標(未生成也算,為下一幕投資)> 本地敵人 > 12
   let refDc = 0;
@@ -960,6 +1009,20 @@ export function scoreState(
   // 殺目標型不給線索分(目標是擊殺,靠上面 ×1.2 集火驅動);無幕資料回退舊的無上限線索分。
   if (objective.kind === 'clues') {
     s += Math.min(scenario.objectiveProgress, objective.clueTarget ?? Infinity) * w.clueFocus;
+  } else if (objective.kind === 'kill') {
+    let potential = 0;
+    for (const action of sharedActionsForCurrentAct(ctx.actCards, scenario)) {
+      if (!action.target_variant || !objectiveCodes.includes(action.target_variant)) continue;
+      if (sharedActionUseCount(scenario, action.code) >= sharedActionLimit(action)) continue;
+      const hpLeft = scenario.enemies
+        .filter((e) => e.hp > 0 && e.enemyDefinitionId === action.target_variant)
+        .reduce((sum, e) => sum + e.hp, 0);
+      potential += Math.min(
+        hpLeft,
+        scenario.objectiveProgress * Number(action.ratio ?? 1),
+      );
+    }
+    if (potential > 0) s += potential * w.clueFocus * 0.8;
   } else if (objective.kind === 'none') {
     s += scenario.objectiveProgress * w.clueFocus;
   }
@@ -994,6 +1057,7 @@ function simulateStep(
     investigators: { ...allies, [inv.investigatorId]: inv },
     cardLookup: ctx.cardLookup, locationStats: ctx.locationStats, enemyStats: ctx.enemyStats,
     stylePools: ctx.stylePools, chaosMarkerEffects: ctx.chaosMarkerEffects,
+    actCards: ctx.actCards,
     // 模擬用「期望值」固定骰(中位 d20≈11),前瞻穩定、不消耗真 rng(實戰再擲真骰)
     rng: () => 0.5,
   };
@@ -1046,10 +1110,10 @@ export function planTurn(
         .slice(0, PLAN_BRANCH); // 即時分剪枝:只模擬最有希望的 M 個
       if (cands.length === 0) { next.push(node); continue; }
       for (const c of cands) {
-        const sim = simulateStep(ctx, node.inv, node.scenario, node.allies, c);
+        const sim = simulateStep(subCtx, node.inv, node.scenario, node.allies, c);
         if (!sim) continue;
         anyExpanded = true;
-        const simCtx: InvestigatorAIContext = { ...ctx, investigator: sim.inv, scenario: sim.scenario, allies: sim.allies };
+        const simCtx: InvestigatorAIContext = { ...subCtx, investigator: sim.inv, scenario: sim.scenario, allies: sim.allies };
         next.push({
           inv: sim.inv, scenario: sim.scenario, allies: sim.allies,
           aiState: { lastActionType: c.actionType, cameFromLocationId: c.actionType === 'move' ? (node.inv.currentLocationId ?? node.aiState.cameFromLocationId) : node.aiState.cameFromLocationId },
@@ -1136,6 +1200,7 @@ export function runInvestigatorAITurn(
       enemyStats: ctx.enemyStats,
       stylePools: ctx.stylePools,
       chaosMarkerEffects: ctx.chaosMarkerEffects,
+      actCards: ctx.actCards,
       rng,
     };
     const resolved = resolveIntent(intent, ruleCtx);

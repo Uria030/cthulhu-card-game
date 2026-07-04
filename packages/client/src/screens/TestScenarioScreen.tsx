@@ -53,6 +53,9 @@ import {
   adoptTeamSpirit,
   investTeamSpirit,
   CURRENT_MESSAGE_SCHEMA_VERSION,
+  sharedActionsForCurrentAct,
+  sharedActionLimit,
+  sharedActionUseCount,
 } from '@cthulhu/shared';
 import type {
   OutcomeData,
@@ -138,6 +141,8 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'investigate_success': return '🔎 ' + (p.narrative as string);
     case 'investigate_fail': return '🔎 ' + (p.narrative as string);
     case 'gain_clue': return '+1 線索';
+    case 'shared_action_used': return '📜 ' + (p.name as string) + ':棄 ' + (p.amount as number) + ' 線索,造成 ' + (p.damage as number) + ' 傷害。' + (p.narrative ? ' ' + (p.narrative as string) : '');
+    case 'clues_spent': return '棄掉 ' + (p.amount as number) + ' 線索' + (p.source ? '(' + (p.source as string) + ')' : '');
     case 'attack_hit': return '⚔ 命中(' + (p.damage as number) + ' 點傷害)— ' + (p.narrative as string);
     case 'attack_miss': return '⚔ ' + (p.narrative as string);
     case 'enemy_defeated': return '☠ ' + (p.narrative as string);
@@ -321,6 +326,7 @@ const ACTION_PLAY_TITLE: Record<string, string> = {
   investigate: '🔎 調查', search: '🔍 搜尋', investigate_hidden: '👁 探查隱密',
   attack: '⚔ 攻擊', execute_card_action: '🃏 卡牌行動', ally_attack: '🤝 盟友攻擊',
   evade: '🌀 閃避', move: '👣 移動', taunt: '🗯 嘲諷', stabilize: '🤲 穩定隊友',
+  use_shared_action: '📜 揭穿傳說',
 };
 
 /** 動作敘述拍的情境文字(結構占位,非最終 flavor;待資料/Gemini 帶入)*/
@@ -331,6 +337,7 @@ function actionNarration(actionType: string, locName: string): string {
     case 'investigate_hidden': return `你盯住那處先前察覺的異樣,湊近細看……`;
     case 'attack': return `你穩住呼吸,向眼前的威脅出手……`;
     case 'execute_card_action': return `你催動手中卡牌的力量……`;
+    case 'use_shared_action': return `你把散落的線索一段段拼回去,讓傳說露出真正的輪廓……`;
     case 'ally_attack': return `你的盟友會意,撲向那東西……`;
     case 'evade': return `你壓低重心,準備閃開逼近的攻擊……`;
     case 'move': return `你離開【${locName}】,往下一處推進……`;
@@ -542,6 +549,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [panel, setPanel] = useState<PanelType>(null);
   // 投入加值選擇(下一次檢定動作帶上,送出後清空)
   const [commitSelection, setCommitSelection] = useState<string[]>([]);
+  const [sharedActionAmount, setSharedActionAmount] = useState(1);
   // 戰役旗標(幕翻面/結局寫入)與結算
   const [flags, setFlags] = useState<Record<string, unknown>>({});
   const [outcome, setOutcome] = useState<OutcomeData | null>(null);
@@ -874,6 +882,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         scenario: sc, investigator: ai, allies, turnNumber,
         locationStats: setup.locationStats, enemyStats: setup.enemyStats,
         cardLookup: setup.cardLookup, stylePools: setup.stylePools,
+        actCards: setup.actData,
         objective,
         urgency: Number.isFinite(trace.urgency) ? trace.urgency : 1,
       },
@@ -1021,14 +1030,17 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     };
     bus.publish(intent);
     const turn: TurnState = { turnNumber, phase, actionPointsSpent: {}, pendingLegendaryActions: [], triggeredReactions: [] };
+    const ruleInvestigators: Record<string, InvestigatorState> = { [investigator.investigatorId]: investigator };
+    for (const ai of aiMembers) ruleInvestigators[ai.investigatorId] = ai;
     const ctx: RuleContext = {
       scenario, investigator, turn,
-      investigators: { [investigator.investigatorId]: investigator },
+      investigators: ruleInvestigators,
       locationStats: setup.locationStats,
       enemyStats: setup.enemyStats,
       cardLookup: setup.cardLookup,
       stylePools: setup.stylePools,
       chaosMarkerEffects: setup.chaosMarkerEffects,
+      actCards: setup.actData,
     };
     const out = resolveIntent(intent, ctx);
     bus.publish(out.result);
@@ -1097,7 +1109,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         if (!next.outcome && !pendingDamageAlloc) triggerEncounter(pendingEncounter);
       }
     }
-  }, [bus, investigator, scenario, turnNumber, phase, setup, flags, locMeta, triggerEncounter]);
+  }, [bus, investigator, scenario, aiMembers, turnNumber, phase, setup, flags, locMeta, triggerEncounter]);
 
   /** 檢定類動作:自動帶上目前的加值選擇 */
   const submitCheckIntent = useCallback((
@@ -1576,6 +1588,27 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     : (currentAct?.progressMax ?? 12);
   const agendaPct = Math.min(100, (scenario.agendaProgress / agendaMax) * 100);
   const objectivePct = Math.min(100, (scenario.objectiveProgress / objectiveMax) * 100);
+  const currentSharedAction = sharedActionsForCurrentAct(setup.actData, scenario)[0] ?? null;
+  const sharedActionTarget = currentSharedAction?.target_variant
+    ? scenario.enemies.find((e) => e.hp > 0 && e.enemyDefinitionId === currentSharedAction.target_variant)
+    : undefined;
+  const sharedActionRatio = Math.max(0.0001, Number(currentSharedAction?.ratio ?? 1) || 1);
+  const sharedActionLimitCount = currentSharedAction ? sharedActionLimit(currentSharedAction) : 0;
+  const sharedActionUsed = currentSharedAction ? sharedActionUseCount(scenario, currentSharedAction.code) : 0;
+  const sharedActionMaxAmount = currentSharedAction && sharedActionTarget
+    ? Math.max(0, Math.min(scenario.objectiveProgress, Math.ceil(sharedActionTarget.hp / sharedActionRatio)))
+    : 0;
+  const canUseSharedAction = !!currentSharedAction
+    && !!sharedActionTarget
+    && sharedActionMaxAmount > 0
+    && sharedActionUsed < sharedActionLimitCount
+    && investigator.actionPoints > 0;
+  const chosenSharedActionAmount = Math.max(1, Math.min(sharedActionAmount, Math.max(1, sharedActionMaxAmount)));
+
+  useEffect(() => {
+    if (sharedActionMaxAmount <= 0) return;
+    setSharedActionAmount((v) => Math.max(1, Math.min(v, sharedActionMaxAmount)));
+  }, [sharedActionMaxAmount]);
 
   // 隊伍 modal:玩家 + AI 隊友
   const teamMembers: Array<{ inv: InvestigatorState; name: string; label: string }> = [
@@ -1826,6 +1859,41 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                     🔎 調查隱藏內容:{p.title}
                   </button>
                 ))}
+              {currentSharedAction && sharedActionTarget && (
+                <>
+                  <span className="commit-chip">
+                    {currentSharedAction.name_zh ?? currentSharedAction.code}・線索池 {scenario.objectiveProgress}・本回合 {sharedActionUsed}/{sharedActionLimitCount}
+                  </span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={Math.max(1, sharedActionMaxAmount)}
+                    value={chosenSharedActionAmount}
+                    disabled={sharedActionMaxAmount <= 0 || sharedActionUsed >= sharedActionLimitCount}
+                    onChange={(e) => setSharedActionAmount(Number(e.target.value))}
+                    title="選擇要棄掉的線索數"
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    max={Math.max(1, sharedActionMaxAmount)}
+                    value={chosenSharedActionAmount}
+                    disabled={sharedActionMaxAmount <= 0 || sharedActionUsed >= sharedActionLimitCount}
+                    onChange={(e) => setSharedActionAmount(Number(e.target.value))}
+                    title="選擇要棄掉的線索數"
+                  />
+                  <button
+                    className="attack"
+                    disabled={!canUseSharedAction}
+                    onClick={() => submitIntent('use_shared_action', {
+                      code: currentSharedAction.code,
+                      amount: chosenSharedActionAmount,
+                    })}
+                  >
+                    📜 {currentSharedAction.name_zh ?? '揭穿傳說'}({chosenSharedActionAmount} 線索→{Math.round(chosenSharedActionAmount * sharedActionRatio * 100) / 100} 傷害)
+                  </button>
+                </>
+              )}
               {moveTargets.map((tid) => {
                 const meta = locMeta[tid];
                 const target = scenario.locations.find((l) => l.locationDefinitionId === tid);

@@ -20,6 +20,7 @@ export type ActionType =
   | 'taunt'
   | 'evade'
   | 'execute_card_action'
+  | 'use_shared_action'
   | 'consume'
   | 'gain_resource'
   | 'draw_card'

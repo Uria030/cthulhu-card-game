@@ -23,6 +23,7 @@ import type { AIObjective } from './investigatorAI';
 import { deriveObjective, estimateSuccessChance, weaponExpectedModifier } from './investigatorAI';
 import { locationDistance } from './monsterBehavior';
 import { isStanding } from './dying';
+import { normalizeSharedActions, sharedActionLimit, sharedActionUseCount } from './sharedActions';
 
 // ─── 常數(企畫書 §2 第 3 層;告急/不可行為 U 的顯示分檔,U 本身是連續值)──
 export const ACTIONS_PER_TURN = 3;          // 規則書 ch2 §2.2
@@ -186,6 +187,30 @@ function bestDamagePerAction(
   return best;
 }
 
+function sharedClueDamageForSubgoal(
+  subgoal: VictorySubgoal,
+  code: string,
+  hpLeft: number,
+  ctx: CommandContext,
+): { damage: number; apCost: number; detail: string } {
+  // 指揮層估算 current/pending ACT 時，都用該 ACT 自己的 shared_actions 折抵線索轉傷。
+  if (ctx.scenario.objectiveProgress <= 0 || hpLeft <= 0) {
+    return { damage: 0, apCost: 0, detail: '' };
+  }
+  const act = ctx.actCards.find((a) => Number(a.card_order) === Number(subgoal.actOrder));
+  const action = normalizeSharedActions(act?.shared_actions)
+    .find((a) => a.target_variant === code && sharedActionUseCount(ctx.scenario, a.code) < sharedActionLimit(a));
+  if (!action) return { damage: 0, apCost: 0, detail: '' };
+  const ratio = Number(action.ratio ?? 1);
+  const damage = Math.min(hpLeft, ctx.scenario.objectiveProgress * ratio);
+  if (damage <= 0) return { damage: 0, apCost: 0, detail: '' };
+  return {
+    damage,
+    apCost: 1,
+    detail: `;線索折抵:${action.name_zh ?? action.code}轉傷${damage}(1AP)`,
+  };
+}
+
 /** 把一個子目標換算成期望行動點需求(企畫書 §2 第 3 層換算式)。 */
 export function estimateSubgoalDemand(subgoal: VictorySubgoal, ctx: CommandContext): SubgoalDemand {
   const { scenario, locationStats, enemyData, cardLookup, stylePools } = ctx;
@@ -218,12 +243,14 @@ export function estimateSubgoalDemand(subgoal: VictorySubgoal, ctx: CommandConte
           ? alive.reduce((s, e) => s + e.hp, 0)
           : Number(data.hp_base ?? 0) + Number(data.hp_per_player ?? 0) * (ctx.playerCount - 1);
         if (hpLeft <= 0) { parts.push(`${code}:已倒`); continue; }
+        const shared = sharedClueDamageForSubgoal(subgoal, code, hpLeft, ctx);
+        const combatHp = Math.max(0, hpLeft - shared.damage);
         const dc = Number(data.dc ?? 10);
         let dmgPerAp = 0;
         for (const inv of standing) dmgPerAp = Math.max(dmgPerAp, bestDamagePerAction(inv, dc, cardLookup, stylePools));
-        const ap = dmgPerAp > 0 ? hpLeft / dmgPerAp : Infinity;
+        const ap = shared.apCost + (combatHp > 0 ? (dmgPerAp > 0 ? combatHp / dmgPerAp : Infinity) : 0);
         totalAp += ap;
-        parts.push(`${String(data.name_zh ?? code)}HP${hpLeft}÷期望傷害${dmgPerAp.toFixed(2)}/AP(DC${dc})`);
+        parts.push(`${String(data.name_zh ?? code)}HP${hpLeft}${shared.detail}÷期望傷害${dmgPerAp.toFixed(2)}/AP(DC${dc})`);
       }
       return { subgoal, apNeeded: totalAp, detail: parts.join(';') };
     }

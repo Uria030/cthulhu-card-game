@@ -1,4 +1,6 @@
 // MOD-07 關卡編輯器型別
+import type { SharedActAction } from '../game/sharedActions';
+
 export type StageType = 'main' | 'side' | 'side_return' | 'side_random';
 export type MonsterRole = 'primary' | 'secondary';
 export type DifficultyPreset = 'easy' | 'standard' | 'hard' | 'expert';
@@ -55,6 +57,7 @@ export interface StageActCard {
   front_objective_types: ObjectiveType[];
   front_advance_condition: Record<string, unknown>;
   front_scaling: Record<string, unknown>;
+  shared_actions: SharedActAction[];
   back_narrative: string;
   back_flag_sets: unknown[];
   back_rewards: Record<string, unknown>;

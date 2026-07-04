@@ -66,3 +66,7 @@ E11 已確立的 workflow 修正一併納入 Gate:
 | Claude 寫的(守燈人親寫引擎碼) | Raviel(hub Codex PTY) | hub-review --to codex --file <brief>(brief 照 docs/_hub_brief_* 慣例) |
 
 **push 紀律(2026-07-02 事故教訓)**:任何人 push 前必跑 `git log origin/main..HEAD`,清單裡有未經對面審查的 commit 就不推。E1 曾被守燈人推 README 時無意帶上線——鍋在推的人,不在寫的人。
+
+## 一單一收尾(2026-07-05 補訂,E12 中斷教訓)
+
+工作包開工後,未到交付點不得靜默切換任務。必須切換時(額度/更高優先派工),**先把進度寫進該包 handoff**(已完成/未完成/續作入口),否則半成品會在工作樹裡無人知曉地擱置。誰發現無主半成品,先問原作者,不接手不覆蓋。

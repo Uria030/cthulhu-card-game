@@ -4,7 +4,7 @@
  * API base 與 admin-shared.js 同策略:固定指向 Railway,
  * 本機開發可用 VITE_API_BASE 覆寫(.env.local)。
  */
-import type { StageBootstrap } from '@cthulhu/shared';
+import type { CampaignProgress, StageBootstrap } from '@cthulhu/shared';
 
 export const API_BASE: string =
   import.meta.env.VITE_API_BASE ?? 'https://server-production-fc4f.up.railway.app';
@@ -53,13 +53,80 @@ export interface PlayInvestigator {
   attr_charisma: number;
 }
 
-async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
+export interface PlayerAccount {
+  id: string;
+  email: string;
+  username: string;
+  save_slots_max: number;
+  dead_count: number;
+  retired_count: number;
+  is_disabled: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface PlayerSave {
+  id: string;
+  player_id: string;
+  slot: number;
+  template_id: string;
+  campaign_id: string | null;
+  status: 'active' | 'dead' | 'retired';
+  campaign_progress: CampaignProgress | Record<string, never>;
+  created_at: string;
+  updated_at: string;
+  ended_at: string | null;
+  investigator_code: string;
+  mbti_code: string;
+  faction_code: string;
+  name_zh: string;
+  name_en: string;
+  title_zh: string | null;
+  is_completed: boolean;
+  campaign_code: string | null;
+  campaign_name: string | null;
+}
+
+export interface PlayerMe {
+  player: PlayerAccount;
+  saves: PlayerSave[];
+}
+
+const PLAYER_TOKEN_KEY = 'ug_player_token';
+
+export function getPlayerToken(): string | null {
+  try {
+    return localStorage.getItem(PLAYER_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setPlayerToken(token: string): void {
+  localStorage.setItem(PLAYER_TOKEN_KEY, token);
+}
+
+export function clearPlayerToken(): void {
+  localStorage.removeItem(PLAYER_TOKEN_KEY);
+}
+
+async function requestJson<T>(path: string, options: RequestInit = {}, playerAuth = false): Promise<T> {
+  const headers = new Headers(options.headers);
+  if (options.body !== undefined && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  if (playerAuth) {
+    const token = getPlayerToken();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+  }
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const body = await res.json().catch(() => null);
   if (!res.ok || !body?.success) {
     throw new Error(`GET ${path} 失敗(${res.status}):${body?.error ?? '未知錯誤'}`);
   }
   return body.data as T;
+}
+
+async function getJson<T>(path: string): Promise<T> {
+  return requestJson<T>(path);
 }
 
 export function fetchPlayStages(): Promise<PlayStageListItem[]> {
@@ -69,6 +136,77 @@ export function fetchPlayStages(): Promise<PlayStageListItem[]> {
 export function fetchPlayInvestigators(options: { includeDraft?: boolean } = {}): Promise<PlayInvestigator[]> {
   const qs = options.includeDraft ? '?includeDraft=true' : '';
   return getJson<PlayInvestigator[]>(`/api/play/investigators${qs}`);
+}
+
+export async function loginPlayer(login: string, password: string): Promise<PlayerMe> {
+  const data = await requestJson<PlayerMe & { token: string }>('/api/player/login', {
+    method: 'POST',
+    body: JSON.stringify({ login, password }),
+  });
+  setPlayerToken(data.token);
+  return { player: data.player, saves: data.saves };
+}
+
+export async function logoutPlayer(): Promise<void> {
+  try {
+    await requestJson('/api/player/logout', { method: 'POST' }, true);
+  } finally {
+    clearPlayerToken();
+  }
+}
+
+export function fetchPlayerMe(): Promise<PlayerMe> {
+  return requestJson<PlayerMe>('/api/player/me', {}, true);
+}
+
+export function createPlayerSave(input: {
+  slot: number;
+  template_id: string;
+  campaign_id?: string | null;
+  campaign_progress?: CampaignProgress | Record<string, never>;
+}): Promise<PlayerSave> {
+  return requestJson<PlayerSave>('/api/player/saves', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  }, true);
+}
+
+export function updatePlayerSaveProgress(
+  saveId: string,
+  campaignProgress: CampaignProgress,
+  campaignId?: string | null,
+): Promise<PlayerSave> {
+  return requestJson<PlayerSave>(`/api/player/saves/${saveId}/progress`, {
+    method: 'PUT',
+    body: JSON.stringify({ campaign_id: campaignId ?? campaignProgress.campaignId, campaign_progress: campaignProgress }),
+  }, true);
+}
+
+export function retirePlayerSave(saveId: string): Promise<PlayerMe> {
+  return requestJson<PlayerMe>(`/api/player/saves/${saveId}/retire`, { method: 'POST' }, true);
+}
+
+export function markPlayerSaveDead(saveId: string, campaignProgress: CampaignProgress): Promise<PlayerMe> {
+  return requestJson<PlayerMe>(`/api/player/saves/${saveId}/mark-dead`, {
+    method: 'POST',
+    body: JSON.stringify({ campaign_progress: campaignProgress }),
+  }, true);
+}
+
+export function settlePlayerSaveScenario(input: {
+  saveId: string;
+  stageId: string;
+  flags: Record<string, unknown>;
+  investigator: unknown;
+}): Promise<PlayerSave> {
+  return requestJson<PlayerSave>(`/api/player/saves/${input.saveId}/settle-scenario`, {
+    method: 'POST',
+    body: JSON.stringify({
+      stage_id: input.stageId,
+      flags: input.flags,
+      investigator: input.investigator,
+    }),
+  }, true);
 }
 
 // 開局包 promise cache:劇情提要頁先暖,進戰鬥板直接重用,不重打

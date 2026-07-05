@@ -3329,6 +3329,74 @@ UPDATE stages
     OR name_zh = '三地點測試關卡';
 `;
 
+// Migration 040: E15-E18 player accounts, investigator save slots, and MOD-15 audit log.
+export const MIGRATION_040_SQL = `
+CREATE TABLE IF NOT EXISTS players (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email           VARCHAR(255) UNIQUE NOT NULL,
+  username        VARCHAR(64) UNIQUE NOT NULL,
+  password_hash   VARCHAR(255) NOT NULL,
+  save_slots_max  INTEGER NOT NULL DEFAULT 2 CHECK (save_slots_max >= 1 AND save_slots_max <= 8),
+  dead_count      INTEGER NOT NULL DEFAULT 0 CHECK (dead_count >= 0),
+  retired_count   INTEGER NOT NULL DEFAULT 0 CHECK (retired_count >= 0),
+  is_disabled     BOOLEAN NOT NULL DEFAULT FALSE,
+  last_login_at   TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_players_username ON players(username);
+CREATE INDEX IF NOT EXISTS idx_players_email ON players(email);
+CREATE INDEX IF NOT EXISTS idx_players_disabled ON players(is_disabled);
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id       UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  token_hash      VARCHAR(255) UNIQUE NOT NULL,
+  expires_at      TIMESTAMPTZ NOT NULL,
+  used_at         TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_reset_player ON password_reset_tokens(player_id);
+CREATE INDEX IF NOT EXISTS idx_player_reset_expires ON password_reset_tokens(expires_at);
+
+CREATE TABLE IF NOT EXISTS investigator_saves (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id         UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  slot              INTEGER NOT NULL CHECK (slot >= 1),
+  template_id       UUID NOT NULL REFERENCES investigator_templates(id),
+  campaign_id       UUID REFERENCES campaigns(id),
+  status            VARCHAR(16) NOT NULL DEFAULT 'active'
+                    CHECK (status IN ('active', 'dead', 'retired')),
+  campaign_progress JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ended_at          TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_investigator_saves_player ON investigator_saves(player_id);
+CREATE INDEX IF NOT EXISTS idx_investigator_saves_template ON investigator_saves(template_id);
+CREATE INDEX IF NOT EXISTS idx_investigator_saves_campaign ON investigator_saves(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_investigator_saves_status ON investigator_saves(status);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_save_slot
+  ON investigator_saves(player_id, slot)
+  WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS account_audit_logs (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_user_id   UUID REFERENCES admin_users(id) ON DELETE SET NULL,
+  target_player_id UUID REFERENCES players(id) ON DELETE SET NULL,
+  action          VARCHAR(64) NOT NULL,
+  detail          JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_audit_player ON account_audit_logs(target_player_id);
+CREATE INDEX IF NOT EXISTS idx_account_audit_admin ON account_audit_logs(admin_user_id);
+CREATE INDEX IF NOT EXISTS idx_account_audit_created ON account_audit_logs(created_at DESC);
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3550,6 +3618,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_037', MIGRATION_037_SQL);
     await runOne('MIGRATION_038', MIGRATION_038_SQL);
     await runOne('MIGRATION_039', MIGRATION_039_SQL);
+    await runOne('MIGRATION_040', MIGRATION_040_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

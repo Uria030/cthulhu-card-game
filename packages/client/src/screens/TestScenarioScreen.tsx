@@ -87,15 +87,24 @@ import type {
 } from '@cthulhu/shared';
 import { applyDamageAllocation, autoAllocateDamage } from '@cthulhu/shared';
 import type { AllocatableTarget } from '@cthulhu/shared';
-import { fetchBootstrap } from '../api';
+import {
+  fetchBootstrap,
+  fetchPlayerMe,
+  getPlayerToken,
+  markPlayerSaveDead,
+  settlePlayerSaveScenario,
+  updatePlayerSaveProgress,
+} from '../api';
 import { getSelectedInvestigator } from '../game/selectedInvestigator';
 import { getPartyTemplateIds } from '../game/selectedParty';
 import { buildSetupFromBootstrap } from '../game/gameSetup';
 import type { GameSetup, LocationDisplay, CardDisplay } from '../game/gameSetup';
 import { latestActionRows } from '../game/battleLogPreview';
+import { getSelectedSave } from '../game/selectedSave';
 import {
   ensureCampaignProgressForSetup,
   loadStoredCampaignProgressFromBootstrap,
+  saveStoredCampaignProgressFor,
   saveStoredCampaignProgressFromBootstrap,
 } from '../game/campaignProgressStorage';
 import './TestScenarioScreen.css';
@@ -512,12 +521,27 @@ export function TestScenarioScreen() {
       fetchBootstrap(stageId, playerTemplateId, { crossTest: selectedInvestigator?.is_completed === false }),
       Promise.all(partyTemplateIds.map((id) => fetchBootstrap(stageId, id, { crossTest: true }).catch(() => null))),
     ])
-      .then(([bootstrap, aiBoots]) => {
+      .then(async ([bootstrap, aiBoots]) => {
+        let progress = loadStoredCampaignProgressFromBootstrap(bootstrap);
+        const selectedSaveId = getSelectedSave()?.id;
+        if (selectedSaveId && getPlayerToken()) {
+          try {
+            const me = await fetchPlayerMe();
+            const save = me.saves.find((s) => s.id === selectedSaveId && s.status === 'active');
+            const serverProgress = save?.campaign_progress as CampaignProgress | undefined;
+            if (save && serverProgress?.campaignId) {
+              saveStoredCampaignProgressFor(serverProgress.campaignId, save.template_id, serverProgress);
+              progress = serverProgress;
+            }
+          } catch {
+            // Local fallback keeps the single-player board usable if the save API is unreachable.
+          }
+        }
         if (!cancelled) {
           setSetup(buildSetupFromBootstrap(
             bootstrap,
             aiBoots.filter((b): b is Boot => b != null),
-            loadStoredCampaignProgressFromBootstrap(bootstrap),
+            progress,
           ));
         }
       })
@@ -615,6 +639,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [logCollapsed, setLogCollapsed] = useState(true);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
   const [systemSub, setSystemSub] = useState<null | 'settings' | 'rules'>(null);
+  const deathReportedRef = useRef(false);
+  const settlementReportedRef = useRef(false);
 
   // 地圖 pan / zoom
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -634,7 +660,22 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
 
   useEffect(() => {
     saveStoredCampaignProgressFromBootstrap(setup.bootstrap, campaignProgress);
-  }, [setup.bootstrap, campaignProgress]);
+    const selectedSave = getSelectedSave();
+    if (!selectedSave || !getPlayerToken()) return;
+    if (outcome && settlementReportedRef.current && !preparationOpen) return;
+    if (investigator.permanentlyDead && !deathReportedRef.current) {
+      deathReportedRef.current = true;
+      markPlayerSaveDead(selectedSave.id, campaignProgress).catch(() => {
+        deathReportedRef.current = false;
+      });
+      return;
+    }
+    updatePlayerSaveProgress(
+      selectedSave.id,
+      campaignProgress,
+      setup.bootstrap?.campaign?.id ?? campaignProgress.campaignId,
+    ).catch(() => {});
+  }, [setup.bootstrap, campaignProgress, investigator.permanentlyDead, outcome, preparationOpen]);
 
   useEffect(() => {
     if (!outcome || campaignSettlement) return;
@@ -651,6 +692,27 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     const effects = [...settled.effects, ...rested.effects];
     setCampaignProgress(rested.progress);
     setCampaignSettlement({ reward, effects, progress: rested.progress });
+    const selectedSave = getSelectedSave();
+    if (selectedSave && getPlayerToken() && !settlementReportedRef.current) {
+      settlementReportedRef.current = true;
+      settlePlayerSaveScenario({
+        saveId: selectedSave.id,
+        stageId: setup.stageId,
+        flags,
+        investigator,
+      })
+        .then((save) => {
+          const serverProgress = save.campaign_progress as CampaignProgress | undefined;
+          if (serverProgress?.campaignId) {
+            saveStoredCampaignProgressFor(serverProgress.campaignId, save.template_id, serverProgress);
+            setCampaignProgress(serverProgress);
+            setCampaignSettlement((prev) => prev ? { ...prev, progress: serverProgress } : prev);
+          }
+        })
+        .catch(() => {
+          settlementReportedRef.current = false;
+        });
+    }
   }, [outcome, campaignSettlement, campaignProgress, investigator, scenario.hiddenPoints]);
 
   // === Uria 六項檢查數據:累計於 ref,結局時在結算畫面渲染(不觸發 re-render;outcome set 時讀到的即最終值) ===

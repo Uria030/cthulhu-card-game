@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resolveCampaignStageAccess } from '@cthulhu/shared';
 import type { CampaignProgress, CampaignStageAccess } from '@cthulhu/shared';
-import { fetchPlayStages } from '../api';
+import { fetchPlayerMe, fetchPlayStages, getPlayerToken } from '../api';
 import type { PlayStageListItem } from '../api';
 import { getSelectedInvestigator } from '../game/selectedInvestigator';
-import { loadStoredCampaignProgressFor } from '../game/campaignProgressStorage';
+import { loadStoredCampaignProgressFor, saveStoredCampaignProgressFor } from '../game/campaignProgressStorage';
+import { getSelectedSave } from '../game/selectedSave';
 import './DepartureBoardScreen.css';
 
 /**
@@ -32,6 +33,7 @@ export function DepartureBoardScreen() {
   const [stages, setStages] = useState<PlayStageListItem[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
+  const [progressVersion, setProgressVersion] = useState(0);
   const selectedInvestigatorId = getSelectedInvestigator()?.id ?? null;
 
   useEffect(() => {
@@ -39,6 +41,24 @@ export function DepartureBoardScreen() {
     fetchPlayStages()
       .then((list) => { if (!cancelled) setStages(list); })
       .catch((e: unknown) => { if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e)); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const selectedSaveId = getSelectedSave()?.id;
+    if (!selectedSaveId || !getPlayerToken()) return;
+    let cancelled = false;
+    fetchPlayerMe()
+      .then((me) => {
+        if (cancelled) return;
+        const save = me.saves.find((s) => s.id === selectedSaveId && s.status === 'active');
+        const progress = save?.campaign_progress as CampaignProgress | undefined;
+        if (save && progress?.campaignId) {
+          saveStoredCampaignProgressFor(progress.campaignId, save.template_id, progress);
+          setProgressVersion((v) => v + 1);
+        }
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, []);
 
@@ -66,7 +86,7 @@ export function DepartureBoardScreen() {
       for (const access of resolveCampaignStageAccess(list, progress)) out.set(access.stage.id, access);
     }
     return out;
-  }, [mainline, selectedInvestigatorId]);
+  }, [mainline, selectedInvestigatorId, progressVersion]);
 
   const progressSummary = useMemo(() => {
     const byCampaign = new Map<string, CampaignProgress | null>();
@@ -81,7 +101,7 @@ export function DepartureBoardScreen() {
     if (current && progress) return `${current.campaign_name} · 第 ${progress.currentChapterNumber} 章`;
     if (current) return `${current.campaign_name} · 尚未開始`;
     return '尚無可進行主線';
-  }, [accessByStageId, mainline, selectedInvestigatorId]);
+  }, [accessByStageId, mainline, selectedInvestigatorId, progressVersion]);
 
   const enterStage = (stageId: string) => navigate(`/scenario/${stageId}/briefing`);
 

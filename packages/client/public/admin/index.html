@@ -277,6 +277,18 @@
           <div class="card-desc">L1+L2 全 DB 健檢:術語白名單 / 軸向一致 / 武器風格 / ő 亂碼 / effects↔desc 同步 + 一鍵修復(僅 admin 可見)</div>
         `;
         designGrid.appendChild(checker);
+
+        // MOD-15 帳號管理:測試期玩家帳號、存檔格、履歷與調參
+        const accounts = document.createElement('a');
+        accounts.href = 'admin-account-manager.html';
+        accounts.className = 'module-card';
+        accounts.innerHTML = `
+          <div class="card-code"><span>MOD-15</span><span class="badge-ready">READY</span></div>
+          <div class="card-title">帳號管理</div>
+          <div class="card-en">Account Manager</div>
+          <div class="card-desc">建立測試期玩家帳號、停用/改密碼、檢視與調整調查員存檔格（僅 admin 可見）</div>
+        `;
+        designGrid.appendChild(accounts);
       }
 
       // 系統診斷面板：僅 admin / owner 可見，掛在 SIM 工具區

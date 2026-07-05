@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { StageBootstrap } from '@cthulhu/shared';
 import type { CampaignProgress, ChapterResultRecord } from '@cthulhu/shared';
-import { fetchBootstrap } from '../api';
+import { fetchBootstrap, fetchPlayerMe, getPlayerToken } from '../api';
 import { getSelectedInvestigator } from '../game/selectedInvestigator';
-import { loadStoredCampaignProgressFromBootstrap } from '../game/campaignProgressStorage';
+import { loadStoredCampaignProgressFromBootstrap, saveStoredCampaignProgressFor } from '../game/campaignProgressStorage';
+import { getSelectedSave } from '../game/selectedSave';
 import './ScenarioBriefingScreen.css';
 
 /**
@@ -112,8 +113,23 @@ export function ScenarioBriefingScreen() {
       return;
     }
     fetchBootstrap(stageId, selectedInvestigator?.id, { crossTest: selectedInvestigator?.is_completed === false })
-      .then((b) => {
-        if (!cancelled) setContent(briefingFromBootstrap(b, loadStoredCampaignProgressFromBootstrap(b)));
+      .then(async (b) => {
+        let progress = loadStoredCampaignProgressFromBootstrap(b);
+        const selectedSaveId = getSelectedSave()?.id;
+        if (selectedSaveId && getPlayerToken()) {
+          try {
+            const me = await fetchPlayerMe();
+            const save = me.saves.find((s) => s.id === selectedSaveId && s.status === 'active');
+            const serverProgress = save?.campaign_progress as CampaignProgress | undefined;
+            if (save && serverProgress?.campaignId) {
+              saveStoredCampaignProgressFor(serverProgress.campaignId, save.template_id, serverProgress);
+              progress = serverProgress;
+            }
+          } catch {
+            // Fall back to local progress; briefing remains usable while offline.
+          }
+        }
+        if (!cancelled) setContent(briefingFromBootstrap(b, progress));
       })
       .catch((e: unknown) => {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));

@@ -36,6 +36,20 @@ export function loadStoredCampaignProgressFor(
   }
 }
 
+export function saveStoredCampaignProgressFor(
+  campaignId: string | null | undefined,
+  investigatorId: string | null | undefined,
+  progress: CampaignProgress,
+): void {
+  const key = campaignProgressStorageKeyFor(campaignId, investigatorId);
+  if (!key) return;
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(progress));
+  } catch {
+    // sessionStorage may be blocked; playable flow still works in memory.
+  }
+}
+
 export function loadStoredCampaignProgressFromBootstrap(bootstrap: StageBootstrap): CampaignProgress | null {
   return loadStoredCampaignProgressFor(
     bootstrap.campaign?.id ?? bootstrap.stage?.id,
@@ -47,13 +61,11 @@ export function saveStoredCampaignProgressFromBootstrap(
   bootstrap: StageBootstrap | null,
   progress: CampaignProgress,
 ): void {
-  const key = campaignProgressStorageKeyFromBootstrap(bootstrap);
-  if (!key) return;
-  try {
-    window.sessionStorage.setItem(key, JSON.stringify(progress));
-  } catch {
-    // sessionStorage may be blocked; playable flow still works in memory.
-  }
+  saveStoredCampaignProgressFor(
+    bootstrap?.campaign?.id ?? bootstrap?.stage?.id,
+    bootstrap?.investigator?.id,
+    progress,
+  );
 }
 
 export function deckDefinitionIdsFromBootstrap(bootstrap: StageBootstrap | null): string[] {

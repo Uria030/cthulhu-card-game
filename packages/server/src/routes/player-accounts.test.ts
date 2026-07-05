@@ -1,0 +1,86 @@
+import { playerAccountTestHelpers } from './player-accounts.js';
+
+type TestFn = () => void;
+const tests: { name: string; fn: TestFn }[] = [];
+function test(name: string, fn: TestFn): void { tests.push({ name, fn }); }
+function assertEq<T>(actual: T, expected: T, msg?: string): void {
+  if (actual !== expected) throw new Error((msg ?? 'assertEq') + ': expected=' + String(expected) + ', actual=' + String(actual));
+}
+
+const h = playerAccountTestHelpers;
+
+test('normalizeEmail: trims and lowercases before unique lookup', () => {
+  assertEq(h.normalizeEmail('  Uria@Test.COM '), 'uria@test.com');
+});
+
+test('username policy: permits test account names but rejects spaces', () => {
+  assertEq(h.isValidUsername('playtest_01'), true);
+  assertEq(h.isValidUsername('play test'), false);
+});
+
+test('email and password policy match E15a test-phase contract', () => {
+  assertEq(h.isValidEmail('player@example.com'), true);
+  assertEq(h.isValidEmail('player.example.com'), false);
+  assertEq(h.passwordError('1234567') !== null, true, 'minimum length enforced');
+  assertEq(h.passwordError('12345678'), null);
+});
+
+test('settleProgressOnServer: awards DB outcome rewards and advances chapter', () => {
+  const result = h.settleProgressOnServer({
+    previous: {
+      campaignId: 'campaign-1',
+      currentChapterNumber: 1,
+      investigators: {
+        'template-1': {
+          deck: ['card-1'],
+          xp: 1,
+          talentPoints: 0,
+          hpMax: 9,
+          sanMax: 7,
+          talents: {},
+        },
+      },
+      cohesion: 0,
+      flags: {},
+    },
+    campaignId: 'campaign-1',
+    chapterNumber: 1,
+    templateId: 'template-1',
+    investigator: {
+      investigatorDefinitionId: 'template-1',
+      hp: 4,
+      san: 5,
+      hpMax: 9,
+      sanMax: 7,
+      combatStyle: 'sidearm',
+      specializations: [],
+      traumas: [],
+    },
+    outcome: {
+      outcome_code: 'A',
+      next_chapter_version: 'ch2_a',
+      rewards: { xp: 2, talent_point: 1, cohesion: 1 },
+      flag_sets: [{ flag_code: 'outcome.victory', value: true }],
+    },
+    stageId: 'stage-1',
+  });
+  const carry = result.progress.investigators['template-1'];
+  assertEq(result.status, 'active', 'save remains active');
+  assertEq(carry.xp, 3, 'xp added from DB reward');
+  assertEq(carry.talentPoints, 1, 'talent point added from DB reward');
+  assertEq(result.progress.flags['outcome.victory'], true, 'flag_sets applied');
+  assertEq(result.progress.currentChapterNumber, 2, 'long rest advances chapter');
+  assertEq(result.progress.cohesion, 2, 'reward cohesion + long rest cohesion');
+});
+
+let failed = 0;
+for (const t of tests) {
+  try {
+    t.fn();
+    console.log('PASS', t.name);
+  } catch (e) {
+    failed++;
+    console.error('FAIL', t.name, e);
+  }
+}
+if (failed > 0) process.exit(1);

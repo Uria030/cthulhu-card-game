@@ -139,6 +139,7 @@ s 專項規範(s01-s14)                   ← 高(s11-s13 V 值公式覆蓋 ch3 
 | MOD-11 | 調查員設計器 | `admin-investigator-designer.html` | 批次寫調查員模板 / 簽名卡 / 弱點 / 預組牌組 | s05 八派系 + 調查員 schema(MIGRATION_013, INTP-1 row 待修) |
 | MOD-12 | AI 主控台 | `admin-ai-console.html` | 透過聊天介面 AI 呼叫其他模組 API | ai-console.ts BRIDGE_URL proxy |
 | MOD-14 | 卡片檢查器 | `admin-card-checker.html` | L1+L2 全 DB 健檢 + 一鍵修復 | 各 MOD 規範的驗閘規則合集 |
+| MOD-15 | 帳號管理 | `admin-account-manager.html` | 測試期玩家帳號建立、停用/改密碼、存檔格與履歷管理 | M2-M3 帳號存檔裁定(E15-E18) |
 | AXIS | 主軸系列編輯器 | `admin-axis-series.html` | 主軸卡池檢視 + 3×3 法器矩陣 + 一鍵到 MOD-12 補寫 | s11-13 主軸 + 法器系統 |
 
 **已成熟 Gemini 生產線**(可抄):

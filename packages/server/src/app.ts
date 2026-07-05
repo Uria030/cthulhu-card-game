@@ -19,6 +19,7 @@ import { dbDiagRoutes } from './routes/db-diag.js';
 import { sandboxConfigRoutes } from './routes/sandbox-configs.js';
 import { calibrationRoutes } from './routes/calibration.js';
 import { playRoutes } from './routes/play.js';
+import { playerAccountRoutes } from './routes/player-accounts.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -55,6 +56,7 @@ export async function buildApp() {
   await app.register(sandboxConfigRoutes);
   await app.register(calibrationRoutes);
   await app.register(playRoutes);
+  await app.register(playerAccountRoutes);
 
   return app;
 }

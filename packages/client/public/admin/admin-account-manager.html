@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <script src="admin-boot.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOD-15 帳號管理</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin-shared.css">
+  <style>
+    .layout { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; gap: 1rem; }
+    .panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+    .panel h2 { margin: 0 0 0.75rem; color: var(--gold); font-family: 'Cinzel', serif; font-size: 1rem; }
+    .toolbar { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .toolbar input, .form-row input, .form-row select, textarea {
+      width: 100%; box-sizing: border-box; background: var(--bg-secondary); border: 1px solid var(--border);
+      color: var(--text-primary); border-radius: 6px; padding: 0.55rem 0.7rem; font-family: 'Noto Sans TC', sans-serif;
+    }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
+    .form-row label { display: block; color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 0.35rem; }
+    .btn-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
+    .player-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 64vh; overflow-y: auto; }
+    .player-card { text-align: left; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); padding: 0.75rem; cursor: pointer; }
+    .player-card.active { border-color: var(--gold); box-shadow: 0 0 18px var(--gold-glow); }
+    .player-line { display: flex; justify-content: space-between; gap: 0.5rem; }
+    .mono { font-family: 'JetBrains Mono', monospace; color: var(--text-tertiary); font-size: 0.72rem; }
+    .muted { color: var(--text-tertiary); font-size: 0.78rem; line-height: 1.5; }
+    .save-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.75rem; }
+    .save-card { border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; background: var(--bg-secondary); }
+    .save-head { display: flex; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+    textarea { min-height: 180px; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; resize: vertical; }
+    .danger { color: var(--danger); }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <nav class="admin-nav">
+    <a href="index.html" class="nav-title" style="text-decoration:none;color:var(--gold);">← 管理後台</a>
+    <span style="flex:1"></span>
+    <button onclick="adminLogout()" class="btn" style="font-size:0.75rem;padding:0.3rem 0.75rem;">登出</button>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>MOD-15 帳號管理</h1>
+      <p>測試期玩家帳號、存檔格、死亡/退休履歷與調參入口。</p>
+    </div>
+
+    <div class="layout">
+      <section class="panel">
+        <h2>帳號列表</h2>
+        <div class="toolbar">
+          <input id="search" placeholder="搜尋 username / email">
+          <button class="btn" id="reloadBtn">刷新</button>
+        </div>
+        <div id="playerList" class="player-list"></div>
+      </section>
+
+      <main class="panel">
+        <h2>建帳號 / 編輯帳號</h2>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Email</label>
+            <input id="email" autocomplete="off">
+          </div>
+          <div class="form-row">
+            <label>Username</label>
+            <input id="username" autocomplete="off">
+          </div>
+          <div class="form-row">
+            <label>新密碼(建立時必填;編輯時空白=不改)</label>
+            <input id="password" type="password" autocomplete="new-password">
+          </div>
+          <div class="form-row">
+            <label>存檔格上限</label>
+            <input id="saveSlots" type="number" min="1" max="8" value="2">
+          </div>
+          <div class="form-row">
+            <label>狀態</label>
+            <select id="disabled">
+              <option value="false">啟用</option>
+              <option value="true">停用</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="createBtn">建立帳號</button>
+          <button class="btn" id="updateBtn" disabled>儲存變更</button>
+          <button class="btn" id="clearBtn">清空表單</button>
+        </div>
+        <p id="status" class="muted"></p>
+
+        <hr style="border-color:var(--border);margin:1rem 0;">
+
+        <h2>存檔管理</h2>
+        <div id="selectedSummary" class="muted">尚未選擇帳號。</div>
+        <div id="saveGrid" class="save-grid" style="margin-top:0.75rem;"></div>
+      </main>
+    </div>
+  </div>
+
+  <script src="admin-shared.js"></script>
+  <script>
+    let players = [];
+    let selectedPlayer = null;
+
+    const el = (id) => document.getElementById(id);
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    function setStatus(text, danger) {
+      el('status').textContent = text || '';
+      el('status').className = danger ? 'muted danger' : 'muted';
+    }
+
+    async function loadPlayers() {
+      const q = el('search').value.trim();
+      const res = await adminFetch('/api/admin/players' + (q ? '?search=' + encodeURIComponent(q) : ''));
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || '讀取失敗');
+      players = data.data || [];
+      renderPlayers();
+    }
+
+    function renderPlayers() {
+      el('playerList').innerHTML = players.map(p => `
+        <button class="player-card ${selectedPlayer && selectedPlayer.player.id === p.id ? 'active' : ''}" data-id="${esc(p.id)}">
+          <div class="player-line"><strong>${esc(p.username)}</strong><span class="${p.is_disabled ? 'danger' : 'mono'}">${p.is_disabled ? '停用' : 'active ' + Number(p.active_save_count || 0)}</span></div>
+          <div class="mono">${esc(p.email)}</div>
+          <div class="muted">已故 ${Number(p.dead_count || 0)} · 退休 ${Number(p.retired_count || 0)} · 格數 ${Number(p.save_slots_max || 2)}</div>
+        </button>
+      `).join('');
+      document.querySelectorAll('.player-card').forEach(btn => btn.addEventListener('click', () => selectPlayer(btn.dataset.id)));
+    }
+
+    function fillForm(player) {
+      el('email').value = player?.email || '';
+      el('username').value = player?.username || '';
+      el('password').value = '';
+      el('saveSlots').value = player?.save_slots_max || 2;
+      el('disabled').value = player?.is_disabled ? 'true' : 'false';
+      el('updateBtn').disabled = !player;
+    }
+
+    async function selectPlayer(id) {
+      const res = await adminFetch('/api/admin/players/' + encodeURIComponent(id) + '/saves');
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || '讀取帳號失敗');
+      selectedPlayer = data.data;
+      fillForm(selectedPlayer.player);
+      renderPlayers();
+      renderSaves();
+    }
+
+    function renderSaves() {
+      if (!selectedPlayer) {
+        el('selectedSummary').textContent = '尚未選擇帳號。';
+        el('saveGrid').innerHTML = '';
+        return;
+      }
+      const p = selectedPlayer.player;
+      el('selectedSummary').textContent = `${p.username} · ${p.email} · 已故 ${p.dead_count} · 退休 ${p.retired_count}`;
+      const saves = selectedPlayer.saves || [];
+      if (saves.length === 0) {
+        el('saveGrid').innerHTML = '<div class="muted">此帳號尚無存檔。</div>';
+        return;
+      }
+      el('saveGrid').innerHTML = saves.map(s => `
+        <article class="save-card" data-save="${esc(s.id)}">
+          <div class="save-head">
+            <strong>Slot ${Number(s.slot)} · ${esc(s.title_zh || s.name_zh || s.mbti_code)}</strong>
+            <span class="mono">${esc(s.status)}</span>
+          </div>
+          <div class="muted">${esc(s.campaign_name || '未進戰役')} · ${esc(s.updated_at || '')}</div>
+          <div class="form-row" style="margin-top:0.5rem;">
+            <label>Status</label>
+            <select class="save-status">
+              ${['active','retired','dead'].map(v => `<option value="${v}" ${s.status === v ? 'selected' : ''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row" style="margin-top:0.5rem;">
+            <label>CampaignProgress JSON</label>
+            <textarea class="save-progress">${esc(JSON.stringify(s.campaign_progress || {}, null, 2))}</textarea>
+          </div>
+          <div class="btn-row">
+            <button class="btn save-update">儲存存檔</button>
+          </div>
+        </article>
+      `).join('');
+      document.querySelectorAll('.save-card').forEach(card => {
+        card.querySelector('.save-update').addEventListener('click', () => updateSave(card));
+      });
+    }
+
+    async function updateSave(card) {
+      const id = card.dataset.save;
+      let progress;
+      try {
+        progress = JSON.parse(card.querySelector('.save-progress').value || '{}');
+      } catch {
+        setStatus('CampaignProgress JSON 格式錯誤', true);
+        return;
+      }
+      const res = await adminFetch('/api/admin/player-saves/' + encodeURIComponent(id), {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: card.querySelector('.save-status').value,
+          campaign_progress: progress
+        })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setStatus(data.error || '更新存檔失敗', true);
+        return;
+      }
+      setStatus('存檔已更新');
+      await selectPlayer(selectedPlayer.player.id);
+    }
+
+    async function createPlayer() {
+      const body = {
+        email: el('email').value.trim(),
+        username: el('username').value.trim(),
+        password: el('password').value,
+        save_slots_max: Number(el('saveSlots').value || 2)
+      };
+      const res = await adminFetch('/api/admin/players', { method: 'POST', body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!data.success) {
+        setStatus(data.error || '建立失敗', true);
+        return;
+      }
+      setStatus('帳號已建立');
+      await loadPlayers();
+      await selectPlayer(data.data.id);
+    }
+
+    async function updatePlayer() {
+      if (!selectedPlayer) return;
+      const body = {
+        email: el('email').value.trim(),
+        username: el('username').value.trim(),
+        save_slots_max: Number(el('saveSlots').value || 2),
+        is_disabled: el('disabled').value === 'true'
+      };
+      if (el('password').value) body.password = el('password').value;
+      const res = await adminFetch('/api/admin/players/' + encodeURIComponent(selectedPlayer.player.id), {
+        method: 'PATCH',
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setStatus(data.error || '更新失敗', true);
+        return;
+      }
+      setStatus('帳號已更新');
+      await loadPlayers();
+      await selectPlayer(selectedPlayer.player.id);
+    }
+
+    el('reloadBtn').addEventListener('click', () => loadPlayers().catch(e => setStatus(e.message, true)));
+    el('search').addEventListener('keydown', e => { if (e.key === 'Enter') loadPlayers().catch(err => setStatus(err.message, true)); });
+    el('createBtn').addEventListener('click', () => createPlayer().catch(e => setStatus(e.message, true)));
+    el('updateBtn').addEventListener('click', () => updatePlayer().catch(e => setStatus(e.message, true)));
+    el('clearBtn').addEventListener('click', () => { selectedPlayer = null; fillForm(null); renderPlayers(); renderSaves(); setStatus(''); });
+
+    loadPlayers().catch(e => setStatus(e.message, true));
+  </script>
+</body>
+</html>

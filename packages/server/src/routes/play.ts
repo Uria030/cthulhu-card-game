@@ -13,6 +13,7 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
     try {
       const res = await pool.query(
         `SELECT s.id, s.code, s.name_zh, s.stage_type, s.narrative, s.design_status,
+                COALESCE(s.is_hidden, FALSE) AS is_hidden,
                 ch.chapter_number, ch.chapter_code, ch.name_zh AS chapter_name,
                 c.id AS campaign_id, c.code AS campaign_code, c.name_zh AS campaign_name,
                 c.theme, c.cover_narrative, c.difficulty_tier,
@@ -21,6 +22,7 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
            JOIN chapters ch ON ch.id = s.chapter_id
            JOIN campaigns c ON c.id = ch.campaign_id
           WHERE s.stage_type = 'main'
+            AND COALESCE(s.is_hidden, FALSE) = FALSE
           ORDER BY c.created_at, ch.chapter_number`,
       );
       return reply.send({ success: true, data: res.rows });
@@ -95,6 +97,9 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
       const stage = await loadFullStage(request.params.id);
       if (!stage) {
         return reply.status(404).send({ success: false, error: '關卡不存在' });
+      }
+      if (stage.is_hidden === true) {
+        return reply.status(410).send({ success: false, error: '此關卡已下架' });
       }
 
       // ── 章節 + 戰役 + 結局 ──

@@ -26,7 +26,6 @@ const MAINLINE_SPOTS = [
   { x: 430, y: 372 }, { x: 372, y: 304 }, { x: 408, y: 232 }, { x: 506, y: 200 },
   { x: 648, y: 240 }, { x: 690, y: 356 },
 ];
-const TEST_SPOT = { x: 762, y: 430 };
 
 export function DepartureBoardScreen() {
   const navigate = useNavigate();
@@ -45,7 +44,7 @@ export function DepartureBoardScreen() {
 
   const mainline = useMemo(
     () => (stages ?? [])
-      .filter((s) => s.stage_type === 'main')
+      .filter((s) => s.stage_type === 'main' && !s.is_hidden)
       .sort((a, b) =>
         a.campaign_code.localeCompare(b.campaign_code) ||
         a.chapter_number - b.chapter_number ||
@@ -159,15 +158,6 @@ export function DepartureBoardScreen() {
               </g>
             );
           })}
-
-          {/* 支線:三地點測試關卡 */}
-          <g className={'wm-pin wm-pin-side' + (hover === 'test' ? ' wm-pin-hover' : '')}
-            transform={`translate(${TEST_SPOT.x} ${TEST_SPOT.y})`}
-            onMouseEnter={() => setHover('test')} onMouseLeave={() => setHover(null)}
-            onClick={() => enterStage('test')} role="button" tabIndex={0}>
-            <path d="M 0 0 C -12 -22 12 -22 0 0 M 0 -14 a 7 7 0 1 0 0.01 0" className="wm-pin-shape" />
-            <text x={0} y={16} textAnchor="middle" className="wm-pin-name">三地點測試關卡</text>
-          </g>
 
           {stages === null && !loadError && <text x={VB_W / 2} y={VB_H / 2} textAnchor="middle" className="wm-loading">正在攤開地圖……</text>}
           {loadError && <text x={VB_W / 2} y={VB_H / 2} textAnchor="middle" className="wm-loading">地圖載入失敗:{loadError}</text>}

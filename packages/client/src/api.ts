@@ -16,6 +16,7 @@ export interface PlayStageListItem {
   stage_type: string;
   narrative: string | null;
   design_status: string;
+  is_hidden: boolean;
   chapter_number: number;
   chapter_code: string;
   chapter_name: string;

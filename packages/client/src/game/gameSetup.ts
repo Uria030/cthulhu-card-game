@@ -36,6 +36,7 @@ import {
   profileForTemplate,
   materializeAIInvestigator,
 } from '@cthulhu/shared';
+import { displayNameFor } from './displayName';
 
 export interface CardDisplay {
   id: string;
@@ -330,6 +331,7 @@ export function buildSetupFromBootstrap(
   }));
 
   const inv = bootstrap.investigator;
+  const investigatorName = displayNameFor(inv, '調查員');
   const spawnName =
     locMeta[built.investigator.currentLocationId ?? '']?.name ??
     built.investigator.currentLocationId ?? '';
@@ -396,6 +398,12 @@ export function buildSetupFromBootstrap(
         name_zh: info.name_zh,
         card_type: info.card_type,
         cost: info.cost,
+        faction_code: d.faction_code ?? d.faction ?? null,
+        faction: d.faction ?? d.faction_code ?? null,
+        rarity: d.rarity ?? null,
+        description_zh: d.description_zh ?? d.ability_text_zh ?? null,
+        flavor_text_zh: d.flavor_text_zh ?? d.flavor_zh ?? null,
+        flavor_zh: d.flavor_zh ?? d.flavor_text_zh ?? null,
         combat_style: d.combat_style ?? null,
         // 軸向系統(s08–s10):保留軸值供軸向 COMBO 連動辨識(in_play 同軸計數)
         primary_axis_layer: d.primary_axis_layer ?? null,
@@ -438,7 +446,7 @@ export function buildSetupFromBootstrap(
   return {
     stageId: bootstrap.stage.id,
     title: bootstrap.stage.name_zh,
-    investigatorName: inv?.name_zh ?? '調查員',
+    investigatorName,
     factionLabel: FACTION_LABEL[String(inv?.faction_code ?? '')] ?? String(inv?.faction_code ?? ''),
     tutorial: false,
     investigator: built.investigator,
@@ -449,7 +457,7 @@ export function buildSetupFromBootstrap(
     agendaCards,
     introLog: [
       `──── ${bootstrap.campaign?.name_zh ?? ''}:${bootstrap.stage.name_zh} ────`,
-      `${inv?.name_zh ?? '調查員'} 站在【${spawnName}】。`,
+      `${investigatorName} 站在【${spawnName}】。`,
       ...aiMembers.flatMap((m) => [
         `${m.profile.name_zh}(${m.profile.title_zh})與你同行。`,
         `[${m.profile.name_zh}] ${m.profile.introLine}`,

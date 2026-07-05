@@ -19,6 +19,7 @@ import {
   setSelectedInvestigator,
 } from '../game/selectedInvestigator';
 import { setPartyTemplateIds } from '../game/selectedParty';
+import { displayNameFor } from '../game/displayName';
 import './LobbyScreen.css';
 
 const SURFACE = 'study-room';
@@ -127,6 +128,7 @@ export function LobbyScreen() {
     const sel = {
       id: inv.id,
       name_zh: inv.name_zh,
+      title_zh: inv.title_zh,
       mbti_code: inv.mbti_code,
       faction_code: inv.faction_code,
       is_completed: inv.is_completed,
@@ -199,8 +201,8 @@ export function LobbyScreen() {
           ))}
           {SEAT_ORDER.map((seatId, i) => {
             const member = i === 0
-              ? (selected ? { name: selected.name_zh } : null)
-              : (partyMembers[i - 1] ? { name: partyMembers[i - 1].name_zh } : null);
+              ? (selected ? { name: displayNameFor(selected) } : null)
+              : (partyMembers[i - 1] ? { name: displayNameFor(partyMembers[i - 1]) } : null);
             if (!member) return null;
             const hs = hotspots.find((h) => h.id === seatId);
             if (!hs) return null;
@@ -219,7 +221,7 @@ export function LobbyScreen() {
           <div className="lr-title">調查隊</div>
           <button className="lr-slot lr-me" onClick={() => setPickerOpen(true)}>
             <span className="lr-role">我</span>
-            <span className="lr-name">{selected ? selected.name_zh : '選擇調查員'}</span>
+            <span className="lr-name">{displayNameFor(selected, '選擇調查員')}</span>
             {selectedCandidate?.is_completed === false && <span className="lr-meta">草稿</span>}
           </button>
 
@@ -229,7 +231,7 @@ export function LobbyScreen() {
               return (
                 <div key={i} className="lr-slot lr-ai">
                   <span className="lr-role">AI {i + 1}</span>
-                  <span className="lr-name">{member ? member.name_zh : '等待組隊'}</span>
+                  <span className="lr-name">{displayNameFor(member, '等待組隊')}</span>
                   {member && <span className="lr-meta">{member.faction_code} / {member.title_zh ?? member.mbti_code}</span>}
                 </div>
               );
@@ -281,7 +283,7 @@ export function LobbyScreen() {
                           onClick={() => pickInvestigator(inv)}
                         >
                           <div className="inv-card-name">
-                            {inv.name_zh || inv.title_zh || inv.mbti_code}
+                            {displayNameFor(inv)}
                             {inv.is_completed === false && <span className="inv-draft-pill">草稿</span>}
                           </div>
                           <div className="inv-card-meta">{inv.mbti_code} / {inv.title_zh ?? inv.faction_code}</div>

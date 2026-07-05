@@ -55,6 +55,8 @@ import {
   sharedActionsForCurrentAct,
   sharedActionLimit,
   sharedActionUseCount,
+  commitValueFor,
+  cardMaxUses,
 } from '@cthulhu/shared';
 import type {
   OutcomeData,
@@ -80,14 +82,17 @@ import type {
   EncounterCardData,
   EncounterOption,
   EncounterTriggerContext,
+  AttributeKey,
+  CardData,
 } from '@cthulhu/shared';
 import { applyDamageAllocation, autoAllocateDamage } from '@cthulhu/shared';
 import type { AllocatableTarget } from '@cthulhu/shared';
 import { fetchBootstrap } from '../api';
 import { getSelectedInvestigator } from '../game/selectedInvestigator';
 import { getPartyTemplateIds } from '../game/selectedParty';
-import { makeTestSetup, buildSetupFromBootstrap } from '../game/gameSetup';
+import { buildSetupFromBootstrap } from '../game/gameSetup';
 import type { GameSetup, LocationDisplay, CardDisplay } from '../game/gameSetup';
+import { latestActionRows } from '../game/battleLogPreview';
 import {
   ensureCampaignProgressForSetup,
   loadStoredCampaignProgressFromBootstrap,
@@ -314,8 +319,22 @@ interface EncounterPlay {
   pendingOutcome: OutcomeData | null;
 }
 
-// Phase2 B:AI 隊友計時器同時行動 — 每位 AI 行動的間隔(節奏化、不瞬間連發)
-const AI_ACTION_INTERVAL_MS = 1600;
+interface PendingCommitWindow {
+  actionType: IntentMessage['actionType'];
+  payload: Record<string, unknown>;
+  attribute: AttributeKey | null;
+  dc: number | null;
+  selectedIds: string[];
+  candidates: Array<{ id: string; name: string; value: number; icons: string }>;
+}
+
+interface PendingAIStep {
+  lines: string[];
+}
+
+// Phase2 B:AI 隊友計時器同時行動 — AI 起動與單一 action Log 的節奏分開控制。
+const AI_ACTION_INTERVAL_MS = 1100;
+const AI_ACTION_STEP_INTERVAL_MS = 950;
 
 // 檢定拍效果型別(擲骰/檢定);其餘效果歸結果拍
 const CHECK_EFFECT_TYPES = new Set(['roll_d20', 'fear_check', 'death_save', 'talisman_check']);
@@ -325,7 +344,36 @@ const ACTION_PLAY_TITLE: Record<string, string> = {
   investigate: '🔎 調查', search: '🔍 搜尋', investigate_hidden: '👁 探查隱密',
   attack: '⚔ 攻擊', execute_card_action: '🃏 卡牌行動', ally_attack: '🤝 盟友攻擊',
   evade: '🌀 閃避', move: '👣 移動', taunt: '🗯 嘲諷', stabilize: '🤲 穩定隊友',
-  use_shared_action: '📜 揭穿傳說',
+  use_shared_action: '📜 揭穿傳說', gain_resource: '拿資源', draw_card: '抽卡',
+};
+
+const ATTRIBUTE_LABEL: Record<AttributeKey, string> = {
+  strength: '力量',
+  agility: '敏捷',
+  constitution: '體魄',
+  reflex: '反應',
+  intellect: '智識',
+  willpower: '意志',
+  perception: '感知',
+  charisma: '魅力',
+};
+const COMMIT_ATTRIBUTES: AttributeKey[] = [
+  'strength',
+  'agility',
+  'constitution',
+  'reflex',
+  'intellect',
+  'willpower',
+  'perception',
+  'charisma',
+];
+
+const CHECK_ACTION_ATTRIBUTE: Partial<Record<IntentMessage['actionType'], AttributeKey>> = {
+  investigate: 'perception',
+  search: 'perception',
+  investigate_hidden: 'perception',
+  attack: 'strength',
+  evade: 'reflex',
 };
 
 /** 動作敘述拍的情境文字(結構占位,非最終 flavor;待資料/Gemini 帶入)*/
@@ -435,22 +483,25 @@ function teamSpiritBlockLabel(reason?: string): string {
  * /scenario/:stageId(UUID)打 /api/play bootstrap → buildSetupFromBootstrap。
  */
 export function TestScenarioScreen() {
+  const navigate = useNavigate();
   const { stageId = 'test' } = useParams();
-  const [setup, setSetup] = useState<GameSetup | null>(() =>
-    stageId === 'test' ? makeTestSetup() : null,
-  );
+  const [setup, setSetup] = useState<GameSetup | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (stageId === 'test') {
-      setSetup(makeTestSetup());
-      setLoadError(null);
+      setSetup(null);
+      setLoadError('此關卡已下架;請從世界地圖選擇「雨夜的真相」。');
       return;
     }
     let cancelled = false;
     setSetup(null);
     setLoadError(null);
     const selectedInvestigator = getSelectedInvestigator();
+    if (!selectedInvestigator) {
+      navigate('/lobby', { replace: true });
+      return;
+    }
     const playerTemplateId = selectedInvestigator?.id;
     // AI 隊友:讀大廳組隊名單(rosterCode);未設則預設名冊前 3 位不與玩家撞模板
     const partyTemplateIds = (getPartyTemplateIds() ?? [])
@@ -474,7 +525,7 @@ export function TestScenarioScreen() {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
       });
     return () => { cancelled = true; };
-  }, [stageId]);
+  }, [stageId, navigate]);
 
   if (loadError) {
     return (
@@ -482,6 +533,10 @@ export function TestScenarioScreen() {
         <div className="board-loading">
           <p>關卡資料載入失敗</p>
           <p className="board-loading-detail">{loadError}</p>
+          <div className="board-loading-actions">
+            <button onClick={() => navigate('/departure')}>返回世界地圖</button>
+            <button onClick={() => navigate('/lobby')}>返回大廳</button>
+          </div>
         </div>
       </div>
     );
@@ -542,11 +597,11 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [actionPlay, setActionPlay] = useState<ActionPlay | null>(null);
   const [encounterDeck, setEncounterDeck] = useState<EncounterCardData[]>(() => setup.encounterCards);
   const [encounterPlay, setEncounterPlay] = useState<EncounterPlay | null>(null);
-  // 手牌放大檢視:點手牌卡 → 放大看內容,下方打出/消耗/投入按鈕(刻意慢一拍提升體驗)
+  // 手牌放大檢視:點手牌卡 → 放大看內容,下方打出/消耗按鈕
   const [zoomCard, setZoomCard] = useState<CardDisplay | null>(null);
   const [panel, setPanel] = useState<PanelType>(null);
-  // 投入加值選擇(下一次檢定動作帶上,送出後清空)
-  const [commitSelection, setCommitSelection] = useState<string[]>([]);
+  const [commitWindow, setCommitWindow] = useState<PendingCommitWindow | null>(null);
+  const [aiStepQueue, setAiStepQueue] = useState<PendingAIStep[]>([]);
   const [sharedActionAmount, setSharedActionAmount] = useState(1);
   // 戰役旗標(幕翻面/結局寫入)與結算
   const [flags, setFlags] = useState<Record<string, unknown>>({});
@@ -567,7 +622,15 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
   const [zoom, setZoom] = useState(1);
 
-  const append = (s: string) => setLog((l) => [...l.slice(-50), s]);
+  const appendLines = useCallback((lines: string[]) => {
+    if (lines.length === 0) return;
+    setLog((l) => [...l, ...lines].slice(-50));
+  }, []);
+  const append = useCallback((s: string) => appendLines([s]), [appendLines]);
+  const queueAISteps = useCallback((steps: PendingAIStep[]) => {
+    if (steps.length === 0) return;
+    setAiStepQueue((q) => [...q, ...steps]);
+  }, []);
 
   useEffect(() => {
     saveStoredCampaignProgressFromBootstrap(setup.bootstrap, campaignProgress);
@@ -711,7 +774,12 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // §11 v0 AI auto-policy:對 effects 內所有「指向 AI 隊友」的 damage_allocatable,自動把傷害塞給
   // 該 AI 的盟友(隊友 AI 不跳 Modal — Modal 是玩家專屬)。就地更新傳入的 aiArr,逐筆寫 Log。
   // 玩家本人的 damage_allocatable 不在此處理(走 setDamageAlloc Modal)。
-  const settleAITeamAllocatable = (effects: ResultEffect[], aiArr: InvestigatorState[], playerId: string): void => {
+  const settleAITeamAllocatable = (
+    effects: ResultEffect[],
+    aiArr: InvestigatorState[],
+    playerId: string,
+    emit: (line: string) => void = append,
+  ): void => {
     for (const eff of effects) {
       if (eff.type !== 'damage_allocatable' || eff.targetId === playerId) continue;
       const j = aiArr.findIndex((ai) => ai?.investigatorId === eff.targetId);
@@ -723,7 +791,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       if (auto.effects.length === 0) continue;
       aiArr[j] = auto.investigator;
       const aiName = setup.aiMembers[j]?.profile.name_zh ?? 'AI';
-      for (const e of auto.effects) append('  └ ' + describeEffect(e, locMeta).split('你').join(aiName));
+      for (const e of auto.effects) emit('  └ ' + describeEffect(e, locMeta).split('你').join(aiName));
     }
   };
 
@@ -831,19 +899,20 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   };
 
   // 跑單一 AI 隊友的一回合(邏輯同 enterMythosPhase ⓪;抽出供「計時器同時行動」與「結束階段補跑」共用)。
-  // 純計算式:吃 (idx, sc, inv, aiArr) 回新的三者,只 append Log、不直接 setState(commit 由呼叫端負責)。
+  // 純計算式:吃 (idx, sc, inv, aiArr) 回新的三者與待播放 Log,不直接 setState。
   const stepAITeammate = (
     idx: number,
     sc0: ScenarioState,
     inv0: InvestigatorState,
     aiArr0: InvestigatorState[],
-  ): { sc: ScenarioState; inv: InvestigatorState; aiArr: InvestigatorState[] } => {
+  ): { sc: ScenarioState; inv: InvestigatorState; aiArr: InvestigatorState[]; steps: PendingAIStep[] } => {
     const m = setup.aiMembers[idx];
     const ai = aiArr0[idx];
-    if (!m || !ai || ai.dead || ai.permanentlyDead || isDowned(ai)) return { sc: sc0, inv: inv0, aiArr: aiArr0 };
+    if (!m || !ai || ai.dead || ai.permanentlyDead || isDowned(ai)) return { sc: sc0, inv: inv0, aiArr: aiArr0, steps: [] };
     let sc = sc0;
     let inv = inv0;
     const aiArr = [...aiArr0];
+    const aiSteps: PendingAIStep[] = [];
     const allies: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };
     for (const [j, other] of aiArr.entries()) if (j !== idx && other) allies[other.investigatorId] = other;
     // 指揮層接管目標(企畫書 P2/P3):勝利解析 → 時間預算 → 緊急分值 U → 隊伍指派。
@@ -873,7 +942,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     if (myRole) {
       const kindLabel = { clues: '湊線索', kill: '殺敵', escape: '撤離', survive: '撐住', none: '自由' }[myRole.kind] ?? myRole.kind;
       const postureLabel = trace.posture === 'calm' ? '從容' : trace.posture === 'urgent' ? '告急' : '背水';
-      append(`⚑ [指揮] ${m.profile.name_zh} → ${kindLabel}${myRole.role === 'prepare' ? '(組陣備戰)' : ''} | U=${Number.isFinite(trace.urgency) ? trace.urgency.toFixed(2) : '∞'}(${postureLabel})`);
+      aiSteps.push({
+        lines: [`[${m.profile.name_zh}] 指揮: ${kindLabel}${myRole.role === 'prepare' ? '(組陣備戰)' : ''} | U=${Number.isFinite(trace.urgency) ? trace.urgency.toFixed(2) : '∞'}(${postureLabel})`],
+      });
     }
     const r = runInvestigatorAITurn(
       {
@@ -897,18 +968,21 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     }
     for (const step of r.steps) {
       if (step.outcome === 'rejected') continue; // AI 被駁回不上戰役紀錄
-      append(`[${m.profile.name_zh}] ${step.intentNarrative}`);
+      const lines = [`[${m.profile.name_zh}] ${step.intentNarrative}`];
       for (const eff of step.effects) {
         if (eff.type === 'damage_allocatable') continue; // Modal 提示不對 AI 顯示;改下方自動分配
-        append('  └ ' + describeEffect(eff, locMeta).split('你').join(m.profile.name_zh));
+        lines.push('  └ ' + describeEffect(eff, locMeta).split('你').join(m.profile.name_zh));
       }
+      aiSteps.push({ lines });
     }
     // 六項:AI 本人這回合的線索/傷害/資源/抽卡(被駁回的動作不計)
     tallyActor(ai.investigatorId, r.steps.filter((s) => s.outcome !== 'rejected').flatMap((s) => s.effects));
     // v0 AI auto-policy:把 AI 本回合自身受到的可分配傷害自動塞給自己的盟友(不跳 Modal)
-    settleAITeamAllocatable(r.steps.flatMap((s) => s.effects), aiArr, inv0.investigatorId);
-    if (r.steps.length === 0) append(`[${m.profile.name_zh}] 按兵不動,觀察著四周。`);
-    return { sc, inv, aiArr };
+    const autoLines: string[] = [];
+    settleAITeamAllocatable(r.steps.flatMap((s) => s.effects), aiArr, inv0.investigatorId, (line) => autoLines.push(line));
+    if (autoLines.length > 0) aiSteps.push({ lines: autoLines });
+    if (aiSteps.length === 0) aiSteps.push({ lines: [`[${m.profile.name_zh}] 按兵不動,觀察著四周。`] });
+    return { sc, inv, aiArr, steps: aiSteps };
   };
 
   // Phase2 B:AI 隊友計時器同時行動 — 調查員階段中,每隔 AI_ACTION_INTERVAL_MS 讓一位「本回合還沒
@@ -922,7 +996,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // 連階段判斷都用 fresh 閉包(不靠落後的 ref)。單執行緒下無交錯,故無 lost update。
   const aiHasUnacted = aiMembers.some((ai) =>
     !!ai && !ai.dead && !ai.permanentlyDead && !isDowned(ai) && !aiActedThisTurn.includes(ai.investigatorId));
-  const aiPaused = !!(setup.tutorial || phase !== 'investigator' || outcome || actionPlay || encounterPlay || damageAlloc);
+  const aiPaused = !!(setup.tutorial || phase !== 'investigator' || outcome || actionPlay || encounterPlay || damageAlloc || aiStepQueue.length > 0);
   // 計時器:只發訊號,不碰遊戲狀態。aiActedThisTurn 入 deps → 每位 AI 行動完都重新武裝下一個計時器
   // (否則 aiHasUnacted 仍為 true 時 deps 不變,序列會在第一位之後停住)。
   useEffect(() => {
@@ -943,12 +1017,22 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setScenario(next.sc);
     setInvestigator(next.inv);
     setAiMembers(next.aiArr); // 用 applyProgress 回傳的最終陣列(含場景轉場落點),非 res.aiArr
-    next.logs.forEach((l) => append(l)); // AI 動作無玩家演出 → 進度敘事即時進 Log
+    queueAISteps([...res.steps, ...next.logs.map((line) => ({ lines: [line] }))]); // AI 動作逐步進 Log
     if (next.outcome) { checkpointVitals(next.inv, next.aiArr); setOutcome(next.outcome); }
     if (actedId) setAiActedThisTurn((s) => (s.includes(actedId) ? s : [...s, actedId]));
     // 僅依 aiTick 觸發;其餘狀態刻意讀 fresh 閉包(這正是杜絕舊值寫入的關鍵)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiTick]);
+
+  useEffect(() => {
+    if (aiStepQueue.length === 0) return;
+    const head = aiStepQueue[0];
+    const id = setTimeout(() => {
+      appendLines(head.lines);
+      setAiStepQueue((q) => q.slice(1));
+    }, AI_ACTION_STEP_INTERVAL_MS);
+    return () => clearTimeout(id);
+  }, [aiStepQueue, appendLines]);
 
   // 訂閱訊息匯流排
   useEffect(() => {
@@ -1069,9 +1153,6 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       const pendingDamageAlloc: PendingDamageAlloc | null = dp
         ? { physical: Number(dp.physical ?? 0), horror: Number(dp.horror ?? 0), targets: dp.targets ?? [] }
         : null;
-      if ((intent.payload as { commitCardIds?: unknown }).commitCardIds) {
-        setCommitSelection([]);
-      }
       // 後續行(倒地同步 + 進度/場景/結局敘事):一律排在主效果「之後」。
       const cascadeLogs = [...syncLogs, ...next.logs];
       const effects = out.result.effects ?? [];
@@ -1100,6 +1181,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         setActionPlay(buildActionPlay(actionType, effects, locName, locMeta, pendingDamageAlloc, cascadeLogs, next.outcome, pendingEncounter));
       } else {
         // 純記帳動作(拿資源/抽卡)不跳演出 → 主效果 + 後續行即時進 Log(無演出可同步)
+        append(`[${setup.investigatorName}] ${ACTION_PLAY_TITLE[actionType] ?? actionType}`);
         for (const eff of effects) append('[結算] ' + describeEffect(eff, locMeta));
         for (const l of cascadeLogs) append(l);
         if (next.outcome) { checkpointVitals(next.inv, next.aiArr); setOutcome(next.outcome); }
@@ -1109,13 +1191,109 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     }
   }, [bus, investigator, scenario, aiMembers, turnNumber, phase, setup, flags, locMeta, triggerEncounter]);
 
-  /** 檢定類動作:自動帶上目前的加值選擇 */
-  const submitCheckIntent = useCallback((
+  const iconLabel = (key: string): string => key === 'all'
+    ? '萬用'
+    : (ATTRIBUTE_LABEL[key as AttributeKey] ?? key);
+
+  const commitIconText = (data: CardData | undefined): string => {
+    const icons = data?.commit_icons ?? {};
+    const parts = Object.entries(icons)
+      .filter(([, value]) => Number(value) > 0)
+      .map(([key, value]) => `${iconLabel(key)} +${Number(value)}`);
+    return parts.length > 0 ? parts.join(' / ') : '無投入圖示';
+  };
+
+  const commitCandidateValue = (data: CardData | undefined, attribute: AttributeKey | null): number => {
+    const icons = data?.commit_icons ?? {};
+    if (attribute) return commitValueFor(attribute, [icons]);
+    return Math.max(0, ...COMMIT_ATTRIBUTES.map((attr) => commitValueFor(attr, [icons])));
+  };
+
+  const commitCandidatesFor = (attribute: AttributeKey | null): PendingCommitWindow['candidates'] => investigator.hand
+    .map((id) => {
+      const data = setup.cardLookup[id];
+      const value = commitCandidateValue(data, attribute);
+      return {
+        id,
+        name: data?.name_zh ?? id,
+        value,
+        icons: commitIconText(data),
+      };
+    })
+    .filter((card) => card.value > 0);
+
+  const inferCheckAttribute = (
     actionType: IntentMessage['actionType'],
-    payload: Record<string, unknown> = {}
+  ): AttributeKey | null => {
+    if (actionType === 'execute_card_action') return null;
+    return CHECK_ACTION_ATTRIBUTE[actionType] ?? null;
+  };
+
+  const inferCheckDc = (
+    actionType: IntentMessage['actionType'],
+    payload: Record<string, unknown>,
+  ): number | null => {
+    if (actionType === 'investigate' || actionType === 'search' || actionType === 'investigate_hidden') {
+      return setup.locationStats[investigator.currentLocationId ?? '']?.shroud ?? 10;
+    }
+    if (actionType === 'attack' || actionType === 'evade' || actionType === 'execute_card_action') {
+      const requestedEnemyId = String(payload.enemyInstanceId ?? '');
+      const enemy = scenario.enemies.find((e) => e.instanceId === requestedEnemyId)
+        ?? scenario.enemies.find((e) => e.locationId === investigator.currentLocationId && e.hp > 0);
+      return enemy ? (setup.enemyStats[enemy.enemyDefinitionId]?.dc ?? 10) : null;
+    }
+    return null;
+  };
+
+  const estimateChance = (dc: number | null, modifier: number | null): string | null => {
+    if (dc == null || modifier == null) return null;
+    const required = dc - modifier;
+    const hits = required <= 1 ? 20 : required > 20 ? 0 : 21 - required;
+    return Math.round((hits / 20) * 100) + '%';
+  };
+
+  /** 檢定類動作:宣告後才開投入時機,確認後送 shared rule engine。 */
+  const submitCheckIntent = (
+    actionType: IntentMessage['actionType'],
+    payload: Record<string, unknown> = {},
   ) => {
-    submitIntent(actionType, commitSelection.length > 0 ? { ...payload, commitCardIds: commitSelection } : payload);
-  }, [submitIntent, commitSelection]);
+    const attribute = inferCheckAttribute(actionType);
+    const candidates = commitCandidatesFor(attribute);
+    if (candidates.length === 0) {
+      submitIntent(actionType, payload);
+      return;
+    }
+    setCommitWindow({
+      actionType,
+      payload,
+      attribute,
+      dc: inferCheckDc(actionType, payload),
+      selectedIds: [],
+      candidates,
+    });
+  };
+
+  const togglePendingCommit = (cardId: string) => {
+    setCommitWindow((win) => win
+      ? {
+          ...win,
+          selectedIds: win.selectedIds.includes(cardId)
+            ? win.selectedIds.filter((id) => id !== cardId)
+            : [...win.selectedIds, cardId],
+        }
+      : win);
+  };
+
+  const confirmCommitWindow = (selectedIdsOverride?: string[]) => {
+    if (!commitWindow) return;
+    const selectedIds = selectedIdsOverride ?? commitWindow.selectedIds;
+    const payload = selectedIds.length > 0
+      ? { ...commitWindow.payload, commitCardIds: selectedIds }
+      : commitWindow.payload;
+    const actionType = commitWindow.actionType;
+    setCommitWindow(null);
+    submitIntent(actionType, payload);
+  };
 
   // §11 把這次傷害分配給選定的卡(目前 v0 = 盟友;一鍵讓它擋下能擋的部分)
   const allocateDamageTo = useCallback((target: AllocatableTarget) => {
@@ -1149,6 +1327,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     // 方向 A 完整收斂:演出走完才一次放 Log — 主效果 → 後續行(倒地同步 + 進度/場景/結局敘事),
     // 順序固定、單一來源、不先於演出暴雷。結局畫面也等到此刻才覆蓋(不蓋掉沒播完的演出)。
     if (actionPlay) {
+      append(`[${setup.investigatorName}] ${actionPlay.title}`);
       for (const eff of actionPlay.effects) append('[結算] ' + describeEffect(eff, locMeta));
       for (const l of actionPlay.cascadeLogs) append(l);
     }
@@ -1165,12 +1344,6 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     }, 700);
     return () => clearTimeout(id);
   }, [actionPlay]);
-
-  const toggleCommit = (cardId: string) => {
-    setCommitSelection((sel) =>
-      sel.includes(cardId) ? sel.filter((id) => id !== cardId) : [...sel, cardId],
-    );
-  };
 
   // 階段控制
   // 短休息(ch2 §3.1):調查員階段開頭的個人決定 — 放棄本回合行動換重洗牌庫,
@@ -1192,6 +1365,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     // ⓪ 結束調查員階段:把本回合「計時器還沒輪到」的 AI 隊友補跑完,保證每位都行動到、不損失回合。
     //    (玩家逗留時計時器已讓 AI 陸續行動;玩家提前結束就在這裡補齊 — 同時/自由順序的數位形態)
     let updatedAIs = [...aiMembers];
+    const catchupSteps: PendingAIStep[] = [];
     if (!setup.tutorial) {
       for (let idx = 0; idx < updatedAIs.length; idx += 1) {
         const aiId = updatedAIs[idx]?.investigatorId;
@@ -1200,8 +1374,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         sc = res.sc;
         inv = res.inv;
         updatedAIs = res.aiArr;
+        catchupSteps.push(...res.steps);
       }
     }
+    queueAISteps(catchupSteps);
 
     turnLoopRef.current?.advance();
     append('[階段切換] 進入敵人階段');
@@ -1617,10 +1793,17 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       label: (setup.aiMembers[idx]?.profile.title_zh ?? '') + ' · AI 隊友',
     })),
   ];
+  const logStatusRows = latestActionRows(
+    teamMembers.map((member) => ({
+      id: member.inv.investigatorId,
+      name: member.name,
+      label: member.label,
+    })),
+    log,
+  );
 
   // phase dots:目前 4 階段(短休息/調查員/神話/結束)
   const phaseIdx = PHASE_ORDER.indexOf(phase);
-  const lastLogText = log[log.length - 1] || '';
   const playerCarry = campaignProgress.investigators[investigator.investigatorDefinitionId];
   const rewardPreview: ScenarioReward = outcome
     ? (campaignSettlement?.reward ?? scenarioRewardFromOutcome(outcome, scenario.hiddenPoints ?? [], [investigator.investigatorId]))
@@ -1793,9 +1976,12 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           </div>
 
           <div className="log-preview" onClick={() => setLogCollapsed(false)}>
-            <div className="log-entry">
-              <div className="log-content">{lastLogText}</div>
-            </div>
+            {logStatusRows.map((row) => (
+              <div className={'log-status-row' + (row.waiting ? ' waiting' : '')} key={row.id}>
+                <div className="log-status-name">{row.name}</div>
+                <div className="log-status-line">{row.line}</div>
+              </div>
+            ))}
           </div>
         </aside>
 
@@ -1803,11 +1989,6 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         <div className="phase-control">
           <div className="phase-info">
             T{turnNumber} · {PHASE_LABEL[phase]} · 行動點 {investigator.actionPoints}
-            {commitSelection.length > 0 && (
-              <span className="commit-chip" title="下一次檢定將投入這些手牌加值">
-                🂠 投入 {commitSelection.length} 張
-              </span>
-            )}
           </div>
           {phase === 'investigator' && isDowned(investigator) && (
             <div className="phase-buttons">
@@ -1971,27 +2152,22 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       {panel === 'hand' && (
         <div className="bottom-panel active">
           <div className="panel-close" onClick={() => setPanel(null)}>[✕ 關閉]</div>
-          <div className="panel-title">
-            手牌 ({handCards.length}) · 點卡片 = 放大查看
-            {commitSelection.length > 0 && ` · 已投入 ${commitSelection.length} 張`}
-          </div>
+          <div className="panel-title">手牌 ({handCards.length}) · 點卡片 = 放大查看</div>
           <div className="mock-cards">
             {handCards.map((card, i) => {
               const center = (handCards.length - 1) / 2;
               const offset = i - center;
-              const selected = commitSelection.includes(card.id);
               return (
                 <div
                   key={card.id}
-                  className={'mock-card rarity-' + card.rarity + (selected ? ' commit-selected' : '')}
-                  style={{ transform: `rotate(${offset * 4}deg) translateY(${Math.abs(offset) * 4 - (selected ? 14 : 0)}px)` }}
+                  className={'mock-card rarity-' + card.rarity}
+                  style={{ transform: `rotate(${offset * 4}deg) translateY(${Math.abs(offset) * 4}px)` }}
                   title={card.desc}
                   onClick={() => setZoomCard(card)}
                 >
                   <div className="mc-cost">{card.cost}</div>
                   <div className="mc-name">{card.name}</div>
                   <div className="mc-desc">{card.desc}</div>
-                  {selected && <div className="mc-commit-badge">🂠 投入</div>}
                 </div>
               );
             })}
@@ -2002,20 +2178,79 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
 
       {/* === 卡片放大檢視(點手牌卡 → 放大看內容 + 打出/消耗/投入加值)=== */}
       {zoomCard && (() => {
-        const d = setup.cardLookup[zoomCard.id];
+        const d: CardData | undefined = setup.cardLookup[zoomCard.id];
         const playable = !!(d?.card_type && d.card_type !== 'skill');
         const consumable = !!d?.consume_enabled;
-        const selected = commitSelection.includes(zoomCard.id);
+        const effects = d?.effects ?? [];
+        const effectGroups = [
+          { key: 'action', title: '行動效果', items: effects.filter((f) => f.trigger_type === 'action') },
+          { key: 'passive', title: '被動效果', items: effects.filter((f) => f.trigger_type === 'passive') },
+          { key: 'reaction', title: '反應效果', items: effects.filter((f) => f.trigger_type === 'reaction') },
+          { key: 'other', title: '其他效果', items: effects.filter((f) => !['action', 'passive', 'reaction'].includes(String(f.trigger_type))) },
+        ].filter((group) => group.items.length > 0);
+        const maxUses = cardMaxUses(d);
+        const usesLeft = investigator.assetState?.[zoomCard.id]?.usesLeft;
+        const subtypeText = Array.isArray(d?.subtypes) ? d.subtypes.map(String).filter(Boolean).join(' / ') : '';
+        const isWeaponLike = !!d?.combat_style
+          || (d?.card_type === 'asset' && d?.damage != null && Number(d.damage) > 0);
+        const weaponBits = isWeaponLike
+          ? [
+              d?.combat_style ? `風格 ${d.combat_style}` : '',
+              d?.damage != null && Number(d.damage) > 0 ? `傷害 ${d.damage}` : '',
+              d?.damage_element ? `元素 ${d.damage_element}` : '',
+            ].filter(Boolean)
+          : [];
+        const allyBits = [
+          d?.ally_hp != null ? `HP ${d.ally_hp}` : '',
+          d?.ally_san != null ? `SAN ${d.ally_san}` : '',
+          d?.damage != null && d.card_type === 'ally' ? `攻擊 ${d.damage}` : '',
+        ].filter(Boolean);
+        const flavor = d?.flavor_text_zh ?? d?.flavor_zh ?? '';
         return (
           <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setZoomCard(null); }}>
-            <div className="modal-frame">
-              <div
-                className={'rarity-' + zoomCard.rarity}
-                style={{ width: 300, maxWidth: '80vw', margin: '0 auto', padding: '22px 20px', borderRadius: 12, background: 'rgba(20,18,28,0.96)', border: '1px solid #6c5a3e', textAlign: 'center' }}
-              >
-                <div style={{ fontSize: 13, opacity: 0.7 }}>費用 {zoomCard.cost}</div>
-                <div style={{ fontSize: 22, fontWeight: 700, margin: '8px 0', color: '#e8dcc0' }}>{zoomCard.name}</div>
-                <div style={{ fontSize: 15, lineHeight: 1.6, color: '#cabfa8', whiteSpace: 'pre-wrap' }}>{zoomCard.desc}</div>
+            <div className="modal-frame card-detail-modal">
+              <div className={'card-detail rarity-' + zoomCard.rarity}>
+                <div className="card-detail-head">
+                  <div>
+                    <div className="card-detail-name">{zoomCard.name}</div>
+                    <div className="card-detail-meta">
+                      <span>{d?.card_type ?? '未知類型'}</span>
+                      <span>{d?.faction_code ?? d?.faction ?? '無陣營'}</span>
+                      {subtypeText && <span>{subtypeText}</span>}
+                    </div>
+                  </div>
+                  <div className="card-detail-cost">{zoomCard.cost}</div>
+                </div>
+                <div className="card-detail-desc">{d?.description_zh ?? zoomCard.desc}</div>
+                <div className="card-chip-row">
+                  <span className="card-chip">投入: {commitIconText(d)}</span>
+                  {maxUses != null && (
+                    <span className="card-chip">
+                      {d?.ammo != null ? '彈藥' : d?.is_talisman ? (d.break_charge_label ?? '充能') : '使用'}:
+                      {' '}{usesLeft ?? maxUses}/{maxUses}
+                    </span>
+                  )}
+                  {allyBits.length > 0 && <span className="card-chip">盟友 {allyBits.join(' / ')}</span>}
+                  {weaponBits.length > 0 && <span className="card-chip">武器 {weaponBits.join(' / ')}</span>}
+                </div>
+                <div className="card-detail-body">
+                  {effectGroups.length > 0
+                    ? effectGroups.map((group) => (
+                        <section className="card-effect-section" key={group.key}>
+                          <div className="card-effect-title">{group.title}</div>
+                          {group.items.map((effect, index) => (
+                            <div className="card-effect-line" key={index}>
+                              {effect.description_zh ?? effect.effect_code}
+                            </div>
+                          ))}
+                        </section>
+                      ))
+                    : <div className="card-empty-effect">此卡目前沒有可顯示的效果條目。</div>}
+                </div>
+                {d?.card_type === 'skill' && (
+                  <div className="card-empty-effect">技能卡不能直接打出;檢定時會自動進入投入時機。</div>
+                )}
+                {flavor && <div className="card-flavor">{flavor}</div>}
               </div>
               <hr className="modal-divider" />
               <div className="action-row">
@@ -2029,8 +2264,60 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                     ♻ 消耗
                   </button>
                 )}
-                <button onClick={() => toggleCommit(zoomCard.id)}>{selected ? '🂠 取消投入' : '🂠 投入加值'}</button>
                 <button onClick={() => setZoomCard(null)}>✕ 關閉</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {commitWindow && (() => {
+        const selectedBonus = commitWindow.candidates
+          .filter((candidate) => commitWindow.selectedIds.includes(candidate.id))
+          .reduce((sum, candidate) => sum + candidate.value, 0);
+        const baseModifier = commitWindow.attribute
+          ? Number(investigator.attributes[commitWindow.attribute] ?? 0)
+          : null;
+        const beforeChance = estimateChance(commitWindow.dc, baseModifier);
+        const afterChance = estimateChance(
+          commitWindow.dc,
+          baseModifier == null ? null : baseModifier + selectedBonus,
+        );
+        return (
+          <div className="modal-backdrop active">
+            <div className="modal-frame commit-window">
+              <div className="modal-title">投入加值 · {ACTION_PLAY_TITLE[commitWindow.actionType] ?? commitWindow.actionType}</div>
+              <div className="commit-summary">
+                <span>檢定: {commitWindow.attribute ? ATTRIBUTE_LABEL[commitWindow.attribute] : '由卡牌/風格決定'}</span>
+                <span>DC: {commitWindow.dc ?? '未知'}</span>
+                {baseModifier != null && <span>基礎修正: +{baseModifier}</span>}
+                {beforeChance && <span>目前估算: {beforeChance}</span>}
+                {afterChance && <span>投入後: {afterChance}</span>}
+              </div>
+              <div className="commit-card-list">
+                {commitWindow.candidates.map((candidate) => {
+                  const selected = commitWindow.selectedIds.includes(candidate.id);
+                  return (
+                    <button
+                      type="button"
+                      key={candidate.id}
+                      className={'commit-card-option' + (selected ? ' selected' : '')}
+                      onClick={() => togglePendingCommit(candidate.id)}
+                    >
+                      <span className="commit-card-name">{candidate.name}</span>
+                      <span className="commit-card-icons">{candidate.icons}</span>
+                      <span className="commit-card-value">+{candidate.value}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <hr className="modal-divider" />
+              <div className="action-row">
+                <button onClick={() => setCommitWindow(null)}>取消行動</button>
+                <button onClick={() => confirmCommitWindow([])}>不投入並擲骰</button>
+                <button onClick={() => confirmCommitWindow()}>
+                  確認投入 {commitWindow.selectedIds.length > 0 ? `+${selectedBonus}` : ''} 並擲骰
+                </button>
               </div>
             </div>
           </div>

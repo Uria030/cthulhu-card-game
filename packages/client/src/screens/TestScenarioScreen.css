@@ -600,6 +600,40 @@
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.log-status-row {
+  border: 1px solid rgba(201, 168, 76, 0.22);
+  border-radius: 6px;
+  padding: 8px 9px;
+  background: rgba(20, 18, 28, 0.52);
+}
+
+.log-status-name {
+  font: 700 12px "Noto Serif TC", serif;
+  color: #C9A84C;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-status-line {
+  margin-top: 3px;
+  font-family: var(--font-typewriter);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.log-status-row.waiting .log-status-line {
+  color: var(--text-tertiary);
 }
 
 .log-entry {
@@ -1115,6 +1149,13 @@
   text-align: center;
 }
 
+.board-loading-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 /* 地點 bar 第二行:地點描述敘事 */
 .loc-bar-desc {
   margin-top: 6px;
@@ -1122,20 +1163,6 @@
   font-size: 13px;
   color: var(--text-secondary);
   max-width: 720px;
-}
-
-/* === 手牌投入加值 + 打出 === */
-.mock-card.commit-selected {
-  outline: 2px solid #C9A84C;
-  box-shadow: 0 0 14px rgba(201, 168, 76, 0.5);
-}
-
-.mc-commit-badge {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  font: 700 11px "Noto Sans TC", sans-serif;
-  color: #C9A84C;
 }
 
 .mc-play-btn {
@@ -1159,6 +1186,182 @@
   border-radius: 999px;
   color: #C9A84C;
   font-size: 12px;
+}
+
+/* === 卡片詳情 === */
+.card-detail-modal {
+  width: min(620px, 92vw);
+}
+
+.card-detail {
+  background: rgba(20, 18, 28, 0.96);
+  border: 1px solid rgba(201, 168, 76, 0.45);
+  border-radius: 8px;
+  padding: 18px;
+  color: var(--text-primary, #E8E4D9);
+}
+
+.card-detail-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.card-detail-name {
+  font: 700 22px "Noto Serif TC", serif;
+  color: #e8dcc0;
+  line-height: 1.25;
+}
+
+.card-detail-cost {
+  width: 42px;
+  height: 42px;
+  border: 1px solid #C9A84C;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font: 700 18px "Noto Serif TC", serif;
+  color: #C9A84C;
+}
+
+.card-detail-meta,
+.card-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.card-detail-meta {
+  margin-top: 6px;
+  color: var(--text-tertiary, #9a968c);
+  font: 400 12px "Noto Sans TC", sans-serif;
+}
+
+.card-detail-meta span,
+.card-chip {
+  border: 1px solid rgba(201, 168, 76, 0.28);
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: rgba(201, 168, 76, 0.08);
+}
+
+.card-detail-desc {
+  margin-top: 14px;
+  white-space: pre-wrap;
+  color: var(--text-secondary, #b8b4a8);
+  font: 400 14px/1.65 "Noto Sans TC", sans-serif;
+}
+
+.card-chip-row {
+  margin-top: 14px;
+}
+
+.card-chip {
+  color: #d7c58b;
+  font: 600 12px "Noto Sans TC", sans-serif;
+}
+
+.card-detail-body {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.card-effect-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+}
+
+.card-effect-title {
+  font: 700 12px "Noto Serif TC", serif;
+  color: #C9A84C;
+  margin-bottom: 5px;
+}
+
+.card-effect-line,
+.card-empty-effect {
+  font: 400 13px/1.55 "Noto Sans TC", sans-serif;
+  color: var(--text-secondary, #b8b4a8);
+}
+
+.card-flavor {
+  margin-top: 14px;
+  padding-left: 12px;
+  border-left: 2px solid rgba(201, 168, 76, 0.45);
+  font: italic 13px/1.6 "Noto Serif TC", serif;
+  color: var(--text-tertiary, #9a968c);
+}
+
+/* === 檢定投入時機 === */
+.commit-window {
+  width: min(560px, 92vw);
+}
+
+.commit-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+  font: 600 12px "Noto Sans TC", sans-serif;
+  color: var(--text-secondary, #b8b4a8);
+}
+
+.commit-summary span {
+  border: 1px solid rgba(201, 168, 76, 0.25);
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.commit-card-list {
+  display: grid;
+  gap: 8px;
+  max-height: 36vh;
+  overflow-y: auto;
+}
+
+.commit-card-option {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(201, 168, 76, 0.28);
+  border-radius: 6px;
+  color: var(--text-primary, #E8E4D9);
+  padding: 9px 10px;
+  cursor: pointer;
+}
+
+.commit-card-option.selected {
+  border-color: #C9A84C;
+  box-shadow: 0 0 0 1px rgba(201, 168, 76, 0.45);
+  background: rgba(201, 168, 76, 0.14);
+}
+
+.commit-card-name {
+  font: 700 13px "Noto Serif TC", serif;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-card-icons {
+  font: 400 12px "Noto Sans TC", sans-serif;
+  color: var(--text-secondary, #b8b4a8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-card-value {
+  color: #C9A84C;
+  font: 700 14px "Noto Serif TC", serif;
 }
 
 /* === 背包:場上資產列表 === */

@@ -6,6 +6,7 @@ const KEY = 'ug_selected_investigator';
 export interface SelectedInvestigator {
   id: string;
   name_zh: string;
+  title_zh?: string | null;
   mbti_code?: string;
   faction_code?: string;
   is_completed?: boolean;

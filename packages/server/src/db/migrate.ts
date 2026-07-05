@@ -3314,7 +3314,19 @@ UPDATE stage_act_cards ac
  WHERE ac.stage_id = s.id
    AND s.code = 'g_slit_mouth_legend_st1'
    AND ac.card_order = 2
-   AND COALESCE(jsonb_array_length(ac.shared_actions), 0) = 0;
+    AND COALESCE(jsonb_array_length(ac.shared_actions), 0) = 0;
+`;
+
+// Migration 039: E14 hide retired playtest stages without deleting data.
+export const MIGRATION_039_SQL = `
+ALTER TABLE stages
+  ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT FALSE;
+
+UPDATE stages
+   SET is_hidden = TRUE,
+       updated_at = NOW()
+ WHERE code IN ('test', 'three_location_test', 'g1_three_location_test')
+    OR name_zh = '三地點測試關卡';
 `;
 
 // ============================================
@@ -3537,6 +3549,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_036', MIGRATION_036_SQL);
     await runOne('MIGRATION_037', MIGRATION_037_SQL);
     await runOne('MIGRATION_038', MIGRATION_038_SQL);
+    await runOne('MIGRATION_039', MIGRATION_039_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

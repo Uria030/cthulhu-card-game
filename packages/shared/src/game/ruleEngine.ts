@@ -58,6 +58,12 @@ export interface CardData {
   name_zh?: string;
   card_type?: string;
   cost?: number | null;
+  faction_code?: string | null;
+  faction?: string | null;
+  rarity?: string | null;
+  description_zh?: string | null;
+  flavor_text_zh?: string | null;
+  flavor_zh?: string | null;
   combat_style?: string | null;
   /** 軸向系統(s08–s10;四層 faction/combat_style/proficiency/card_name + 法器 talisman_type)。
    *  軸向 COMBO 連動條件以此辨識「同軸」;bootstrap SELECT * 已載入,容器轉 cardLookup 須保留。 */

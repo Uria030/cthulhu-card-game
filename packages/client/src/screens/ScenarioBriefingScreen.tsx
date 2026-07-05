@@ -26,17 +26,15 @@ interface BriefingContent {
   locked?: boolean;
 }
 
-const TEST_SCENARIO_BRIEFING: BriefingContent = {
-  title: '三地點測試關卡',
-  subtitle: 'G1 教學 · 預計 30 分鐘 · 推薦 1 人',
+const RETIRED_TEST_SCENARIO_BRIEFING: BriefingContent = {
+  title: '三地點測試關卡已下架',
+  subtitle: '請改從世界地圖選擇「雨夜的真相」',
   paragraphs: [
-    '雨水順著瓦片滑落,敲在牆上的鐵皮排水槽,發出空洞的聲響。',
-    '剛才那封信仍在你口袋裡——「請於今晚到鎮南那條鵝卵石街,找到那家舊書店。我們需要你的眼睛。」',
-    '你不認識寄信人。地址沒有店名,只有街角的描述。但你還是來了——你向來如此。',
-    '街口的煤氣燈在霧氣裡昏黃地亮著。三條路在你眼前展開:那條陰冷無人的小巷、街尾那扇半掩的書店門、還有遠處被濃霧吞沒的後門。',
-    '你深吸一口氣,把領子拉高。今晚要弄清楚,到底是誰——或什麼——在等你。',
+    '這個早期教學關卡已被「雨夜的真相」取代,目前不再從世界地圖開放。',
+    '舊連結仍會停在此頁,避免進入已下架測試內容。',
   ],
-  meta: '結算:通過 / 失敗 · 不產生戰役旗標 · 可重玩',
+  meta: '狀態:已下架',
+  locked: true,
 };
 
 const DIFFICULTY_LABEL: Record<string, string> = {
@@ -95,13 +93,13 @@ export function ScenarioBriefingScreen() {
   const isTest = stageId === 'test';
 
   const [content, setContent] = useState<BriefingContent | null>(
-    isTest ? TEST_SCENARIO_BRIEFING : null,
+    isTest ? RETIRED_TEST_SCENARIO_BRIEFING : null,
   );
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isTest) {
-      setContent(TEST_SCENARIO_BRIEFING);
+      setContent(RETIRED_TEST_SCENARIO_BRIEFING);
       setLoadError(null);
       return;
     }
@@ -109,6 +107,10 @@ export function ScenarioBriefingScreen() {
     setContent(null);
     setLoadError(null);
     const selectedInvestigator = getSelectedInvestigator();
+    if (!selectedInvestigator) {
+      navigate('/lobby', { replace: true });
+      return;
+    }
     fetchBootstrap(stageId, selectedInvestigator?.id, { crossTest: selectedInvestigator?.is_completed === false })
       .then((b) => {
         if (!cancelled) setContent(briefingFromBootstrap(b, loadStoredCampaignProgressFromBootstrap(b)));
@@ -117,7 +119,7 @@ export function ScenarioBriefingScreen() {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
       });
     return () => { cancelled = true; };
-  }, [stageId, isTest]);
+  }, [stageId, isTest, navigate]);
 
   return (
     <div className="brief-root">
@@ -175,7 +177,7 @@ export function ScenarioBriefingScreen() {
                 disabled={content.locked}
                 onClick={() => navigate(`/scenario/${stageId}`)}
               >
-                {content.locked ? '尚未解鎖' : '進入關卡 →'}
+                {content.locked ? (isTest ? '此關卡已下架' : '尚未解鎖') : '進入關卡 →'}
               </button>
             </footer>
           </>

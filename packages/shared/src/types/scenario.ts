@@ -28,6 +28,7 @@ export interface Stage {
   return_stage_number: number | null;
   side_signature_card_id: string | null;
   design_status: StageDesignStatus;
+  is_hidden?: boolean;
   version: number;
   created_at: string;
   updated_at: string;

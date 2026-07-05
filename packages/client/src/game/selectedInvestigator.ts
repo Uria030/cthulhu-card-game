@@ -8,6 +8,7 @@ export interface SelectedInvestigator {
   name_zh: string;
   mbti_code?: string;
   faction_code?: string;
+  is_completed?: boolean;
 }
 
 export function getSelectedInvestigator(): SelectedInvestigator | null {

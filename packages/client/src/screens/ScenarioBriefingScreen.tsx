@@ -108,7 +108,8 @@ export function ScenarioBriefingScreen() {
     let cancelled = false;
     setContent(null);
     setLoadError(null);
-    fetchBootstrap(stageId, getSelectedInvestigator()?.id)
+    const selectedInvestigator = getSelectedInvestigator();
+    fetchBootstrap(stageId, selectedInvestigator?.id, { crossTest: selectedInvestigator?.is_completed === false })
       .then((b) => {
         if (!cancelled) setContent(briefingFromBootstrap(b, loadStoredCampaignProgressFromBootstrap(b)));
       })

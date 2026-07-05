@@ -1,20 +1,27 @@
-/**
- * 入隊 AI 名單 — 大廳組隊,跨畫面沿用(localStorage 持久)
- * 存 AI 名冊 rosterCode 陣列(順序 = 入隊順序)。null/未設 → 由開局預設帶名冊前幾位。
- */
+import { AI_INVESTIGATOR_ROSTER } from '@cthulhu/shared';
+
 const KEY = 'ug_selected_party';
 
-export function getPartyCodes(): string[] | null {
+function toTemplateId(value: string): string {
+  return AI_INVESTIGATOR_ROSTER.find((p) => p.rosterCode === value)?.templateId ?? value;
+}
+
+export function getPartyTemplateIds(): string[] | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const v = JSON.parse(raw);
-    return Array.isArray(v) && v.every((x) => typeof x === 'string') ? (v as string[]) : null;
+    return Array.isArray(v) && v.every((x) => typeof x === 'string')
+      ? (v as string[]).map(toTemplateId)
+      : null;
   } catch {
     return null;
   }
 }
 
-export function setPartyCodes(codes: string[]): void {
-  localStorage.setItem(KEY, JSON.stringify(codes));
+export function setPartyTemplateIds(templateIds: string[]): void {
+  localStorage.setItem(KEY, JSON.stringify(templateIds));
 }
+
+export const getPartyCodes = getPartyTemplateIds;
+export const setPartyCodes = setPartyTemplateIds;

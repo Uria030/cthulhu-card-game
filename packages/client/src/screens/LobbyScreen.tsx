@@ -10,7 +10,7 @@ import {
 } from '@cthulhu/calibration';
 import '@cthulhu/calibration/styles';
 
-import { AI_INVESTIGATOR_ROSTER } from '@cthulhu/shared';
+import { autoComposeParty } from '@cthulhu/shared';
 import hotspotsJson from '../data/surfaces/study-room/hotspots.json';
 import { fetchPlayInvestigators } from '../api';
 import type { PlayInvestigator } from '../api';
@@ -18,26 +18,23 @@ import {
   getSelectedInvestigator,
   setSelectedInvestigator,
 } from '../game/selectedInvestigator';
-import { getPartyCodes, setPartyCodes } from '../game/selectedParty';
+import { setPartyTemplateIds } from '../game/selectedParty';
 import './LobbyScreen.css';
 
-// 入隊 AI 預設:名冊前 3 位
-const DEFAULT_PARTY_CODES = AI_INVESTIGATOR_ROSTER.slice(0, 3).map((p) => p.rosterCode);
-// 座位 ↔ 成員對應(主位=玩家;其餘三席 = AI 1/2/3)
+const SURFACE = 'study-room';
 const SEAT_ORDER = ['seat.head', 'seat.front', 'seat.left', 'seat.right'];
 
 const ATTR_LABELS: Array<[keyof PlayInvestigator, string]> = [
   ['attr_strength', '力量'],
   ['attr_agility', '敏捷'],
-  ['attr_constitution', '體質'],
+  ['attr_constitution', '體魄'],
   ['attr_reflex', '反應'],
-  ['attr_intellect', '智力'],
+  ['attr_intellect', '智識'],
   ['attr_willpower', '意志'],
   ['attr_perception', '感知'],
   ['attr_charisma', '魅力'],
 ];
 
-// 熱區幾何中心(SVG 座標)
 function hotspotCentroid(hs: HotspotData): { cx: number; cy: number } {
   const g = hs.geometry as { x?: number; y?: number; width?: number; height?: number; cx?: number; cy?: number; points?: { x: number; y: number }[] };
   if (hs.shape === 'rect' && g.x !== undefined && g.y !== undefined && g.width && g.height) {
@@ -53,13 +50,13 @@ function hotspotCentroid(hs: HotspotData): { cx: number; cy: number } {
   return { cx: 0, cy: 0 };
 }
 
-// 熱區可見標籤(文字直接浮在熱區形狀上,背景由熱區形狀本身上色 — CSS 覆蓋)
 function HotspotLabel({ hs }: { hs: HotspotData }) {
   const { cx, cy } = hotspotCentroid(hs);
   return (
     <g pointerEvents="none" className="hotspot-label-group" transform={`translate(${cx}, ${cy})`}>
       <text
-        x={0} y={-4}
+        x={0}
+        y={-4}
         textAnchor="middle"
         fill="#C9A84C"
         style={{ font: '700 14px "Noto Serif TC", serif', letterSpacing: '0.05em', paintOrder: 'stroke', stroke: 'rgba(13,13,20,0.9)', strokeWidth: 3 }}
@@ -67,7 +64,8 @@ function HotspotLabel({ hs }: { hs: HotspotData }) {
         {hs.label}
       </text>
       <text
-        x={0} y={16}
+        x={0}
+        y={16}
         textAnchor="middle"
         fill="#E8E4D9"
         style={{ font: '400 12px "Noto Sans TC", sans-serif', paintOrder: 'stroke', stroke: 'rgba(13,13,20,0.9)', strokeWidth: 3 }}
@@ -78,17 +76,9 @@ function HotspotLabel({ hs }: { hs: HotspotData }) {
   );
 }
 
-/**
- * 遊戲大廳 — 1922 年偵探辦公室書房俯瞰
- * 美術:packages/client/public/surfaces/study-room/bg.webp(1408x800)
- * 熱區:hotspots.json(@cthulhu/calibration v2 schema)
- *
- * 玩家側只渲染 Provider + Surface + Hotspot,純展示+點擊事件。
- * 校準工具(Toolbar / Panel / HandleLayer)只存在於系統管理員後台
- * /admin/calibration,玩家側不可進入。
- */
-
-const SURFACE = 'study-room';
+function factionKey(inv: PlayInvestigator): string {
+  return String(inv.faction_code || inv.mbti_code?.[0] || '?').toUpperCase();
+}
 
 export function LobbyScreen() {
   const navigate = useNavigate();
@@ -96,28 +86,42 @@ export function LobbyScreen() {
   const [candidates, setCandidates] = useState<PlayInvestigator[] | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [selected, setSelected] = useState(getSelectedInvestigator());
-  // 入隊 AI 名單(rosterCode);左上組隊名單可調整
-  const [partyCodes, setPartyCodesState] = useState<string[]>(() => getPartyCodes() ?? DEFAULT_PARTY_CODES);
-  const [aiPickerSlot, setAiPickerSlot] = useState<number | null>(null);
-  const partyProfiles = partyCodes
-    .map((c) => AI_INVESTIGATOR_ROSTER.find((p) => p.rosterCode === c))
-    .filter((p): p is (typeof AI_INVESTIGATOR_ROSTER)[number] => !!p);
+  const [partySeed, setPartySeed] = useState(0);
 
-  const swapAi = (slot: number, rosterCode: string) => {
-    const next = [...partyCodes];
-    next[slot] = rosterCode;
-    setPartyCodes(next);
-    setPartyCodesState(next);
-    setAiPickerSlot(null);
-  };
-
-  // 開面板時才撈候選名單(設計完成的調查員)
   useEffect(() => {
-    if (!pickerOpen || candidates !== null) return;
-    fetchPlayInvestigators()
+    if (candidates !== null) return;
+    fetchPlayInvestigators({ includeDraft: true })
       .then(setCandidates)
       .catch((e: unknown) => setPickerError(e instanceof Error ? e.message : String(e)));
-  }, [pickerOpen, candidates]);
+  }, [candidates]);
+
+  const selectedCandidate = useMemo(
+    () => candidates?.find((inv) => inv.id === selected?.id) ?? null,
+    [candidates, selected?.id],
+  );
+
+  const autoParty = useMemo(
+    () => selectedCandidate && candidates
+      ? autoComposeParty(selectedCandidate, candidates, partySeed)
+      : null,
+    [selectedCandidate, candidates, partySeed],
+  );
+  const partyMembers = autoParty?.members ?? [];
+
+  const candidatesByFaction = useMemo(() => {
+    const groups = new Map<string, PlayInvestigator[]>();
+    for (const inv of candidates ?? []) {
+      const key = factionKey(inv);
+      groups.set(key, [...(groups.get(key) ?? []), inv]);
+    }
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [candidates]);
+
+  useEffect(() => {
+    if (partyMembers.length === 3) {
+      setPartyTemplateIds(partyMembers.map((inv) => inv.id));
+    }
+  }, [partyMembers]);
 
   const pickInvestigator = (inv: PlayInvestigator) => {
     const sel = {
@@ -125,9 +129,11 @@ export function LobbyScreen() {
       name_zh: inv.name_zh,
       mbti_code: inv.mbti_code,
       faction_code: inv.faction_code,
+      is_completed: inv.is_completed,
     };
     setSelectedInvestigator(sel);
     setSelected(sel);
+    setPartySeed(0);
     setPickerOpen(false);
   };
 
@@ -156,16 +162,10 @@ export function LobbyScreen() {
         case 'prep.forge':
         case 'prep.flask':
         case 'prep.tomes':
-          console.info(`[lobby] ${detail.label} — G2 開放`);
-          break;
-        case 'seat.head':
-        case 'seat.front':
-        case 'seat.left':
-        case 'seat.right':
-          // 椅子取消點擊(改由左上組隊名單管理;椅上只放「在席人形影子」意象)
+          console.info(`[lobby] ${detail.label} is reserved for G2`);
           break;
         default:
-          console.warn('[lobby] 未處理熱區', detail.hotspotId);
+          break;
       }
     };
     window.addEventListener('hotspot-click', handler);
@@ -181,26 +181,26 @@ export function LobbyScreen() {
         permissionCheck={() => false}
       >
         <header className="lobby-header">
-          <h1 className="lobby-title">書房</h1>
-          <p className="lobby-sub">1922 年・新英格蘭・雨夜</p>
+          <h1 className="lobby-title">大廳</h1>
+          <p className="lobby-sub">選擇調查員與短期測試隊伍</p>
         </header>
 
         <CalibrationSurface
           background={{
             src: '/surfaces/study-room/bg.webp',
-            alt: '書房俯瞰場景',
+            alt: '大廳書房背景',
           }}
         >
-          {/* 熱區 + 標籤成對包在 wrapper g,讓 hover 能同步觸發兩者顯示 */}
           {hotspots.map((hs) => (
             <g key={hs.id} className="hotspot-wrap">
               <Hotspot {...hs} />
               <HotspotLabel hs={hs} />
             </g>
           ))}
-          {/* 在席人形影子:座位有成員就放一個剪影(主位=玩家,其餘三席=AI)*/}
           {SEAT_ORDER.map((seatId, i) => {
-            const member = i === 0 ? (selected ? { name: selected.name_zh } : null) : (partyProfiles[i - 1] ? { name: partyProfiles[i - 1].name_zh } : null);
+            const member = i === 0
+              ? (selected ? { name: selected.name_zh } : null)
+              : (partyMembers[i - 1] ? { name: partyMembers[i - 1].name_zh } : null);
             if (!member) return null;
             const hs = hotspots.find((h) => h.id === seatId);
             if (!hs) return null;
@@ -215,26 +215,42 @@ export function LobbyScreen() {
           })}
         </CalibrationSurface>
 
-        {/* 左上書櫃:組隊名單(我的調查員 + 入隊 AI)*/}
         <div className="lobby-roster">
-          <div className="lr-title">組隊名單</div>
+          <div className="lr-title">調查隊</div>
           <button className="lr-slot lr-me" onClick={() => setPickerOpen(true)}>
             <span className="lr-role">我</span>
-            <span className="lr-name">{selected ? selected.name_zh : '＋ 選擇調查員'}</span>
+            <span className="lr-name">{selected ? selected.name_zh : '選擇調查員'}</span>
+            {selectedCandidate?.is_completed === false && <span className="lr-meta">草稿</span>}
           </button>
-          {[0, 1, 2].map((i) => (
-            <button key={i} className="lr-slot" onClick={() => setAiPickerSlot(i)}>
-              <span className="lr-role">AI {i + 1}</span>
-              <span className="lr-name">{partyProfiles[i] ? partyProfiles[i].name_zh : '＋ 入隊'}</span>
-            </button>
-          ))}
+
+          <div className="lr-party-shelf">
+            {[0, 1, 2].map((i) => {
+              const member = partyMembers[i];
+              return (
+                <div key={i} className="lr-slot lr-ai">
+                  <span className="lr-role">AI {i + 1}</span>
+                  <span className="lr-name">{member ? member.name_zh : '等待組隊'}</span>
+                  {member && <span className="lr-meta">{member.faction_code} / {member.title_zh ?? member.mbti_code}</span>}
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            className="lr-reroll"
+            disabled={!selectedCandidate || (candidates?.length ?? 0) < 4}
+            onClick={() => setPartySeed((v) => v + 1)}
+          >
+            換一組
+          </button>
+          {autoParty?.relaxed && <div className="lr-note">已放寬條件: {autoParty.reasons.join(', ')}</div>}
         </div>
 
         <footer className="lobby-footer">
           <button className="lobby-back" onClick={() => navigate('/')}>
-            ← 回啟動畫面
+            返回
           </button>
-          <span className="lobby-tip">整備七功能 / 鍛造 / 製作 在 G2 開放</span>
+          <span className="lobby-tip">前往地圖開始關卡，隊伍會自動帶入戰鬥板。</span>
         </footer>
 
         {pickerOpen && (
@@ -243,65 +259,46 @@ export function LobbyScreen() {
             onClick={(e) => { if (e.target === e.currentTarget) setPickerOpen(false); }}
           >
             <div className="inv-picker-frame">
-              <button className="inv-picker-close" onClick={() => setPickerOpen(false)}>✕</button>
-              <div className="inv-picker-title">❖ 選擇你的調查員 ❖</div>
-              <div className="inv-picker-sub">只列出設計完成的調查員;選定後出發板與關卡都會帶上這位。</div>
+              <button className="inv-picker-close" onClick={() => setPickerOpen(false)}>×</button>
+              <div className="inv-picker-title">選擇調查員</div>
+              <div className="inv-picker-sub">64 位 preset 皆可選用；草稿會以 crossTest 模式開局。</div>
 
-              {pickerError && <div className="inv-picker-error">名單載入失敗:{pickerError}</div>}
-              {!pickerError && candidates === null && <div className="inv-picker-loading">翻閱人事檔案……</div>}
+              {pickerError && <div className="inv-picker-error">名單載入失敗: {pickerError}</div>}
+              {!pickerError && candidates === null && <div className="inv-picker-loading">載入調查員名單...</div>}
               {candidates !== null && candidates.length === 0 && (
-                <div className="inv-picker-loading">(後台尚無設計完成的調查員)</div>
+                <div className="inv-picker-loading">目前沒有可選調查員。</div>
               )}
 
-              <div className="inv-picker-grid">
-                {(candidates ?? []).map((inv) => (
-                  <button
-                    key={inv.id}
-                    className={'inv-card' + (selected?.id === inv.id ? ' inv-card-selected' : '')}
-                    onClick={() => pickInvestigator(inv)}
-                  >
-                    <div className="inv-card-name">{inv.name_zh}</div>
-                    <div className="inv-card-meta">{inv.mbti_code} · {inv.title_zh ?? inv.faction_code}</div>
-                    {inv.ability_text_zh && <div className="inv-card-ability">{inv.ability_text_zh}</div>}
-                    <div className="inv-card-attrs">
-                      {ATTR_LABELS.map(([key, label]) => (
-                        <span key={key} className="inv-attr">
-                          {label} {Number(inv[key] ?? 0)}
-                        </span>
+              <div className="inv-picker-groups">
+                {candidatesByFaction.map(([faction, list]) => (
+                  <section key={faction} className="inv-picker-group">
+                    <div className="inv-picker-group-title">{faction}</div>
+                    <div className="inv-picker-grid">
+                      {list.map((inv) => (
+                        <button
+                          key={inv.id}
+                          className={'inv-card' + (selected?.id === inv.id ? ' inv-card-selected' : '')}
+                          onClick={() => pickInvestigator(inv)}
+                        >
+                          <div className="inv-card-name">
+                            {inv.name_zh || inv.title_zh || inv.mbti_code}
+                            {inv.is_completed === false && <span className="inv-draft-pill">草稿</span>}
+                          </div>
+                          <div className="inv-card-meta">{inv.mbti_code} / {inv.title_zh ?? inv.faction_code}</div>
+                          {inv.ability_text_zh && <div className="inv-card-ability">{inv.ability_text_zh}</div>}
+                          <div className="inv-card-attrs">
+                            {ATTR_LABELS.map(([key, label]) => (
+                              <span key={key} className="inv-attr">
+                                {label} {Number(inv[key] ?? 0)}
+                              </span>
+                            ))}
+                          </div>
+                          {selected?.id === inv.id && <div className="inv-card-badge">使用中</div>}
+                        </button>
                       ))}
                     </div>
-                    {selected?.id === inv.id && <div className="inv-card-badge">✓ 目前選用</div>}
-                  </button>
+                  </section>
                 ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {aiPickerSlot !== null && (
-          <div className="inv-picker-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setAiPickerSlot(null); }}>
-            <div className="inv-picker-frame">
-              <button className="inv-picker-close" onClick={() => setAiPickerSlot(null)}>✕</button>
-              <div className="inv-picker-title">❖ 選擇入隊 AI ❖</div>
-              <div className="inv-picker-sub">換上這個位置的 AI 調查員(同一位不可重複入隊)。</div>
-              <div className="inv-picker-grid">
-                {AI_INVESTIGATOR_ROSTER.map((p) => {
-                  const here = partyCodes[aiPickerSlot] === p.rosterCode;
-                  const elsewhere = !here && partyCodes.includes(p.rosterCode);
-                  return (
-                    <button
-                      key={p.rosterCode}
-                      className={'inv-card' + (here ? ' inv-card-selected' : '')}
-                      disabled={elsewhere}
-                      onClick={() => swapAi(aiPickerSlot, p.rosterCode)}
-                    >
-                      <div className="inv-card-name">{p.name_zh}</div>
-                      <div className="inv-card-meta">{p.templateCode} · {p.title_zh}</div>
-                      {here && <div className="inv-card-badge">✓ 此位</div>}
-                      {elsewhere && <div className="inv-card-badge">已在隊上</div>}
-                    </button>
-                  );
-                })}
               </div>
             </div>
           </div>

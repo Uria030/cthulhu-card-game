@@ -33,7 +33,7 @@ import type {
 } from '@cthulhu/shared';
 import {
   defaultKeeperProfile,
-  rosterProfileForTemplate,
+  profileForTemplate,
   materializeAIInvestigator,
 } from '@cthulhu/shared';
 
@@ -280,8 +280,7 @@ export function buildSetupFromBootstrap(
   const aiMembers: GameSetup['aiMembers'] = [];
   const aiCardIndexes: Array<Record<string, import('@cthulhu/shared').CardInstanceInfo>> = [];
   for (const [i, aiB] of aiBootstraps.entries()) {
-    const templateId = aiB.investigator?.id;
-    const profile = templateId ? rosterProfileForTemplate(templateId) : null;
+    const profile = aiB.investigator ? profileForTemplate(aiB.investigator) : null;
     if (!profile) continue; // 不在名冊上的模板不落地(名字是 AI 的靈魂,沒名字不上場)
     const aiBuilt = buildGameFromBootstrap(aiB, { cardInstancePrefix: `ai${i}_` });
     aiMembers.push({

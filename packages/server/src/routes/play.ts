@@ -33,17 +33,49 @@ export const playRoutes: FastifyPluginAsync = async (app) => {
   // ═══════════════════════════════════════════
   // 可選調查員清單(大廳/整備用,只列設計完成的)
   // ═══════════════════════════════════════════
-  app.get('/api/play/investigators', async (request, reply) => {
+  app.get<{
+    Querystring: { includeDraft?: string | boolean };
+  }>('/api/play/investigators', async (request, reply) => {
     try {
+      const includeDraft = request.query.includeDraft === true || request.query.includeDraft === 'true';
       const res = await pool.query(
         `SELECT id, code, mbti_code, faction_code, name_zh, name_en,
                 title_zh, backstory, ability_text_zh, portrait_url,
+                is_completed, is_preset, proficiency_ids,
                 attr_strength, attr_agility, attr_constitution, attr_reflex,
                 attr_intellect, attr_willpower, attr_perception, attr_charisma
            FROM investigator_templates
-          WHERE is_completed = TRUE
+          WHERE is_completed = TRUE OR ($1::boolean AND is_preset = TRUE)
           ORDER BY mbti_code`,
+        [includeDraft],
       );
+      const proficiencyTokens = [
+        ...new Set(
+          res.rows
+            .flatMap((row: any) => Array.isArray(row.proficiency_ids) ? row.proficiency_ids : [])
+            .map((p: unknown) => String(p))
+            .filter(Boolean),
+        ),
+      ];
+      if (proficiencyTokens.length > 0) {
+        const profRes = await pool.query(
+          `SELECT id::text AS id, code
+             FROM combat_styles
+            WHERE id::text = ANY($1::text[]) OR code = ANY($1::text[])`,
+          [proficiencyTokens],
+        );
+        const styleByToken = new Map<string, string>();
+        for (const row of profRes.rows) {
+          styleByToken.set(String(row.id), String(row.code));
+          styleByToken.set(String(row.code), String(row.code));
+        }
+        for (const row of res.rows) {
+          const raw = Array.isArray(row.proficiency_ids)
+            ? row.proficiency_ids.map((p: unknown) => String(p)).filter(Boolean)
+            : [];
+          row.proficiency_ids = raw.map((p: string) => styleByToken.get(p) ?? p);
+        }
+      }
       return reply.send({ success: true, data: res.rows });
     } catch (error) {
       request.log.error(error, 'play: 列出調查員失敗');

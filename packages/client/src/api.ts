@@ -39,6 +39,9 @@ export interface PlayInvestigator {
   backstory: string | null;
   ability_text_zh: string | null;
   portrait_url: string | null;
+  is_completed: boolean;
+  is_preset?: boolean;
+  proficiency_ids?: string[] | null;
   attr_strength: number;
   attr_agility: number;
   attr_constitution: number;
@@ -62,19 +65,27 @@ export function fetchPlayStages(): Promise<PlayStageListItem[]> {
   return getJson<PlayStageListItem[]>('/api/play/stages');
 }
 
-export function fetchPlayInvestigators(): Promise<PlayInvestigator[]> {
-  return getJson<PlayInvestigator[]>('/api/play/investigators');
+export function fetchPlayInvestigators(options: { includeDraft?: boolean } = {}): Promise<PlayInvestigator[]> {
+  const qs = options.includeDraft ? '?includeDraft=true' : '';
+  return getJson<PlayInvestigator[]>(`/api/play/investigators${qs}`);
 }
 
 // 開局包 promise cache:劇情提要頁先暖,進戰鬥板直接重用,不重打
 // key 含調查員 id(換人選 → 重新取開局包)
 const bootstrapCache = new Map<string, Promise<StageBootstrap>>();
 
-export function fetchBootstrap(stageId: string, investigatorId?: string): Promise<StageBootstrap> {
-  const key = `${stageId}|${investigatorId ?? ''}`;
+export function fetchBootstrap(
+  stageId: string,
+  investigatorId?: string,
+  options: { crossTest?: boolean } = {},
+): Promise<StageBootstrap> {
+  const key = `${stageId}|${investigatorId ?? ''}|${options.crossTest ? 'crossTest' : ''}`;
   let p = bootstrapCache.get(key);
   if (!p) {
-    const qs = investigatorId ? `?investigator=${encodeURIComponent(investigatorId)}` : '';
+    const params = new URLSearchParams();
+    if (investigatorId) params.set('investigator', investigatorId);
+    if (options.crossTest) params.set('crossTest', 'true');
+    const qs = params.toString() ? `?${params.toString()}` : '';
     p = getJson<StageBootstrap>(`/api/play/stages/${stageId}/bootstrap${qs}`);
     // 失敗不留毒快取,下次重試
     p.catch(() => bootstrapCache.delete(key));

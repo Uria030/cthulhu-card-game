@@ -32,6 +32,7 @@ import {
   objectiveForAssignment,
   computeDeckBlueprint,
   AI_INVESTIGATOR_ROSTER,
+  autoComposeParty,
   runTurnEndUpkeep,
   syncDownedState,
   runDeathSave,
@@ -72,6 +73,9 @@ const TEAM_SPECS = (argValue('--team') ?? process.env.SIM_TEAM ?? DEFAULT_TEAM.j
   .filter(Boolean);
 const CACHE_DIR = argValue('--cache-dir') ?? process.env.SIM_CACHE_DIR ?? '';
 const JSON_OUTPUT = hasArg('--json') || process.env.SIM_JSON === '1';
+const AUTO_PLAYER = argValue('--auto-player') ?? process.env.SIM_AUTO_PLAYER ?? '';
+const PARTY_SEED = Number(argValue('--party-seed') ?? process.env.SIM_PARTY_SEED ?? 0);
+const AUTO_LIST = argValue('--auto-list') ?? process.env.SIM_AUTO_LIST ?? '';
 
 const seedInput = Number(argValue('--seed') ?? process.env.SIM_SEED ?? 20260612);
 let rngSeed = seedInput;
@@ -94,6 +98,32 @@ async function fetchBootstrap(invId: string): Promise<StageBootstrap> {
     fs.writeFileSync(cacheFile, JSON.stringify(j.data, null, 2));
   }
   return j.data;
+}
+
+async function fetchInvestigatorList(): Promise<NonNullable<StageBootstrap['investigator']>[]> {
+  if (AUTO_LIST) {
+    const raw = fs.readFileSync(AUTO_LIST, 'utf8');
+    return JSON.parse(raw) as NonNullable<StageBootstrap['investigator']>[];
+  }
+  const url = `${BASE}/api/play/investigators?includeDraft=true`;
+  const r = await fetch(url);
+  const j = (await r.json()) as { success: boolean; data: NonNullable<StageBootstrap['investigator']>[]; error?: string };
+  if (!r.ok || !j.success) throw new Error(`investigator list ${r.status} ${j.error ?? ''}`);
+  return j.data;
+}
+
+async function resolveTeamTemplateIds(): Promise<string[]> {
+  if (!AUTO_PLAYER) return TEAM_SPECS.map(resolveTeamSpec);
+  const playerId = resolveTeamSpec(AUTO_PLAYER);
+  const list = await fetchInvestigatorList();
+  const player = list.find((inv) => inv.id === playerId || inv.code === AUTO_PLAYER || inv.mbti_code === AUTO_PLAYER);
+  if (!player) throw new Error(`--auto-player not found: ${AUTO_PLAYER}`);
+  const party = autoComposeParty(player, list, PARTY_SEED);
+  const team = [player.id, ...party.members.map((inv) => inv.id)];
+  if (team.length !== 4) throw new Error(`auto party needs 4 seats, got ${team.length}`);
+  console.log(`[E13 auto-party] player=${player.code ?? player.id} seed=${PARTY_SEED} ai=${party.members.map((m) => m.code ?? m.id).join(',')}`);
+  if (party.relaxed) console.log(`[E13 auto-party] relaxed=${party.reasons.join(',')}`);
+  return team;
 }
 
 function lookupsFrom(b: StageBootstrap) {
@@ -215,7 +245,7 @@ function makeMember(
 
 async function main() {
   // ── 開局 ──
-  const teamTemplateIds = TEAM_SPECS.map(resolveTeamSpec);
+  const teamTemplateIds = await resolveTeamTemplateIds();
   if (teamTemplateIds.length !== 4) {
     throw new Error(`--team 必須剛好 4 位調查員,目前 ${teamTemplateIds.length}: ${TEAM_SPECS.join(',')}`);
   }

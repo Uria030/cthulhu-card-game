@@ -21,7 +21,6 @@ import {
   mythosUseCount,
   mythosUsesRemaining,
   isMythosUsedUp,
-  AI_INVESTIGATOR_ROSTER,
   initInvestigatorAIState,
   runInvestigatorAITurn,
   deriveObjective,
@@ -86,7 +85,7 @@ import { applyDamageAllocation, autoAllocateDamage } from '@cthulhu/shared';
 import type { AllocatableTarget } from '@cthulhu/shared';
 import { fetchBootstrap } from '../api';
 import { getSelectedInvestigator } from '../game/selectedInvestigator';
-import { getPartyCodes } from '../game/selectedParty';
+import { getPartyTemplateIds } from '../game/selectedParty';
 import { makeTestSetup, buildSetupFromBootstrap } from '../game/gameSetup';
 import type { GameSetup, LocationDisplay, CardDisplay } from '../game/gameSetup';
 import {
@@ -451,17 +450,16 @@ export function TestScenarioScreen() {
     let cancelled = false;
     setSetup(null);
     setLoadError(null);
-    const playerTemplateId = getSelectedInvestigator()?.id;
+    const selectedInvestigator = getSelectedInvestigator();
+    const playerTemplateId = selectedInvestigator?.id;
     // AI 隊友:讀大廳組隊名單(rosterCode);未設則預設名冊前 3 位不與玩家撞模板
-    const partyCodes = getPartyCodes();
-    const aiProfiles = (partyCodes && partyCodes.length > 0
-      ? partyCodes.map((c) => AI_INVESTIGATOR_ROSTER.find((p) => p.rosterCode === c))
-      : AI_INVESTIGATOR_ROSTER.filter((p) => p.templateId !== playerTemplateId).slice(0, 3)
-    ).filter((p): p is (typeof AI_INVESTIGATOR_ROSTER)[number] => !!p && p.templateId !== playerTemplateId);
+    const partyTemplateIds = (getPartyTemplateIds() ?? [])
+      .filter((id) => id !== playerTemplateId)
+      .slice(0, 3);
     type Boot = Awaited<ReturnType<typeof fetchBootstrap>>;
     Promise.all([
-      fetchBootstrap(stageId, playerTemplateId),
-      Promise.all(aiProfiles.map((p) => fetchBootstrap(stageId, p.templateId).catch(() => null))),
+      fetchBootstrap(stageId, playerTemplateId, { crossTest: selectedInvestigator?.is_completed === false }),
+      Promise.all(partyTemplateIds.map((id) => fetchBootstrap(stageId, id, { crossTest: true }).catch(() => null))),
     ])
       .then(([bootstrap, aiBoots]) => {
         if (!cancelled) {

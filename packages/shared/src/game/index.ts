@@ -15,6 +15,7 @@ export * from './monsterBehavior';
 export * from './monsterActions';
 export * from './gameProgress';
 export * from './sharedActions';
+export * from './partyAutoCompose';
 export * from './keeperAI';
 export * from './investigatorAI';
 export * from './investigatorCommand';

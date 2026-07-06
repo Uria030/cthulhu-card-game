@@ -3397,6 +3397,119 @@ CREATE INDEX IF NOT EXISTS idx_account_audit_admin ON account_audit_logs(admin_u
 CREATE INDEX IF NOT EXISTS idx_account_audit_created ON account_audit_logs(created_at DESC);
 `;
 
+// Migration 041: E20 investigator-turn encounter trigger, encounter_type cleanup,
+// and the first draft encounter mythos card for keeper legendary dispatch.
+export const MIGRATION_041_SQL = `
+UPDATE stages
+   SET encounter_trigger_config = jsonb_set(
+         COALESCE(encounter_trigger_config, '{}'::jsonb),
+         '{draw_on_turn_end}',
+         'true'::jsonb,
+         true
+       ),
+       updated_at = NOW()
+ WHERE code = 'g_slit_mouth_legend_st1';
+
+UPDATE encounter_cards
+   SET encounter_type = CASE encounter_type
+     WHEN 'passive' THEN 'thriller'
+     WHEN 'conditional' THEN 'puzzle'
+     WHEN 'choice_entry' THEN 'choice'
+     WHEN 'choice_fail' THEN 'choice'
+     WHEN 'choice_responsibility' THEN 'choice'
+     WHEN 'test' THEN 'puzzle'
+     WHEN 'chaos_bag' THEN 'thriller'
+     ELSE encounter_type
+   END,
+   updated_at = NOW()
+ WHERE encounter_type IN (
+   'passive','conditional','choice_entry','choice_fail',
+   'choice_responsibility','test','chaos_bag'
+ );
+
+DO $$
+DECLARE
+  bad_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO bad_count
+    FROM encounter_cards
+   WHERE encounter_type NOT IN ('thriller','choice','trade','puzzle','social','discovery');
+  IF bad_count > 0 THEN
+    RAISE EXCEPTION 'encounter_cards.encounter_type has % unmapped values', bad_count;
+  END IF;
+END $$;
+
+ALTER TABLE encounter_cards DROP CONSTRAINT IF EXISTS encounter_cards_encounter_type_check;
+ALTER TABLE encounter_cards ADD CONSTRAINT encounter_cards_encounter_type_check
+  CHECK (encounter_type IN ('thriller','choice','trade','puzzle','social','discovery')) NOT VALID;
+ALTER TABLE encounter_cards VALIDATE CONSTRAINT encounter_cards_encounter_type_check;
+
+WITH upsert_card AS (
+  INSERT INTO mythos_cards (
+    code, name_zh, name_en, description_zh, description_en,
+    action_cost, activation_timing, card_category, intensity_tag, response_trigger,
+    flavor_text_zh, flavor_text_en, design_notes, design_status,
+    reusable, cooldown_rounds, max_uses_per_stage, cooldown_turns, max_uses,
+    axis_tag, persistence_mode, threat_type, attack_surfaces, faction_pressure,
+    complexity_tier, dv_average, dv_peak, dv_peak_target, updated_at
+  )
+  VALUES (
+    'e20_legendary_encounter_dispatch',
+    'E20傳奇遭遇派發',
+    'E20 Legendary Encounter Dispatch',
+    '機械種子:城主在調查員階段的行動間隙指定一位調查員,從本關遭遇池抽 1 張遭遇卡並立即結算。',
+    '',
+    2,
+    'investigator_phase_reaction',
+    'encounter',
+    'small',
+    'legendary_action',
+    NULL,
+    NULL,
+    'E20 mechanics-only draft. Name/flavor must be replaced by keeper-cards Gemini before review/approved; migration preserves existing generated text on conflict.',
+    'draft',
+    TRUE,
+    2,
+    NULL,
+    2,
+    NULL,
+    '["legendary_action"]'::jsonb,
+    'instant',
+    '["meta_personal"]'::jsonb,
+    '["遭遇池","調查員行動間隙"]'::jsonb,
+    '{"E":1,"I":1,"S":1,"N":1,"T":1,"F":1,"J":1,"P":1}'::jsonb,
+    1,
+    2,
+    2,
+    'encounter_dispatch',
+    NOW()
+  )
+  ON CONFLICT (code) DO UPDATE SET
+    action_cost = 2,
+    activation_timing = 'investigator_phase_reaction',
+    card_category = 'encounter',
+    intensity_tag = 'small',
+    response_trigger = 'legendary_action',
+    design_status = CASE WHEN mythos_cards.design_status = 'approved' THEN mythos_cards.design_status ELSE 'draft' END,
+    reusable = TRUE,
+    cooldown_rounds = 2,
+    max_uses_per_stage = NULL,
+    cooldown_turns = 2,
+    max_uses = NULL,
+    axis_tag = '["legendary_action"]'::jsonb,
+    persistence_mode = 'instant',
+    updated_at = NOW()
+  RETURNING id
+),
+target_stage AS (
+  SELECT id FROM stages WHERE code = 'g_slit_mouth_legend_st1'
+)
+INSERT INTO stage_mythos_pool (stage_id, mythos_card_id, weight)
+SELECT target_stage.id, upsert_card.id, 1
+  FROM target_stage, upsert_card
+ON CONFLICT (stage_id, mythos_card_id) DO NOTHING;
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3619,6 +3732,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_038', MIGRATION_038_SQL);
     await runOne('MIGRATION_039', MIGRATION_039_SQL);
     await runOne('MIGRATION_040', MIGRATION_040_SQL);
+    await runOne('MIGRATION_041', MIGRATION_041_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

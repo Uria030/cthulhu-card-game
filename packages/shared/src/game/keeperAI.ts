@@ -28,6 +28,7 @@ export interface MythosCardData {
   action_cost: number;
   intensity_tag: string;
   activation_timing?: string;
+  response_trigger?: string | null;
   reusable?: boolean;
   /** Canonical E2 field. Older rows/routes may still expose cooldown_rounds. */
   cooldown_turns?: number | null;
@@ -35,6 +36,7 @@ export interface MythosCardData {
   /** Canonical E2 field. Older rows/routes may still expose max_uses_per_stage. */
   max_uses?: number | null;
   max_uses_per_stage?: number | null;
+  axis_tag?: unknown;
   effects?: Array<{ action_code: string; action_params: Record<string, unknown> | null }>;
 }
 
@@ -184,6 +186,109 @@ export function isMythosOnCooldown(card: MythosCardData, state: KeeperState): bo
   return mythosCooldownRemaining(card, state) > 0;
 }
 
+export function isMythosPhaseEligible(card: MythosCardData): boolean {
+  const timing = String(card.activation_timing ?? 'keeper_phase');
+  return timing === 'keeper_phase' || timing === 'both';
+}
+
+export function isInvestigatorPhaseEligible(card: MythosCardData): boolean {
+  const timing = String(card.activation_timing ?? 'keeper_phase');
+  return timing === 'investigator_phase_reaction' || timing === 'both';
+}
+
+function axisTags(card: MythosCardData): string[] {
+  const raw = card.axis_tag;
+  if (Array.isArray(raw)) return raw.map(String);
+  if (raw && typeof raw === 'object') return Object.values(raw as Record<string, unknown>).flatMap((v) => Array.isArray(v) ? v.map(String) : [String(v)]);
+  return [];
+}
+
+export function isLegendaryEncounterCard(card: MythosCardData): boolean {
+  if (String(card.card_category ?? '') !== 'encounter') return false;
+  if (!isInvestigatorPhaseEligible(card)) return false;
+  const response = String(card.response_trigger ?? '').toLowerCase();
+  const tags = axisTags(card).map((s) => s.toLowerCase());
+  return response === 'legendary_action' || tags.includes('legendary') || tags.includes('legendary_action');
+}
+
+export function investigatorThreatScore(investigator: InvestigatorState): number {
+  if (investigator.dead || investigator.permanentlyDead || investigator.hp <= 0 || investigator.san <= 0) return -Infinity;
+  const hpPct = investigator.hpMax > 0 ? investigator.hp / investigator.hpMax : 0;
+  const sanPct = investigator.sanMax > 0 ? investigator.san / investigator.sanMax : 0;
+  return (
+    investigator.actionPoints * 2 +
+    investigator.hand.length * 0.5 +
+    investigator.assetsInPlay.length +
+    investigator.resources * 0.25 +
+    investigator.engagedWith.length * 0.75 +
+    hpPct +
+    sanPct
+  );
+}
+
+export function chooseLegendaryEncounterTarget(investigators: InvestigatorState[]): InvestigatorState | null {
+  const candidates = investigators
+    .filter((i) => investigatorThreatScore(i) !== -Infinity)
+    .map((investigator) => ({ investigator, score: investigatorThreatScore(investigator) }))
+    .sort((a, b) => b.score - a.score || a.investigator.investigatorId.localeCompare(b.investigator.investigatorId));
+  return candidates[0]?.investigator ?? null;
+}
+
+export interface KeeperLegendaryEncounterSelection {
+  card: MythosCardData | null;
+  target: InvestigatorState | null;
+  state: KeeperState;
+  effects: ResultEffect[];
+}
+
+export function selectKeeperLegendaryEncounter(
+  cards: MythosCardData[],
+  investigators: InvestigatorState[],
+  prevState: KeeperState,
+  rng: () => number = Math.random,
+): KeeperLegendaryEncounterSelection {
+  const target = chooseLegendaryEncounterTarget(investigators);
+  if (!target) return { card: null, target: null, state: prevState, effects: [] };
+
+  const candidates = cards
+    .filter(isLegendaryEncounterCard)
+    .filter((card) => isCardExecutable(card))
+    .filter((card) => card.action_cost <= prevState.actionPoints)
+    .filter((card) => !isMythosOnCooldown(card, prevState))
+    .filter((card) => !isMythosUsedUp(card, prevState));
+  if (candidates.length === 0) return { card: null, target: null, state: prevState, effects: [] };
+
+  const cheapest = Math.min(...candidates.map((c) => c.action_cost));
+  const pool = candidates.filter((c) => c.action_cost === cheapest);
+  const card = pool[Math.floor(rng() * pool.length)];
+  const cooldownTurns = mythosCooldownTurns(card);
+  const state: KeeperState = {
+    actionPoints: prevState.actionPoints - card.action_cost,
+    cooldowns: {
+      ...prevState.cooldowns,
+      ...(card.reusable && cooldownTurns > 0 ? { [card.id]: cooldownTurns } : {}),
+    },
+    uses: { ...prevState.uses, [card.id]: (prevState.uses[card.id] ?? 0) + 1 },
+    lastCategory: String(card.card_category ?? 'encounter'),
+    lastCardId: card.id,
+  };
+  return {
+    card,
+    target,
+    state,
+    effects: [{
+      type: 'keeper_legendary_dispatch',
+      params: {
+        name: card.name_zh,
+        cost: card.action_cost,
+        targetId: target.investigatorId,
+        targetThreatScore: investigatorThreatScore(target),
+      },
+      targetId: target.investigatorId,
+    }],
+  };
+}
+
 // ─── 評分(規格 §4.2 + §4.2A 戲劇曲線 + 避免單調)────
 export function scoreCard(
   card: MythosCardData,
@@ -193,6 +298,7 @@ export function scoreCard(
 ): number | null {
   // 不可用判定
   if (!isCardExecutable(card)) return null;
+  if (!isMythosPhaseEligible(card)) return null;
   if (card.action_cost > state.actionPoints) return null;
   if (isMythosOnCooldown(card, state)) return null;
   if (isMythosUsedUp(card, state)) return null;
@@ -265,6 +371,7 @@ export function selectKeeperActivations(
   // 議程推進=基準敗局時鐘,繞過戲劇曲線守門與「快贏才加分」評分,但仍尊重 uses/cooldown/reusable。
   // 取費用最低的可用 advance_agenda 卡(時鐘要穩定能放);不夠費用也放(夾 0),可被後續貪婪多放。
   const doomReady = (c: MythosCardData): boolean => {
+    if (!isMythosPhaseEligible(c)) return false;
     if (!(c.effects ?? []).some((f) => f.action_code === 'advance_agenda')) return false;
     if (isMythosOnCooldown(c, state)) return false;
     if (isMythosUsedUp(c, state)) return false;

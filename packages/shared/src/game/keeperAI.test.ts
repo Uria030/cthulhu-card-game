@@ -7,8 +7,10 @@ import {
   snapshotSituation,
   scoreCard,
   selectKeeperActivations,
+  selectKeeperLegendaryEncounter,
   executeMythosCard,
   isCardExecutable,
+  isLegendaryEncounterCard,
   mythosCooldownTurns,
   mythosMaxUses,
   attachmentTestModifier,
@@ -70,6 +72,19 @@ const STATUS = card({ id: 'status', name_zh: '恐懼侵襲', card_category: 'sta
 const AMBIENT = card({ id: 'ambient', name_zh: '黑暗滲出', card_category: 'general', action_cost: 1 });
 const DORMANT = card({ id: 'dormant', name_zh: '線索篡改', card_category: 'narrative', action_cost: 2, effects: [] }); // 無可執行效果 = 蟄伏
 const ENCOUNTER = card({ id: 'encounter', name_zh: '報紙上的紅字', card_category: 'encounter', action_cost: 1, effects: [] });
+const LEGENDARY_ENCOUNTER = card({
+  id: 'legendary-encounter',
+  name_zh: '傳奇遭遇測試',
+  card_category: 'encounter',
+  action_cost: 2,
+  activation_timing: 'investigator_phase_reaction',
+  response_trigger: 'legendary_action',
+  axis_tag: ['legendary_action'],
+  reusable: true,
+  cooldown_turns: 2,
+  max_uses: null,
+  effects: [],
+});
 
 function situation(over: Partial<ReturnType<typeof snapshotSituation>> = {}) {
   return { aliveEnemies: 0, sanPct: 100, hpPct: 100, playerProgressPct: 0, dramaTier: 'rising' as const, turnNumber: 3, ...over };
@@ -185,6 +200,41 @@ test('encounter mythos:無效果仍可由城主啟動以觸發遭遇池', () => 
   assertEq(isCardExecutable(ENCOUNTER), true);
   const r = selectKeeperActivations([ENCOUNTER], situation({ dramaTier: 'rising' }), fresh, p, () => 0);
   assertEq(r.activations.some((c) => c.id === 'encounter'), true);
+});
+
+test('傳奇遭遇:只在調查員階段時機窗可用,神話階段不重複發動', () => {
+  const p = defaultKeeperProfile(undefined, 1);
+  const fresh = initKeeperState(p);
+  assertEq(isCardExecutable(LEGENDARY_ENCOUNTER), true);
+  assertEq(isLegendaryEncounterCard(LEGENDARY_ENCOUNTER), true);
+  const mythos = selectKeeperActivations([LEGENDARY_ENCOUNTER], situation({ dramaTier: 'rising' }), fresh, p, () => 0);
+  assertEq(mythos.activations.length, 0, 'investigator_phase_reaction 不進神話階段選卡');
+});
+
+test('傳奇遭遇:扣能量、寫冷卻/次數,並指向當前威脅最大者', () => {
+  const strong = makeInv({
+    investigatorId: 'strong',
+    actionPoints: 3,
+    resources: 6,
+    hand: ['a', 'b', 'c', 'd'],
+    assetsInPlay: ['asset-1'],
+  });
+  const weak = makeInv({
+    investigatorId: 'weak',
+    actionPoints: 0,
+    resources: 0,
+    hand: [],
+    hp: 2,
+    san: 2,
+  });
+  const prev: KeeperState = { actionPoints: 3, cooldowns: {}, uses: {}, lastCategory: null, lastCardId: null };
+  const r = selectKeeperLegendaryEncounter([LEGENDARY_ENCOUNTER], [weak, strong], prev, () => 0);
+  assertEq(r.card?.id, 'legendary-encounter');
+  assertEq(r.target?.investigatorId, 'strong');
+  assertEq(r.state.actionPoints, 1);
+  assertEq(r.state.cooldowns['legendary-encounter'], 2);
+  assertEq(r.state.uses['legendary-encounter'], 1);
+  assertEq(r.effects.some((e) => e.type === 'keeper_legendary_dispatch' && e.targetId === 'strong'), true);
 });
 
 test('避免單調:同類別連用扣分', () => {

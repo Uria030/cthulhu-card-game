@@ -72,7 +72,7 @@ export type EncounterTriggerPath =
   | 'player_action';
 
 export interface EncounterTriggerConfig {
-  /** Draw one encounter when the round moves through turn_end. */
+  /** Draw one encounter per standing investigator after keeper phase, before upkeep. */
   draw_on_turn_end?: boolean;
   /** Location codes that draw after a player enters them. */
   trigger_locations?: string[];
@@ -199,6 +199,63 @@ export function drawTriggeredEncounter(
   }
   const draw = drawEncounter(deck, rng);
   return { triggered: draw.card !== null, reason: decision.reason, ...draw };
+}
+
+export interface AutoResolvedTriggeredEncounter extends TriggeredEncounterDraw {
+  investigator: InvestigatorState;
+  scenario: ScenarioState;
+  effects: ResultEffect[];
+  optionIndex: number | null;
+}
+
+/**
+ * AI / headless path: draw an encounter for one investigator and choose the
+ * lowest-risk option through the shared encounter resolver. Player-facing UI
+ * should still use drawTriggeredEncounter + modal selection.
+ */
+export function drawAndAutoResolveEncounter(
+  deck: EncounterCardData[],
+  config: EncounterTriggerConfig,
+  context: EncounterTriggerContext,
+  investigator: InvestigatorState,
+  scenario: ScenarioState,
+  enemyData: EnemyDataLookup,
+  rng: () => number = Math.random,
+): AutoResolvedTriggeredEncounter {
+  const draw = drawTriggeredEncounter(deck, config, context, rng);
+  if (!draw.triggered || !draw.card) {
+    return { ...draw, investigator, scenario, effects: [], optionIndex: null };
+  }
+
+  const effects: ResultEffect[] = [{
+    type: 'encounter_drawn',
+    params: { name: draw.card.name_zh, reason: draw.reason, path: context.path },
+    targetId: investigator.investigatorId,
+  }];
+  const options = draw.card.options ?? [];
+  if (options.length === 0) {
+    return {
+      ...draw,
+      investigator,
+      scenario,
+      effects: [
+        ...effects,
+        { type: 'encounter_no_options', params: { name: draw.card.name_zh }, targetId: investigator.investigatorId },
+      ],
+      optionIndex: null,
+    };
+  }
+
+  const rawIndex = chooseEncounterOption(draw.card, investigator);
+  const optionIndex = Math.max(0, Math.min(options.length - 1, rawIndex));
+  const resolved = resolveEncounterOption(options[optionIndex], investigator, scenario, enemyData, rng);
+  return {
+    ...draw,
+    investigator: resolved.investigator,
+    scenario: resolved.scenario,
+    effects: [...effects, ...resolved.effects],
+    optionIndex,
+  };
 }
 
 // ─── 結算:選一個選項,跑檢定(若需要),施加結構化效果 ────

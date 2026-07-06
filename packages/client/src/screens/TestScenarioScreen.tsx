@@ -13,6 +13,7 @@ import {
   initKeeperState,
   snapshotSituation,
   selectKeeperActivations,
+  selectKeeperLegendaryEncounter,
   executeMythosCard,
   runAttachmentUpkeep,
   isCardExecutable,
@@ -34,7 +35,9 @@ import {
   syncDownedState,
   runDeathSave,
   isDowned,
+  isStanding,
   allInvestigatorsDead,
+  drawAndAutoResolveEncounter,
   drawTriggeredEncounter,
   resolveEncounterOption,
   resolveEncounterWithTalisman,
@@ -194,6 +197,8 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'fear_check': return '😨 恐懼檢定 vs ' + (p.enemy as string) + ':d20 ' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '穩住了' : '失敗') + ')';
     case 'fear_damage': return '😱 ' + (p.narrative as string) + '(SAN -' + (p.amount as number) + ')';
     case 'encounter_check': return '遭遇檢定:' + (p.attribute as string) + ' d20=' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '成功' : '失敗') + ')';
+    case 'encounter_drawn': return '抽到遭遇「' + (p.name as string) + '」';
+    case 'encounter_no_options': return '遭遇「' + (p.name as string) + '」尚無可結算選項';
     case 'encounter_narrative': return String(p.narrative ?? '');
     case 'encounter_damage': return '遭遇傷害:' + ((p.narrative as string) || '') + '(HP -' + (p.amount as number) + ')';
     case 'talisman_toll_paid': return '法器「' + (p.name as string) + '」支付 ' + (p.cost as number) + ' ' + (p.resource as string) + '(剩 ' + (p.left as number) + ')';
@@ -220,6 +225,7 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'transfer_horror': return '🤝 ' + (p.narrative as string) + '(替 ' + (p.ally as string) + ' 分擔 ' + (p.amount as number) + ' 恐懼)';
     case 'doom_added': return '☄ 毀滅標記 +' + (p.amount as number) + '(累計 ' + (p.total as number) + ')' + (p.source ? ' — ' + (p.source as string) + ' 的存在加速著終局' : '');
     case 'keeper_card_activated': return '🃏 城主啟用【' + (p.name as string) + '】(' + (p.cost as number) + ' 點)— ' + (p.narrative as string);
+    case 'keeper_legendary_dispatch': return '🃏 城主傳奇【' + (p.name as string) + '】指定 ' + String(p.targetId ?? '一位調查員') + '(費用 ' + (p.cost as number) + ')';
     case 'keeper_attachment': return '🕸 【' + (p.name as string) + '】的影響附著在這場雨上,揮之不去。';
     case 'visibility_changed': return '🌑 ' + (locMeta[p.location as string]?.name ?? (p.location as string)) + ' 陷入' + (p.visibility === 'darkness' ? '黑暗' : (p.visibility as string)) + '。';
     case 'attachment_upkeep': return '🕸 ' + (p.narrative as string);
@@ -290,6 +296,7 @@ interface PendingDamageAlloc { physical: number; horror: number; targets: Alloca
 interface PendingEncounterTrigger {
   sourceLabel: string;
   context: EncounterTriggerContext;
+  targetInvestigatorId?: string | null;
 }
 interface ActionPlay {
   beat: ActionBeat;
@@ -607,6 +614,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [phase, setPhase] = useState<TurnPhase>('investigator');
   // 本回合玩家是否已選短休息(放棄行動;每回合開頭重置)
   const [playerShortRested, setPlayerShortRested] = useState(false);
+  const [turnEndEncounterCheckpoint, setTurnEndEncounterCheckpoint] = useState<'pending' | 'player_done' | 'done'>('pending');
   const [turnNumber, setTurnNumber] = useState(1);
   // 城主運行時狀態(行動點/冷卻/使用次數;教學關卡不用)
   const [keeperState, setKeeperState] = useState<KeeperState>(() => initKeeperState(setup.keeperProfile));
@@ -859,6 +867,40 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
 
   const triggerEncounter = useCallback((pending: PendingEncounterTrigger | null): boolean => {
     if (!pending || encounterPlay || encounterDeck.length === 0) return false;
+    const targetId = pending.targetInvestigatorId ?? investigator.investigatorId;
+    if (targetId !== investigator.investigatorId) {
+      const idx = aiMembers.findIndex((ai) => ai.investigatorId === targetId);
+      const target = idx >= 0 ? aiMembers[idx] : null;
+      if (!target) return false;
+      const resolved = drawAndAutoResolveEncounter(
+        encounterDeck,
+        setup.encounterTriggerConfig,
+        pending.context,
+        target,
+        scenario,
+        setup.enemyStats,
+      );
+      if (!resolved.triggered || !resolved.card) return false;
+      const nextDeck = resolved.remaining;
+      const nextAIs = [...aiMembers];
+      nextAIs[idx] = resolved.investigator;
+      settleAITeamAllocatable(resolved.effects, nextAIs, investigator.investigatorId);
+      const sync = syncDownedState(nextAIs[idx]);
+      nextAIs[idx] = sync.investigator;
+      const next = applyProgress(resolved.scenario, investigator, nextAIs);
+      setEncounterDeck(nextDeck);
+      setScenario(next.sc);
+      setAiMembers(next.aiArr);
+      const aiName = setup.aiMembers[idx]?.profile.name_zh ?? 'AI';
+      append('[遭遇] ' + pending.sourceLabel + '指定' + aiName + '抽到「' + resolved.card.name_zh + '」。');
+      for (const eff of resolved.effects.filter((e) => e.type !== 'encounter_drawn')) {
+        append('[遭遇] ' + describeEffect(eff, locMeta).split('你').join(aiName));
+      }
+      for (const eff of sync.effects) append('[結算] ' + describeEffect(eff, locMeta).split('你').join(aiName));
+      for (const l of next.logs) append(l);
+      if (next.outcome) { checkpointVitals(next.inv, next.aiArr); setOutcome(next.outcome); }
+      return true;
+    }
     const draw = drawTriggeredEncounter(
       encounterDeck,
       setup.encounterTriggerConfig,
@@ -878,7 +920,25 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     });
     append('[遭遇] ' + pending.sourceLabel + '抽到「' + draw.card.name_zh + '」。');
     return true;
-  }, [encounterDeck, encounterPlay, setup.encounterTriggerConfig]);
+  }, [aiMembers, encounterDeck, encounterPlay, investigator, scenario, setup, locMeta]);
+
+  const triggerKeeperLegendaryEncounter = useCallback((): boolean => {
+    if (phase !== 'investigator' || outcome || encounterPlay || damageAlloc || encounterDeck.length === 0) return false;
+    if (setup.encounterTriggerConfig.keeper_mythos === false) return false;
+    const selection = selectKeeperLegendaryEncounter(
+      setup.mythosCards,
+      [investigator, ...aiMembers],
+      keeperState,
+    );
+    if (!selection.card || !selection.target) return false;
+    setKeeperState(selection.state);
+    for (const eff of selection.effects) append('[城主傳奇派發] ' + describeEffect(eff, locMeta));
+    return triggerEncounter({
+      sourceLabel: '城主傳奇派發',
+      context: { path: 'keeper_mythos', mythosCardCategory: 'encounter' },
+      targetInvestigatorId: selection.target.investigatorId,
+    });
+  }, [aiMembers, damageAlloc, encounterDeck.length, encounterPlay, investigator, keeperState, locMeta, outcome, phase, setup, triggerEncounter]);
 
   const advanceEncounterPlay = () => {
     setEncounterPlay((ep) => {
@@ -1248,10 +1308,13 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         for (const l of cascadeLogs) append(l);
         if (next.outcome) { checkpointVitals(next.inv, next.aiArr); setOutcome(next.outcome); }
         if (pendingDamageAlloc) setDamageAlloc(pendingDamageAlloc);
-        if (!next.outcome && !pendingDamageAlloc) triggerEncounter(pendingEncounter);
+        if (!next.outcome && !pendingDamageAlloc) {
+          const opened = triggerEncounter(pendingEncounter);
+          if (!opened) triggerKeeperLegendaryEncounter();
+        }
       }
     }
-  }, [bus, investigator, scenario, aiMembers, turnNumber, phase, setup, flags, locMeta, triggerEncounter]);
+  }, [bus, investigator, scenario, aiMembers, turnNumber, phase, setup, flags, locMeta, triggerEncounter, triggerKeeperLegendaryEncounter]);
 
   const iconLabel = (key: string): string => key === 'all'
     ? '萬用'
@@ -1396,7 +1459,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setActionPlay(null);
     if (pendingOutcome) { checkpointVitals(investigator, aiMembers); setOutcome(pendingOutcome); }
     if (pending) setDamageAlloc(pending);
-    if (!pendingOutcome && !pending) triggerEncounter(pendingEncounter);
+    if (!pendingOutcome && !pending) {
+      const opened = triggerEncounter(pendingEncounter);
+      if (!opened) triggerKeeperLegendaryEncounter();
+    }
   };
   // 檢定拍擲骰動畫(節奏窗口 ~700ms:重量感 + 遮蔽未來延遲載入)
   useEffect(() => {
@@ -1578,10 +1644,57 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     if (!next.outcome) triggerEncounter(pendingKeeperEncounter);
   };
   const endTurn = () => {
+    if (!setup.tutorial && turnEndEncounterCheckpoint !== 'done') {
+      if (turnEndEncounterCheckpoint === 'pending') {
+        setTurnEndEncounterCheckpoint('player_done');
+        if (isStanding(investigator)) {
+          const opened = triggerEncounter({
+            sourceLabel: '回合結束遭遇',
+            context: { path: 'turn_end', locationId: investigator.currentLocationId },
+            targetInvestigatorId: investigator.investigatorId,
+          });
+          if (opened) return;
+        }
+      }
+
+      let nextDeck = encounterDeck;
+      let sc = scenario;
+      const nextAIs = [...aiMembers];
+      for (let idx = 0; idx < nextAIs.length; idx += 1) {
+        const ai = nextAIs[idx];
+        if (!isStanding(ai)) continue;
+        const enc = drawAndAutoResolveEncounter(
+          nextDeck,
+          setup.encounterTriggerConfig,
+          { path: 'turn_end', locationId: ai.currentLocationId },
+          ai,
+          sc,
+          setup.enemyStats,
+        );
+        if (!enc.triggered || !enc.card) continue;
+        nextDeck = enc.remaining;
+        sc = enc.scenario;
+        nextAIs[idx] = syncDownedState(enc.investigator).investigator;
+        const aiName = setup.aiMembers[idx]?.profile.name_zh ?? 'AI';
+        append(`[回合結束遭遇] ${aiName} 抽到「${enc.card.name_zh}」。`);
+        for (const eff of enc.effects.filter((e) => e.type !== 'encounter_drawn')) {
+          append('[遭遇] ' + describeEffect(eff, locMeta).split('你').join(aiName));
+        }
+      }
+      const next = applyProgress(sc, investigator, nextAIs);
+      setEncounterDeck(nextDeck);
+      setScenario(next.sc);
+      setAiMembers(next.aiArr);
+      next.logs.forEach((l) => append(l));
+      setTurnEndEncounterCheckpoint('done');
+      if (next.outcome) { checkpointVitals(next.inv, next.aiArr); setOutcome(next.outcome); return; }
+    }
+
     // 敵人階段 → 回合結束 → 下一回合的調查員階段(三階段:advance ×2)
     turnLoopRef.current?.advance();
     turnLoopRef.current?.advance();
     setPlayerShortRested(false); // 新回合開頭重置短休息決定
+    setTurnEndEncounterCheckpoint('pending');
     setAiActedThisTurn([]); // 新回合:AI 隊友計時器重新開放(同時行動)
     // 回合結束階段(ch2 §2.4):每人抽 1 卡 + 1 資源 + 手牌上限 8(教學關卡跳過)
     if (!setup.tutorial) {
@@ -1625,10 +1738,6 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     // 場景回合數同步(戲劇曲線/行為腳本 turn_count 觸發都依賴它)
     setScenario((s) => ({ ...s, turnNumber: s.turnNumber + 1 }));
     setKeeperEnergy((e) => Math.min(12, e + 1));
-    triggerEncounter({
-      sourceLabel: '回合結束',
-      context: { path: 'turn_end', locationId: investigator.currentLocationId },
-    });
   };
 
   // ─── 浮層互動 ──────────────────

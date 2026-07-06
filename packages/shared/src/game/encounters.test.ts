@@ -3,6 +3,7 @@
  */
 import {
   availableTalismansForEncounter,
+  drawAndAutoResolveEncounter,
   drawEncounter,
   drawTriggeredEncounter,
   normaliseEncounterTriggerConfig,
@@ -119,6 +120,30 @@ test('觸發:四條路徑都能抽遭遇', () => {
   assertEq(drawTriggeredEncounter([CARD], cfg, { path: 'keeper_mythos', mythosCardCategory: 'encounter' }, roll(1)).triggered, true);
   assertEq(drawTriggeredEncounter([CARD], cfg, { path: 'player_action', locationId: 'B' }, roll(1)).triggered, true);
   assertEq(drawTriggeredEncounter([CARD], cfg, { path: 'player_action', actionType: 'search' }, roll(1)).triggered, true);
+});
+
+test('逐人回合結束:每位調查員各抽 1 張,池空不炸', () => {
+  const cfg = normaliseEncounterTriggerConfig({ draw_on_turn_end: true });
+  let deck = [CARD, { ...CARD, id: 'ec2', name_zh: '第二張遭遇' }];
+  let sc = makeScenario();
+
+  const a = drawAndAutoResolveEncounter(deck, cfg, { path: 'turn_end' }, makeInv({ investigatorId: 'i1' }), sc, ENEMY, roll(1));
+  deck = a.remaining;
+  sc = a.scenario;
+  assertEq(a.triggered, true);
+  assertEq(a.effects.some((e) => e.type === 'encounter_drawn' && e.targetId === 'i1'), true);
+  assertEq(deck.length, 1);
+
+  const b = drawAndAutoResolveEncounter(deck, cfg, { path: 'turn_end' }, makeInv({ investigatorId: 'i2' }), sc, ENEMY, roll(1));
+  deck = b.remaining;
+  sc = b.scenario;
+  assertEq(b.triggered, true);
+  assertEq(b.effects.some((e) => e.type === 'encounter_drawn' && e.targetId === 'i2'), true);
+  assertEq(deck.length, 0);
+
+  const c = drawAndAutoResolveEncounter(deck, cfg, { path: 'turn_end' }, makeInv({ investigatorId: 'i3' }), sc, ENEMY, roll(1));
+  assertEq(c.triggered, false, '空池不炸');
+  assertEq(c.remaining.length, 0);
 });
 
 test('觸發:未命中條件時不消耗牌堆', () => {

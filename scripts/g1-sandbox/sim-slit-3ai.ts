@@ -19,7 +19,10 @@ import {
   defaultKeeperProfile,
   snapshotSituation,
   selectKeeperActivations,
+  selectKeeperLegendaryEncounter,
   executeMythosCard,
+  normaliseEncounterTriggerConfig,
+  drawAndAutoResolveEncounter,
   runAttachmentUpkeep,
   activateMonsters,
   runFearChecks,
@@ -50,6 +53,7 @@ import type {
   AgendaCardData,
   OutcomeData,
   ScenarioState,
+  EncounterCardData,
 } from '@cthulhu/shared';
 
 const BASE = process.env.G1_API_BASE ?? 'https://server-production-fc4f.up.railway.app';
@@ -280,6 +284,8 @@ async function main() {
   let keeperState = initKeeperState(defaultKeeperProfile(baseB.keeper_settings, members.length));
   const keeperProfile = defaultKeeperProfile(baseB.keeper_settings, members.length);
   const mythos = (baseB.mythos_cards ?? []) as unknown as MythosCardData[];
+  let encounterDeck = (baseB.encounter_cards ?? []) as unknown as EncounterCardData[];
+  const encounterConfig = normaliseEncounterTriggerConfig((baseB.stage as any).encounter_trigger_config);
   const actData = (baseB.stage.act_cards ?? []) as unknown as ActCardData[];
   const agendaData = (baseB.stage.agenda_cards ?? []) as unknown as AgendaCardData[];
   const outcomes = (baseB.chapter?.outcomes ?? []) as unknown as OutcomeData[];
@@ -300,6 +306,8 @@ async function main() {
 
   const keeperUsage: Record<string, number> = {};
   let mythosLog = 0;
+  let legendaryDispatchLog = 0;
+  let investigatorTurnEndEncounterLog = 0;
   let outcome: OutcomeData | null = null;
   let victoryFlag = false;
 
@@ -477,6 +485,34 @@ async function main() {
       });
       console.log(`   ${m.label}:${detail.join('→') || '按兵不動'}${kills ? ` ☠×${kills}` : ''}`);
       if (applyProgress()) break turnLoop;
+
+      const legendary = encounterDeck.length > 0 && encounterConfig.keeper_mythos !== false
+        ? selectKeeperLegendaryEncounter(mythos, members.map((x) => x.inv), keeperState, rng)
+        : { card: null, target: null, state: keeperState };
+      if (legendary.card && legendary.target) {
+        keeperState = legendary.state;
+        const target = members.find((x) => x.inv.investigatorId === legendary.target?.investigatorId);
+        if (target) {
+          const enc = drawAndAutoResolveEncounter(
+            encounterDeck,
+            encounterConfig,
+            { path: 'keeper_mythos', mythosCardCategory: 'encounter' },
+            target.inv,
+            scenario,
+            L.enemyStats,
+            rng,
+          );
+          if (enc.triggered && enc.card) {
+            encounterDeck = enc.remaining;
+            scenario = enc.scenario;
+            target.inv = syncDownedState(enc.investigator).investigator;
+            legendaryDispatchLog += 1;
+            keeperUsage[legendary.card.name_zh] = (keeperUsage[legendary.card.name_zh] ?? 0) + 1;
+            console.log(`   [城主傳奇派發]【${legendary.card.name_zh}】→ ${target.label} 抽「${enc.card.name_zh}」`);
+            if (applyProgress()) break turnLoop;
+          }
+        }
+      }
     }
 
     // ② 附著 upkeep(v0:只結算玩家席)
@@ -549,6 +585,27 @@ async function main() {
     }
     if (applyProgress()) break;
 
+    // ⑤.5 E20 回合結束遭遇:城主階段全部結束後、補給前,站立者依席位各抽 1 張。
+    for (const m of members) {
+      if (!isStanding(m.inv)) continue;
+      const enc = drawAndAutoResolveEncounter(
+        encounterDeck,
+        encounterConfig,
+        { path: 'turn_end', locationId: m.inv.currentLocationId },
+        m.inv,
+        scenario,
+        L.enemyStats,
+        rng,
+      );
+      if (!enc.triggered || !enc.card) continue;
+      encounterDeck = enc.remaining;
+      scenario = enc.scenario;
+      m.inv = syncDownedState(enc.investigator).investigator;
+      investigatorTurnEndEncounterLog += 1;
+      console.log(`   [回合結束遭遇] ${m.label} 抽「${enc.card.name_zh}」`);
+      if (applyProgress()) break turnLoop;
+    }
+
     // ⑥ 回合結束階段(ch2 §2.4):抽 1 卡 + 1 資源 + 手牌上限
     for (const m of members) {
       const up = runTurnEndUpkeep(m.inv);
@@ -585,6 +642,7 @@ async function main() {
     console.log(`  ${m.label}: ${m.aligned}/${m.judged}(${pct})最後指派:${m.assignedKind ?? '無'}`);
   }
   console.log(`城主啟用:${Object.entries(keeperUsage).map(([k, v]) => `${k}×${v}`).join(' ')}(共 ${mythosLog} 次)`);
+  console.log(`遭遇入口:回合結束遭遇 ${investigatorTurnEndEncounterLog} 次 | 城主傳奇派發 ${legendaryDispatchLog} 次 | 剩餘遭遇池 ${encounterDeck.length} 張`);
 
   const boss = scenario.enemies.find((e) => e.enemyDefinitionId === bossCode);
   const result = {
@@ -606,6 +664,9 @@ async function main() {
     bossHp: boss?.hp ?? null,
     aliveEnemies: scenario.enemies.filter((e) => e.hp > 0).length,
     keeperActivations: keeperUsage,
+    investigatorTurnEndEncounters: investigatorTurnEndEncounterLog,
+    legendaryDispatches: legendaryDispatchLog,
+    encounterDeckRemaining: encounterDeck.length,
     members: members.map((m) => ({
       templateId: m.templateId,
       templateCode: m.templateCode,

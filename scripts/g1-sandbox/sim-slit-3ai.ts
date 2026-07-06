@@ -23,6 +23,7 @@ import {
   executeMythosCard,
   normaliseEncounterTriggerConfig,
   drawAndAutoResolveEncounter,
+  ENCOUNTER_DECK_RESHUFFLED_NARRATIVE,
   runAttachmentUpkeep,
   activateMonsters,
   runFearChecks,
@@ -80,6 +81,7 @@ const JSON_OUTPUT = hasArg('--json') || process.env.SIM_JSON === '1';
 const AUTO_PLAYER = argValue('--auto-player') ?? process.env.SIM_AUTO_PLAYER ?? '';
 const PARTY_SEED = Number(argValue('--party-seed') ?? process.env.SIM_PARTY_SEED ?? 0);
 const AUTO_LIST = argValue('--auto-list') ?? process.env.SIM_AUTO_LIST ?? '';
+const SELF_TEST_RESHUFFLE = hasArg('--self-test-encounter-reshuffle');
 
 const seedInput = Number(argValue('--seed') ?? process.env.SIM_SEED ?? 20260612);
 let rngSeed = seedInput;
@@ -87,6 +89,42 @@ const rng = () => {
   rngSeed = (rngSeed * 1103515245 + 12345) % 2147483648;
   return rngSeed / 2147483648;
 };
+
+function runEncounterReshuffleSelfTest(): void {
+  const sourceDeck = Array.from({ length: 8 }, (_, i) => ({
+    id: `sim-encounter-${i + 1}`,
+    name_zh: `遭遇測試${i + 1}`,
+    options: [],
+  })) as EncounterCardData[];
+  const cfg = normaliseEncounterTriggerConfig({ draw_on_turn_end: true });
+  const values = [0.91, 0.14, 0.65, 0.29, 0.81, 0.03, 0.44, 0.52, 0.36];
+  let i = 0;
+  const selfRng = () => values[i++ % values.length];
+  let deck = [...sourceDeck];
+  let reshuffles = 0;
+  const drawn: string[] = [];
+
+  for (let drawIndex = 0; drawIndex < 9; drawIndex += 1) {
+    const r = drawAndAutoResolveEncounter(
+      deck,
+      cfg,
+      { path: 'turn_end' },
+      { investigatorId: `sim-self-test-${drawIndex}` } as InvestigatorState,
+      {} as ScenarioState,
+      {},
+      selfRng,
+      sourceDeck,
+    );
+    if (!r.triggered || !r.card) throw new Error(`reshuffle self-test draw ${drawIndex + 1} did not draw`);
+    if (r.reshuffled) reshuffles += 1;
+    drawn.push(r.card.id);
+    deck = r.remaining;
+  }
+
+  if (reshuffles !== 1) throw new Error(`reshuffle self-test expected 1 reshuffle, got ${reshuffles}`);
+  if (deck.length !== 7) throw new Error(`reshuffle self-test expected remaining=7, got ${deck.length}`);
+  console.log(`SIM_SELF_TEST encounter-reshuffle PASS draws=${drawn.join(',')} remaining=${deck.length} reshuffles=${reshuffles}`);
+}
 
 async function fetchBootstrap(invId: string): Promise<StageBootstrap> {
   const cacheFile = CACHE_DIR ? path.join(CACHE_DIR, `${STAGE}__${invId}.json`) : '';
@@ -248,6 +286,11 @@ function makeMember(
 }
 
 async function main() {
+  if (SELF_TEST_RESHUFFLE) {
+    runEncounterReshuffleSelfTest();
+    return;
+  }
+
   // ── 開局 ──
   const teamTemplateIds = await resolveTeamTemplateIds();
   if (teamTemplateIds.length !== 4) {
@@ -284,7 +327,8 @@ async function main() {
   let keeperState = initKeeperState(defaultKeeperProfile(baseB.keeper_settings, members.length));
   const keeperProfile = defaultKeeperProfile(baseB.keeper_settings, members.length);
   const mythos = (baseB.mythos_cards ?? []) as unknown as MythosCardData[];
-  let encounterDeck = (baseB.encounter_cards ?? []) as unknown as EncounterCardData[];
+  const encounterSourceDeck = (baseB.encounter_cards ?? []) as unknown as EncounterCardData[];
+  let encounterDeck = [...encounterSourceDeck];
   const encounterConfig = normaliseEncounterTriggerConfig((baseB.stage as any).encounter_trigger_config);
   const actData = (baseB.stage.act_cards ?? []) as unknown as ActCardData[];
   const agendaData = (baseB.stage.agenda_cards ?? []) as unknown as AgendaCardData[];
@@ -308,8 +352,15 @@ async function main() {
   let mythosLog = 0;
   let legendaryDispatchLog = 0;
   let investigatorTurnEndEncounterLog = 0;
+  let encounterDeckReshuffles = 0;
   let outcome: OutcomeData | null = null;
   let victoryFlag = false;
+
+  const noteEncounterReshuffle = (reshuffled: boolean | undefined) => {
+    if (!reshuffled) return;
+    encounterDeckReshuffles += 1;
+    console.log(`   [遭遇牌堆] ${ENCOUNTER_DECK_RESHUFFLED_NARRATIVE}`);
+  };
 
   // 進度推進(鏡射 client applyProgress)
   const applyProgress = (): boolean => {
@@ -486,7 +537,7 @@ async function main() {
       console.log(`   ${m.label}:${detail.join('→') || '按兵不動'}${kills ? ` ☠×${kills}` : ''}`);
       if (applyProgress()) break turnLoop;
 
-      const legendary = encounterDeck.length > 0 && encounterConfig.keeper_mythos !== false
+      const legendary = encounterSourceDeck.length > 0 && encounterConfig.keeper_mythos !== false
         ? selectKeeperLegendaryEncounter(mythos, members.map((x) => x.inv), keeperState, rng)
         : { card: null, target: null, state: keeperState };
       if (legendary.card && legendary.target) {
@@ -501,6 +552,7 @@ async function main() {
             scenario,
             L.enemyStats,
             rng,
+            encounterSourceDeck,
           );
           if (enc.triggered && enc.card) {
             encounterDeck = enc.remaining;
@@ -508,6 +560,7 @@ async function main() {
             target.inv = syncDownedState(enc.investigator).investigator;
             legendaryDispatchLog += 1;
             keeperUsage[legendary.card.name_zh] = (keeperUsage[legendary.card.name_zh] ?? 0) + 1;
+            noteEncounterReshuffle(enc.reshuffled);
             console.log(`   [城主傳奇派發]【${legendary.card.name_zh}】→ ${target.label} 抽「${enc.card.name_zh}」`);
             if (applyProgress()) break turnLoop;
           }
@@ -596,12 +649,14 @@ async function main() {
         scenario,
         L.enemyStats,
         rng,
+        encounterSourceDeck,
       );
       if (!enc.triggered || !enc.card) continue;
       encounterDeck = enc.remaining;
       scenario = enc.scenario;
       m.inv = syncDownedState(enc.investigator).investigator;
       investigatorTurnEndEncounterLog += 1;
+      noteEncounterReshuffle(enc.reshuffled);
       console.log(`   [回合結束遭遇] ${m.label} 抽「${enc.card.name_zh}」`);
       if (applyProgress()) break turnLoop;
     }
@@ -642,7 +697,7 @@ async function main() {
     console.log(`  ${m.label}: ${m.aligned}/${m.judged}(${pct})最後指派:${m.assignedKind ?? '無'}`);
   }
   console.log(`城主啟用:${Object.entries(keeperUsage).map(([k, v]) => `${k}×${v}`).join(' ')}(共 ${mythosLog} 次)`);
-  console.log(`遭遇入口:回合結束遭遇 ${investigatorTurnEndEncounterLog} 次 | 城主傳奇派發 ${legendaryDispatchLog} 次 | 剩餘遭遇池 ${encounterDeck.length} 張`);
+  console.log(`遭遇入口:回合結束遭遇 ${investigatorTurnEndEncounterLog} 次 | 城主傳奇派發 ${legendaryDispatchLog} 次 | 剩餘遭遇池 ${encounterDeck.length} 張 | 重洗 ${encounterDeckReshuffles} 次`);
 
   const boss = scenario.enemies.find((e) => e.enemyDefinitionId === bossCode);
   const result = {
@@ -667,6 +722,7 @@ async function main() {
     investigatorTurnEndEncounters: investigatorTurnEndEncounterLog,
     legendaryDispatches: legendaryDispatchLog,
     encounterDeckRemaining: encounterDeck.length,
+    encounterDeckReshuffles,
     members: members.map((m) => ({
       templateId: m.templateId,
       templateCode: m.templateCode,

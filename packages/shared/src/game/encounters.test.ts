@@ -5,7 +5,9 @@ import {
   availableTalismansForEncounter,
   drawAndAutoResolveEncounter,
   drawEncounter,
+  drawEncounterWithReshuffle,
   drawTriggeredEncounter,
+  ENCOUNTER_DECK_RESHUFFLED_NARRATIVE,
   normaliseEncounterTriggerConfig,
   resolveEncounterOption,
   resolveEncounterWithTalisman,
@@ -44,6 +46,10 @@ function makeScenario(): ScenarioState {
 }
 const ENEMY: EnemyDataLookup = { rev: { name_zh: '深潛者亡靈', tier: 1, hp_base: 4 } };
 const roll = (n: number) => () => (n - 1) / 20;
+const seq = (values: number[]) => {
+  let i = 0;
+  return () => values[i++ % values.length];
+};
 
 // 合成遭遇卡(資料形狀對齊 DB,內容是測試用)
 const CARD: EncounterCardData = {
@@ -107,6 +113,63 @@ test('抽卡:從牌堆抽 1 張,不洗回(抽完即無)', () => {
   assertEq(d.card?.id, 'ec1');
   assertEq(d.remaining.length, 1);
   assertEq(drawEncounter([], roll(1)).card, null);
+});
+
+test('抽卡:遭遇牌堆抽乾後用原始池重洗,第 9 張仍抽得出且可重現', () => {
+  const cfg = normaliseEncounterTriggerConfig({ draw_on_turn_end: true });
+  const sourceDeck = Array.from({ length: 8 }, (_, i) => ({ ...CARD, id: 'ec' + (i + 1), name_zh: '遭遇' + (i + 1) }));
+  const sequence = [0.91, 0.14, 0.65, 0.29, 0.81, 0.03, 0.44, 0.52, 0.36];
+
+  const run = () => {
+    let deck = [...sourceDeck];
+    const rng = seq(sequence);
+    const ids: string[] = [];
+    let reshuffles = 0;
+    let lastRemaining = deck.length;
+    let lastNarrative = '';
+
+    for (let i = 0; i < 9; i += 1) {
+      const r = drawAndAutoResolveEncounter(
+        deck,
+        cfg,
+        { path: 'turn_end' },
+        makeInv({ investigatorId: 'i' + i }),
+        makeScenario(),
+        ENEMY,
+        rng,
+        sourceDeck,
+      );
+      assertEq(r.triggered, true, '第 ' + (i + 1) + ' 抽應成功');
+      ids.push(r.card?.id ?? '');
+      deck = r.remaining;
+      lastRemaining = deck.length;
+      if (r.reshuffled) {
+        reshuffles += 1;
+        const effect = r.effects.find((e) => e.type === 'encounter_deck_reshuffled');
+        lastNarrative = String(effect?.params.narrative ?? '');
+      }
+    }
+    return { ids, reshuffles, lastRemaining, lastNarrative };
+  };
+
+  const a = run();
+  const b = run();
+  assertEq(a.reshuffles, 1);
+  assertEq(a.lastRemaining, 7);
+  assertEq(a.lastNarrative, ENCOUNTER_DECK_RESHUFFLED_NARRATIVE);
+  assertEq(JSON.stringify(a), JSON.stringify(b), '同一 seeded rng 序列結果應可重現');
+});
+
+test('抽卡:原始遭遇池為 0 張時維持 no-op', () => {
+  const cfg = normaliseEncounterTriggerConfig({ draw_on_turn_end: true });
+  const r = drawEncounterWithReshuffle([], [], roll(1));
+  assertEq(r.card, null);
+  assertEq(r.reshuffled, false);
+
+  const resolved = drawAndAutoResolveEncounter([], cfg, { path: 'turn_end' }, makeInv(), makeScenario(), ENEMY, roll(1), []);
+  assertEq(resolved.triggered, false);
+  assertEq(resolved.effects.length, 0);
+  assertEq(resolved.remaining.length, 0);
 });
 
 test('觸發:四條路徑都能抽遭遇', () => {

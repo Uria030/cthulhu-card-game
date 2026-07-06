@@ -39,6 +39,7 @@ import {
   allInvestigatorsDead,
   drawAndAutoResolveEncounter,
   drawTriggeredEncounter,
+  ENCOUNTER_DECK_RESHUFFLED_NARRATIVE,
   resolveEncounterOption,
   resolveEncounterWithTalisman,
   availableTalismansForEncounter,
@@ -198,6 +199,7 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'fear_damage': return '😱 ' + (p.narrative as string) + '(SAN -' + (p.amount as number) + ')';
     case 'encounter_check': return '遭遇檢定:' + (p.attribute as string) + ' d20=' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '成功' : '失敗') + ')';
     case 'encounter_drawn': return '抽到遭遇「' + (p.name as string) + '」';
+    case 'encounter_deck_reshuffled': return String(p.narrative ?? ENCOUNTER_DECK_RESHUFFLED_NARRATIVE);
     case 'encounter_no_options': return '遭遇「' + (p.name as string) + '」尚無可結算選項';
     case 'encounter_narrative': return String(p.narrative ?? '');
     case 'encounter_damage': return '遭遇傷害:' + ((p.narrative as string) || '') + '(HP -' + (p.amount as number) + ')';
@@ -866,7 +868,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   };
 
   const triggerEncounter = useCallback((pending: PendingEncounterTrigger | null): boolean => {
-    if (!pending || encounterPlay || encounterDeck.length === 0) return false;
+    if (!pending || encounterPlay || setup.encounterCards.length === 0) return false;
     const targetId = pending.targetInvestigatorId ?? investigator.investigatorId;
     if (targetId !== investigator.investigatorId) {
       const idx = aiMembers.findIndex((ai) => ai.investigatorId === targetId);
@@ -879,6 +881,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         target,
         scenario,
         setup.enemyStats,
+        undefined,
+        setup.encounterCards,
       );
       if (!resolved.triggered || !resolved.card) return false;
       const nextDeck = resolved.remaining;
@@ -892,8 +896,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       setScenario(next.sc);
       setAiMembers(next.aiArr);
       const aiName = setup.aiMembers[idx]?.profile.name_zh ?? 'AI';
+      if (resolved.reshuffled) append('[遭遇] ' + ENCOUNTER_DECK_RESHUFFLED_NARRATIVE);
       append('[遭遇] ' + pending.sourceLabel + '指定' + aiName + '抽到「' + resolved.card.name_zh + '」。');
-      for (const eff of resolved.effects.filter((e) => e.type !== 'encounter_drawn')) {
+      for (const eff of resolved.effects.filter((e) => e.type !== 'encounter_drawn' && e.type !== 'encounter_deck_reshuffled')) {
         append('[遭遇] ' + describeEffect(eff, locMeta).split('你').join(aiName));
       }
       for (const eff of sync.effects) append('[結算] ' + describeEffect(eff, locMeta).split('你').join(aiName));
@@ -905,6 +910,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       encounterDeck,
       setup.encounterTriggerConfig,
       pending.context,
+      Math.random,
+      setup.encounterCards,
     );
     if (!draw.triggered || !draw.card) return false;
     setEncounterDeck(draw.remaining);
@@ -918,12 +925,13 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       cascadeLogs: [],
       pendingOutcome: null,
     });
+    if (draw.reshuffled) append('[遭遇] ' + ENCOUNTER_DECK_RESHUFFLED_NARRATIVE);
     append('[遭遇] ' + pending.sourceLabel + '抽到「' + draw.card.name_zh + '」。');
     return true;
   }, [aiMembers, encounterDeck, encounterPlay, investigator, scenario, setup, locMeta]);
 
   const triggerKeeperLegendaryEncounter = useCallback((): boolean => {
-    if (phase !== 'investigator' || outcome || encounterPlay || damageAlloc || encounterDeck.length === 0) return false;
+    if (phase !== 'investigator' || outcome || encounterPlay || damageAlloc || setup.encounterCards.length === 0) return false;
     if (setup.encounterTriggerConfig.keeper_mythos === false) return false;
     const selection = selectKeeperLegendaryEncounter(
       setup.mythosCards,
@@ -938,7 +946,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       context: { path: 'keeper_mythos', mythosCardCategory: 'encounter' },
       targetInvestigatorId: selection.target.investigatorId,
     });
-  }, [aiMembers, damageAlloc, encounterDeck.length, encounterPlay, investigator, keeperState, locMeta, outcome, phase, setup, triggerEncounter]);
+  }, [aiMembers, damageAlloc, encounterPlay, investigator, keeperState, locMeta, outcome, phase, setup, triggerEncounter]);
 
   const advanceEncounterPlay = () => {
     setEncounterPlay((ep) => {
@@ -1670,14 +1678,17 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           ai,
           sc,
           setup.enemyStats,
+          undefined,
+          setup.encounterCards,
         );
         if (!enc.triggered || !enc.card) continue;
         nextDeck = enc.remaining;
         sc = enc.scenario;
         nextAIs[idx] = syncDownedState(enc.investigator).investigator;
         const aiName = setup.aiMembers[idx]?.profile.name_zh ?? 'AI';
+        if (enc.reshuffled) append('[遭遇] ' + ENCOUNTER_DECK_RESHUFFLED_NARRATIVE);
         append(`[回合結束遭遇] ${aiName} 抽到「${enc.card.name_zh}」。`);
-        for (const eff of enc.effects.filter((e) => e.type !== 'encounter_drawn')) {
+        for (const eff of enc.effects.filter((e) => e.type !== 'encounter_drawn' && e.type !== 'encounter_deck_reshuffled')) {
           append('[遭遇] ' + describeEffect(eff, locMeta).split('你').join(aiName));
         }
       }

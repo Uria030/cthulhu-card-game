@@ -24,6 +24,8 @@ import type { CardData, CardDataLookup } from './ruleEngine';
 import { TOLL_FUNCTIONS } from '../types/talisman';
 import type { BreakTiming, BreakTestAttribute, EncounterSubroutine, ThreatTypeCode } from '../types/talisman';
 
+export const ENCOUNTER_DECK_RESHUFFLED_NARRATIVE = '夜還長,厄運重新洗牌。';
+
 // ─── 遭遇卡資料(bootstrap encounter_cards rows + options)────
 export interface EncounterEffect {
   /** 效果碼(支援 deal_horror/deal_damage/place_doom/spawn_enemy/draw_card/discover_clue) */
@@ -167,8 +169,12 @@ export function shouldDrawEncounter(
 // ─── 觸發:進入新地點抽 1 張(技術債最快解鎖路)────
 export interface EncounterDraw {
   card: EncounterCardData | null;
-  /** 抽走後剩餘的牌堆(不洗回,抽完即無) */
+  /** 抽走後剩餘的目前牌堆。 */
   remaining: EncounterCardData[];
+  /** true 表示本次抽牌前,目前牌堆已空並從原始遭遇池重建。 */
+  reshuffled?: boolean;
+  /** 重建牌堆時使用的原始遭遇池張數。 */
+  reshuffleSourceSize?: number;
 }
 
 export interface TriggeredEncounterDraw extends EncounterDraw {
@@ -187,17 +193,28 @@ export function drawEncounter(deck: EncounterCardData[], rng: () => number = Mat
   return { card, remaining: deck.filter((_, i) => i !== idx) };
 }
 
+export function drawEncounterWithReshuffle(
+  deck: EncounterCardData[],
+  sourceDeck: EncounterCardData[],
+  rng: () => number = Math.random,
+): EncounterDraw {
+  if (deck.length > 0) return { ...drawEncounter(deck, rng), reshuffled: false };
+  if (sourceDeck.length === 0) return { card: null, remaining: [], reshuffled: false, reshuffleSourceSize: 0 };
+  return { ...drawEncounter(sourceDeck, rng), reshuffled: true, reshuffleSourceSize: sourceDeck.length };
+}
+
 export function drawTriggeredEncounter(
   deck: EncounterCardData[],
   config: EncounterTriggerConfig,
   context: EncounterTriggerContext,
   rng: () => number = Math.random,
+  sourceDeck: EncounterCardData[] = deck,
 ): TriggeredEncounterDraw {
   const decision = shouldDrawEncounter(config, context);
   if (!decision.shouldDraw) {
     return { triggered: false, reason: decision.reason, card: null, remaining: deck };
   }
-  const draw = drawEncounter(deck, rng);
+  const draw = drawEncounterWithReshuffle(deck, sourceDeck, rng);
   return { triggered: draw.card !== null, reason: decision.reason, ...draw };
 }
 
@@ -221,17 +238,31 @@ export function drawAndAutoResolveEncounter(
   scenario: ScenarioState,
   enemyData: EnemyDataLookup,
   rng: () => number = Math.random,
+  sourceDeck: EncounterCardData[] = deck,
 ): AutoResolvedTriggeredEncounter {
-  const draw = drawTriggeredEncounter(deck, config, context, rng);
+  const draw = drawTriggeredEncounter(deck, config, context, rng, sourceDeck);
   if (!draw.triggered || !draw.card) {
     return { ...draw, investigator, scenario, effects: [], optionIndex: null };
   }
 
-  const effects: ResultEffect[] = [{
+  const effects: ResultEffect[] = [];
+  if (draw.reshuffled) {
+    effects.push({
+      type: 'encounter_deck_reshuffled',
+      params: {
+        narrative: ENCOUNTER_DECK_RESHUFFLED_NARRATIVE,
+        reason: draw.reason,
+        path: context.path,
+        sourceSize: draw.reshuffleSourceSize ?? sourceDeck.length,
+      },
+      targetId: investigator.investigatorId,
+    });
+  }
+  effects.push({
     type: 'encounter_drawn',
     params: { name: draw.card.name_zh, reason: draw.reason, path: context.path },
     targetId: investigator.investigatorId,
-  }];
+  });
   const options = draw.card.options ?? [];
   if (options.length === 0) {
     return {

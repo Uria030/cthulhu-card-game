@@ -1,4 +1,5 @@
 import { playerAccountTestHelpers } from './player-accounts.js';
+import { MIGRATION_042_SQL } from '../db/migrate.js';
 
 type TestFn = () => void;
 const tests: { name: string; fn: TestFn }[] = [];
@@ -71,6 +72,15 @@ test('settleProgressOnServer: awards DB outcome rewards and advances chapter', (
   assertEq(result.progress.flags['outcome.victory'], true, 'flag_sets applied');
   assertEq(result.progress.currentChapterNumber, 2, 'long rest advances chapter');
   assertEq(result.progress.cohesion, 2, 'reward cohesion + long rest cohesion');
+});
+
+test('MIGRATION_042 mirrors creator01/creator02 admin users into MOD-15 players', () => {
+  assertEq(MIGRATION_042_SQL.includes('creator01'), true);
+  assertEq(MIGRATION_042_SQL.includes('creator02'), true);
+  assertEq(MIGRATION_042_SQL.includes('FROM admin_users'), true);
+  assertEq(MIGRATION_042_SQL.includes('INSERT INTO players'), true);
+  assertEq(MIGRATION_042_SQL.includes("'@ug.local'"), true);
+  assertEq(MIGRATION_042_SQL.includes('legacy_creator_import'), true);
 });
 
 let failed = 0;

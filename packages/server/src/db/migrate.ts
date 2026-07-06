@@ -3510,6 +3510,53 @@ SELECT target_stage.id, upsert_card.id, 1
 ON CONFLICT (stage_id, mythos_card_id) DO NOTHING;
 `;
 
+// Migration 042: mirror legacy creator admin users into MOD-15 player accounts.
+export const MIGRATION_042_SQL = `
+WITH legacy_creator_accounts AS (
+  SELECT id AS source_admin_user_id,
+         username,
+         password_hash,
+         COALESCE(is_active, TRUE) AS is_active
+    FROM admin_users
+   WHERE username IN ('creator01', 'creator02')
+),
+upserted_players AS (
+  INSERT INTO players (email, username, password_hash, save_slots_max, is_disabled, created_at, updated_at)
+  SELECT lower(username) || '@ug.local',
+         username,
+         password_hash,
+         2,
+         NOT is_active,
+         NOW(),
+         NOW()
+    FROM legacy_creator_accounts
+  ON CONFLICT (username) DO UPDATE
+    SET password_hash = EXCLUDED.password_hash,
+        is_disabled = EXCLUDED.is_disabled,
+        save_slots_max = GREATEST(players.save_slots_max, EXCLUDED.save_slots_max),
+        updated_at = NOW()
+  RETURNING id, email, username
+)
+INSERT INTO account_audit_logs (target_player_id, action, detail)
+SELECT u.id,
+       'legacy_creator_import',
+       jsonb_build_object(
+         'source', 'admin_users',
+         'source_admin_user_id', l.source_admin_user_id,
+         'username', u.username,
+         'email', u.email
+       )
+  FROM upserted_players u
+  JOIN legacy_creator_accounts l ON l.username = u.username
+ WHERE NOT EXISTS (
+   SELECT 1
+     FROM account_audit_logs existing
+    WHERE existing.target_player_id = u.id
+      AND existing.action = 'legacy_creator_import'
+      AND existing.detail->>'username' = u.username
+ );
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3733,6 +3780,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_039', MIGRATION_039_SQL);
     await runOne('MIGRATION_040', MIGRATION_040_SQL);
     await runOne('MIGRATION_041', MIGRATION_041_SQL);
+    await runOne('MIGRATION_042', MIGRATION_042_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

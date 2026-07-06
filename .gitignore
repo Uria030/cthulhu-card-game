@@ -27,3 +27,36 @@ graphify-out/
 skills-lock.json
 .claude/skills/
 packages/shared/src/game/_debug_ai.ts
+
+# Codex / hub 本機副產品
+.tmp_*
+docs/_hub_brief_*
+docs/_hub_result_*
+docs/hub_briefs/
+
+# 交叉測試可重跑輸出
+scripts/g1-sandbox/cross-test/preset-investigators.json
+scripts/g1-sandbox/cross-test/results-*.jsonl
+scripts/g1-sandbox/cross-test/results-*.jsonl.err.log
+
+# g1-sandbox 本機診斷 / 修數一次性腳本
+scripts/g1-sandbox/backfill-shroud-d20.mjs
+scripts/g1-sandbox/backfill-slit-act-agenda.mjs
+scripts/g1-sandbox/check-bootstrap-live.mjs
+scripts/g1-sandbox/check-istp-deck.mjs
+scripts/g1-sandbox/check-slit-locs-deck.mjs
+scripts/g1-sandbox/e2e-investigator-ai.ts
+scripts/g1-sandbox/fix-doom-advance-tokens.mjs
+scripts/g1-sandbox/inspect-card-fields.mjs
+scripts/g1-sandbox/inspect-progression-shapes.mjs
+scripts/g1-sandbox/inspect-slit-scenarios.mjs
+scripts/g1-sandbox/inventory-istp-effects.mjs
+scripts/g1-sandbox/inventory-slit-mythos.mjs
+scripts/g1-sandbox/name-intj-four.mjs
+scripts/g1-sandbox/poll-bootstrap-live.mjs
+scripts/g1-sandbox/poll-migration-fix-live.mjs
+scripts/g1-sandbox/poll-play-live.mjs
+scripts/g1-sandbox/set-slit-agenda1-doom.mjs
+scripts/g1-sandbox/set-slit-agenda3-doom.mjs
+scripts/g1-sandbox/set-slit-tide-regen-rule.mjs
+scripts/g1-sandbox/tune-slit-agenda.mjs

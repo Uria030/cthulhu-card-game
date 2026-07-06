@@ -1,0 +1,1229 @@
+{
+  "schema": "ug-cross-test-teams-v1",
+  "generatedAt": "2026-07-02T13:46:52.319Z",
+  "source": "scripts\\g1-sandbox\\cross-test\\preset-investigators.json",
+  "seed": 20260702,
+  "minAppearances": 8,
+  "teamCount": 128,
+  "investigatorCount": 64,
+  "teams": [
+    {
+      "teamIndex": 0,
+      "investigatorIds": [
+        "d6f5f836-8c1c-45df-8928-ba88b144c783",
+        "4e4ecd62-82cf-4596-8f6a-8e642f8a532b",
+        "f86acf74-67eb-4b6c-b4a3-6c3003ccb255",
+        "df3448a4-994b-4a84-8206-7ee5ebc93518"
+      ]
+    },
+    {
+      "teamIndex": 1,
+      "investigatorIds": [
+        "0ec58173-0817-449d-abae-362c5315d71b",
+        "fc825fc6-cce8-4957-96d0-7fc5c13b552b",
+        "a319ba49-4834-40ae-80d8-52f6cd78289e",
+        "9c26824f-9ac4-4d62-9c86-645929a0bb62"
+      ]
+    },
+    {
+      "teamIndex": 2,
+      "investigatorIds": [
+        "4b0de2b5-d2f6-455b-9dd8-7795f30243a1",
+        "4a0990a4-bed1-4b96-b106-9026b62c7e5a",
+        "14045d00-65e7-402a-b5c6-d2d019f6ba99",
+        "a6568fc1-0ec1-48c6-976a-617f81435f3b"
+      ]
+    },
+    {
+      "teamIndex": 3,
+      "investigatorIds": [
+        "d5d06cf0-45f9-4d9d-8c34-9b1787fd9e5d",
+        "81f08f50-0638-46e2-b934-ebee490d6156",
+        "4ec9062e-417b-4048-a616-e5fb3af0f0a8",
+        "0de04630-f5e1-46b9-b030-3f096e933fd5"
+      ]
+    },
+    {
+      "teamIndex": 4,
+      "investigatorIds": [
+        "f80323f5-afce-40f0-862d-3a3757059459",
+        "b7eff7dd-9927-48d7-81bb-c83fa3876b52",
+        "ed8bb0ee-a253-43d6-97d1-609a8f0a66bc",
+        "345f765b-d25a-44e8-945a-fee9467c0754"
+      ]
+    },
+    {
+      "teamIndex": 5,
+      "investigatorIds": [
+        "c7e4a9e3-03f8-405d-8946-3bf7f439bdf8",
+        "f6ddfe04-cd49-4775-99f2-5edc873e3799",
+        "558635b5-595d-4886-a47c-c3c0433338e3",
+        "9005da0d-c384-47c1-bbeb-85c6ca3d1819"
+      ]
+    },
+    {
+      "teamIndex": 6,
+      "investigatorIds": [
+        "dd1431f4-9af7-436b-9cf4-44fff1192a1c",
+        "c353744f-8b6e-4b7b-bcb4-d3292dcac0af",
+        "2b1186fd-fb10-4256-8516-8b0234c15c91",
+        "558d7aa6-8e18-4f46-bd4c-28e6d6a44423"
+      ]
+    },
+    {
+      "teamIndex": 7,
+      "investigatorIds": [
+        "6a294126-6531-4501-a48d-70a9ae5f5053",
+        "3a697c2a-2a5b-4291-98fc-08bb62a24ea6",
+        "deee5da8-ce99-4394-919d-20abbd85672e",
+        "1b1b746b-43f2-47dc-a064-33d370d42561"
+      ]
+    },
+    {
+      "teamIndex": 8,
+      "investigatorIds": [
+        "36effa3a-5709-47fe-a710-8b6d436da2f5",
+        "f643f0df-476e-4c6b-9b8f-985ace1dd920",
+        "3ab864ab-018c-4954-8478-b6f7df583533",
+        "35ec7398-8709-43a6-bd0c-ac7e8ed4e1d5"
+      ]
+    },
+    {
+      "teamIndex": 9,
+      "investigatorIds": [
+        "58d0e967-dede-4655-a39b-b981ced9927f",
+        "21c086bb-eced-446c-adb8-c9906eac204b",
+        "77fb726a-7c12-4197-af19-12262588f475",
+        "e87de55c-b57b-4c7c-9633-6a6a423e6f97"
+      ]
+    },
+    {
+      "teamIndex": 10,
+      "investigatorIds": [
+        "610a0f3a-f6ce-43c4-bb00-ce4d756c7bd3",
+        "c1082207-a575-4ade-b0e9-cc110fbe6440",
+        "89abce48-bd3f-468d-a701-1aacb44639ca",
+        "054f6233-15b3-4781-9461-f09e02e50439"
+      ]
+    },
+    {
+      "teamIndex": 11,
+      "investigatorIds": [
+        "7854c8a2-c213-4333-aaaa-2ce53dea6515",
+        "7a7fbdf9-1c3e-4154-9217-23b9b3093cf6",
+        "784a4d83-e16b-4879-aafb-502a3d03d0e8",
+        "aa11394c-1052-44ed-83c8-79d756bd89a7"
+      ]
+    },
+    {
+      "teamIndex": 12,
+      "investigatorIds": [
+        "8bde0cef-1701-449d-9ab1-be48f65ea6ac",
+        "ce1310dd-9662-48a7-a8b9-171e793ab494",
+        "80699b97-f5b0-49af-93ad-1d120495adc7",
+        "d87521eb-8301-4057-82d1-09ce17ac7bd5"
+      ]
+    },
+    {
+      "teamIndex": 13,
+      "investigatorIds": [
+        "51e17a45-9a9c-42bd-b143-85b2e9d80da9",
+        "aff9c51a-5c25-4b07-af9d-a1bea61178e1",
+        "8b196ce8-713e-41c3-9153-29ea9be55261",
+        "86f484fa-1fc2-45b3-9ffc-395403d8c8d0"
+      ]
+    },
+    {
+      "teamIndex": 14,
+      "investigatorIds": [
+        "c3e28cc4-4159-4d3b-af07-ba25a1f80e71",
+        "f5b77be9-6eee-4cc5-b95a-f63f279eed0f",
+        "320d1882-a35d-4d45-b656-428947f7e32c",
+        "8dd8cfa7-93be-4048-825a-49127b9bffdb"
+      ]
+    },
+    {
+      "teamIndex": 15,
+      "investigatorIds": [
+        "b2019b43-b190-4b92-ab3e-c800e956667e",
+        "69bfb5c4-a897-4a62-a7df-a81e244f7168",
+        "ca72d023-be8d-460d-989f-d949dc440fc1",
+        "1ad78b83-0b95-4337-9ae8-d935bc85db9f"
+      ]
+    },
+    {
+      "teamIndex": 16,
+      "investigatorIds": [
+        "a319ba49-4834-40ae-80d8-52f6cd78289e",
+        "6a294126-6531-4501-a48d-70a9ae5f5053",
+        "3ab864ab-018c-4954-8478-b6f7df583533",
+        "deee5da8-ce99-4394-919d-20abbd85672e"
+      ]
+    },
+    {
+      "teamIndex": 17,
+      "investigatorIds": [
+        "f86acf74-67eb-4b6c-b4a3-6c3003ccb255",
+        "c3e28cc4-4159-4d3b-af07-ba25a1f80e71",
+        "69bfb5c4-a897-4a62-a7df-a81e244f7168",
+        "1b1b746b-43f2-47dc-a064-33d370d42561"
+      ]
+    },
+    {
+      "teamIndex": 18,
+      "investigatorIds": [
+        "36effa3a-5709-47fe-a710-8b6d436da2f5",
+        "4ec9062e-417b-4048-a616-e5fb3af0f0a8",
+        "58d0e967-dede-4655-a39b-b981ced9927f",
+        "345f765b-d25a-44e8-945a-fee9467c0754"
+      ]
+    },
+    {
+      "teamIndex": 19,
+      "investigatorIds": [
+        "f643f0df-476e-4c6b-9b8f-985ace1dd920",
+        "ca72d023-be8d-460d-989f-d949dc440fc1",
+        "b7eff7dd-9927-48d7-81bb-c83fa3876b52",
+        "4b0de2b5-d2f6-455b-9dd8-7795f30243a1"
+      ]
+    },
+    {
+      "teamIndex": 20,
+      "investigatorIds": [
+        "dd1431f4-9af7-436b-9cf4-44fff1192a1c",
+        "8dd8cfa7-93be-4048-825a-49127b9bffdb",
+        "9c26824f-9ac4-4d62-9c86-645929a0bb62",
+        "7a7fbdf9-1c3e-4154-9217-23b9b3093cf6"
+      ]
+    },
+    {
+      "teamIndex": 21,
+      "investigatorIds": [
+        "80699b97-f5b0-49af-93ad-1d120495adc7",
+        "ed8bb0ee-a253-43d6-97d1-609a8f0a66bc",
+        "0ec58173-0817-449d-abae-362c5315d71b",
+        "ce1310dd-9662-48a7-a8b9-171e793ab494"
+      ]
+    },
+    {
+      "teamIndex": 22,
+      "investigatorIds": [
+        "054f6233-15b3-4781-9461-f09e02e50439",
+        "a6568fc1-0ec1-48c6-976a-617f81435f3b",
+        "77fb726a-7c12-4197-af19-12262588f475",
+        "0de04630-f5e1-46b9-b030-3f096e933fd5"
+      ]
+    },
+    {
+      "teamIndex": 23,
+      "investigatorIds": [
+        "f6ddfe04-cd49-4775-99f2-5edc873e3799",
+        "3a697c2a-2a5b-4291-98fc-08bb62a24ea6",
+        "14045d00-65e7-402a-b5c6-d2d019f6ba99",
+        "fc825fc6-cce8-4957-96d0-7fc5c13b552b"
+      ]
+    },
+    {
+      "teamIndex": 24,
+      "investigatorIds": [
+        "21c086bb-eced-446c-adb8-c9906eac204b",
+        "558635b5-595d-4886-a47c-c3c0433338e3",
+        "d87521eb-8301-4057-82d1-09ce17ac7bd5",
+        "784a4d83-e16b-4879-aafb-502a3d03d0e8"
+      ]
+    },
+    {
+      "teamIndex": 25,
+      "investigatorIds": [
+        "aff9c51a-5c25-4b07-af9d-a1bea61178e1",
+        "8bde0cef-1701-449d-9ab1-be48f65ea6ac",
+        "df3448a4-994b-4a84-8206-7ee5ebc93518",
+        "b2019b43-b190-4b92-ab3e-c800e956667e"
+      ]
+    },
+    {
+      "teamIndex": 26,
+      "investigatorIds": [
+        "51e17a45-9a9c-42bd-b143-85b2e9d80da9",
+        "4a0990a4-bed1-4b96-b106-9026b62c7e5a",
+        "610a0f3a-f6ce-43c4-bb00-ce4d756c7bd3",
+        "f5b77be9-6eee-4cc5-b95a-f63f279eed0f"
+      ]
+    },
+    {
+      "teamIndex": 27,
+      "investigatorIds": [
+        "9005da0d-c384-47c1-bbeb-85c6ca3d1819",
+        "89abce48-bd3f-468d-a701-1aacb44639ca",
+        "320d1882-a35d-4d45-b656-428947f7e32c",
+        "e87de55c-b57b-4c7c-9633-6a6a423e6f97"
+      ]
+    },
+    {
+      "teamIndex": 28,
+      "investigatorIds": [
+        "2b1186fd-fb10-4256-8516-8b0234c15c91",
+        "35ec7398-8709-43a6-bd0c-ac7e8ed4e1d5",
+        "c7e4a9e3-03f8-405d-8946-3bf7f439bdf8",
+        "8b196ce8-713e-41c3-9153-29ea9be55261"
+      ]
+    },
+    {
+      "teamIndex": 29,
+      "investigatorIds": [
+        "7854c8a2-c213-4333-aaaa-2ce53dea6515",
+        "86f484fa-1fc2-45b3-9ffc-395403d8c8d0",
+        "1ad78b83-0b95-4337-9ae8-d935bc85db9f",
+        "d5d06cf0-45f9-4d9d-8c34-9b1787fd9e5d"
+      ]
+    },
+    {
+      "teamIndex": 30,
+      "investigatorIds": [
+        "81f08f50-0638-46e2-b934-ebee490d6156",
+        "f80323f5-afce-40f0-862d-3a3757059459",
+        "558d7aa6-8e18-4f46-bd4c-28e6d6a44423",
+        "d6f5f836-8c1c-45df-8928-ba88b144c783"
+      ]
+    },
+    {
+      "teamIndex": 31,
+      "investigatorIds": [
+        "c1082207-a575-4ade-b0e9-cc110fbe6440",
+        "c353744f-8b6e-4b7b-bcb4-d3292dcac0af",
+        "4e4ecd62-82cf-4596-8f6a-8e642f8a532b",
+        "aa11394c-1052-44ed-83c8-79d756bd89a7"
+      ]
+    },
+    {
+      "teamIndex": 32,
+      "investigatorIds": [
+        "2b1186fd-fb10-4256-8516-8b0234c15c91",
+        "58d0e967-dede-4655-a39b-b981ced9927f",
+        "4b0de2b5-d2f6-455b-9dd8-7795f30243a1",
+        "77fb726a-7c12-4197-af19-12262588f475"
+      ]
+    },
+    {
+      "teamIndex": 33,
+      "investigatorIds": [
+        "8dd8cfa7-93be-4048-825a-49127b9bffdb",
+        "ce1310dd-9662-48a7-a8b9-171e793ab494",
+        "320d1882-a35d-4d45-b656-428947f7e32c",
+        "a319ba49-4834-40ae-80d8-52f6cd78289e"
+      ]
+    },
+    {
+      "teamIndex": 34,
+      "investigatorIds": [
+        "deee5da8-ce99-4394-919d-20abbd85672e",
+        "81f08f50-0638-46e2-b934-ebee490d6156",
+        "f80323f5-afce-40f0-862d-3a3757059459",
+        "8bde0cef-1701-449d-9ab1-be48f65ea6ac"
+      ]
+    },
+    {
+      "teamIndex": 35,
+      "investigatorIds": [
+        "0ec58173-0817-449d-abae-362c5315d71b",
+        "f86acf74-67eb-4b6c-b4a3-6c3003ccb255",
+        "aff9c51a-5c25-4b07-af9d-a1bea61178e1",
+        "c7e4a9e3-03f8-405d-8946-3bf7f439bdf8"
+      ]
+    },
+    {
+      "teamIndex": 36,
+      "investigatorIds": [
+        "6a294126-6531-4501-a48d-70a9ae5f5053",
+        "14045d00-65e7-402a-b5c6-d2d019f6ba99",
+        "1ad78b83-0b95-4337-9ae8-d935bc85db9f",
+        "b7eff7dd-9927-48d7-81bb-c83fa3876b52"
+      ]
+    },
+    {
+      "teamIndex": 37,
+      "investigatorIds": [
+        "3a697c2a-2a5b-4291-98fc-08bb62a24ea6",
+        "4e4ecd62-82cf-4596-8f6a-8e642f8a532b",
+        "784a4d83-e16b-4879-aafb-502a3d03d0e8",
+        "89abce48-bd3f-468d-a701-1aacb44639ca"
+      ]
+    },
+    {
+      "teamIndex": 38,
+      "investigatorIds": [
+        "d87521eb-8301-4057-82d1-09ce17ac7bd5",
+        "7a7fbdf9-1c3e-4154-9217-23b9b3093cf6",
+        "558d7aa6-8e18-4f46-bd4c-28e6d6a44423",
+        "dd1431f4-9af7-436b-9cf4-44fff1192a1c"
+      ]
+    },
+    {
+      "teamIndex": 39,
+      "investigatorIds": [
+        "a6568fc1-0ec1-48c6-976a-617f81435f3b",
+        "0de04630-f5e1-46b9-b030-3f096e933fd5",
+        "345f765b-d25a-44e8-945a-fee9467c0754",
+        "c353744f-8b6e-4b7b-bcb4-d3292dcac0af"
+      ]
+    },
+    {
+      "teamIndex": 40,
+      "investigatorIds": [
+        "69bfb5c4-a897-4a62-a7df-a81e244f7168",
+        "51e17a45-9a9c-42bd-b143-85b2e9d80da9",
+        "21c086bb-eced-446c-adb8-c9906eac204b",
+        "c3e28cc4-4159-4d3b-af07-ba25a1f80e71"
+      ]
+    },
+    {
+      "teamIndex": 41,
+      "investigatorIds": [
+        "c1082207-a575-4ade-b0e9-cc110fbe6440",
+        "610a0f3a-f6ce-43c4-bb00-ce4d756c7bd3",
+        "80699b97-f5b0-49af-93ad-1d120495adc7",
+        "8b196ce8-713e-41c3-9153-29ea9be55261"
+      ]
+    },
+    {
+      "teamIndex": 42,
+      "investigatorIds": [
+        "e87de55c-b57b-4c7c-9633-6a6a423e6f97",
+        "ed8bb0ee-a253-43d6-97d1-609a8f0a66bc",
+        "9c26824f-9ac4-4d62-9c86-645929a0bb62",
+        "36effa3a-5709-47fe-a710-8b6d436da2f5"
+      ]
+    },
+    {
+      "teamIndex": 43,
+      "investigatorIds": [
+        "aa11394c-1052-44ed-83c8-79d756bd89a7",
+        "558635b5-595d-4886-a47c-c3c0433338e3",
+        "4a0990a4-bed1-4b96-b106-9026b62c7e5a",
+        "86f484fa-1fc2-45b3-9ffc-395403d8c8d0"
+      ]
+    },
+    {
+      "teamIndex": 44,
+      "investigatorIds": [
+        "9005da0d-c384-47c1-bbeb-85c6ca3d1819",
+        "d6f5f836-8c1c-45df-8928-ba88b144c783",
+        "35ec7398-8709-43a6-bd0c-ac7e8ed4e1d5",
+        "df3448a4-994b-4a84-8206-7ee5ebc93518"
+      ]
+    },
+    {
+      "teamIndex": 45,
+      "investigatorIds": [
+        "1b1b746b-43f2-47dc-a064-33d370d42561",
+        "f5b77be9-6eee-4cc5-b95a-f63f279eed0f",
+        "7854c8a2-c213-4333-aaaa-2ce53dea6515",
+        "3ab864ab-018c-4954-8478-b6f7df583533"
+      ]
+    },
+    {
+      "teamIndex": 46,
+      "investigatorIds": [
+        "054f6233-15b3-4781-9461-f09e02e50439",
+        "f6ddfe04-cd49-4775-99f2-5edc873e3799",
+        "b2019b43-b190-4b92-ab3e-c800e956667e",
+        "f643f0df-476e-4c6b-9b8f-985ace1dd920"
+      ]
+    },
+    {
+      "teamIndex": 47,
+      "investigatorIds": [
+        "fc825fc6-cce8-4957-96d0-7fc5c13b552b",
+        "ca72d023-be8d-460d-989f-d949dc440fc1",
+        "4ec9062e-417b-4048-a616-e5fb3af0f0a8",
+        "d5d06cf0-45f9-4d9d-8c34-9b1787fd9e5d"
+      ]
+    },
+    {
+      "teamIndex": 48,
+      "investigatorIds": [
+        "aa11394c-1052-44ed-83c8-79d756bd89a7",
+        "21c086bb-eced-446c-adb8-c9906eac204b",
+        "81f08f50-0638-46e2-b934-ebee490d6156",
+        "345f765b-d25a-44e8-945a-fee9467c0754"
+      ]
+    },
+    {
+      "teamIndex": 49,
+      "investigatorIds": [
+        "320d1882-a35d-4d45-b656-428947f7e32c",
+        "86f484fa-1fc2-45b3-9ffc-395403d8c8d0",
+        "14045d00-65e7-402a-b5c6-d2d019f6ba99",
+        "d6f5f836-8c1c-45df-8928-ba88b144c783"
+      ]
+    },
+    {
+      "teamIndex": 50,
+      "investigatorIds": [
+        "c353744f-8b6e-4b7b-bcb4-d3292dcac0af",
+        "e87de55c-b57b-4c7c-9633-6a6a423e6f97",
+        "a6568fc1-0ec1-48c6-976a-617f81435f3b",
+        "ed8bb0ee-a253-43d6-97d1-609a8f0a66bc"
+      ]
+    },
+    {
+      "teamIndex": 51,
+      "investigatorIds": [
+        "c7e4a9e3-03f8-405d-8946-3bf7f439bdf8",
+        "f86acf74-67eb-4b6c-b4a3-6c3003ccb255",
+        "d5d06cf0-45f9-4d9d-8c34-9b1787fd9e5d",
+        "df3448a4-994b-4a84-8206-7ee5ebc93518"
+      ]
+    },
+    {
+      "teamIndex": 52,
+      "investigatorIds": [
+        "4a0990a4-bed1-4b96-b106-9026b62c7e5a",
+        "4b0de2b5-d2f6-455b-9dd8-7795f30243a1",
+        "dd1431f4-9af7-436b-9cf4-44fff1192a1c",
+        "b7eff7dd-9927-48d7-81bb-c83fa3876b52"
+      ]
+    },
+    {
+      "teamIndex": 53,
+      "investigatorIds": [
+        "9c26824f-9ac4-4d62-9c86-645929a0bb62",
+        "8dd8cfa7-93be-4048-825a-49127b9bffdb",
+        "35ec7398-8709-43a6-bd0c-ac7e8ed4e1d5",
+        "8b196ce8-713e-41c3-9153-29ea9be55261"
+      ]
+    },
+    {
+      "teamIndex": 54,
+      "investigatorIds": [
+        "d87521eb-8301-4057-82d1-09ce17ac7bd5",
+        "f5b77be9-6eee-4cc5-b95a-f63f279eed0f",
+        "c3e28cc4-4159-4d3b-af07-ba25a1f80e71",
+        "b2019b43-b190-4b92-ab3e-c800e956667e"
+      ]
+    },
+    {
+      "teamIndex": 55,
+      "investigatorIds": [
+        "2b1186fd-fb10-4256-8516-8b0234c15c91",
+        "51e17a45-9a9c-42bd-b143-85b2e9d80da9",
+        "7854c8a2-c213-4333-aaaa-2ce53dea6515",
+        "9005da0d-c384-47c1-bbeb-85c6ca3d1819"
+      ]
+    },
+    {
+      "teamIndex": 56,
+      "investigatorIds": [
+        "36effa3a-5709-47fe-a710-8b6d436da2f5",
+        "784a4d83-e16b-4879-aafb-502a3d03d0e8",
+        "4e4ecd62-82cf-4596-8f6a-8e642f8a532b",
+        "ce1310dd-9662-48a7-a8b9-171e793ab494"
+      ]
+    },
+    {
+      "teamIndex": 57,
+      "investigatorIds": [
+        "89abce48-bd3f-468d-a701-1aacb44639ca",
+        "f80323f5-afce-40f0-862d-3a3757059459",
+        "f6ddfe04-cd49-4775-99f2-5edc873e3799",
+        "aff9c51a-5c25-4b07-af9d-a1bea61178e1"
+      ]
+    },
+    {
+      "teamIndex": 58,
+      "investigatorIds": [
+        "610a0f3a-f6ce-43c4-bb00-ce4d756c7bd3",
+        "558635b5-595d-4886-a47c-c3c0433338e3",
+        "deee5da8-ce99-4394-919d-20abbd85672e",
+        "fc825fc6-cce8-4957-96d0-7fc5c13b552b"
+      ]
+    },
+    {
+      "teamIndex": 59,
+      "investigatorIds": [
+        "054f6233-15b3-4781-9461-f09e02e50439",
+        "558d7aa6-8e18-4f46-bd4c-28e6d6a44423",
+        "a319ba49-4834-40ae-80d8-52f6cd78289e",
+        "69bfb5c4-a897-4a62-a7df-a81e244f7168"
+      ]
+    },
+    {
+      "teamIndex": 60,
+      "investigatorIds": [
+        "ca72d023-be8d-460d-989f-d949dc440fc1",
+        "80699b97-f5b0-49af-93ad-1d120495adc7",
+        "0ec58173-0817-449d-abae-362c5315d71b",
+        "c1082207-a575-4ade-b0e9-cc110fbe6440"
+      ]
+    },
+    {
+      "teamIndex": 61,
+      "investigatorIds": [
+        "1b1b746b-43f2-47dc-a064-33d370d42561",
+        "4ec9062e-417b-4048-a616-e5fb3af0f0a8",
+        "f643f0df-476e-4c6b-9b8f-985ace1dd920",
+        "7a7fbdf9-1c3e-4154-9217-23b9b3093cf6"
+      ]
+    },
+    {
+      "teamIndex": 62,
+      "investigatorIds": [
+        "3a697c2a-2a5b-4291-98fc-08bb62a24ea6",
+        "77fb726a-7c12-4197-af19-12262588f475",
+        "58d0e967-dede-4655-a39b-b981ced9927f",
+        "6a294126-6531-4501-a48d-70a9ae5f5053"
+      ]
+    },
+    {
+      "teamIndex": 63,
+      "investigatorIds": [
+        "8bde0cef-1701-449d-9ab1-be48f65ea6ac",
+        "1ad78b83-0b95-4337-9ae8-d935bc85db9f",
+        "0de04630-f5e1-46b9-b030-3f096e933fd5",
+        "3ab864ab-018c-4954-8478-b6f7df583533"
+      ]
+    },
+    {
+      "teamIndex": 64,
+      "investigatorIds": [
+        "610a0f3a-f6ce-43c4-bb00-ce4d756c7bd3",
+        "86f484fa-1fc2-45b3-9ffc-395403d8c8d0",
+        "0ec58173-0817-449d-abae-362c5315d71b",
+        "58d0e967-dede-4655-a39b-b981ced9927f"
+      ]
+    },
+    {
+      "teamIndex": 65,
+      "investigatorIds": [
+        "21c086bb-eced-446c-adb8-c9906eac204b",
+        "df3448a4-994b-4a84-8206-7ee5ebc93518",
+        "8b196ce8-713e-41c3-9153-29ea9be55261",
+        "1b1b746b-43f2-47dc-a064-33d370d42561"
+      ]
+    },
+    {
+      "teamIndex": 66,
+      "investigatorIds": [
+        "320d1882-a35d-4d45-b656-428947f7e32c",
+        "89abce48-bd3f-468d-a701-1aacb44639ca",
+        "2b1186fd-fb10-4256-8516-8b0234c15c91",
+        "4b0de2b5-d2f6-455b-9dd8-7795f30243a1"
+      ]
+    },
+    {
+      "teamIndex": 67,
+      "investigatorIds": [
+        "f5b77be9-6eee-4cc5-b95a-f63f279eed0f",
+        "ed8bb0ee-a253-43d6-97d1-609a8f0a66bc",
+        "c7e4a9e3-03f8-405d-8946-3bf7f439bdf8",
+        "35ec7398-8709-43a6-bd0c-ac7e8ed4e1d5"
+      ]
+    },
+    {
+      "teamIndex": 68,
+      "investigatorIds": [
+        "054f6233-15b3-4781-9461-f09e02e50439",
+        "77fb726a-7c12-4197-af19-12262588f475",
+        "aa11394c-1052-44ed-83c8-79d756bd89a7",
+        "a319ba49-4834-40ae-80d8-52f6cd78289e"
+      ]
+    },
+    {
+      "teamIndex": 69,
+      "investigatorIds": [
+        "b2019b43-b190-4b92-ab3e-c800e956667e",
+        "3ab864ab-018c-4954-8478-b6f7df583533",
+        "dd1431f4-9af7-436b-9cf4-44fff1192a1c",
+        "558d7aa6-8e18-4f46-bd4c-28e6d6a44423"
+      ]
+    },
+    {
+      "teamIndex": 70,
+      "investigatorIds": [
+        "1ad78b83-0b95-4337-9ae8-d935bc85db9f",
+        "0de04630-f5e1-46b9-b030-3f096e933fd5",
+        "c353744f-8b6e-4b7b-bcb4-d3292dcac0af",
+        "f643f0df-476e-4c6b-9b8f-985ace1dd920"
+      ]
+    },
+    {
+      "teamIndex": 71,
+      "investigatorIds": [
+        "6a294126-6531-4501-a48d-70a9ae5f5053",
+        "a6568fc1-0ec1-48c6-976a-617f81435f3b",
+        "c1082207-a575-4ade-b0e9-cc110fbe6440",
+        "36effa3a-5709-47fe-a710-8b6d436da2f5"
+      ]
+    },
+    {
+      "teamIndex": 72,
+      "investigatorIds": [
+        "d5d06cf0-45f9-4d9d-8c34-9b1787fd9e5d",
+        "3a697c2a-2a5b-4291-98fc-08bb62a24ea6",
+        "8bde0cef-1701-449d-9ab1-be48f65ea6ac",
+        "9c26824f-9ac4-4d62-9c86-645929a0bb62"
+      ]
+    },
+    {
+      "teamIndex": 73,
+      "investigatorIds": [
+        "e87de55c-b57b-4c7c-9633-6a6a423e6f97",
+        "fc825fc6-cce8-4957-96d0-7fc5c13b552b",
+        "7a7fbdf9-1c3e-4154-9217-23b9b3093cf6",
+        "4e4ecd62-82cf-4596-8f6a-8e642f8a532b"
+      ]
+    },
+    {
+      "teamIndex": 74,
+      "investigatorIds": [
+        "ca72d023-be8d-460d-989f-d949dc440fc1",
+        "ce1310dd-9662-48a7-a8b9-171e793ab494",
+        "558635b5-595d-4886-a47c-c3c0433338e3",
+        "f6ddfe04-cd49-4775-99f2-5edc873e3799"
+      ]
+    },
+    {
+      "teamIndex": 75,
+      "investigatorIds": [
+        "4a0990a4-bed1-4b96-b106-9026b62c7e5a",
+        "8dd8cfa7-93be-4048-825a-49127b9bffdb",
+        "51e17a45-9a9c-42bd-b143-85b2e9d80da9",
+        "f86acf74-67eb-4b6c-b4a3-6c3003ccb255"
+      ]
+    },
+    {
+      "teamIndex": 76,
+      "investigatorIds": [
+        "80699b97-f5b0-49af-93ad-1d120495adc7",
+        "d87521eb-8301-4057-82d1-09ce17ac7bd5",
+        "69bfb5c4-a897-4a62-a7df-a81e244f7168",
+        "aff9c51a-5c25-4b07-af9d-a1bea61178e1"
+      ]
+    },
+    {
+      "teamIndex": 77,
+      "investigatorIds": [
+        "f80323f5-afce-40f0-862d-3a3757059459",
+        "deee5da8-ce99-4394-919d-20abbd85672e",
+        "81f08f50-0638-46e2-b934-ebee490d6156",
+        "784a4d83-e16b-4879-aafb-502a3d03d0e8"
+      ]
+    },
+    {
+      "teamIndex": 78,
+      "investigatorIds": [
+        "b7eff7dd-9927-48d7-81bb-c83fa3876b52",
+        "9005da0d-c384-47c1-bbeb-85c6ca3d1819",
+        "14045d00-65e7-402a-b5c6-d2d019f6ba99",
+        "d6f5f836-8c1c-45df-8928-ba88b144c783"
+      ]
+    },
+    {
+      "teamIndex": 79,
+      "investigatorIds": [
+        "4ec9062e-417b-4048-a616-e5fb3af0f0a8",
+        "c3e28cc4-4159-4d3b-af07-ba25a1f80e71",
+        "345f765b-d25a-44e8-945a-fee9467c0754",
+        "7854c8a2-c213-4333-aaaa-2ce53dea6515"
+      ]
+    },
+    {
+      "teamIndex": 80,
+      "investigatorIds": [
+        "8bde0cef-1701-449d-9ab1-be48f65ea6ac",
+        "f643f0df-476e-4c6b-9b8f-985ace1dd920",
+        "d87521eb-8301-4057-82d1-09ce17ac7bd5",
+        "f80323f5-afce-40f0-862d-3a3757059459"
+      ]
+    },
+    {
+      "teamIndex": 81,
+      "investigatorIds": [
+        "0ec58173-0817-449d-abae-362c5315d71b",
+        "f6ddfe04-cd49-4775-99f2-5edc873e3799",
+        "2b1186fd-fb10-4256-8516-8b0234c15c91",
+        "f5b77be9-6eee-4cc5-b95a-f63f279eed0f"
+      ]
+    },
+    {
+      "teamIndex": 82,
+      "investigatorIds": [
+        "c1082207-a575-4ade-b0e9-cc110fbe6440",
+        "4ec9062e-417b-4048-a616-e5fb3af0f0a8",
+        "81f08f50-0638-46e2-b934-ebee490d6156",
+        "c353744f-8b6e-4b7b-bcb4-d3292dcac0af"
+      ]
+    },
+    {
+      "teamIndex": 83,
+      "investigatorIds": [
+        "8dd8cfa7-93be-4048-825a-49127b9bffdb",
+        "345f765b-d25a-44e8-945a-fee9467c0754",
+        "4a0990a4-bed1-4b96-b106-9026b62c7e5a",
+        "054f6233-15b3-4781-9461-f09e02e50439"
+      ]
+    },
+    {
+      "teamIndex": 84,
+      "investigatorIds": [
+        "58d0e967-dede-4655-a39b-b981ced9927f",
+        "4e4ecd62-82cf-4596-8f6a-8e642f8a532b",
+        "36effa3a-5709-47fe-a710-8b6d436da2f5",
+        "0de04630-f5e1-46b9-b030-3f096e933fd5"
+      ]
+    },
+    {
+      "teamIndex": 85,
+      "investigatorIds": [
+        "deee5da8-ce99-4394-919d-20abbd85672e",
+        "1ad78b83-0b95-4337-9ae8-d935bc85db9f",
+        "aff9c51a-5c25-4b07-af9d-a1bea61178e1",
+        "69bfb5c4-a897-4a62-a7df-a81e244f7168"
+      ]
+    },
+    {
+      "teamIndex": 86,
+      "investigatorIds": [
+        "ed8bb0ee-a253-43d6-97d1-609a8f0a66bc",
+        "f86acf74-67eb-4b6c-b4a3-6c3003ccb255",
+        "3ab864ab-018c-4954-8478-b6f7df583533",
+        "a6568fc1-0ec1-48c6-976a-617f81435f3b"
+      ]
+    },
+    {
+      "teamIndex": 87,
+      "investigatorIds": [
+        "558d7aa6-8e18-4f46-bd4c-28e6d6a44423",
+        "8b196ce8-713e-41c3-9153-29ea9be55261",
+        "9c26824f-9ac4-4d62-9c86-645929a0bb62",
+        "51e17a45-9a9c-42bd-b143-85b2e9d80da9"
+      ]
+    },
+    {
+      "teamIndex": 88,
+      "investigatorIds": [
+        "6a294126-6531-4501-a48d-70a9ae5f5053",
+        "1b1b746b-43f2-47dc-a064-33d370d42561",
+        "610a0f3a-f6ce-43c4-bb00-ce4d756c7bd3",
+        "35ec7398-8709-43a6-bd0c-ac7e8ed4e1d5"
+      ]
+    },
+    {
+      "teamIndex": 89,
+      "investigatorIds": [
+        "a319ba49-4834-40ae-80d8-52f6cd78289e",
+        "dd1431f4-9af7-436b-9cf4-44fff1192a1c",
+        "9005da0d-c384-47c1-bbeb-85c6ca3d1819",
+        "558635b5-595d-4886-a47c-c3c0433338e3"
+      ]
+    },
+    {
+      "teamIndex": 90,
+      "investigatorIds": [
+        "86f484fa-1fc2-45b3-9ffc-395403d8c8d0",
+        "d6f5f836-8c1c-45df-8928-ba88b144c783",
+        "df3448a4-994b-4a84-8206-7ee5ebc93518",
+        "77fb726a-7c12-4197-af19-12262588f475"
+      ]
+    },
+    {
+      "teamIndex": 91,
+      "investigatorIds": [
+        "4b0de2b5-d2f6-455b-9dd8-7795f30243a1",
+        "c3e28cc4-4159-4d3b-af07-ba25a1f80e71",
+        "3a697c2a-2a5b-4291-98fc-08bb62a24ea6",
+        "aa11394c-1052-44ed-83c8-79d756bd89a7"
+      ]
+    },
+    {
+      "teamIndex": 92,
+      "investigatorIds": [
+        "7a7fbdf9-1c3e-4154-9217-23b9b3093cf6",
+        "89abce48-bd3f-468d-a701-1aacb44639ca",
+        "80699b97-f5b0-49af-93ad-1d120495adc7",
+        "7854c8a2-c213-4333-aaaa-2ce53dea6515"
+      ]
+    },
+    {
+      "teamIndex": 93,
+      "investigatorIds": [
+        "e87de55c-b57b-4c7c-9633-6a6a423e6f97",
+        "d5d06cf0-45f9-4d9d-8c34-9b1787fd9e5d",
+        "fc825fc6-cce8-4957-96d0-7fc5c13b552b",
+        "14045d00-65e7-402a-b5c6-d2d019f6ba99"
+      ]
+    },
+    {
+      "teamIndex": 94,
+      "investigatorIds": [
+        "ca72d023-be8d-460d-989f-d949dc440fc1",
+        "21c086bb-eced-446c-adb8-c9906eac204b",
+        "784a4d83-e16b-4879-aafb-502a3d03d0e8",
+        "ce1310dd-9662-48a7-a8b9-171e793ab494"
+      ]
+    },
+    {
+      "teamIndex": 95,
+      "investigatorIds": [
+        "320d1882-a35d-4d45-b656-428947f7e32c",
+        "b2019b43-b190-4b92-ab3e-c800e956667e",
+        "c7e4a9e3-03f8-405d-8946-3bf7f439bdf8",
+        "b7eff7dd-9927-48d7-81bb-c83fa3876b52"
+      ]
+    },
+    {
+      "teamIndex": 96,
+      "investigatorIds": [
+        "784a4d83-e16b-4879-aafb-502a3d03d0e8",
+        "610a0f3a-f6ce-43c4-bb00-ce4d756c7bd3",
+        "320d1882-a35d-4d45-b656-428947f7e32c",
+        "a6568fc1-0ec1-48c6-976a-617f81435f3b"
+      ]
+    },
+    {
+      "teamIndex": 97,
+      "investigatorIds": [
+        "b2019b43-b190-4b92-ab3e-c800e956667e",
+        "0de04630-f5e1-46b9-b030-3f096e933fd5",
+        "ce1310dd-9662-48a7-a8b9-171e793ab494",
+        "58d0e967-dede-4655-a39b-b981ced9927f"
+      ]
+    },
+    {
+      "teamIndex": 98,
+      "investigatorIds": [
+        "d5d06cf0-45f9-4d9d-8c34-9b1787fd9e5d",
+        "f5b77be9-6eee-4cc5-b95a-f63f279eed0f",
+        "80699b97-f5b0-49af-93ad-1d120495adc7",
+        "dd1431f4-9af7-436b-9cf4-44fff1192a1c"
+      ]
+    },
+    {
+      "teamIndex": 99,
+      "investigatorIds": [
+        "8bde0cef-1701-449d-9ab1-be48f65ea6ac",
+        "69bfb5c4-a897-4a62-a7df-a81e244f7168",
+        "fc825fc6-cce8-4957-96d0-7fc5c13b552b",
+        "ca72d023-be8d-460d-989f-d949dc440fc1"
+      ]
+    },
+    {
+      "teamIndex": 100,
+      "investigatorIds": [
+        "558635b5-595d-4886-a47c-c3c0433338e3",
+        "9c26824f-9ac4-4d62-9c86-645929a0bb62",
+        "35ec7398-8709-43a6-bd0c-ac7e8ed4e1d5",
+        "7854c8a2-c213-4333-aaaa-2ce53dea6515"
+      ]
+    },
+    {
+      "teamIndex": 101,
+      "investigatorIds": [
+        "e87de55c-b57b-4c7c-9633-6a6a423e6f97",
+        "86f484fa-1fc2-45b3-9ffc-395403d8c8d0",
+        "8dd8cfa7-93be-4048-825a-49127b9bffdb",
+        "4b0de2b5-d2f6-455b-9dd8-7795f30243a1"
+      ]
+    },
+    {
+      "teamIndex": 102,
+      "investigatorIds": [
+        "3a697c2a-2a5b-4291-98fc-08bb62a24ea6",
+        "6a294126-6531-4501-a48d-70a9ae5f5053",
+        "77fb726a-7c12-4197-af19-12262588f475",
+        "c353744f-8b6e-4b7b-bcb4-d3292dcac0af"
+      ]
+    },
+    {
+      "teamIndex": 103,
+      "investigatorIds": [
+        "c1082207-a575-4ade-b0e9-cc110fbe6440",
+        "14045d00-65e7-402a-b5c6-d2d019f6ba99",
+        "aa11394c-1052-44ed-83c8-79d756bd89a7",
+        "aff9c51a-5c25-4b07-af9d-a1bea61178e1"
+      ]
+    },
+    {
+      "teamIndex": 104,
+      "investigatorIds": [
+        "df3448a4-994b-4a84-8206-7ee5ebc93518",
+        "9005da0d-c384-47c1-bbeb-85c6ca3d1819",
+        "f80323f5-afce-40f0-862d-3a3757059459",
+        "c7e4a9e3-03f8-405d-8946-3bf7f439bdf8"
+      ]
+    },
+    {
+      "teamIndex": 105,
+      "investigatorIds": [
+        "b7eff7dd-9927-48d7-81bb-c83fa3876b52",
+        "51e17a45-9a9c-42bd-b143-85b2e9d80da9",
+        "81f08f50-0638-46e2-b934-ebee490d6156",
+        "ed8bb0ee-a253-43d6-97d1-609a8f0a66bc"
+      ]
+    },
+    {
+      "teamIndex": 106,
+      "investigatorIds": [
+        "1ad78b83-0b95-4337-9ae8-d935bc85db9f",
+        "d6f5f836-8c1c-45df-8928-ba88b144c783",
+        "7a7fbdf9-1c3e-4154-9217-23b9b3093cf6",
+        "89abce48-bd3f-468d-a701-1aacb44639ca"
+      ]
+    },
+    {
+      "teamIndex": 107,
+      "investigatorIds": [
+        "c3e28cc4-4159-4d3b-af07-ba25a1f80e71",
+        "3ab864ab-018c-4954-8478-b6f7df583533",
+        "2b1186fd-fb10-4256-8516-8b0234c15c91",
+        "f86acf74-67eb-4b6c-b4a3-6c3003ccb255"
+      ]
+    },
+    {
+      "teamIndex": 108,
+      "investigatorIds": [
+        "0ec58173-0817-449d-abae-362c5315d71b",
+        "a319ba49-4834-40ae-80d8-52f6cd78289e",
+        "21c086bb-eced-446c-adb8-c9906eac204b",
+        "4e4ecd62-82cf-4596-8f6a-8e642f8a532b"
+      ]
+    },
+    {
+      "teamIndex": 109,
+      "investigatorIds": [
+        "deee5da8-ce99-4394-919d-20abbd85672e",
+        "558d7aa6-8e18-4f46-bd4c-28e6d6a44423",
+        "8b196ce8-713e-41c3-9153-29ea9be55261",
+        "345f765b-d25a-44e8-945a-fee9467c0754"
+      ]
+    },
+    {
+      "teamIndex": 110,
+      "investigatorIds": [
+        "f6ddfe04-cd49-4775-99f2-5edc873e3799",
+        "054f6233-15b3-4781-9461-f09e02e50439",
+        "f643f0df-476e-4c6b-9b8f-985ace1dd920",
+        "36effa3a-5709-47fe-a710-8b6d436da2f5"
+      ]
+    },
+    {
+      "teamIndex": 111,
+      "investigatorIds": [
+        "1b1b746b-43f2-47dc-a064-33d370d42561",
+        "4a0990a4-bed1-4b96-b106-9026b62c7e5a",
+        "4ec9062e-417b-4048-a616-e5fb3af0f0a8",
+        "d87521eb-8301-4057-82d1-09ce17ac7bd5"
+      ]
+    },
+    {
+      "teamIndex": 112,
+      "investigatorIds": [
+        "77fb726a-7c12-4197-af19-12262588f475",
+        "fc825fc6-cce8-4957-96d0-7fc5c13b552b",
+        "35ec7398-8709-43a6-bd0c-ac7e8ed4e1d5",
+        "36effa3a-5709-47fe-a710-8b6d436da2f5"
+      ]
+    },
+    {
+      "teamIndex": 113,
+      "investigatorIds": [
+        "86f484fa-1fc2-45b3-9ffc-395403d8c8d0",
+        "b7eff7dd-9927-48d7-81bb-c83fa3876b52",
+        "610a0f3a-f6ce-43c4-bb00-ce4d756c7bd3",
+        "558635b5-595d-4886-a47c-c3c0433338e3"
+      ]
+    },
+    {
+      "teamIndex": 114,
+      "investigatorIds": [
+        "7854c8a2-c213-4333-aaaa-2ce53dea6515",
+        "2b1186fd-fb10-4256-8516-8b0234c15c91",
+        "1b1b746b-43f2-47dc-a064-33d370d42561",
+        "d6f5f836-8c1c-45df-8928-ba88b144c783"
+      ]
+    },
+    {
+      "teamIndex": 115,
+      "investigatorIds": [
+        "f6ddfe04-cd49-4775-99f2-5edc873e3799",
+        "f643f0df-476e-4c6b-9b8f-985ace1dd920",
+        "c7e4a9e3-03f8-405d-8946-3bf7f439bdf8",
+        "e87de55c-b57b-4c7c-9633-6a6a423e6f97"
+      ]
+    },
+    {
+      "teamIndex": 116,
+      "investigatorIds": [
+        "3ab864ab-018c-4954-8478-b6f7df583533",
+        "0de04630-f5e1-46b9-b030-3f096e933fd5",
+        "d87521eb-8301-4057-82d1-09ce17ac7bd5",
+        "f80323f5-afce-40f0-862d-3a3757059459"
+      ]
+    },
+    {
+      "teamIndex": 117,
+      "investigatorIds": [
+        "f86acf74-67eb-4b6c-b4a3-6c3003ccb255",
+        "8b196ce8-713e-41c3-9153-29ea9be55261",
+        "dd1431f4-9af7-436b-9cf4-44fff1192a1c",
+        "c1082207-a575-4ade-b0e9-cc110fbe6440"
+      ]
+    },
+    {
+      "teamIndex": 118,
+      "investigatorIds": [
+        "21c086bb-eced-446c-adb8-c9906eac204b",
+        "8dd8cfa7-93be-4048-825a-49127b9bffdb",
+        "69bfb5c4-a897-4a62-a7df-a81e244f7168",
+        "ed8bb0ee-a253-43d6-97d1-609a8f0a66bc"
+      ]
+    },
+    {
+      "teamIndex": 119,
+      "investigatorIds": [
+        "81f08f50-0638-46e2-b934-ebee490d6156",
+        "c353744f-8b6e-4b7b-bcb4-d3292dcac0af",
+        "a6568fc1-0ec1-48c6-976a-617f81435f3b",
+        "aa11394c-1052-44ed-83c8-79d756bd89a7"
+      ]
+    },
+    {
+      "teamIndex": 120,
+      "investigatorIds": [
+        "14045d00-65e7-402a-b5c6-d2d019f6ba99",
+        "320d1882-a35d-4d45-b656-428947f7e32c",
+        "3a697c2a-2a5b-4291-98fc-08bb62a24ea6",
+        "ca72d023-be8d-460d-989f-d949dc440fc1"
+      ]
+    },
+    {
+      "teamIndex": 121,
+      "investigatorIds": [
+        "9005da0d-c384-47c1-bbeb-85c6ca3d1819",
+        "4a0990a4-bed1-4b96-b106-9026b62c7e5a",
+        "784a4d83-e16b-4879-aafb-502a3d03d0e8",
+        "df3448a4-994b-4a84-8206-7ee5ebc93518"
+      ]
+    },
+    {
+      "teamIndex": 122,
+      "investigatorIds": [
+        "7a7fbdf9-1c3e-4154-9217-23b9b3093cf6",
+        "4b0de2b5-d2f6-455b-9dd8-7795f30243a1",
+        "4e4ecd62-82cf-4596-8f6a-8e642f8a532b",
+        "0ec58173-0817-449d-abae-362c5315d71b"
+      ]
+    },
+    {
+      "teamIndex": 123,
+      "investigatorIds": [
+        "ce1310dd-9662-48a7-a8b9-171e793ab494",
+        "558d7aa6-8e18-4f46-bd4c-28e6d6a44423",
+        "d5d06cf0-45f9-4d9d-8c34-9b1787fd9e5d",
+        "89abce48-bd3f-468d-a701-1aacb44639ca"
+      ]
+    },
+    {
+      "teamIndex": 124,
+      "investigatorIds": [
+        "1ad78b83-0b95-4337-9ae8-d935bc85db9f",
+        "345f765b-d25a-44e8-945a-fee9467c0754",
+        "deee5da8-ce99-4394-919d-20abbd85672e",
+        "4ec9062e-417b-4048-a616-e5fb3af0f0a8"
+      ]
+    },
+    {
+      "teamIndex": 125,
+      "investigatorIds": [
+        "8bde0cef-1701-449d-9ab1-be48f65ea6ac",
+        "58d0e967-dede-4655-a39b-b981ced9927f",
+        "c3e28cc4-4159-4d3b-af07-ba25a1f80e71",
+        "054f6233-15b3-4781-9461-f09e02e50439"
+      ]
+    },
+    {
+      "teamIndex": 126,
+      "investigatorIds": [
+        "80699b97-f5b0-49af-93ad-1d120495adc7",
+        "9c26824f-9ac4-4d62-9c86-645929a0bb62",
+        "a319ba49-4834-40ae-80d8-52f6cd78289e",
+        "51e17a45-9a9c-42bd-b143-85b2e9d80da9"
+      ]
+    },
+    {
+      "teamIndex": 127,
+      "investigatorIds": [
+        "aff9c51a-5c25-4b07-af9d-a1bea61178e1",
+        "b2019b43-b190-4b92-ab3e-c800e956667e",
+        "6a294126-6531-4501-a48d-70a9ae5f5053",
+        "f5b77be9-6eee-4cc5-b95a-f63f279eed0f"
+      ]
+    }
+  ],
+  "appearanceCounts": {
+    "054f6233-15b3-4781-9461-f09e02e50439": 8,
+    "0de04630-f5e1-46b9-b030-3f096e933fd5": 8,
+    "0ec58173-0817-449d-abae-362c5315d71b": 8,
+    "14045d00-65e7-402a-b5c6-d2d019f6ba99": 8,
+    "1ad78b83-0b95-4337-9ae8-d935bc85db9f": 8,
+    "1b1b746b-43f2-47dc-a064-33d370d42561": 8,
+    "21c086bb-eced-446c-adb8-c9906eac204b": 8,
+    "2b1186fd-fb10-4256-8516-8b0234c15c91": 8,
+    "320d1882-a35d-4d45-b656-428947f7e32c": 8,
+    "345f765b-d25a-44e8-945a-fee9467c0754": 8,
+    "35ec7398-8709-43a6-bd0c-ac7e8ed4e1d5": 8,
+    "36effa3a-5709-47fe-a710-8b6d436da2f5": 8,
+    "3a697c2a-2a5b-4291-98fc-08bb62a24ea6": 8,
+    "3ab864ab-018c-4954-8478-b6f7df583533": 8,
+    "4a0990a4-bed1-4b96-b106-9026b62c7e5a": 8,
+    "4b0de2b5-d2f6-455b-9dd8-7795f30243a1": 8,
+    "4e4ecd62-82cf-4596-8f6a-8e642f8a532b": 8,
+    "4ec9062e-417b-4048-a616-e5fb3af0f0a8": 8,
+    "51e17a45-9a9c-42bd-b143-85b2e9d80da9": 8,
+    "558635b5-595d-4886-a47c-c3c0433338e3": 8,
+    "558d7aa6-8e18-4f46-bd4c-28e6d6a44423": 8,
+    "58d0e967-dede-4655-a39b-b981ced9927f": 8,
+    "610a0f3a-f6ce-43c4-bb00-ce4d756c7bd3": 8,
+    "69bfb5c4-a897-4a62-a7df-a81e244f7168": 8,
+    "6a294126-6531-4501-a48d-70a9ae5f5053": 8,
+    "77fb726a-7c12-4197-af19-12262588f475": 8,
+    "784a4d83-e16b-4879-aafb-502a3d03d0e8": 8,
+    "7854c8a2-c213-4333-aaaa-2ce53dea6515": 8,
+    "7a7fbdf9-1c3e-4154-9217-23b9b3093cf6": 8,
+    "80699b97-f5b0-49af-93ad-1d120495adc7": 8,
+    "81f08f50-0638-46e2-b934-ebee490d6156": 8,
+    "86f484fa-1fc2-45b3-9ffc-395403d8c8d0": 8,
+    "89abce48-bd3f-468d-a701-1aacb44639ca": 8,
+    "8b196ce8-713e-41c3-9153-29ea9be55261": 8,
+    "8bde0cef-1701-449d-9ab1-be48f65ea6ac": 8,
+    "8dd8cfa7-93be-4048-825a-49127b9bffdb": 8,
+    "9005da0d-c384-47c1-bbeb-85c6ca3d1819": 8,
+    "9c26824f-9ac4-4d62-9c86-645929a0bb62": 8,
+    "a319ba49-4834-40ae-80d8-52f6cd78289e": 8,
+    "a6568fc1-0ec1-48c6-976a-617f81435f3b": 8,
+    "aa11394c-1052-44ed-83c8-79d756bd89a7": 8,
+    "aff9c51a-5c25-4b07-af9d-a1bea61178e1": 8,
+    "b2019b43-b190-4b92-ab3e-c800e956667e": 8,
+    "b7eff7dd-9927-48d7-81bb-c83fa3876b52": 8,
+    "c1082207-a575-4ade-b0e9-cc110fbe6440": 8,
+    "c353744f-8b6e-4b7b-bcb4-d3292dcac0af": 8,
+    "c3e28cc4-4159-4d3b-af07-ba25a1f80e71": 8,
+    "c7e4a9e3-03f8-405d-8946-3bf7f439bdf8": 8,
+    "ca72d023-be8d-460d-989f-d949dc440fc1": 8,
+    "ce1310dd-9662-48a7-a8b9-171e793ab494": 8,
+    "d5d06cf0-45f9-4d9d-8c34-9b1787fd9e5d": 8,
+    "d6f5f836-8c1c-45df-8928-ba88b144c783": 8,
+    "d87521eb-8301-4057-82d1-09ce17ac7bd5": 8,
+    "dd1431f4-9af7-436b-9cf4-44fff1192a1c": 8,
+    "deee5da8-ce99-4394-919d-20abbd85672e": 8,
+    "df3448a4-994b-4a84-8206-7ee5ebc93518": 8,
+    "e87de55c-b57b-4c7c-9633-6a6a423e6f97": 8,
+    "ed8bb0ee-a253-43d6-97d1-609a8f0a66bc": 8,
+    "f5b77be9-6eee-4cc5-b95a-f63f279eed0f": 8,
+    "f643f0df-476e-4c6b-9b8f-985ace1dd920": 8,
+    "f6ddfe04-cd49-4775-99f2-5edc873e3799": 8,
+    "f80323f5-afce-40f0-862d-3a3757059459": 8,
+    "f86acf74-67eb-4b6c-b4a3-6c3003ccb255": 8,
+    "fc825fc6-cce8-4957-96d0-7fc5c13b552b": 8
+  }
+}

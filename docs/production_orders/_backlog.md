@@ -16,3 +16,8 @@
 - MOD-09 鍛造:**無 driver**
 
 登記:2026-07-02(Codex grep 盤點 + Uria 指示記錄)
+
+## MOD-09 進度更新(26070601)
+- 生產線已建:`scripts/mod-agent-local/forge-content/`(master_forge.md + run-forge-batch.mjs,含四層閘)——backlog「無 driver」狀態解除。
+- **初版內容已入庫(Uria 放行)**:素材 40/40 具名(fish/insect/mineral/wood 各十級)+ 配方 12 個(手續費標 draft 待裁);總成本 $0.14。
+- 未產:怪物類素材(綁怪物家族,隨 MOD-03)、臨時卡配方(需產卡片本體,走卡片線)。配方 unlock_ref 為設計占位,M4 鍛造引擎實裝時對表。

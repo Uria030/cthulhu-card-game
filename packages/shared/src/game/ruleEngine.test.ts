@@ -646,6 +646,33 @@ test('play_card:事件卡結算範圍傷害後進棄牌堆', () => {
   assertEq(r.newState?.investigator?.discardPile.includes('evt'), true);
 });
 
+test('play_card:鼓舞士氣治療同地點全員並抽牌', () => {
+  const investigator = makeInv({ hand: ['morale'], deck: ['drawn'], resources: 3, san: 4, sanMax: 9 });
+  const ally = makeInv({ investigatorId: 'ally', san: 3, sanMax: 9, currentLocationId: 'loc-a' });
+  const far = makeInv({ investigatorId: 'far', san: 3, sanMax: 9, currentLocationId: 'loc-b' });
+  const ctx: RuleContext = {
+    scenario: makeScenario(['loc-a', 'loc-b']),
+    investigator,
+    turn: makeTurn(),
+    investigators: { [investigator.investigatorId]: investigator, ally, far },
+    cardLookup: {
+      morale: {
+        name_zh: '鼓舞士氣', card_type: 'event', cost: 1,
+        effects: [
+          { trigger_type: 'action', effect_code: 'heal_san_at_location', effect_params: { amount: 2 } },
+          { trigger_type: 'action', effect_code: 'draw_card', effect_params: { amount: 1 } },
+        ],
+      },
+    },
+  };
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'morale' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator.san, 6);
+  assertEq(r.newState?.investigator.hand.includes('drawn'), true);
+  assertEq(r.newState?.updatedAllies?.ally.san, 5);
+  assertEq(r.newState?.updatedAllies?.far.san, 3, '不同地點不受治療');
+});
+
 test('武器攻擊:風格卡指定屬性 + 武器修正生效(§8)', () => {
   // roll 10 + 感知 3 + 武器修正 1 = 14 ≥ DC 14 → hit;傷害 2
   const ctx = makeCardCtx({ roll: 10, assets: ['wpn'], enemyDc: 14 });

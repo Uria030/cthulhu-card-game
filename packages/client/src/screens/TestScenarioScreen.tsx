@@ -61,6 +61,8 @@ import {
   sharedActionUseCount,
   commitValueFor,
   cardMaxUses,
+  discardForHandLimit,
+  HAND_LIMIT,
 } from '@cthulhu/shared';
 import type {
   OutcomeData,
@@ -110,6 +112,7 @@ import {
   CARD_LAB_STAGE_ID,
 } from '../game/cardLab';
 import { latestActionRows } from '../game/battleLogPreview';
+import { uniqueLocationConnections } from '../game/mapConnections';
 import { getSelectedSave } from '../game/selectedSave';
 import {
   ensureCampaignProgressForSetup,
@@ -120,6 +123,13 @@ import {
 import './TestScenarioScreen.css';
 
 type LocationArtKind = 'lab-entrance' | 'card-lab' | 'library' | 'docks' | 'downtown' | 'alley' | 'brick-wall' | 'haunt';
+
+const INVESTIGATOR_PAWNS = [
+  '/game-art/pawns/pawn-player.png',
+  '/game-art/pawns/pawn-companion-teal.png',
+  '/game-art/pawns/pawn-companion-gold.png',
+  '/game-art/pawns/pawn-companion-violet.png',
+];
 
 export function locationArtKind(locationId: string, name?: string): LocationArtKind {
   const key = `${locationId} ${name ?? ''}`.toLowerCase();
@@ -412,13 +422,17 @@ interface PendingCommitWindow {
   candidates: Array<{ id: string; name: string; value: number; icons: string }>;
 }
 
-interface PendingAIStep {
-  lines: string[];
+interface PendingAIStep { lines: string[]; }
+
+type RoundTransitionStep = null | 'supply' | 'discard' | 'ready' | 'new_round';
+
+interface HandLimitSelection {
+  required: number;
+  selectedIds: string[];
 }
 
 // Phase2 B:AI 隊友計時器同時行動 — AI 起動與單一 action Log 的節奏分開控制。
 const AI_ACTION_INTERVAL_MS = 1100;
-const AI_ACTION_STEP_INTERVAL_MS = 950;
 
 // 檢定拍效果型別(擲骰/檢定);其餘效果歸結果拍
 const CHECK_EFFECT_TYPES = new Set(['roll_d20', 'fear_check', 'death_save', 'talisman_check']);
@@ -519,6 +533,14 @@ const PHASE_LABEL: Record<TurnPhase, string> = {
 };
 
 const PHASE_ORDER: TurnPhase[] = ['investigator', 'mythos', 'turn_end'];
+
+const CARD_TYPE_LABEL: Record<string, string> = {
+  asset: '資產',
+  event: '事件',
+  ally: '盟友',
+  skill: '技能',
+  weakness: '弱點',
+};
 
 type ModalType = null | 'keeper' | 'act' | 'team';
 type PanelType = null | 'hand' | 'bag';
@@ -700,6 +722,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // 本回合玩家是否已選短休息(放棄行動;每回合開頭重置)
   const [playerShortRested, setPlayerShortRested] = useState(false);
   const [turnEndEncounterCheckpoint, setTurnEndEncounterCheckpoint] = useState<'pending' | 'player_done' | 'done'>('pending');
+  const [enemyResolutionComplete, setEnemyResolutionComplete] = useState(false);
+  const [keeperNoticeVisible, setKeeperNoticeVisible] = useState(false);
+  const [roundTransition, setRoundTransition] = useState<RoundTransitionStep>(null);
+  const [handLimitSelection, setHandLimitSelection] = useState<HandLimitSelection | null>(null);
   const [turnNumber, setTurnNumber] = useState(1);
   // 城主運行時狀態(行動點/冷卻/使用次數;教學關卡不用)
   const [keeperState, setKeeperState] = useState<KeeperState>(() => initKeeperState(setup.keeperProfile));
@@ -718,7 +744,6 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [zoomCard, setZoomCard] = useState<CardDisplay | null>(null);
   const [panel, setPanel] = useState<PanelType>(null);
   const [commitWindow, setCommitWindow] = useState<PendingCommitWindow | null>(null);
-  const [aiStepQueue, setAiStepQueue] = useState<PendingAIStep[]>([]);
   const [sharedActionAmount, setSharedActionAmount] = useState(1);
   // 戰役旗標(幕翻面/結局寫入)與結算
   const [flags, setFlags] = useState<Record<string, unknown>>({});
@@ -749,9 +774,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   }, [isCardLab]);
   const append = useCallback((s: string) => appendLines([s]), [appendLines]);
   const queueAISteps = useCallback((steps: PendingAIStep[]) => {
-    if (steps.length === 0) return;
-    setAiStepQueue((q) => [...q, ...steps]);
-  }, []);
+    appendLines(steps.flatMap((step) => step.lines));
+  }, [appendLines]);
 
   const copyCardLabLog = useCallback(async () => {
     const text = log.join('\n');
@@ -813,6 +837,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setActionPlay(null);
     setEncounterPlay(null);
     setDamageAlloc(null);
+    setEnemyResolutionComplete(false);
+    setKeeperNoticeVisible(false);
+    setRoundTransition(null);
+    setHandLimitSelection(null);
     setPanel(null);
     setModal(null);
     setLog([...setup.introLog, '[LAB][RESET] 實驗環境、牌組與訓練木人已還原。']);
@@ -1278,7 +1306,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // 連階段判斷都用 fresh 閉包(不靠落後的 ref)。單執行緒下無交錯,故無 lost update。
   const aiHasUnacted = aiMembers.some((ai) =>
     !!ai && !ai.dead && !ai.permanentlyDead && !isDowned(ai) && !aiActedThisTurn.includes(ai.investigatorId));
-  const aiPaused = !!(setup.tutorial || phase !== 'investigator' || outcome || actionPlay || encounterPlay || damageAlloc || aiStepQueue.length > 0);
+  const aiPaused = !!(setup.tutorial || phase !== 'investigator' || outcome || actionPlay || encounterPlay || damageAlloc);
   // 計時器:只發訊號,不碰遊戲狀態。aiActedThisTurn 入 deps → 每位 AI 行動完都重新武裝下一個計時器
   // (否則 aiHasUnacted 仍為 true 時 deps 不變,序列會在第一位之後停住)。
   useEffect(() => {
@@ -1305,16 +1333,6 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     // 僅依 aiTick 觸發;其餘狀態刻意讀 fresh 閉包(這正是杜絕舊值寫入的關鍵)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiTick]);
-
-  useEffect(() => {
-    if (aiStepQueue.length === 0) return;
-    const head = aiStepQueue[0];
-    const id = setTimeout(() => {
-      appendLines(head.lines);
-      setAiStepQueue((q) => q.slice(1));
-    }, AI_ACTION_STEP_INTERVAL_MS);
-    return () => clearTimeout(id);
-  }, [aiStepQueue, appendLines]);
 
   // 訂閱訊息匯流排
   useEffect(() => {
@@ -1661,6 +1679,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
    * ① 附著卡強制結算 ② 城主選用神話卡(行動點預算+戲劇曲線)③ 怪物啟動 ④ 進度/全滅檢查
    */
   const enterMythosPhase = () => {
+    if (phase !== 'investigator' || investigator.actionPoints > 0) return;
+    setEnemyResolutionComplete(false);
+    setKeeperNoticeVisible(true);
     let sc = scenario;
     let inv = investigator;
 
@@ -1686,6 +1707,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     if (setup.tutorial) {
       setKeeperEnergy((e) => Math.max(0, e - 2));
       setTimeout(() => append('[城主行動] 黑暗從牆角滲出。'), 1200);
+      setEnemyResolutionComplete(true);
       return;
     }
 
@@ -1816,8 +1838,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     next.logs.forEach((l) => append(l)); // 神話階段無玩家演出 → 進度敘事即時進 Log
     if (next.outcome) setOutcome(next.outcome);
     if (!next.outcome) triggerEncounter(pendingKeeperEncounter);
+    setEnemyResolutionComplete(true);
   };
-  const endTurn = () => {
+  const beginTurnEnd = () => {
     if (!setup.tutorial && turnEndEncounterCheckpoint !== 'done') {
       if (turnEndEncounterCheckpoint === 'pending') {
         setTurnEndEncounterCheckpoint('player_done');
@@ -1867,55 +1890,126 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       if (next.outcome) { checkpointVitals(next.inv, next.aiArr); setOutcome(next.outcome); return; }
     }
 
-    // 敵人階段 → 回合結束 → 下一回合的調查員階段(三階段:advance ×2)
+    // 敵人階段完成後只進入回合結束；補給、手牌上限與轉正提示完成後才開下一回合。
     turnLoopRef.current?.advance();
-    turnLoopRef.current?.advance();
-    setPlayerShortRested(false); // 新回合開頭重置短休息決定
-    setTurnEndEncounterCheckpoint('pending');
-    setAiActedThisTurn([]); // 新回合:AI 隊友計時器重新開放(同時行動)
-    // 回合結束階段(ch2 §2.4):每人抽 1 卡 + 1 資源 + 手牌上限 8(教學關卡跳過)
+    setEnemyResolutionComplete(false);
     if (!setup.tutorial) {
-      // 六項:回合結束補給(資源/抽卡)— 純預算一次供統計(runTurnEndUpkeep 為純函式 → 與下方 updater 同值),不動既有流程
-      tallyActor(investigator.investigatorId, runTurnEndUpkeep(investigator).effects);
-      for (const ai of aiMembers) if (ai) tallyActor(ai.investigatorId, runTurnEndUpkeep(ai).effects);
-      setInvestigator((i) => {
-        const up = runTurnEndUpkeep(i);
-        for (const eff of up.effects) append('[回合結束] ' + describeEffect(eff, locMeta));
-        let next = { ...up.investigator, actionPoints: 3 };
-        // 新回合開始:狀態結算(燃燒/再生/加速,§6;燃燒可能打到瀕死)
-        const start = runTurnStartUpkeep(next);
-        for (const eff of start.effects) append('[回合開始] ' + describeEffect(eff, locMeta));
-        next = syncDownedState(start.investigator).investigator;
-        // 新回合調查員階段開頭:瀕死者做瀕死檢定取代行動(§9.3)
-        if (isDowned(next)) {
-          const save = runDeathSave(next);
-          next = { ...save.investigator, actionPoints: 0 };
-          for (const eff of save.effects) append('[瀕死] ' + describeEffect(eff, locMeta));
-        }
-        return next;
-      });
-      // AI 隊友:回合結束補給 + 回合開始狀態 + 瀕死檢定(與玩家同一時點,§9.3 時序一致)
-      setAiMembers((ms) => ms.map((ai, idx) => {
+      const playerUpkeep = runTurnEndUpkeep(investigator, { deferHandLimit: true });
+      tallyActor(investigator.investigatorId, playerUpkeep.effects);
+      setInvestigator(playerUpkeep.investigator);
+      for (const eff of playerUpkeep.effects.filter((effect) => effect.type !== 'hand_limit_required')) {
+        append('[回合結束] ' + describeEffect(eff, locMeta));
+      }
+      setAiMembers(aiMembers.map((ai, idx) => {
         const aiName = setup.aiMembers[idx]?.profile.name_zh ?? 'AI';
-        let next = { ...runTurnEndUpkeep(ai).investigator, actionPoints: 3 };
-        const start = runTurnStartUpkeep(next);
-        for (const eff of start.effects) append('[回合開始] ' + describeEffect(eff, locMeta).split('你').join(aiName));
-        next = syncDownedState(start.investigator).investigator;
-        if (isDowned(next)) {
-          const save = runDeathSave(next);
-          next = { ...save.investigator, actionPoints: 0 };
-          for (const eff of save.effects) append(`[瀕死] ` + describeEffect(eff, locMeta).split('你').join(aiName));
+        const upkeep = runTurnEndUpkeep(ai);
+        tallyActor(ai.investigatorId, upkeep.effects);
+        for (const eff of upkeep.effects) {
+          append(`[回合結束][${aiName}] ` + describeEffect(eff, locMeta).split('你').join(aiName));
         }
-        return next;
+        return upkeep.investigator;
       }));
     } else {
-      setInvestigator((i) => ({ ...i, actionPoints: 3 }));
-      setAiMembers((ms) => ms.map((ai) => ({ ...ai, actionPoints: 3 })));
+      setInvestigator(investigator);
     }
-    // 場景回合數同步(戲劇曲線/行為腳本 turn_count 觸發都依賴它)
-    setScenario((s) => ({ ...s, turnNumber: s.turnNumber + 1 }));
-    setKeeperEnergy((e) => Math.min(12, e + 1));
+    setRoundTransition('supply');
   };
+
+  const startNextRound = useCallback(() => {
+    turnLoopRef.current?.advance();
+    setPlayerShortRested(false);
+    setTurnEndEncounterCheckpoint('pending');
+    setAiActedThisTurn([]);
+    setInvestigator((current) => {
+      let next = { ...current, actionPoints: 3 };
+      const start = runTurnStartUpkeep(next);
+      for (const eff of start.effects) append('[回合開始] ' + describeEffect(eff, locMeta));
+      next = syncDownedState(start.investigator).investigator;
+      if (isDowned(next)) {
+        const save = runDeathSave(next);
+        next = { ...save.investigator, actionPoints: 0 };
+        for (const eff of save.effects) append('[瀕死] ' + describeEffect(eff, locMeta));
+      }
+      return next;
+    });
+    setAiMembers((members) => members.map((ai, idx) => {
+      const aiName = setup.aiMembers[idx]?.profile.name_zh ?? 'AI';
+      let next = { ...ai, actionPoints: 3 };
+      const start = runTurnStartUpkeep(next);
+      for (const eff of start.effects) append(`[回合開始][${aiName}] ` + describeEffect(eff, locMeta).split('你').join(aiName));
+      next = syncDownedState(start.investigator).investigator;
+      if (isDowned(next)) {
+        const save = runDeathSave(next);
+        next = { ...save.investigator, actionPoints: 0 };
+        for (const eff of save.effects) append(`[瀕死][${aiName}] ` + describeEffect(eff, locMeta).split('你').join(aiName));
+      }
+      return next;
+    }));
+    setScenario((current) => ({ ...current, turnNumber: current.turnNumber + 1 }));
+    setKeeperEnergy((energy) => Math.min(12, energy + 1));
+    setRoundTransition('new_round');
+  }, [append, locMeta, setup.aiMembers]);
+
+  const toggleHandLimitCard = (cardId: string) => {
+    setHandLimitSelection((selection) => selection
+      ? {
+          ...selection,
+          selectedIds: selection.selectedIds.includes(cardId)
+            ? selection.selectedIds.filter((id) => id !== cardId)
+            : selection.selectedIds.length < selection.required
+              ? [...selection.selectedIds, cardId]
+              : selection.selectedIds,
+        }
+      : selection);
+  };
+
+  const confirmHandLimitDiscard = () => {
+    if (!handLimitSelection) return;
+    const result = discardForHandLimit(investigator, handLimitSelection.selectedIds);
+    if (!result.ok) return;
+    setInvestigator(result.investigator);
+    if (result.effect) append('[回合結束] ' + describeEffect(result.effect, locMeta));
+    setHandLimitSelection(null);
+    setPanel(null);
+    setRoundTransition('ready');
+  };
+
+  useEffect(() => {
+    if (keeperNoticeVisible) {
+      const id = window.setTimeout(() => setKeeperNoticeVisible(false), 1_500);
+      return () => window.clearTimeout(id);
+    }
+  }, [keeperNoticeVisible]);
+
+  useEffect(() => {
+    if (phase !== 'mythos' || !enemyResolutionComplete || outcome || encounterPlay || damageAlloc || actionPlay || roundTransition) return;
+    const id = window.setTimeout(beginTurnEnd, 0);
+    return () => window.clearTimeout(id);
+  });
+
+  useEffect(() => {
+    if (roundTransition === 'supply') {
+      const id = window.setTimeout(() => {
+        const required = Math.max(0, investigator.hand.length - HAND_LIMIT);
+        if (required > 0) {
+          setHandLimitSelection({ required, selectedIds: [] });
+          setPanel('hand');
+          setRoundTransition('discard');
+        } else {
+          setRoundTransition('ready');
+        }
+      }, 1_500);
+      return () => window.clearTimeout(id);
+    }
+    if (roundTransition === 'ready') {
+      const id = window.setTimeout(startNextRound, 1_500);
+      return () => window.clearTimeout(id);
+    }
+    if (roundTransition === 'new_round') {
+      const id = window.setTimeout(() => setRoundTransition(null), 1_500);
+      return () => window.clearTimeout(id);
+    }
+  }, [investigator.hand.length, roundTransition, startNextRound]);
 
   // ─── 浮層互動 ──────────────────
   const closeAllOverlays = useCallback(() => {
@@ -2095,6 +2189,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // 地圖 grid:依地點數動態決定列數(<=3 用 1 行,4-9 用 3×3,>9 用 4×N)
   const locCount = scenario.locations.length;
   const gridCols = locCount <= 3 ? locCount : (locCount <= 9 ? 3 : 4);
+  const gridRows = Math.max(1, Math.ceil(locCount / Math.max(1, gridCols)));
+  const mapConnections = uniqueLocationConnections(scenario.locations);
+  const locationIndex = new Map(scenario.locations.map((location, index) => [location.locationDefinitionId, index]));
 
   // 議程 / 幕:依進度索引取當前卡(超出 = 最後一張)
   const agendaIdx = Math.min(scenario.agendaIndex ?? 0, Math.max(0, setup.agendaCards.length - 1));
@@ -2218,6 +2315,22 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                   transform: `scale(${zoom})`,
                 }}
               >
+                <svg className="map-connections" viewBox={`0 0 ${gridCols} ${gridRows}`} preserveAspectRatio="none" aria-hidden>
+                  {mapConnections.map((connection) => {
+                    const fromIndex = locationIndex.get(connection.from) ?? 0;
+                    const toIndex = locationIndex.get(connection.to) ?? 0;
+                    return (
+                      <line
+                        key={`${connection.from}-${connection.to}`}
+                        className={connection.blocked ? 'blocked' : ''}
+                        x1={(fromIndex % gridCols) + 0.5}
+                        y1={Math.floor(fromIndex / gridCols) + 0.5}
+                        x2={(toIndex % gridCols) + 0.5}
+                        y2={Math.floor(toIndex / gridCols) + 0.5}
+                      />
+                    );
+                  })}
+                </svg>
                 {scenario.locations.map((loc) => {
                   const meta = locMeta[loc.locationDefinitionId];
                   const artKind = locationArtKind(loc.locationDefinitionId, meta?.name);
@@ -2231,17 +2344,17 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                       className={'location-card' + (isCurr ? ' current-loc' : '') + (unlocked ? '' : ' locked')}
                       onClick={() => onLocationClick(loc.locationDefinitionId)}
                     >
-                      {isCurr && <div className="player-token">P1</div>}
+                      {isCurr && <img className="investigator-pawn pawn-player" src={INVESTIGATOR_PAWNS[0]} alt="玩家棋子" />}
                       {aiMembers.map((ai, aiIdx) =>
                         !ai.dead && !ai.permanentlyDead && ai.currentLocationId === loc.locationDefinitionId ? (
-                          <div
+                          <img
                             key={ai.investigatorId}
-                            className="player-token ai-token"
-                            style={{ left: -12 + aiIdx * 26, opacity: isDowned(ai) ? 0.45 : 1 }}
+                            className="investigator-pawn pawn-companion"
+                            src={INVESTIGATOR_PAWNS[aiIdx + 1] ?? INVESTIGATOR_PAWNS[1]}
+                            style={{ left: -20 + aiIdx * 38, opacity: isDowned(ai) ? 0.45 : 1 }}
                             title={(setup.aiMembers[aiIdx]?.profile.name_zh ?? '') + (isDowned(ai) ? '(瀕死)' : '')}
-                          >
-                            {isDowned(ai) ? '倒' : (setup.aiMembers[aiIdx]?.profile.name_zh ?? 'A').slice(0, 1)}
-                          </div>
+                            alt={`${setup.aiMembers[aiIdx]?.profile.name_zh ?? '隊友'}棋子`}
+                          />
                         ) : null,
                       )}
                       {scenario.enemies
@@ -2374,7 +2487,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               <button onClick={enterMythosPhase}>結束調查員階段 →</button>
             </div>
           )}
-          {phase === 'investigator' && !playerShortRested && !isDowned(investigator) && !investigator.dead && (
+          {phase === 'investigator' && investigator.actionPoints > 0 && !playerShortRested && !isDowned(investigator) && !investigator.dead && (
             <div className="phase-buttons">
               {!setup.tutorial && investigator.actionPoints === 3 && (
                 <button onClick={takePlayerShortRest} title="放棄本回合行動,將棄牌堆洗回牌庫">💤 短休息</button>
@@ -2489,17 +2602,63 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               {enemyHere && !enemyHere.engagedWith.includes(investigator.investigatorId) && (
                 <button onClick={() => submitIntent('taunt', { enemyInstanceId: enemyHere.instanceId })}>🗯 嘲諷</button>
               )}
+            </div>
+          )}
+          {phase === 'investigator' && investigator.actionPoints === 0 && !playerShortRested && !isDowned(investigator) && !investigator.dead && (
+            <div className="phase-buttons phase-buttons-end-only">
               <button onClick={enterMythosPhase}>結束調查員階段 →</button>
             </div>
           )}
           {phase === 'mythos' && (
             <div className="phase-buttons">
-              <button onClick={endTurn}>結束敵人階段 → 下回合</button>
+              <span className="commit-chip">敵人與城主正在結算...</span>
             </div>
           )}
         </div>
 
       </div>
+
+      {(keeperNoticeVisible || roundTransition === 'supply' || roundTransition === 'ready' || roundTransition === 'new_round') && (
+        <div className="phase-notice" role="status" aria-live="assertive">
+          <div className="phase-notice-mark" aria-hidden />
+          <strong>
+            {keeperNoticeVisible
+              ? '有神秘的事情發生了！'
+              : roundTransition === 'supply'
+                ? '抽一張牌，獲得一個資源'
+                : roundTransition === 'ready'
+                  ? '所有已橫置的卡片恢復可使用'
+                  : '新的回合開始了！'}
+          </strong>
+        </div>
+      )}
+
+      {handLimitSelection && (
+        <div className="modal-backdrop active hand-limit-backdrop">
+          <section className="modal-frame hand-limit-modal" aria-label="選擇棄牌">
+            <div className="modal-title">手牌超過上限</div>
+            <p>目前 {investigator.hand.length} 張，請選擇 {handLimitSelection.required} 張棄掉。</p>
+            <div className="hand-limit-selected" aria-label="待棄牌">
+              {handLimitSelection.selectedIds.length === 0 && <span>點選下方卡片，選中的牌會移到這裡。</span>}
+              {handLimitSelection.selectedIds.map((id) => {
+                const card = cardMeta[id];
+                return <button key={id} onClick={() => toggleHandLimitCard(id)}><strong>{card?.name ?? id}</strong><small>取消選擇</small></button>;
+              })}
+            </div>
+            <div className="hand-limit-grid">
+              {handCards.filter((card) => !handLimitSelection.selectedIds.includes(card.id)).map((card) => (
+                <button key={card.id} onClick={() => toggleHandLimitCard(card.id)}>
+                  <span>{card.cost}</span><strong>{card.name}</strong><small>{card.desc || '查看卡片內容'}</small>
+                </button>
+              ))}
+            </div>
+            <div className="action-row">
+              <span>已選 {handLimitSelection.selectedIds.length}/{handLimitSelection.required}</span>
+              <button disabled={handLimitSelection.selectedIds.length !== handLimitSelection.required} onClick={confirmHandLimitDiscard}>確認棄牌</button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* === 地點 bar(從上滑下,5 秒 auto-close)=== */}
       {locationBarId && (() => {
@@ -2581,12 +2740,13 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         return (
           <div className="modal-backdrop active" onClick={(e) => { if (e.target === e.currentTarget) setZoomCard(null); }}>
             <div className="modal-frame card-detail-modal">
+              <button className="card-detail-close" aria-label="關閉卡片" title="關閉" onClick={() => setZoomCard(null)}>×</button>
               <div className={'card-detail rarity-' + zoomCard.rarity}>
                 <div className="card-detail-head">
                   <div>
                     <div className="card-detail-name">{zoomCard.name}</div>
                     <div className="card-detail-meta">
-                      <span>{d?.card_type ?? '未知類型'}</span>
+                      <span>{CARD_TYPE_LABEL[String(d?.card_type ?? '')] ?? '未知類型'}</span>
                       <span>{d?.faction_code ?? d?.faction ?? '無陣營'}</span>
                       {subtypeText && <span>{subtypeText}</span>}
                     </div>
@@ -2636,7 +2796,6 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                     ♻ 消耗
                   </button>
                 )}
-                <button onClick={() => setZoomCard(null)}>✕ 關閉</button>
               </div>
             </div>
           </div>

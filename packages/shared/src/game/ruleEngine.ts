@@ -1262,10 +1262,38 @@ function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOu
   if (data.card_type === 'event') {
     // 事件卡:結算 action 效果 → 棄牌堆
     const actionFx = (data.effects ?? []).filter((f) => f.trigger_type === 'action');
-    const exec = executeCardEffects(actionFx, inv, ctx.scenario, ctx.cardLookup ?? {});
+    const partyFx = actionFx.filter((f) => f.effect_code === 'heal_san_at_location');
+    const exec = executeCardEffects(
+      actionFx.filter((f) => f.effect_code !== 'heal_san_at_location'),
+      inv,
+      ctx.scenario,
+      ctx.cardLookup ?? {},
+    );
     inv = { ...exec.investigator, discardPile: [...exec.investigator.discardPile, cardId] };
     let sc = exec.scenario;
     const effects = [...baseEffects, ...exec.effects];
+    const partyUpdatedAllies: Record<string, InvestigatorState> = {};
+    for (const effect of partyFx) {
+      const amount = Math.max(0, Number(effect.effect_params?.amount ?? 0));
+      const actorHealed = Math.min(inv.sanMax, inv.san + amount) - inv.san;
+      inv = { ...inv, san: inv.san + actorHealed };
+      effects.push({
+        type: 'heal_san',
+        params: { amount: actorHealed, narrative: '同伴的鼓舞讓你重新穩住心神。' },
+        targetId: inv.investigatorId,
+      });
+      for (const ally of Object.values(ctx.investigators ?? {})) {
+        if (ally.investigatorId === inv.investigatorId) continue;
+        if (ally.currentLocationId !== inv.currentLocationId || ally.permanentlyDead) continue;
+        const healed = Math.min(ally.sanMax, ally.san + amount) - ally.san;
+        partyUpdatedAllies[ally.investigatorId] = { ...ally, san: ally.san + healed };
+        effects.push({
+          type: 'heal_san',
+          params: { amount: healed, narrative: '同地點的調查員受到鼓舞。' },
+          targetId: ally.investigatorId,
+        });
+      }
+    }
     if (exec.unsupported.length > 0) {
       effects.push({ type: 'effect_unsupported', params: { codes: exec.unsupported } });
     }
@@ -1274,7 +1302,7 @@ function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOu
     inv = post.investigator;
     effects.push(...post.effects);
     sc = post.scenario;
-    const cardKillAllies = post.updatedAllies;
+    const cardKillAllies = { ...post.updatedAllies, ...partyUpdatedAllies };
     // 施法軌(ch2 §8.4):arcane 事件結算後抽混沌袋定副作用(法術一定命中,代價在袋裡)
     if (String(data.combat_style ?? '') === 'arcane') {
       const targetDef = sc.enemies.find((e) => e.locationId === inv.currentLocationId)?.enemyDefinitionId ?? null;

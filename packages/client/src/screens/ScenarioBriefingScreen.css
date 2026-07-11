@@ -104,13 +104,14 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  font-family: 'Ma Shan Zheng', cursive;
-  font-size: 19px;
-  line-height: 1.9;
+  font-family: 'Noto Serif TC', serif;
+  font-size: 18px;
+  line-height: 1.85;
+  font-weight: 500;
   color: var(--world-deep-walnut);
   text-align: justify;
   padding: 0 var(--sp-md);
-  font-style: italic;
+  font-style: normal;
   scrollbar-width: thin;
   scrollbar-color: var(--world-deep-walnut) transparent;
 }

@@ -1,6 +1,7 @@
 import type { CardLabManifest } from '../api';
 import { buildCardLabSetup, CARD_LAB_STAGE_ID } from './cardLab';
 import type { GameSetup } from './gameSetup';
+import { normaliseBootstrapCardData } from './cardDataAdapter';
 import { bootPreloadPlan } from './preloadPlan';
 
 type TestFn = () => void;
@@ -96,6 +97,20 @@ test('boot preload plan separates local shell assets and public server data', ()
   assertEq(plan.filter((task) => task.source === 'server').length, 2);
   assertEq(plan.some((task) => task.id === 'stages'), true);
   assertEq(plan.some((task) => task.id === 'investigators'), true);
+});
+
+test('legacy signature card fields become playable card data', () => {
+  const signature = normaliseBootstrapCardData({
+    play_effect: '你與同地點調查員各治療 2 點理智,然後抽 1 張卡。',
+    play_effect_code: [
+      { effect_code: 'heal_san_at_location', effect_params: { amount: 2 } },
+      { effect_code: 'draw_card', effect_params: { amount: 1 } },
+    ],
+    commit_icons: ['charisma', 'charisma'],
+  }, '鼓舞士氣', 'event', 1);
+  assertEq(signature.description_zh?.includes('治療 2 點理智'), true);
+  assertEq(signature.effects?.length, 2);
+  assertEq(signature.commit_icons?.charisma, 2);
 });
 
 let failed = 0;

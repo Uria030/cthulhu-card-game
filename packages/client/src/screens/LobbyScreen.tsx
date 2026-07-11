@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CalibrationProvider,
@@ -12,41 +11,36 @@ import {
 import '@cthulhu/calibration/styles';
 
 import { autoComposeParty } from '@cthulhu/shared';
-import type { CampaignProgress } from '@cthulhu/shared';
 import hotspotsJson from '../data/surfaces/study-room/hotspots.json';
 import {
-  clearPlayerToken,
-  createPlayerSave,
   fetchPlayerMe,
   fetchPlayInvestigators,
   getPlayerToken,
-  loginPlayer,
-  logoutPlayer,
-  retirePlayerSave,
 } from '../api';
-import type { PlayerMe, PlayerSave, PlayInvestigator } from '../api';
+import type { PlayInvestigator, PlayerSave } from '../api';
 import {
   getSelectedInvestigator,
   setSelectedInvestigator,
 } from '../game/selectedInvestigator';
-import { saveStoredCampaignProgressFor } from '../game/campaignProgressStorage';
-import { clearSelectedSave, getSelectedSave, setSelectedSave } from '../game/selectedSave';
+import { getSelectedSave } from '../game/selectedSave';
 import { setPartyTemplateIds } from '../game/selectedParty';
 import { displayNameFor } from '../game/displayName';
+import { playablePresetInvestigators } from '../game/investigatorRoster';
 import './LobbyScreen.css';
 
 const SURFACE = 'study-room';
-const SEAT_ORDER = ['seat.head', 'seat.front', 'seat.left', 'seat.right'];
-
-const ATTR_LABELS: Array<[keyof PlayInvestigator, string]> = [
-  ['attr_strength', '力量'],
-  ['attr_agility', '敏捷'],
-  ['attr_constitution', '體魄'],
-  ['attr_reflex', '反應'],
-  ['attr_intellect', '智識'],
-  ['attr_willpower', '意志'],
-  ['attr_perception', '感知'],
-  ['attr_charisma', '魅力'],
+const SEAT_ORDER = ['seat.left', 'seat.head', 'seat.right', 'seat.front'];
+const SEAT_ASSETS = [
+  '/game-art/lobby-seats/seat-player.png',
+  '/game-art/lobby-seats/seat-companion-head.png',
+  '/game-art/lobby-seats/seat-companion-right.png',
+  '/game-art/lobby-seats/seat-companion-front.png',
+];
+const SEAT_BOXES = [
+  { x: -92, y: -170, width: 184, height: 242 },
+  { x: -68, y: -120, width: 136, height: 170 },
+  { x: -72, y: -126, width: 144, height: 180 },
+  { x: -104, y: -184, width: 208, height: 270 },
 ];
 
 function hotspotCentroid(hs: HotspotData): { cx: number; cy: number } {
@@ -90,10 +84,6 @@ function HotspotLabel({ hs }: { hs: HotspotData }) {
   );
 }
 
-function factionKey(inv: PlayInvestigator): string {
-  return String(inv.faction_code || inv.mbti_code?.[0] || '?').toUpperCase();
-}
-
 function selectedFromSave(save: PlayerSave) {
   return {
     id: save.template_id,
@@ -105,62 +95,48 @@ function selectedFromSave(save: PlayerSave) {
   };
 }
 
-function progressCampaignId(save: PlayerSave): string | null {
-  const progress = save.campaign_progress as { campaignId?: unknown } | null;
-  return save.campaign_id ?? (typeof progress?.campaignId === 'string' ? progress.campaignId : null);
-}
-
 export function LobbyScreen() {
   const navigate = useNavigate();
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [candidates, setCandidates] = useState<PlayInvestigator[] | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [selected, setSelected] = useState(getSelectedInvestigator());
   const [partySeed, setPartySeed] = useState(0);
   const [authChecked, setAuthChecked] = useState(false);
-  const [playerMe, setPlayerMe] = useState<PlayerMe | null>(null);
-  const [loginName, setLoginName] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [loginBusy, setLoginBusy] = useState(false);
-  const [pendingSlot, setPendingSlot] = useState<number | null>(null);
-  const [saveBusy, setSaveBusy] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!playerMe || candidates !== null) return;
+    if (!authChecked || !selected || candidates !== null) return;
     fetchPlayInvestigators({ includeDraft: true })
-      .then(setCandidates)
+      .then((rows) => setCandidates(playablePresetInvestigators(rows)))
       .catch((e: unknown) => setPickerError(e instanceof Error ? e.message : String(e)));
-  }, [candidates, playerMe]);
+  }, [authChecked, candidates, selected]);
 
   useEffect(() => {
     let cancelled = false;
     if (!getPlayerToken()) {
-      clearSelectedSave();
-      setAuthChecked(true);
+      navigate('/saves', { replace: true });
       return;
     }
     fetchPlayerMe()
       .then((me) => {
         if (cancelled) return;
-        setPlayerMe(me);
         const selectedSaveId = getSelectedSave()?.id;
-        const active = me.saves.find((s) => s.status === 'active' && s.id === selectedSaveId)
-          ?? me.saves.find((s) => s.status === 'active')
-          ?? null;
-        if (active) selectSave(active, false);
+        const active = me.saves.find((s) => s.status === 'active' && s.id === selectedSaveId) ?? null;
+        if (!active) {
+          navigate('/saves', { replace: true });
+          return;
+        }
+        const sel = selectedFromSave(active);
+        setSelectedInvestigator(sel);
+        setSelected(sel);
       })
       .catch(() => {
-        if (!cancelled) {
-          clearPlayerToken();
-          clearSelectedSave();
-        }
+        if (!cancelled) navigate('/saves', { replace: true });
       })
       .finally(() => {
         if (!cancelled) setAuthChecked(true);
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [navigate]);
 
   const selectedCandidate = useMemo(
     () => candidates?.find((inv) => inv.id === selected?.id) ?? null,
@@ -175,114 +151,12 @@ export function LobbyScreen() {
   );
   const partyMembers = autoParty?.members ?? [];
 
-  const candidatesByFaction = useMemo(() => {
-    const groups = new Map<string, PlayInvestigator[]>();
-    for (const inv of candidates ?? []) {
-      const key = factionKey(inv);
-      groups.set(key, [...(groups.get(key) ?? []), inv]);
-    }
-    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [candidates]);
-
   useEffect(() => {
     if (partyMembers.length === 3) {
       setPartyTemplateIds(partyMembers.map((inv) => inv.id));
     }
   }, [partyMembers]);
 
-  const selectSave = (save: PlayerSave, goDeparture = false) => {
-    const sel = selectedFromSave(save);
-    setSelectedInvestigator(sel);
-    setSelected(sel);
-    setSelectedSave({
-      id: save.id,
-      slot: save.slot,
-      template_id: save.template_id,
-      campaign_id: save.campaign_id,
-    });
-    const campaignId = progressCampaignId(save);
-    if (campaignId && save.campaign_progress && Object.keys(save.campaign_progress).length > 0) {
-      saveStoredCampaignProgressFor(campaignId, save.template_id, save.campaign_progress as CampaignProgress);
-    }
-    setPartySeed(0);
-    if (goDeparture) navigate('/departure');
-  };
-
-  const pickInvestigator = async (inv: PlayInvestigator) => {
-    const sel = {
-      id: inv.id,
-      name_zh: inv.name_zh,
-      title_zh: inv.title_zh,
-      mbti_code: inv.mbti_code,
-      faction_code: inv.faction_code,
-      is_completed: inv.is_completed,
-    };
-    if (playerMe && pendingSlot != null) {
-      setSaveBusy(`create:${pendingSlot}`);
-      try {
-        const save = await createPlayerSave({ slot: pendingSlot, template_id: inv.id, campaign_progress: {} });
-        setPlayerMe({ ...playerMe, saves: [save, ...playerMe.saves] });
-        selectSave(save);
-        setPickerOpen(false);
-        setPendingSlot(null);
-      } catch (e) {
-        setPickerError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setSaveBusy(null);
-      }
-      return;
-    }
-    setSelectedInvestigator(sel);
-    setSelected(sel);
-    setPartySeed(0);
-    setPickerOpen(false);
-  };
-
-  const startNewSave = (slot: number) => {
-    setPendingSlot(slot);
-    setPickerError(null);
-    setPickerOpen(true);
-  };
-
-  const retireSave = async (save: PlayerSave) => {
-    if (!window.confirm(`確定讓第 ${save.slot} 格的「${displayNameFor(selectedFromSave(save))}」退休?`)) return;
-    setSaveBusy(`retire:${save.id}`);
-    try {
-      const me = await retirePlayerSave(save.id);
-      setPlayerMe(me);
-      if (getSelectedSave()?.id === save.id) {
-        clearSelectedSave();
-        setSelected(null);
-      }
-    } catch (e) {
-      setPickerError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaveBusy(null);
-    }
-  };
-
-  const submitLogin = async (e: FormEvent) => {
-    e.preventDefault();
-    setLoginBusy(true);
-    setLoginError(null);
-    try {
-      const me = await loginPlayer(loginName, loginPassword);
-      setPlayerMe(me);
-      const active = me.saves.find((s) => s.status === 'active') ?? null;
-      if (active) selectSave(active);
-    } catch (err) {
-      setLoginError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoginBusy(false);
-    }
-  };
-
-  const doLogout = async () => {
-    await logoutPlayer();
-    clearSelectedSave();
-    setPlayerMe(null);
-    setSelected(null);
-  };
 
   const { hotspots, viewBox } = useMemo(
     () =>
@@ -329,32 +203,6 @@ export function LobbyScreen() {
     );
   }
 
-  if (!playerMe) {
-    return (
-      <div className="lobby-root">
-        <form className="lobby-auth-panel" onSubmit={submitLogin}>
-          <div className="lobby-auth-title">調查員帳號</div>
-          <label>
-            <span>帳號或 Email</span>
-            <input value={loginName} onChange={(e) => setLoginName(e.target.value)} autoComplete="username" />
-          </label>
-          <label>
-            <span>密碼</span>
-            <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} autoComplete="current-password" />
-          </label>
-          {loginError && <div className="lobby-auth-error">{loginError}</div>}
-          <button type="submit" disabled={loginBusy || !loginName || !loginPassword}>
-            {loginBusy ? '登入中...' : '登入'}
-          </button>
-          <p>測試期帳號由 MOD-15 建立。</p>
-        </form>
-      </div>
-    );
-  }
-
-  const activeBySlot = new Map(playerMe.saves.filter((s) => s.status === 'active').map((s) => [s.slot, s]));
-  const slots = Array.from({ length: playerMe.player.save_slots_max }, (_, i) => i + 1);
-
   return (
     <div className="lobby-root">
       <CalibrationProvider
@@ -365,7 +213,7 @@ export function LobbyScreen() {
       >
         <header className="lobby-header">
           <h1 className="lobby-title">大廳</h1>
-          <p className="lobby-sub">選擇調查員與短期測試隊伍</p>
+          <p className="lobby-sub">四人調查隊伍</p>
         </header>
 
         <CalibrationSurface
@@ -377,78 +225,40 @@ export function LobbyScreen() {
           {hotspots.map((hs) => (
             <g key={hs.id} className="hotspot-wrap">
               <Hotspot {...hs} />
-              <HotspotLabel hs={hs} />
+              {hs.id === 'prep.map' && <HotspotLabel hs={hs} />}
             </g>
           ))}
           {SEAT_ORDER.map((seatId, i) => {
             const member = i === 0
-              ? (selected ? { name: displayNameFor(selected) } : null)
+              ? (selected ? { name: '玩家' } : null)
               : (partyMembers[i - 1] ? { name: displayNameFor(partyMembers[i - 1]) } : null);
             if (!member) return null;
             const hs = hotspots.find((h) => h.id === seatId);
             if (!hs) return null;
             const { cx, cy } = hotspotCentroid(hs);
+            const box = SEAT_BOXES[i];
             return (
-              <g key={seatId} className="seat-occupant" transform={`translate(${cx}, ${cy})`} pointerEvents="none">
-                <ellipse cx={0} cy={-22} rx={22} ry={26} fill="rgba(8,8,14,0.6)" />
-                <path d="M -40 58 Q -34 -6 0 -6 Q 34 -6 40 58 Z" fill="rgba(8,8,14,0.6)" />
-                <text x={0} y={80} textAnchor="middle" fill="#C9A84C" style={{ font: '700 14px "Noto Serif TC", serif', paintOrder: 'stroke', stroke: 'rgba(13,13,20,0.92)', strokeWidth: 4 }}>{member.name}</text>
+              <g key={seatId} className={`seat-occupant seat-occupant-${i + 1}`} transform={`translate(${cx}, ${cy})`} pointerEvents="none">
+                <image className="seat-figure" href={SEAT_ASSETS[i]} {...box} preserveAspectRatio="xMidYMax meet" />
+                <text x={0} y={86} textAnchor="middle" fill="#F0D48A" style={{ font: '700 14px "Noto Serif TC", serif', paintOrder: 'stroke', stroke: 'rgba(13,13,20,0.95)', strokeWidth: 4 }}>{member.name}</text>
               </g>
             );
           })}
         </CalibrationSurface>
 
         <div className="lobby-roster">
-          <div className="lr-title">存檔格</div>
-          <div className="lr-account-row">
-            <span>{playerMe.player.username}</span>
-            <button onClick={doLogout}>登出</button>
+          <div className="lr-title">調查隊伍</div>
+          <div className="lr-slot lr-player-slot">
+            <span className="lr-role">玩家</span>
+            <span className="lr-name">{displayNameFor(selected, '尚未選擇存檔')}</span>
           </div>
-          <div className="lr-history">已故 {playerMe.player.dead_count} 位 · 退休 {playerMe.player.retired_count} 位</div>
-          <div className="lr-save-list">
-            {slots.map((slot) => {
-              const save = activeBySlot.get(slot);
-              const current = save && getSelectedSave()?.id === save.id;
-              if (!save) {
-                return (
-                  <button
-                    key={slot}
-                    className="lr-slot lr-empty-save"
-                    disabled={saveBusy === `create:${slot}`}
-                    onClick={() => startNewSave(slot)}
-                  >
-                    <span className="lr-role">{slot}</span>
-                    <span className="lr-name">創新調查員</span>
-                  </button>
-                );
-              }
-              return (
-                <div key={slot} className={'lr-save-card' + (current ? ' lr-save-current' : '')}>
-                  <button className="lr-slot lr-me" onClick={() => selectSave(save, true)}>
-                    <span className="lr-role">{slot}</span>
-                    <span className="lr-name">{displayNameFor(selectedFromSave(save))}</span>
-                    {save.is_completed === false && <span className="lr-meta">草稿</span>}
-                  </button>
-                  <button
-                    className="lr-retire"
-                    disabled={saveBusy === `retire:${save.id}`}
-                    onClick={() => retireSave(save)}
-                  >
-                    退休
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
           <div className="lr-party-shelf">
             {[0, 1, 2].map((i) => {
               const member = partyMembers[i];
               return (
                 <div key={i} className="lr-slot lr-ai">
-                  <span className="lr-role">AI {i + 1}</span>
+                  <span className="lr-role">隊友 {i + 1}</span>
                   <span className="lr-name">{displayNameFor(member, '等待組隊')}</span>
-                  {member && <span className="lr-meta">{member.faction_code} / {member.title_zh ?? member.mbti_code}</span>}
                 </div>
               );
             })}
@@ -461,68 +271,17 @@ export function LobbyScreen() {
           >
             換一組
           </button>
-          {autoParty?.relaxed && <div className="lr-note">已放寬條件: {autoParty.reasons.join(', ')}</div>}
+          <button className="lr-manage-saves" onClick={() => navigate('/saves')}>管理調查員存檔</button>
+          {pickerError && <div className="lr-note">名冊載入失敗:{pickerError}</div>}
         </div>
 
         <footer className="lobby-footer">
-          <button className="lobby-back" onClick={() => navigate('/')}>
-            返回
+          <button className="lobby-back" onClick={() => navigate('/saves')}>
+            返回存檔
           </button>
           <span className="lobby-tip">前往地圖開始關卡，隊伍會自動帶入戰鬥板。</span>
         </footer>
 
-        {pickerOpen && (
-          <div
-            className="inv-picker-backdrop"
-            onClick={(e) => { if (e.target === e.currentTarget) setPickerOpen(false); }}
-          >
-            <div className="inv-picker-frame">
-              <button className="inv-picker-close" onClick={() => setPickerOpen(false)}>×</button>
-              <div className="inv-picker-title">選擇調查員</div>
-              <div className="inv-picker-sub">
-                {pendingSlot ? `建立第 ${pendingSlot} 格 active 存檔；草稿會以 crossTest 模式開局。` : '64 位 preset 皆可選用；草稿會以 crossTest 模式開局。'}
-              </div>
-
-              {pickerError && <div className="inv-picker-error">名單載入失敗: {pickerError}</div>}
-              {!pickerError && candidates === null && <div className="inv-picker-loading">載入調查員名單...</div>}
-              {candidates !== null && candidates.length === 0 && (
-                <div className="inv-picker-loading">目前沒有可選調查員。</div>
-              )}
-
-              <div className="inv-picker-groups">
-                {candidatesByFaction.map(([faction, list]) => (
-                  <section key={faction} className="inv-picker-group">
-                    <div className="inv-picker-group-title">{faction}</div>
-                    <div className="inv-picker-grid">
-                      {list.map((inv) => (
-                        <button
-                          key={inv.id}
-                          className={'inv-card' + (selected?.id === inv.id ? ' inv-card-selected' : '')}
-                          onClick={() => pickInvestigator(inv)}
-                        >
-                          <div className="inv-card-name">
-                            {displayNameFor(inv)}
-                            {inv.is_completed === false && <span className="inv-draft-pill">草稿</span>}
-                          </div>
-                          <div className="inv-card-meta">{inv.mbti_code} / {inv.title_zh ?? inv.faction_code}</div>
-                          {inv.ability_text_zh && <div className="inv-card-ability">{inv.ability_text_zh}</div>}
-                          <div className="inv-card-attrs">
-                            {ATTR_LABELS.map(([key, label]) => (
-                              <span key={key} className="inv-attr">
-                                {label} {Number(inv[key] ?? 0)}
-                              </span>
-                            ))}
-                          </div>
-                          {selected?.id === inv.id && <div className="inv-card-badge">使用中</div>}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </CalibrationProvider>
     </div>
   );

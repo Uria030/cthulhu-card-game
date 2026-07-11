@@ -503,6 +503,26 @@
   transition: transform 0.1s ease-out;
 }
 
+.map-connections {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.map-connections line {
+  stroke: rgba(225, 195, 116, 0.82);
+  stroke-width: 0.035;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 5px rgba(201, 168, 76, 0.72));
+}
+.map-connections line.blocked {
+  stroke: rgba(159, 81, 65, 0.88);
+  stroke-dasharray: 0.09 0.055;
+}
+
 .location-card {
   aspect-ratio: 3/4;
   width: 200px;
@@ -578,29 +598,18 @@
   box-shadow: 0 0 8px rgba(111, 143, 92, 0.8);
   animation: clueSignal 2s ease-in-out infinite;
 }
-.player-token {
+.investigator-pawn {
   position: absolute;
-  top: -12px;
-  right: -12px;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-pill);
-  border: 2px solid var(--player-1);
-  background: var(--cipher);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  color: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  top: -54px;
+  width: 54px;
+  height: 78px;
+  object-fit: contain;
+  z-index: 5;
+  filter: drop-shadow(0 7px 6px rgba(0, 0, 0, 0.75));
+  pointer-events: none;
 }
-
-/* AI 隊友標記:靠左上排,靛藍框與玩家(赭紅)區隔 */
-.player-token.ai-token {
-  right: auto;
-  left: -12px;
-  border-color: var(--player-2);
-}
+.pawn-player { right: -22px; }
+.pawn-companion { right: auto; }
 
 /* === Block 5 右側敘事 LOG(fixed 對齊 viewport)=== */
 .narrative-log {
@@ -1242,14 +1251,17 @@
 .tc-4 { border: 2px solid var(--player-4); border-left: 6px solid var(--player-4); }
 .team-avatar {
   width: 64px;
-  height: 64px;
-  border-radius: var(--r-pill);
+  height: 76px;
+  border-radius: 4px;
   grid-row: span 2;
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
 }
-.ta-1 { background: linear-gradient(135deg, var(--cipher), var(--world-deep-walnut)); border: 3px solid var(--player-1); }
-.ta-2 { background: linear-gradient(135deg, var(--abyss), var(--world-deep-walnut)); border: 3px solid var(--player-2); }
-.ta-3 { background: linear-gradient(135deg, var(--ember), var(--world-deep-walnut)); border: 3px solid var(--player-3); }
-.ta-4 { background: linear-gradient(135deg, var(--oracle), var(--world-deep-walnut)); border: 3px solid var(--player-4); }
+.ta-1 { background-image: url('/game-art/pawns/pawn-player.png'); border: 3px solid var(--player-1); }
+.ta-2 { background-image: url('/game-art/pawns/pawn-companion-teal.png'); border: 3px solid var(--player-2); }
+.ta-3 { background-image: url('/game-art/pawns/pawn-companion-gold.png'); border: 3px solid var(--player-3); }
+.ta-4 { background-image: url('/game-art/pawns/pawn-companion-violet.png'); border: 3px solid var(--player-4); }
 .tc-info {
   display: flex;
   flex-direction: column;
@@ -1445,6 +1457,83 @@
 /* === 卡片詳情 === */
 .card-detail-modal {
   width: min(620px, 92vw);
+  position: relative;
+}
+
+.card-detail-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: rgba(15, 14, 18, 0.8);
+  color: #e8e4d9;
+  font-size: 27px;
+  cursor: pointer;
+}
+
+.phase-buttons-end-only { justify-content: center; }
+
+.phase-notice {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 5, 7, 0.7);
+  backdrop-filter: blur(3px);
+  pointer-events: none;
+  animation: phaseNoticeIn .25s ease both;
+}
+.phase-notice::before,
+.phase-notice::after {
+  content: '';
+  position: absolute;
+  left: 12vw;
+  right: 12vw;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201,168,76,.78), transparent);
+}
+.phase-notice::before { top: calc(50% - 58px); }
+.phase-notice::after { top: calc(50% + 58px); }
+.phase-notice strong {
+  color: #eadba9;
+  font: 700 28px "Noto Serif TC", serif;
+  text-align: center;
+  text-shadow: 0 3px 16px #000;
+  padding: 0 24px;
+}
+.phase-notice-mark {
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  border: 1px solid rgba(201,168,76,.3);
+  transform: rotate(45deg);
+  opacity: .45;
+}
+@keyframes phaseNoticeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.hand-limit-modal { width: min(900px, 94vw); max-height: 88vh; display: flex; flex-direction: column; gap: 14px; }
+.hand-limit-modal > p { margin: 0; text-align: center; color: var(--text-secondary); }
+.hand-limit-selected { min-height: 124px; display: flex; justify-content: center; align-items: center; gap: 12px; border: 1px dashed rgba(201,168,76,.55); padding: 12px; overflow-x: auto; }
+.hand-limit-selected > span { color: var(--text-tertiary); }
+.hand-limit-selected button,
+.hand-limit-grid button { width: 112px; min-width: 112px; aspect-ratio: 3/4; border: 1px solid rgba(201,168,76,.48); background: #e7ddc8; color: #231d18; padding: 10px; display: flex; flex-direction: column; gap: 8px; justify-content: center; cursor: pointer; }
+.hand-limit-selected button { transform: translateY(-4px); box-shadow: 0 0 18px rgba(201,168,76,.35); }
+.hand-limit-selected small,
+.hand-limit-grid small { color: #6f6255; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.hand-limit-grid { display: flex; gap: 10px; overflow-x: auto; padding: 8px 2px 14px; }
+.hand-limit-grid button > span { align-self: flex-end; color: #7b241f; font-weight: 700; }
+.hand-limit-modal .action-row { justify-content: space-between; }
+.hand-limit-modal .action-row > span { color: #c9a84c; }
+
+@media (max-width: 700px) {
+  .phase-notice strong { font-size: 21px; }
+  .investigator-pawn { width: 46px; height: 66px; top: -46px; }
+  .hand-limit-selected button,
+  .hand-limit-grid button { width: 96px; min-width: 96px; }
 }
 
 .card-detail {

@@ -3582,6 +3582,27 @@ CREATE TABLE IF NOT EXISTS server_secrets (
 );
 `;
 
+// Migration 045: first live-play correction batch. Keep data changes code-addressed and idempotent.
+export const MIGRATION_045_SQL = `
+UPDATE campaigns
+   SET cover_narrative = '城市在冷雨中沉睡，但陰暗的角落卻滋生著比濕氣更令人不安的謠言。關於「裂嘴女」在深夜襲擊路人的故事，已從網路論壇的鬼話連篇，逐漸滲透到現實的恐懼之中。你循著目擊紀錄與傳聞，攜帶著信念與武器，踏入傳聞最盛的街區，決心查明這則都市傳說背後的真相。然而，你即將發現，有些真相遠比最瘋狂的謠言更加駭人。',
+       updated_at = NOW()
+ WHERE code = 'g_slit_mouth_legend'
+   AND cover_narrative LIKE '%身為「S 鐵證」的調查員%';
+
+UPDATE investigator_signature_cards AS card
+   SET play_effect_code = '[
+     {"trigger_type":"action","effect_code":"heal_san_at_location","effect_params":{"amount":2},"description_zh":"你與你所在地點的其他調查員各治療 2 點理智。"},
+     {"trigger_type":"action","effect_code":"draw_card","effect_params":{"amount":1},"description_zh":"然後，你抽 1 張卡。"}
+   ]'::jsonb,
+       updated_at = NOW()
+  FROM investigator_templates AS investigator
+ WHERE card.investigator_id = investigator.id
+   AND investigator.code = 'ESFJ-1'
+   AND card.name_zh = '鼓舞士氣'
+   AND (card.play_effect_code IS NULL OR card.play_effect_code = '[]'::jsonb);
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3808,6 +3829,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_042', MIGRATION_042_SQL);
     await runOne('MIGRATION_043', MIGRATION_043_SQL);
     await runOne('MIGRATION_044', MIGRATION_044_SQL);
+    await runOne('MIGRATION_045', MIGRATION_045_SQL);
     try {
       const vaultKey = await getOrCreatePlayerPasswordVaultKey(client);
       const updatedCreators = await bootstrapCreatorPasswords(client, vaultKey);

@@ -1,7 +1,7 @@
 /**
  * G-05 回合經濟測試 — ch2 §2.4 + ch6 §3.1/§8
  */
-import { runTurnEndUpkeep, runTurnStartUpkeep, runShortRest, hpMaxFor, sanMaxFor, HAND_LIMIT, STARTING_RESOURCES } from './upkeep';
+import { discardForHandLimit, runTurnEndUpkeep, runTurnStartUpkeep, runShortRest, hpMaxFor, sanMaxFor, HAND_LIMIT, STARTING_RESOURCES } from './upkeep';
 import type { InvestigatorState } from './state';
 
 type TestFn = () => void;
@@ -56,6 +56,25 @@ test('回合結束:手牌超過 8 棄至上限(棄最舊)', () => {
   assertEq(r.investigator.hand.length, HAND_LIMIT);
   assertEq(r.investigator.discardPile.includes('a'), true, '最舊的被棄');
   assertEq(r.investigator.hand.includes('d1'), true, '剛抽的留著');
+});
+
+test('玩家回合結束:可延後手牌上限,等玩家選牌', () => {
+  const hand = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+  const r = runTurnEndUpkeep(makeInv({ hand }), { deferHandLimit: true });
+  assertEq(r.investigator.hand.length, 9, '補給抽牌後先保留 9 張');
+  assertEq(r.investigator.discardPile.length, 0, '確認前不棄牌');
+  assertEq(r.effects.some((e) => e.type === 'hand_limit_required'), true);
+});
+
+test('手牌上限:只接受玩家選中的精確張數', () => {
+  const inv = makeInv({ hand: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'] });
+  assertEq(discardForHandLimit(inv, ['a']).reason, 'wrong_count');
+  assertEq(discardForHandLimit(inv, ['a', 'missing']).reason, 'card_not_in_hand');
+  const r = discardForHandLimit(inv, ['c', 'h']);
+  assertEq(r.ok, true);
+  assertEq(r.investigator.hand.length, HAND_LIMIT);
+  assertEq(r.investigator.hand.includes('c'), false);
+  assertEq(r.investigator.discardPile.join(','), 'c,h');
 });
 
 test('倒地者不結算補給(§9 瀕死不能行動)', () => {

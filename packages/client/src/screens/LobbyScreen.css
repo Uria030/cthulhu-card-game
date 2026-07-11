@@ -40,7 +40,7 @@
   object-fit: cover !important;
 }
 
-/* 熱區形狀:預設完全透明保留美術,hover/觸控才浮現 10% 深色 + 金色光暈漸層 */
+/* 熱區只負責命中；可點入口由文字標籤承擔，永不顯示校準框線。 */
 .lobby-root .hotspot-wrap g[data-hotspot-id] > rect,
 .lobby-root .hotspot-wrap g[data-hotspot-id] > ellipse,
 .lobby-root .hotspot-wrap g[data-hotspot-id] > polygon {
@@ -54,21 +54,25 @@
 .lobby-root .hotspot-wrap:active g[data-hotspot-id] > rect,
 .lobby-root .hotspot-wrap:active g[data-hotspot-id] > ellipse,
 .lobby-root .hotspot-wrap:active g[data-hotspot-id] > polygon {
-  fill: rgba(13, 13, 20, 0.1) !important;
-  stroke: rgba(184, 137, 61, 0.7) !important;
-  stroke-width: 2 !important;
-  filter: drop-shadow(0 0 12px rgba(201, 168, 76, 0.55));
+  fill: transparent !important;
+  stroke: transparent !important;
+  filter: none;
 }
 
-/* 標籤文字:預設隱藏,hover wrapper 時淡入(pointer-events:none 不影響 hover 偵測)*/
+/* 只有真正可用的入口會渲染標籤，且必須一直可見。 */
 .lobby-root .hotspot-wrap .hotspot-label-group {
-  opacity: 0;
-  transition: opacity 0.25s ease;
+  opacity: 1;
 }
 .lobby-root .hotspot-wrap:hover .hotspot-label-group,
 .lobby-root .hotspot-wrap:active .hotspot-label-group {
   opacity: 1;
 }
+
+.seat-occupant .seat-figure {
+  filter: brightness(1.18) drop-shadow(0 8px 10px rgba(0, 0, 0, 0.78));
+  opacity: 0.96;
+}
+.seat-occupant-1 .seat-figure { filter: brightness(1.36) sepia(.12) drop-shadow(0 8px 12px rgba(0,0,0,.82)); }
 
 @keyframes lobbyEnter {
   from { opacity: 0; transform: scale(1.02); }
@@ -420,8 +424,8 @@
 
 .lr-ai {
   cursor: default;
-  align-items: flex-start;
-  flex-direction: column;
+  align-items: center;
+  flex-direction: row;
 }
 
 .lr-ai:hover {
@@ -501,6 +505,19 @@
   cursor: pointer;
   font: 700 12px "Noto Sans TC", sans-serif;
 }
+
+.lr-manage-saves {
+  min-height: 38px;
+  background: rgba(18, 18, 25, 0.82);
+  border: 1px solid rgba(232, 228, 217, 0.3);
+  border-radius: 6px;
+  color: #e8e4d9;
+  cursor: pointer;
+  font: 700 12px "Noto Sans TC", sans-serif;
+}
+
+.lr-player-slot { cursor: default; border-color: rgba(201, 168, 76, 0.65); }
+.lr-player-slot:hover { background: rgba(255,255,255,.04); }
 
 .lr-reroll:disabled {
   cursor: not-allowed;

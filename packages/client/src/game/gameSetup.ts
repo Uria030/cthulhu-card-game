@@ -37,6 +37,8 @@ import {
   materializeAIInvestigator,
 } from '@cthulhu/shared';
 import { displayNameFor } from './displayName';
+import { normaliseBootstrapCardData } from './cardDataAdapter';
+export { normaliseBootstrapCardData } from './cardDataAdapter';
 
 export interface CardDisplay {
   id: string;
@@ -309,7 +311,7 @@ export function buildSetupFromBootstrap(
         id: instanceId,
         name: info.name_zh,
         cost: Number(info.cost ?? 0),
-        desc: String(info.data.description_zh ?? info.data.ability_text_zh ?? ''),
+        desc: String(info.data.description_zh ?? info.data.ability_text_zh ?? info.data.play_effect ?? ''),
         rarity: toRarity(info.data.rarity),
       };
     }
@@ -393,47 +395,12 @@ export function buildSetupFromBootstrap(
   const cardLookup: GameSetup['cardLookup'] = {};
   for (const index of [built.cardIndex, ...aiCardIndexes]) {
     for (const [instanceId, info] of Object.entries(index)) {
-      const d = info.data;
-      const icons = d.commit_icons;
-      cardLookup[instanceId] = {
-        commit_icons: icons && typeof icons === 'object' && !Array.isArray(icons) ? icons : {},
-        name_zh: info.name_zh,
-        card_type: info.card_type,
-        cost: info.cost,
-        faction_code: d.faction_code ?? d.faction ?? null,
-        faction: d.faction ?? d.faction_code ?? null,
-        rarity: d.rarity ?? null,
-        description_zh: d.description_zh ?? d.ability_text_zh ?? null,
-        flavor_text_zh: d.flavor_text_zh ?? d.flavor_zh ?? null,
-        flavor_zh: d.flavor_zh ?? d.flavor_text_zh ?? null,
-        combat_style: d.combat_style ?? null,
-        // 軸向系統(s08–s10):保留軸值供軸向 COMBO 連動辨識(in_play 同軸計數)
-        primary_axis_layer: d.primary_axis_layer ?? null,
-        primary_axis_value: d.primary_axis_value ?? null,
-        damage_element: d.damage_element ?? null,
-        ally_hp: d.ally_hp ?? null,
-        ally_san: d.ally_san ?? null,
-        damage: d.damage ?? null,
-        attribute_modifiers:
-          d.attribute_modifiers && typeof d.attribute_modifiers === 'object'
-            ? d.attribute_modifiers
-            : {},
-        subtypes: Array.isArray(d.subtypes) ? d.subtypes : [],
-        ammo: d.ammo ?? null,
-        uses: d.uses ?? null,
-        is_talisman: Boolean(d.is_talisman),
-        talisman_type: d.talisman_type ?? null,
-        target_threat_types: d.target_threat_types ?? null,
-        break_timing: d.break_timing ?? null,
-        break_strength_max: d.break_strength_max ?? null,
-        break_charge_label: d.break_charge_label ?? null,
-        break_charge_max: d.break_charge_max ?? null,
-        break_test_attribute: d.break_test_attribute ?? null,
-        stockpile_accumulation_rule: d.stockpile_accumulation_rule ?? null,
-        consume_enabled: Boolean(d.consume_enabled),
-        consume_effect: d.consume_effect ?? null,
-        effects: Array.isArray(d.effects) ? d.effects : [],
-      };
+      cardLookup[instanceId] = normaliseBootstrapCardData(
+        info.data as Record<string, unknown>,
+        info.name_zh,
+        info.card_type,
+        info.cost,
+      );
     }
   }
   // 風格池聯集:玩家 + 各 AI 隊友的牌組武器風格(同 code 以先到為準)

@@ -31,12 +31,24 @@ export interface UpkeepResult {
   effects: ResultEffect[];
 }
 
+export interface TurnEndUpkeepOptions {
+  /** 玩家容器需先讓本人選牌；AI 與模擬仍可沿用自動棄最舊。 */
+  deferHandLimit?: boolean;
+}
+
+export interface HandLimitDiscardResult {
+  ok: boolean;
+  investigator: InvestigatorState;
+  effect: ResultEffect | null;
+  reason?: 'not_over_limit' | 'wrong_count' | 'card_not_in_hand' | 'duplicate_card';
+}
+
 /**
  * 對單一調查員結算回合結束階段:抽 1 卡(空牌庫 → 1 恐懼)→ +1 資源 →
  * 手牌超過上限棄至上限(v0 簡化:由最舊的手牌開始棄;玩家自選棄牌待 UI)。
  * 橫置卡轉正在消耗品系統(G-06)接上後加入。
  */
-export function runTurnEndUpkeep(inv: InvestigatorState): UpkeepResult {
+export function runTurnEndUpkeep(inv: InvestigatorState, options: TurnEndUpkeepOptions = {}): UpkeepResult {
   let next = inv;
   const effects: ResultEffect[] = [];
 
@@ -88,16 +100,54 @@ export function runTurnEndUpkeep(inv: InvestigatorState): UpkeepResult {
 
   // ③ 手牌上限 8,棄至上限(v0:棄最舊)
   if (next.hand.length > HAND_LIMIT) {
-    const discarded = next.hand.slice(0, next.hand.length - HAND_LIMIT);
-    next = {
-      ...next,
-      hand: next.hand.slice(next.hand.length - HAND_LIMIT),
-      discardPile: [...next.discardPile, ...discarded],
-    };
-    effects.push({ type: 'hand_limit_discard', params: { count: discarded.length, cardInstanceIds: discarded } });
+    const count = next.hand.length - HAND_LIMIT;
+    if (options.deferHandLimit) {
+      effects.push({ type: 'hand_limit_required', params: { count } });
+    } else {
+      const discarded = next.hand.slice(0, count);
+      next = {
+        ...next,
+        hand: next.hand.slice(count),
+        discardPile: [...next.discardPile, ...discarded],
+      };
+      effects.push({ type: 'hand_limit_discard', params: { count: discarded.length, cardInstanceIds: discarded } });
+    }
   }
 
   return { investigator: next, effects };
+}
+
+/** 玩家確認後才執行的手牌上限棄牌；精確張數、不可重複、必須仍在手牌。 */
+export function discardForHandLimit(
+  inv: InvestigatorState,
+  selectedCardIds: readonly string[],
+): HandLimitDiscardResult {
+  const required = Math.max(0, inv.hand.length - HAND_LIMIT);
+  if (required === 0) return { ok: false, investigator: inv, effect: null, reason: 'not_over_limit' };
+  if (selectedCardIds.length !== required) {
+    return { ok: false, investigator: inv, effect: null, reason: 'wrong_count' };
+  }
+  if (new Set(selectedCardIds).size !== selectedCardIds.length) {
+    return { ok: false, investigator: inv, effect: null, reason: 'duplicate_card' };
+  }
+  if (selectedCardIds.some((id) => !inv.hand.includes(id))) {
+    return { ok: false, investigator: inv, effect: null, reason: 'card_not_in_hand' };
+  }
+  const selected = new Set(selectedCardIds);
+  const investigator = {
+    ...inv,
+    hand: inv.hand.filter((id) => !selected.has(id)),
+    discardPile: [...inv.discardPile, ...selectedCardIds],
+  };
+  return {
+    ok: true,
+    investigator,
+    effect: {
+      type: 'hand_limit_discard',
+      params: { count: selectedCardIds.length, cardInstanceIds: [...selectedCardIds] },
+      targetId: inv.investigatorId,
+    },
+  };
 }
 
 // ─── 回合開始階段(ch3 §6:燃燒/再生在回合開始結算)──────────

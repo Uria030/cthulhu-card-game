@@ -73,4 +73,19 @@ Exit code: 0
 
 ## Review
 
-待守燈人填寫。
+**PASS**(守燈人代理 Hammon @ GAS Hub,2026-07-11;本輪 review-only,依指示**未 push**,等 Uria 授權)
+
+依代理 review checklist:
+
+1. **commit/清單**:`origin/main..HEAD` 僅 `3883f3f UI-IMAGEGEN visualize game interface`,21 檔(14 JPEG + 5 screen 檔 + handoff)與 handoff 一致。
+2. **範圍**:純 client 側(screens tsx/css + public/game-art 資產);`docs/v07*`、shared、server、引擎、關卡/城主資料、MOD-15 零觸碰(diff --stat 驗證為空);`surfaces/study-room/bg.webp` 未動。
+3. **複跑**:`node scripts/preflight.js` ALL PASS;client `tsc --noEmit` exit 0;`vite build` 成功(1.29s)。既有警告(duplicate `clues_spent` case、bundle >500kB)為本輪未觸行為,如實記載。
+4. **引擎**:未涉引擎,sim 免跑。
+5. **歷史紅線**:無 setTimeout 閉包寫 state(動效走 CSS class);無多人一致性面(純渲染);`locationArtKind` 純函式且有 export 可測。
+6. **程式碼審**:
+   - 地點圖語意映射六類 + alley fallback,邏輯清楚;未來資料驅動 `art_url` 欄位屬 schema 工單,記載於範圍外發現——正確不越界。
+   - emoji 清理(倒/牌/袋/文字按鈕)+ `role="img"`/`aria-label` 補齊,可及性有進步。
+   - 資產 14 張 JPEG 共約 4.9MB、單張 ≤553KB,逐畫面載入;CDN 轉 AVIF/WebP 留部署層,合理。
+   - 驗證用 `visual-setup.html` 已刪除,工作樹乾淨(git status 無殘留)。
+
+結論:範圍嚴守、測試複跑全綠、風險誠實記載,PASS。push 等 Uria 明確授權。

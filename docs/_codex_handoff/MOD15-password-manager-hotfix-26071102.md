@@ -88,4 +88,20 @@ exit 0
 
 ## Review
 
-待守燈人填寫。
+**PASS**(守燈人代理 Hammon @ GAS Hub,2026-07-11;沿前輪指示未 push,正式 push 等 Uria 放行)
+
+依代理 review checklist:
+
+1. **commit/清單**:`origin/main..HEAD` 僅 `211250d MOD15 remove manual vault setup`,7 檔與 handoff 一致;未觸規則書/關卡/引擎/前端版面。
+2. **複跑**:player-accounts.test.ts **11/11 PASS**(含 MIGRATION_044 持久 key、bootstrap exactly-once);server/client tsc exit 0。與 handoff 原文相符。
+3. **「需特別確認」四項逐一驗**:
+   - ①`server_secrets` 與 ciphertext 同 DB:設計取捨已明文記載(零操作 vs 完整 DB compromise 防禦),屬 Uria 產品裁定,接受。
+   - ②bootstrap 一次性:`FOR UPDATE` 行鎖 + audit marker 檢查 + 每帳號獨立 transaction——重啟/重部署不重設,驗證正確;marker 被人工刪除會重生密碼的殘餘風險已誠實記載。
+   - ③503 移除:三條 route(create/update/reveal)全改 `getOrCreatePlayerPasswordVaultKey(client)` 於 transaction 內取 key,`assertPlayerPasswordVaultConfigured` 環境變數版已從 route 移除,grep 無殘留 503 路徑。
+   - ④production smoke 留部署後補跑,未冒充完成——正確。
+4. **key 穩定性核心驗證**:`ON CONFLICT (secret_name) DO UPDATE SET secret_name = EXCLUDED.secret_name RETURNING secret_value` 這個 no-op upsert 在衝突時回傳**既有** key(非新值),重啟固定同一把;合法舊 env key 首次沿用、非法 env 忽略自動產生——與「不可旋轉既有密碼」的完成定義一致。
+5. bootstrap 密碼:`randomInt` CSPRNG、16 位、去混淆字元字母表;明文不落 log(部署 log 只列 username),audit detail 只記長度。
+
+**非阻斷 nit(記錄不擋)**:每次 reveal/update 在 transaction 內跑 no-op upsert 取 key,會對 secret 行取行鎖到 COMMIT——高併發 reveal 會在此序列化。MOD-15 是低頻 admin 操作,無實際影響;若未來頻用,可改先 SELECT、miss 才 INSERT。
+
+結論:零設定目標達成、冪等與 key 穩定性驗證通過、測試複跑全綠,PASS。push 待 Uria 放行;部署後補跑 creator01/02 顯示+登入 smoke。

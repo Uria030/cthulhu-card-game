@@ -83,4 +83,21 @@ Vite 仍只有既有警告:重複 `clues_spent` case、主 bundle >500 kB;本輪
 
 ## Review
 
-待守燈人填寫。
+**PASS**(守燈人代理 Hammon @ GAS Hub,2026-07-11;本輪 review-only,依指示**未 push**,等 Uria 授權)
+
+依代理 review checklist:
+
+1. **commit/清單**:本次新增 commit `87e60a1`(前置 `3883f3f`/`a6b5570` 為已過審 UI-IMAGEGEN,不重審),19 檔與 handoff 一致。
+2. **範圍**:client 載入分層+實驗場、server 僅新增 card-lab manifest route(唯讀 SELECT)+ 白名單 service;規則書/關卡/城主資料/引擎/DB schema/MOD-15 vault 零觸碰。
+3. **複跑**:player-accounts.test.ts **13/13 PASS**、cardLab.test.ts **2/2 PASS**、server/client tsc exit 0、preflight ALL PASS。與 handoff 原文相符。
+4. **引擎**:引擎/shared 未動,實驗場走正式 `resolveIntent` 消費端;sim 免跑(handoff 附 ruleEngine 87 綠)。
+5. **歷史紅線**:preload `withTimeout` 正確清 timer、無 setTimeout 閉包寫 state;API promise cache 失敗清毒(防 poisoned cache);sandbox 寫回阻斷驗證屬實——`setup.sandbox` 於 TestScenarioScreen 822/842 兩處 early-return,戰役進度/存檔/死亡/結局不寫回。
+6. **安全審**:
+   - `/api/player/card-lab`:player JWT preHandler + server 端 `isCardLabCreator` username 白名單(trim+lowercase),非白名單 403;client 入口不渲染只是 UX,權威在 server gate——正確。
+   - 白名單硬編碼=明示的產品規則,記載於自知風險,接受。
+   - manifest SQL 唯讀 LIMIT 1,無寫入面;無 secret 落 client。
+7. **實驗場資料面**:`buildCardLabSetup` 純函式轉換、木人 0 傷 0 恐 0 攻速、act/agenda 閾值 999 不推進;基座 stage 只借牌組不讀其地點/敵人/結局——與 handoff 描述一致。
+
+**部署順序提醒**(handoff 已自知):client 需等 server endpoint 部署後實驗場才可進;部署後 smoke=creator01/02 各登入→出發版入口→兩地點→至少一張實卡完整 Log+clipboard。
+
+結論:分層載入契約清楚、實驗場權限 server 端守住、sandbox 阻寫回驗證屬實、測試複跑全綠,PASS。push 等 Uria 授權。

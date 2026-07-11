@@ -93,4 +93,22 @@ exit 0
 
 ## Review
 
-待守燈人填寫。
+**PASS**(守燈人代理 Hammon @ GAS Hub,2026-07-11;本輪 review-only,依指示**未 push**,正式 push 等 Uria 放行)
+
+依代理 review checklist 逐項:
+
+1. **commit 與檔案清單**:`origin/main..HEAD` 僅 `52c0ab1 MOD15 add recoverable password vault`;`git show --stat` 8 檔與 handoff 清單完全一致。
+2. **範圍**:未觸 `docs/v07*`、關卡、城主、遊戲引擎;禁碰區零觸碰。CORS 僅補 `PATCH` method,未動 origin callback(既有債如實記載)。
+3. **複跑測試**:`player-accounts.test.ts` 9/9 PASS(含 vault round-trip、invalid key/wrong binding 拒絕、雙帳號重設+reveal);server tsc `--noEmit` exit 0;client tsc exit 0。與 handoff 測試原文相符。
+4. **引擎**:未涉引擎,sim 免跑。
+5. **歷史紅線**:無 setTimeout 閉包寫 state;migration `CREATE TABLE IF NOT EXISTS` 冪等;無多人一致性面。
+6. **程式碼審查重點**:
+   - vault service:AES-256-GCM + 12-byte IV + AAD 綁 `player-password:<keyVersion>:<playerId>`,decrypt 用 record 自帶 keyVersion(rotation 相容);key decode 嚴格驗 32-byte + base64 round-trip,fail-closed 正確。
+   - routes:create/update/reveal 三處 `assertPlayerPasswordVaultConfigured` 前置 503;create/update 改 transaction(bcrypt+vault+audit 同成同敗,ROLLBACK 路徑齊);reveal admin-only + `no-store` header + `password_reveal` audit 在同 transaction。
+   - update 的 vault upsert `ON CONFLICT DO UPDATE` 正確;404 時 ROLLBACK 不留殘寫。
+   - 前端:明文只存單一變數,切帳號/刷新/頁面隱藏清除;readonly input + aria-live 狀態,無 innerHTML 注入面。
+   - migration 043:獨立表 + ON DELETE CASCADE + key_version CHECK,登入路徑零改動(仍 bcrypt)。
+
+**非阻斷提醒(部署 checklist,handoff 已自知)**:①Railway 先設 `PLAYER_PASSWORD_VAULT_KEY`(32-byte base64,與 JWT secrets 不可互用);②key rotation 工具未做前不可換 key;③正式密碼不得入 commit/log;④Railway 實帳 smoke 屬部署後補跑,未宣稱完成——正確誠實。
+
+結論:實作完整、測試齊、fail-closed 與稽核到位,PASS。push 待 Uria 明確放行。

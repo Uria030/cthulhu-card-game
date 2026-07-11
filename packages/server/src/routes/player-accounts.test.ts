@@ -11,6 +11,7 @@ import {
   PlayerPasswordVaultConfigurationError,
 } from '../services/player-password-vault.js';
 import { bootstrapCreatorPasswords } from '../services/creator-password-bootstrap.js';
+import { CARD_LAB_MANIFEST, isCardLabCreator } from '../services/card-lab.js';
 
 type TestFn = () => void | Promise<void>;
 const tests: { name: string; fn: TestFn }[] = [];
@@ -35,6 +36,50 @@ test('email and password policy match E15a test-phase contract', () => {
   assertEq(h.isValidEmail('player.example.com'), false);
   assertEq(h.passwordError('1234567') !== null, true, 'minimum length enforced');
   assertEq(h.passwordError('12345678'), null);
+});
+
+test('card lab whitelist only admits creator01 and creator02', () => {
+  assertEq(isCardLabCreator('creator01'), true);
+  assertEq(isCardLabCreator('Creator02'), true);
+  assertEq(isCardLabCreator('creator03'), false);
+  assertEq(isCardLabCreator('admin'), false);
+  assertEq(CARD_LAB_MANIFEST.locations.length, 2);
+  assertEq(CARD_LAB_MANIFEST.enemy.damage_physical, 0);
+  assertEq(CARD_LAB_MANIFEST.enemy.damage_horror, 0);
+  assertEq(CARD_LAB_MANIFEST.enemy.fear_value, 0);
+});
+
+test('card lab endpoint rejects other players and returns manifest to creators', async () => {
+  const originalQuery = pool.query;
+  (pool as any).query = async (sql: string) => {
+    if (sql.includes('FROM stages s')) return { rows: [{ id: 'stage-base-1' }] };
+    throw new Error(`Unexpected SQL in card lab route test: ${sql}`);
+  };
+  const app = Fastify({ logger: false });
+  await app.register(playerAccountRoutes);
+  const secret = process.env.PLAYER_JWT_SECRET || 'player-fallback-secret-change-me';
+  const tokenFor = (username: string) => jwt.sign({ playerId: `${username}-id`, username, kind: 'player' }, secret);
+  try {
+    const denied = await app.inject({
+      method: 'GET',
+      url: '/api/player/card-lab',
+      headers: { authorization: `Bearer ${tokenFor('ordinary-player')}` },
+    });
+    assertEq(denied.statusCode, 403);
+
+    const allowed = await app.inject({
+      method: 'GET',
+      url: '/api/player/card-lab',
+      headers: { authorization: `Bearer ${tokenFor('creator01')}` },
+    });
+    assertEq(allowed.statusCode, 200);
+    assertEq(allowed.json().data.baseStageId, 'stage-base-1');
+    assertEq(allowed.json().data.locations.length, 2);
+    assertEq(allowed.json().data.enemy.name_zh, '訓練木人');
+  } finally {
+    await app.close();
+    (pool as any).query = originalQuery;
+  }
 });
 
 test('settleProgressOnServer: awards DB outcome rewards and advances chapter', () => {

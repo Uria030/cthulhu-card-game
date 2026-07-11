@@ -73,6 +73,8 @@ export interface GameSetup {
   factionLabel: string;
   /** 教學模式:解鎖鏈 + 劇本事件 hooks 只在 test 啟用 */
   tutorial: boolean;
+  /** 實驗場等不寫回戰役/存檔的引擎沙盒。 */
+  sandbox?: boolean;
   investigator: InvestigatorState;
   scenario: ScenarioState;
   locMeta: Record<string, LocationDisplay>;

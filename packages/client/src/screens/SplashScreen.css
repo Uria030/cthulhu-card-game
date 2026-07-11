@@ -58,18 +58,46 @@
   z-index: 1;
 }
 
-.splash-title {
-  /* §2.2 規格:headline-display 64px / 思源宋體粗體 / 煙白 / 字距加寬 0.05em */
-  font-family: 'Noto Serif TC', serif;
-  font-size: 64px;
-  font-weight: 700;
-  color: var(--world-smoke-white);
-  letter-spacing: 0.05em;
-  margin: 0;
-  /* 微妙的歲月感:極淡的陰影 */
-  text-shadow: 0 0 18px rgba(217, 210, 197, 0.12);
+.splash-loading {
+  width: min(420px, 78vw);
   position: relative;
   z-index: 1;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.splash-loading.visible { opacity: 1; transform: translateY(0); }
+
+.splash-loading-title {
+  color: var(--world-smoke-white);
+  font: 700 20px 'Noto Serif TC', serif;
+  letter-spacing: 0.18em;
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.splash-progress-track {
+  height: 8px;
+  border: 1px solid rgba(184, 137, 61, 0.7);
+  background: rgba(7, 8, 10, 0.74);
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.8), 0 0 16px rgba(184, 137, 61, 0.1);
+  overflow: hidden;
+}
+
+.splash-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--world-oxblood), var(--world-antique-brass));
+  box-shadow: 0 0 12px rgba(184, 137, 61, 0.5);
+  transition: width 0.24s ease;
+}
+
+.splash-loading-detail {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 9px;
+  color: rgba(217, 210, 197, 0.72);
+  font: 400 11px 'Noto Sans TC', sans-serif;
 }
 
 @keyframes splashRain {
@@ -78,9 +106,6 @@
 }
 
 @media (max-width: 768px) {
-  .splash-title {
-    font-size: 40px;
-  }
   .splash-emblem svg {
     width: 140px;
     height: 140px;
@@ -91,4 +116,6 @@
   .splash-root,
   .splash-root::after { animation: none; }
   .splash-root { transition: none; }
+  .splash-progress-fill { transition: none; }
+  .splash-loading { transition: none; }
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { runBootPreload, scheduleDeferredGamePreload } from '../game/preload';
 import './SplashScreen.css';
 
 /**
@@ -18,20 +19,47 @@ const TENTACLE_PATH =
   'M 100 86 Q 100 55, 73 50 Q 45 52, 48 80 Q 53 96, 75 90 Q 84 86, 88 80';
 const YELLOW = '#F2C415';
 
-// 第六章 Part 1 §6.2:啟動圖騰 2.5 秒,§2.3 淡出 0.5 秒
-const SPLASH_DURATION_MS = 2500;
+// Logo 至少停留一拍,真正離場由必要資源載入完成決定。
+const LOADING_REVEAL_MS = 450;
+const MIN_SPLASH_DURATION_MS = 1800;
+const COMPLETE_HOLD_MS = 350;
 const FADE_OUT_MS = 500;
 
 export function SplashScreen() {
   const navigate = useNavigate();
   const [fadingOut, setFadingOut] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [loadingLabel, setLoadingLabel] = useState('載入中');
+  const [loadingSource, setLoadingSource] = useState<'local' | 'server'>('local');
+  const [loadingVisible, setLoadingVisible] = useState(false);
 
   useEffect(() => {
-    const fadeTimer = setTimeout(() => setFadingOut(true), SPLASH_DURATION_MS);
-    const navTimer = setTimeout(() => navigate('/lobby'), SPLASH_DURATION_MS + FADE_OUT_MS);
+    let cancelled = false;
+    const revealTimer = window.setTimeout(() => setLoadingVisible(true), LOADING_REVEAL_MS);
+    let fadeTimer = 0;
+    let navTimer = 0;
+    const minimumDelay = new Promise<void>((resolve) => window.setTimeout(resolve, MIN_SPLASH_DURATION_MS));
+    Promise.all([
+      runBootPreload((next) => {
+        if (cancelled) return;
+        setProgress(next.percent);
+        setLoadingLabel(next.label);
+        setLoadingSource(next.source);
+      }),
+      minimumDelay,
+    ]).then(() => {
+      if (cancelled) return;
+      setProgress(100);
+      setLoadingLabel('準備完成');
+      scheduleDeferredGamePreload();
+      fadeTimer = window.setTimeout(() => setFadingOut(true), COMPLETE_HOLD_MS);
+      navTimer = window.setTimeout(() => navigate('/lobby'), COMPLETE_HOLD_MS + FADE_OUT_MS);
+    });
     return () => {
-      clearTimeout(fadeTimer);
-      clearTimeout(navTimer);
+      cancelled = true;
+      window.clearTimeout(revealTimer);
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(navTimer);
     };
   }, [navigate]);
 
@@ -72,8 +100,23 @@ export function SplashScreen() {
         </svg>
       </div>
 
-      {/* 標題:Unknowable Game */}
-      <h1 className="splash-title">Unknowable Game</h1>
+      <div className={'splash-loading' + (loadingVisible ? ' visible' : '')} aria-live="polite">
+        <div className="splash-loading-title">載入中</div>
+        <div
+          className="splash-progress-track"
+          role="progressbar"
+          aria-label="遊戲載入進度"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
+        >
+          <div className="splash-progress-fill" style={{ width: `${progress}%` }} />
+        </div>
+        <div className="splash-loading-detail">
+          <span>{loadingLabel}</span>
+          <span>{progress}% · {loadingSource === 'server' ? '伺服器' : '本機'}</span>
+        </div>
+      </div>
     </div>
   );
 }

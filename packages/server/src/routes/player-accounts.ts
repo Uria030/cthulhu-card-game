@@ -10,6 +10,7 @@ import {
   getOrCreatePlayerPasswordVaultKey,
   type PlayerPasswordVaultRecord,
 } from '../services/player-password-vault.js';
+import { CARD_LAB_MANIFEST, isCardLabCreator } from '../services/card-lab.js';
 
 const PLAYER_JWT_SECRET = process.env.PLAYER_JWT_SECRET || 'player-fallback-secret-change-me';
 const PLAYER_SESSION_HOURS = Number.parseInt(process.env.PLAYER_SESSION_HOURS || '24', 10);
@@ -304,6 +305,36 @@ export const playerAccountRoutes: FastifyPluginAsync = async (app) => {
     const profile = await fetchPlayerProfile((request as any).player.playerId);
     if (!profile) return reply.status(401).send({ success: false, error: '帳號不存在或已停用' });
     return reply.send({ success: true, data: profile });
+  });
+
+  app.get('/api/player/card-lab', { preHandler: requirePlayerAuth }, async (request, reply) => {
+    const username = (request as any).player?.username;
+    if (!isCardLabCreator(username)) {
+      return reply.status(403).send({ success: false, error: '此帳號沒有實驗場權限' });
+    }
+    try {
+      const stageRes = await pool.query(
+        `SELECT s.id
+           FROM stages s
+           JOIN chapters ch ON ch.id = s.chapter_id
+           JOIN campaigns c ON c.id = ch.campaign_id
+          WHERE s.stage_type = 'main'
+            AND COALESCE(s.is_hidden, FALSE) = FALSE
+          ORDER BY c.created_at, ch.chapter_number, s.created_at
+          LIMIT 1`,
+      );
+      const baseStageId = String(stageRes.rows[0]?.id ?? '');
+      if (!baseStageId) {
+        return reply.status(503).send({ success: false, error: '目前沒有可供實驗場載入牌組的基礎關卡' });
+      }
+      return reply.send({
+        success: true,
+        data: { ...CARD_LAB_MANIFEST, baseStageId },
+      });
+    } catch (error) {
+      request.log.error(error, 'card lab manifest failed');
+      return reply.status(500).send({ success: false, error: '實驗場載入失敗' });
+    }
   });
 
   app.get('/api/player/saves', { preHandler: requirePlayerAuth }, async (request, reply) => {

@@ -93,6 +93,7 @@ import { applyDamageAllocation, autoAllocateDamage } from '@cthulhu/shared';
 import type { AllocatableTarget } from '@cthulhu/shared';
 import {
   fetchBootstrap,
+  fetchCardLabManifest,
   fetchPlayerMe,
   getPlayerToken,
   markPlayerSaveDead,
@@ -103,6 +104,11 @@ import { getSelectedInvestigator } from '../game/selectedInvestigator';
 import { getPartyTemplateIds } from '../game/selectedParty';
 import { buildSetupFromBootstrap } from '../game/gameSetup';
 import type { GameSetup, LocationDisplay, CardDisplay } from '../game/gameSetup';
+import {
+  buildCardLabSetup,
+  CARD_LAB_DUMMY_INSTANCE_ID,
+  CARD_LAB_STAGE_ID,
+} from '../game/cardLab';
 import { latestActionRows } from '../game/battleLogPreview';
 import { getSelectedSave } from '../game/selectedSave';
 import {
@@ -113,16 +119,64 @@ import {
 } from '../game/campaignProgressStorage';
 import './TestScenarioScreen.css';
 
-type LocationArtKind = 'library' | 'docks' | 'downtown' | 'alley' | 'brick-wall' | 'haunt';
+type LocationArtKind = 'lab-entrance' | 'card-lab' | 'library' | 'docks' | 'downtown' | 'alley' | 'brick-wall' | 'haunt';
 
 export function locationArtKind(locationId: string, name?: string): LocationArtKind {
   const key = `${locationId} ${name ?? ''}`.toLowerCase();
+  if (/card.lab.entrance|實驗場入口/.test(key)) return 'lab-entrance';
+  if (/card.lab.workbench|卡片實驗室/.test(key)) return 'card-lab';
   if (/library|miskatonic|圖書館|密斯卡塔尼克/.test(key)) return 'library';
   if (/dock|wharf|harbor|innsmouth|碼頭|港口|印斯茅斯/.test(key)) return 'docks';
   if (/downtown|city.center|市中心|城中/.test(key)) return 'downtown';
   if (/brick|wall|磚|牆/.test(key)) return 'brick-wall';
   if (/haunt|deep.one|深潛|出沒|cellar|地窖/.test(key)) return 'haunt';
   return 'alley';
+}
+
+function compactJson(value: unknown): string {
+  const text = JSON.stringify(value ?? null);
+  return text.length > 700 ? `${text.slice(0, 697)}...` : text;
+}
+
+function cardLabDiagnosticLines(input: {
+  actionType: IntentMessage['actionType'];
+  payload: Record<string, unknown>;
+  outcome: ResultMessage['outcome'];
+  rejection?: ResultMessage['rejection'];
+  effects: ResultEffect[];
+  beforeInvestigator: InvestigatorState;
+  afterInvestigator: InvestigatorState;
+  beforeScenario: ScenarioState;
+  afterScenario: ScenarioState;
+  setup: GameSetup;
+}): string[] {
+  const cardId = String(input.payload.cardInstanceId ?? '');
+  const card = cardId ? input.setup.cardLookup[cardId] : undefined;
+  const lines = [`[LAB][ACTION] ${input.actionType} | payload=${compactJson(input.payload)} | outcome=${input.outcome}`];
+  if (card) {
+    lines.push(`[LAB][CARD] ${card.name_zh ?? cardId} | 敘述=${String(card.description_zh ?? '(空白)')}`);
+    lines.push(`[LAB][DECLARED] ${compactJson(card.effects ?? [])}`);
+  }
+  if (input.rejection) lines.push(`[LAB][REJECTED] ${compactJson(input.rejection)}`);
+  input.effects.forEach((effect, index) => {
+    lines.push(`[LAB][EFFECT ${index + 1}/${input.effects.length}] ${effect.type} | params=${compactJson(effect.params)} | target=${effect.targetId ?? '-'}`);
+  });
+  if (input.effects.length === 0) lines.push('[LAB][EFFECT] 無實際效果');
+
+  const beforeEnemies = Object.fromEntries(input.beforeScenario.enemies.map((enemy) => [enemy.instanceId, enemy.hp]));
+  const enemyDiff = input.afterScenario.enemies
+    .map((enemy) => `${enemy.instanceId}:${beforeEnemies[enemy.instanceId] ?? 'new'}→${enemy.hp}`)
+    .join(',') || 'none';
+  lines.push('[LAB][STATE] ' + [
+    `AP ${input.beforeInvestigator.actionPoints}→${input.afterInvestigator.actionPoints}`,
+    `資源 ${input.beforeInvestigator.resources}→${input.afterInvestigator.resources}`,
+    `HP ${input.beforeInvestigator.hp}→${input.afterInvestigator.hp}`,
+    `SAN ${input.beforeInvestigator.san}→${input.afterInvestigator.san}`,
+    `地點 ${input.beforeInvestigator.currentLocationId ?? '-'}→${input.afterInvestigator.currentLocationId ?? '-'}`,
+    `線索 ${input.beforeScenario.objectiveProgress}→${input.afterScenario.objectiveProgress}`,
+    `敵人HP ${enemyDiff}`,
+  ].join(' | '));
+  return lines;
 }
 
 /**
@@ -533,6 +587,23 @@ export function TestScenarioScreen() {
       return;
     }
     const playerTemplateId = selectedInvestigator?.id;
+    if (stageId === CARD_LAB_STAGE_ID) {
+      if (!getPlayerToken()) {
+        setLoadError('請先使用 Creator 帳號登入,再從世界地圖進入實驗場。');
+        return;
+      }
+      fetchCardLabManifest()
+        .then(async (manifest) => {
+          const bootstrap = await fetchBootstrap(manifest.baseStageId, playerTemplateId, {
+            crossTest: selectedInvestigator?.is_completed === false,
+          });
+          if (!cancelled) setSetup(buildCardLabSetup(buildSetupFromBootstrap(bootstrap), manifest));
+        })
+        .catch((e: unknown) => {
+          if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
+        });
+      return () => { cancelled = true; };
+    }
     // AI 隊友:讀大廳組隊名單(rosterCode);未設則預設名冊前 3 位不與玩家撞模板
     const partyTemplateIds = (getPartyTemplateIds() ?? [])
       .filter((id) => id !== playerTemplateId)
@@ -658,7 +729,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [talentPanelOpen, setTalentPanelOpen] = useState(false);
   const [teamSpiritPanelOpen, setTeamSpiritPanelOpen] = useState(false);
   const [locationBarId, setLocationBarId] = useState<string | null>(null);
-  const [logCollapsed, setLogCollapsed] = useState(true);
+  const isCardLab = setup.stageId === CARD_LAB_STAGE_ID;
+  const [logCollapsed, setLogCollapsed] = useState(!isCardLab);
+  const [logCopied, setLogCopied] = useState(false);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
   const [systemSub, setSystemSub] = useState<null | 'settings' | 'rules'>(null);
   const deathReportedRef = useRef(false);
@@ -672,15 +745,81 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
 
   const appendLines = useCallback((lines: string[]) => {
     if (lines.length === 0) return;
-    setLog((l) => [...l, ...lines].slice(-50));
-  }, []);
+    setLog((l) => [...l, ...lines].slice(isCardLab ? -300 : -50));
+  }, [isCardLab]);
   const append = useCallback((s: string) => appendLines([s]), [appendLines]);
   const queueAISteps = useCallback((steps: PendingAIStep[]) => {
     if (steps.length === 0) return;
     setAiStepQueue((q) => [...q, ...steps]);
   }, []);
 
+  const copyCardLabLog = useCallback(async () => {
+    const text = log.join('\n');
+    const fallbackCopy = (): boolean => {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const copied = document.execCommand('copy');
+      textarea.remove();
+      return copied;
+    };
+    let copied = fallbackCopy();
+    if (!copied && navigator.clipboard?.writeText) {
+      try {
+        await Promise.race([
+          navigator.clipboard.writeText(text).then(() => true),
+          new Promise<false>((resolve) => window.setTimeout(() => resolve(false), 800)),
+        ]).then((result) => { copied = result; });
+      } catch {
+        copied = false;
+      }
+    }
+    if (!copied) return;
+    setLogCopied(true);
+    window.setTimeout(() => setLogCopied(false), 1_600);
+  }, [log]);
+
+  const resetTrainingDummy = useCallback(() => {
+    const hp = Number(setup.enemyStats.card_lab_training_dummy?.hp_base ?? 999);
+    setScenario((current) => ({
+      ...current,
+      enemies: [{
+        instanceId: CARD_LAB_DUMMY_INSTANCE_ID,
+        enemyDefinitionId: 'card_lab_training_dummy',
+        locationId: 'card_lab_workbench',
+        hp,
+        engagedWith: [],
+        modifiers: [],
+      }],
+    }));
+    setInvestigator((current) => ({
+      ...current,
+      engagedWith: current.engagedWith.filter((id) => id !== CARD_LAB_DUMMY_INSTANCE_ID),
+    }));
+    append(`[LAB][RESET] 訓練木人恢復至 HP ${hp}`);
+  }, [append, setup.enemyStats]);
+
+  const resetCardLab = useCallback(() => {
+    setInvestigator(setup.investigator);
+    setScenario(setup.scenario);
+    setAiMembers([]);
+    setPhase('investigator');
+    setTurnNumber(1);
+    setOutcome(null);
+    setActionPlay(null);
+    setEncounterPlay(null);
+    setDamageAlloc(null);
+    setPanel(null);
+    setModal(null);
+    setLog([...setup.introLog, '[LAB][RESET] 實驗環境、牌組與訓練木人已還原。']);
+  }, [setup]);
+
   useEffect(() => {
+    if (setup.sandbox) return;
     saveStoredCampaignProgressFromBootstrap(setup.bootstrap, campaignProgress);
     const selectedSave = getSelectedSave();
     if (!selectedSave || !getPlayerToken()) return;
@@ -697,9 +836,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       campaignProgress,
       setup.bootstrap?.campaign?.id ?? campaignProgress.campaignId,
     ).catch(() => {});
-  }, [setup.bootstrap, campaignProgress, investigator.permanentlyDead, outcome, preparationOpen]);
+  }, [setup.bootstrap, setup.sandbox, campaignProgress, investigator.permanentlyDead, outcome, preparationOpen]);
 
   useEffect(() => {
+    if (setup.sandbox) return;
     if (!outcome || campaignSettlement) return;
     const reward = {
       ...scenarioRewardFromOutcome(outcome, scenario.hiddenPoints ?? [], [investigator.investigatorId]),
@@ -735,7 +875,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           settlementReportedRef.current = false;
         });
     }
-  }, [outcome, campaignSettlement, campaignProgress, investigator, scenario.hiddenPoints]);
+  }, [outcome, campaignSettlement, campaignProgress, investigator, scenario.hiddenPoints, setup.sandbox]);
 
   // === Uria 六項檢查數據:累計於 ref,結局時在結算畫面渲染(不觸發 re-render;outcome set 時讀到的即最終值) ===
   const statsRef = useRef<Record<string, SixMetric>>({});
@@ -1268,6 +1408,20 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     };
     const out = resolveIntent(intent, ctx);
     bus.publish(out.result);
+    if (isCardLab) {
+      appendLines(cardLabDiagnosticLines({
+        actionType,
+        payload,
+        outcome: out.result.outcome,
+        rejection: out.result.rejection,
+        effects: out.result.effects ?? [],
+        beforeInvestigator: investigator,
+        afterInvestigator: out.newState?.investigator ?? investigator,
+        beforeScenario: scenario,
+        afterScenario: out.newState?.scenario ?? scenario,
+        setup,
+      }));
+    }
     if (out.result.outcome === 'accepted') {
       tallyActor(investigator.investigatorId, out.result.effects ?? []); // 六項:玩家本動作的線索/傷害/資源/抽卡
       // 倒地同步(閃避失敗/藉機攻擊可能把自己打趴)— 不即時 append,收成 syncLogs 排在主效果之後
@@ -1334,7 +1488,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         }
       }
     }
-  }, [bus, investigator, scenario, aiMembers, turnNumber, phase, setup, flags, locMeta, triggerEncounter, triggerKeeperLegendaryEncounter]);
+  }, [bus, investigator, scenario, aiMembers, turnNumber, phase, setup, flags, locMeta, triggerEncounter, triggerKeeperLegendaryEncounter, isCardLab, appendLines]);
 
   const iconLabel = (key: string): string => key === 'all'
     ? '萬用'
@@ -1995,6 +2149,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     })),
     log,
   );
+  const labDummyHp = scenario.enemies.find((enemy) => enemy.instanceId === CARD_LAB_DUMMY_INSTANCE_ID)?.hp ?? 0;
 
   // phase dots:目前 4 階段(短休息/調查員/神話/結束)
   const phaseIdx = PHASE_ORDER.indexOf(phase);
@@ -2022,7 +2177,21 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
 
   return (
     <div className="bg-root">
-      <div className="battle-screen">
+      <div className={'battle-screen' + (isCardLab ? ' card-lab-screen' : '')}>
+
+        {isCardLab && (
+          <section className="lab-status-strip" aria-label="實驗場狀態">
+            <div>
+              <strong>卡片效果實驗場</strong>
+              <span>訓練木人 HP {labDummyHp} · 傷害 0 · 恐懼 0</span>
+            </div>
+            <div className="lab-status-actions">
+              <button onClick={resetTrainingDummy}>重置木人</button>
+              <button onClick={resetCardLab}>重置實驗</button>
+              <button onClick={() => navigate('/departure')}>返回地圖</button>
+            </div>
+          </section>
+        )}
 
         {/* === Block 4 底層滿版地圖 === */}
         <main className="location-map">
@@ -2080,7 +2249,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                         .map((e, ei) => (
                           <div
                             key={e.instanceId}
-                            className="enemy-token"
+                            className={'enemy-token' + (e.enemyDefinitionId === 'card_lab_training_dummy' ? ' training-dummy' : '')}
                             style={{ right: 8 + ei * 26 }}
                             title={setup.enemyStats[e.enemyDefinitionId]?.name_zh ?? e.enemyDefinitionId}
                             role="img"
@@ -2156,10 +2325,18 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         </div>
 
         {/* === Block 5 右滿高敘事 LOG === */}
-        <aside className={'narrative-log' + (logCollapsed ? ' collapsed' : '')}>
-          <div className="log-title" onClick={() => setLogCollapsed((v) => !v)}>
-            <span>✦ 戰役紀錄 ✦</span>
-            <span>{logCollapsed ? '▼' : '▲'}</span>
+        <aside className={'narrative-log' + (isCardLab ? ' lab-log' : '') + (logCollapsed ? ' collapsed' : '')}>
+          <div className="log-title">
+            <button className="log-title-toggle" onClick={() => setLogCollapsed((v) => !v)}>
+              <span>{isCardLab ? '實驗紀錄' : '戰役紀錄'}</span>
+              <span>{logCollapsed ? '▼' : '▲'}</span>
+            </button>
+            {isCardLab && (
+              <div className="lab-log-actions">
+                <button onClick={() => void copyCardLabLog()}>{logCopied ? '已複製' : '複製 Log'}</button>
+                <button onClick={() => setLog(['──── 卡片效果實驗場 Log 已清空 ────'])}>清空</button>
+              </div>
+            )}
           </div>
 
           <div className="log-scroll-area">

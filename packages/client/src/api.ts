@@ -87,6 +87,29 @@ export interface PlayerSave {
   campaign_name: string | null;
 }
 
+export interface CardLabManifest {
+  id: 'card-lab';
+  version: number;
+  title: string;
+  baseStageId: string;
+  locations: Array<{
+    code: string;
+    name_zh: string;
+    description_zh: string;
+    shroud: number;
+  }>;
+  enemy: {
+    code: string;
+    name_zh: string;
+    hp: number;
+    dc: number;
+    damage_physical: number;
+    damage_horror: number;
+    fear_value: number;
+    movement_speed: number;
+  };
+}
+
 export interface PlayerMe {
   player: PlayerAccount;
   saves: PlayerSave[];
@@ -129,13 +152,29 @@ async function getJson<T>(path: string): Promise<T> {
   return requestJson<T>(path);
 }
 
-export function fetchPlayStages(): Promise<PlayStageListItem[]> {
-  return getJson<PlayStageListItem[]>('/api/play/stages');
+let playStagesCache: Promise<PlayStageListItem[]> | null = null;
+const playInvestigatorsCache = new Map<string, Promise<PlayInvestigator[]>>();
+
+export function fetchPlayStages(options: { refresh?: boolean } = {}): Promise<PlayStageListItem[]> {
+  if (options.refresh) playStagesCache = null;
+  if (!playStagesCache) {
+    playStagesCache = getJson<PlayStageListItem[]>('/api/play/stages');
+    playStagesCache.catch(() => { playStagesCache = null; });
+  }
+  return playStagesCache;
 }
 
-export function fetchPlayInvestigators(options: { includeDraft?: boolean } = {}): Promise<PlayInvestigator[]> {
+export function fetchPlayInvestigators(options: { includeDraft?: boolean; refresh?: boolean } = {}): Promise<PlayInvestigator[]> {
   const qs = options.includeDraft ? '?includeDraft=true' : '';
-  return getJson<PlayInvestigator[]>(`/api/play/investigators${qs}`);
+  const key = options.includeDraft ? 'draft' : 'completed';
+  if (options.refresh) playInvestigatorsCache.delete(key);
+  let cached = playInvestigatorsCache.get(key);
+  if (!cached) {
+    cached = getJson<PlayInvestigator[]>(`/api/play/investigators${qs}`);
+    cached.catch(() => playInvestigatorsCache.delete(key));
+    playInvestigatorsCache.set(key, cached);
+  }
+  return cached;
 }
 
 export async function loginPlayer(login: string, password: string): Promise<PlayerMe> {
@@ -157,6 +196,10 @@ export async function logoutPlayer(): Promise<void> {
 
 export function fetchPlayerMe(): Promise<PlayerMe> {
   return requestJson<PlayerMe>('/api/player/me', {}, true);
+}
+
+export function fetchCardLabManifest(): Promise<CardLabManifest> {
+  return requestJson<CardLabManifest>('/api/player/card-lab', {}, true);
 }
 
 export function createPlayerSave(input: {

@@ -5,10 +5,9 @@ import jwt from 'jsonwebtoken';
 import { pool } from '../db/pool.js';
 import { requireAdminRole } from '../middleware/auth.js';
 import {
-  assertPlayerPasswordVaultConfigured,
   decryptPlayerPassword,
   encryptPlayerPassword,
-  PlayerPasswordVaultConfigurationError,
+  getOrCreatePlayerPasswordVaultKey,
   type PlayerPasswordVaultRecord,
 } from '../services/player-password-vault.js';
 
@@ -646,17 +645,10 @@ export const playerAccountRoutes: FastifyPluginAsync = async (app) => {
     if (!Number.isInteger(saveSlotsMax) || saveSlotsMax < 1 || saveSlotsMax > 8) {
       return reply.status(400).send({ success: false, error: 'save_slots_max 必須為 1-8' });
     }
-    try {
-      assertPlayerPasswordVaultConfigured();
-    } catch (error) {
-      if (error instanceof PlayerPasswordVaultConfigurationError) {
-        return reply.status(503).send({ success: false, error: '密碼保管金鑰尚未設定,暫時無法建立帳號' });
-      }
-      throw error;
-    }
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      const vaultKey = await getOrCreatePlayerPasswordVaultKey(client);
       const hash = await bcrypt.hash(password!, 12);
       const result = await client.query(
         `INSERT INTO players (email, username, password_hash, save_slots_max)
@@ -665,7 +657,7 @@ export const playerAccountRoutes: FastifyPluginAsync = async (app) => {
                    is_disabled, created_at, last_login_at`,
         [email, username, hash, saveSlotsMax],
       );
-      const vault = encryptPlayerPassword(result.rows[0].id, password!);
+      const vault = encryptPlayerPassword(result.rows[0].id, password!, vaultKey);
       await client.query(
         `INSERT INTO player_password_vault (player_id, ciphertext, iv, auth_tag, key_version)
          VALUES ($1, $2, $3, $4, $5)`,
@@ -714,15 +706,6 @@ export const playerAccountRoutes: FastifyPluginAsync = async (app) => {
     if (body.password !== undefined) {
       const pErr = passwordError(body.password);
       if (pErr) return reply.status(400).send({ success: false, error: pErr });
-      try {
-        assertPlayerPasswordVaultConfigured();
-        passwordVault = encryptPlayerPassword(request.params.id, body.password);
-      } catch (error) {
-        if (error instanceof PlayerPasswordVaultConfigurationError) {
-          return reply.status(503).send({ success: false, error: '密碼保管金鑰尚未設定,暫時無法重設密碼' });
-        }
-        throw error;
-      }
       sets.push(`password_hash = $${pi++}`);
       vals.push(await bcrypt.hash(body.password, 12));
     }
@@ -744,6 +727,10 @@ export const playerAccountRoutes: FastifyPluginAsync = async (app) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      if (body.password !== undefined) {
+        const vaultKey = await getOrCreatePlayerPasswordVaultKey(client);
+        passwordVault = encryptPlayerPassword(request.params.id, body.password, vaultKey);
+      }
       const result = await client.query(
         `UPDATE players SET ${sets.join(', ')}
           WHERE id = $${pi}
@@ -789,18 +776,10 @@ export const playerAccountRoutes: FastifyPluginAsync = async (app) => {
     '/api/admin/players/:id/password/reveal',
     { preHandler: requireAdminRole },
     async (request, reply) => {
-      try {
-        assertPlayerPasswordVaultConfigured();
-      } catch (error) {
-        if (error instanceof PlayerPasswordVaultConfigurationError) {
-          return reply.status(503).send({ success: false, error: '密碼保管金鑰尚未設定,無法顯示目前密碼' });
-        }
-        throw error;
-      }
-
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        const vaultKey = await getOrCreatePlayerPasswordVaultKey(client);
         const result = await client.query(
           `SELECT p.id, v.ciphertext, v.iv, v.auth_tag, v.key_version, v.updated_at
              FROM players p
@@ -822,7 +801,7 @@ export const playerAccountRoutes: FastifyPluginAsync = async (app) => {
           iv: row.iv,
           authTag: row.auth_tag,
           keyVersion: Number(row.key_version),
-        });
+        }, vaultKey);
         await auditAccountAction(request, request.params.id, 'password_reveal', {}, client);
         await client.query('COMMIT');
         return reply

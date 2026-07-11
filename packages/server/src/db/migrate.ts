@@ -1,6 +1,8 @@
 import { pool } from './pool.js';
 import type { PoolClient } from 'pg';
 import { innsmouthCampaignSeed } from './seeds/mod06-campaigns.js';
+import { bootstrapCreatorPasswords } from '../services/creator-password-bootstrap.js';
+import { getOrCreatePlayerPasswordVaultKey } from '../services/player-password-vault.js';
 
 const MIGRATION_SQL = `
 -- ============================================
@@ -3570,6 +3572,16 @@ CREATE TABLE IF NOT EXISTS player_password_vault (
 );
 `;
 
+// Migration 044: persist the MOD-15 vault key on the server so no operator setup is required.
+export const MIGRATION_044_SQL = `
+CREATE TABLE IF NOT EXISTS server_secrets (
+  secret_name     VARCHAR(128) PRIMARY KEY,
+  secret_value    TEXT NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3795,6 +3807,21 @@ export async function runMigrations() {
     await runOne('MIGRATION_041', MIGRATION_041_SQL);
     await runOne('MIGRATION_042', MIGRATION_042_SQL);
     await runOne('MIGRATION_043', MIGRATION_043_SQL);
+    await runOne('MIGRATION_044', MIGRATION_044_SQL);
+    try {
+      const vaultKey = await getOrCreatePlayerPasswordVaultKey(client);
+      const updatedCreators = await bootstrapCreatorPasswords(client, vaultKey);
+      if (updatedCreators.length > 0) {
+        console.log(`[MOD-15] 已自動建立可顯示密碼:${updatedCreators.join(', ')}`);
+      }
+    } catch (bootstrapErr: any) {
+      failures.push({
+        name: 'MOD15_CREATOR_PASSWORD_BOOTSTRAP',
+        error: bootstrapErr?.message || String(bootstrapErr),
+        code: bootstrapErr?.code,
+      });
+      console.error('[MOD-15] 自動密碼建立失敗:', bootstrapErr?.message || bootstrapErr);
+    }
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

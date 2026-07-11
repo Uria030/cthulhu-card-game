@@ -4,6 +4,11 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_BYTES = 12;
 const KEY_BYTES = 32;
 const KEY_VERSION = 1;
+const SECRET_NAME = 'player_password_vault_key';
+
+interface Queryable {
+  query(sql: string, params?: unknown[]): Promise<{ rows: any[] }>;
+}
 
 export interface PlayerPasswordVaultRecord {
   ciphertext: string;
@@ -36,7 +41,7 @@ function additionalData(playerId: string, keyVersion: number): Buffer {
 export function encryptPlayerPassword(
   playerId: string,
   password: string,
-  encodedKey = process.env.PLAYER_PASSWORD_VAULT_KEY,
+  encodedKey: string,
 ): PlayerPasswordVaultRecord {
   const key = decodeKey(encodedKey);
   const iv = randomBytes(IV_BYTES);
@@ -54,7 +59,7 @@ export function encryptPlayerPassword(
 export function decryptPlayerPassword(
   playerId: string,
   record: PlayerPasswordVaultRecord,
-  encodedKey = process.env.PLAYER_PASSWORD_VAULT_KEY,
+  encodedKey: string,
 ): string {
   const key = decodeKey(encodedKey);
   const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(record.iv, 'base64'));
@@ -66,8 +71,32 @@ export function decryptPlayerPassword(
   ]).toString('utf8');
 }
 
-export function assertPlayerPasswordVaultConfigured(
-  encodedKey = process.env.PLAYER_PASSWORD_VAULT_KEY,
-): void {
+export function assertPlayerPasswordVaultConfigured(encodedKey: string): void {
   decodeKey(encodedKey);
+}
+
+function initialVaultKey(): string {
+  const configured = process.env.PLAYER_PASSWORD_VAULT_KEY?.trim();
+  if (configured) {
+    try {
+      decodeKey(configured);
+      return configured;
+    } catch {
+      // An invalid legacy setting must not block MOD-15 startup.
+    }
+  }
+  return randomBytes(KEY_BYTES).toString('base64');
+}
+
+export async function getOrCreatePlayerPasswordVaultKey(db: Queryable): Promise<string> {
+  const result = await db.query(
+    `INSERT INTO server_secrets (secret_name, secret_value)
+     VALUES ($1, $2)
+     ON CONFLICT (secret_name) DO UPDATE SET secret_name = EXCLUDED.secret_name
+     RETURNING secret_value`,
+    [SECRET_NAME, initialVaultKey()],
+  );
+  const key = String(result.rows[0]?.secret_value ?? '');
+  assertPlayerPasswordVaultConfigured(key);
+  return key;
 }

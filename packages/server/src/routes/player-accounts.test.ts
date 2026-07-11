@@ -1,14 +1,16 @@
 import Fastify from 'fastify';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { playerAccountTestHelpers } from './player-accounts.js';
 import { playerAccountRoutes } from './player-accounts.js';
-import { MIGRATION_042_SQL, MIGRATION_043_SQL } from '../db/migrate.js';
+import { MIGRATION_042_SQL, MIGRATION_043_SQL, MIGRATION_044_SQL } from '../db/migrate.js';
 import { pool } from '../db/pool.js';
 import {
   decryptPlayerPassword,
   encryptPlayerPassword,
   PlayerPasswordVaultConfigurationError,
 } from '../services/player-password-vault.js';
+import { bootstrapCreatorPasswords } from '../services/creator-password-bootstrap.js';
 
 type TestFn = () => void | Promise<void>;
 const tests: { name: string; fn: TestFn }[] = [];
@@ -99,6 +101,12 @@ test('MIGRATION_043 stores encrypted password material outside players', () => {
   assertEq(MIGRATION_043_SQL.includes('password_plaintext'), false);
 });
 
+test('MIGRATION_044 persists a server-managed vault key', () => {
+  assertEq(MIGRATION_044_SQL.includes('CREATE TABLE IF NOT EXISTS server_secrets'), true);
+  assertEq(MIGRATION_044_SQL.includes('secret_name'), true);
+  assertEq(MIGRATION_044_SQL.includes('secret_value'), true);
+});
+
 test('password vault round-trips independent creator passwords', () => {
   const key = Buffer.alloc(32, 17).toString('base64');
   const creator01 = encryptPlayerPassword('creator-01-id', 'CreatorAlpha1207', key);
@@ -130,7 +138,7 @@ test('password vault rejects an invalid key and wrong player binding', () => {
 
 test('MOD-15 resets and reveals two independent creator passwords', async () => {
   const originalConnect = pool.connect;
-  const originalVaultKey = process.env.PLAYER_PASSWORD_VAULT_KEY;
+  const serverVaultKey = Buffer.alloc(32, 31).toString('base64');
   const vaultRows = new Map<string, { ciphertext: string; iv: string; auth_tag: string; key_version: number; updated_at: string }>();
   const creatorRows = new Map([
     ['creator-01-id', { id: 'creator-01-id', email: 'creator01@ug.local', username: 'creator01' }],
@@ -139,6 +147,7 @@ test('MOD-15 resets and reveals two independent creator passwords', async () => 
   const fakeClient = {
     async query(sql: string, params: unknown[] = []) {
       if (/^\s*(BEGIN|COMMIT|ROLLBACK)\s*$/i.test(sql)) return { rows: [] };
+      if (sql.includes('INSERT INTO server_secrets')) return { rows: [{ secret_value: serverVaultKey }] };
       if (sql.includes('UPDATE players SET')) {
         const id = String(params.at(-1));
         const player = creatorRows.get(id);
@@ -168,7 +177,6 @@ test('MOD-15 resets and reveals two independent creator passwords', async () => 
   };
 
   (pool as any).connect = async () => fakeClient;
-  process.env.PLAYER_PASSWORD_VAULT_KEY = Buffer.alloc(32, 31).toString('base64');
   const app = Fastify({ logger: false });
   await app.register(playerAccountRoutes);
   const adminToken = jwt.sign(
@@ -208,9 +216,60 @@ test('MOD-15 resets and reveals two independent creator passwords', async () => 
   } finally {
     await app.close();
     (pool as any).connect = originalConnect;
-    if (originalVaultKey === undefined) delete process.env.PLAYER_PASSWORD_VAULT_KEY;
-    else process.env.PLAYER_PASSWORD_VAULT_KEY = originalVaultKey;
   }
+});
+
+test('deployment bootstraps visible, login-valid creator passwords exactly once', async () => {
+  const key = Buffer.alloc(32, 41).toString('base64');
+  const players = new Map([
+    ['creator01', { id: 'creator-01-id', username: 'creator01', password_hash: '' }],
+    ['creator02', { id: 'creator-02-id', username: 'creator02', password_hash: '' }],
+  ]);
+  const vaultRows = new Map<string, { ciphertext: string; iv: string; authTag: string; keyVersion: number }>();
+  const bootstrapped = new Set<string>();
+  const fakeClient = {
+    async query(sql: string, params: unknown[] = []) {
+      if (/^\s*(BEGIN|COMMIT|ROLLBACK)\s*$/i.test(sql)) return { rows: [] };
+      if (sql.includes('FROM players p') && sql.includes('already_bootstrapped')) {
+        const player = players.get(String(params[0]));
+        return { rows: player ? [{ ...player, already_bootstrapped: bootstrapped.has(player.id) }] : [] };
+      }
+      if (sql.includes('UPDATE players SET password_hash')) {
+        const player = [...players.values()].find((row) => row.id === String(params[1]));
+        if (player) player.password_hash = String(params[0]);
+        return { rows: [] };
+      }
+      if (sql.includes('INSERT INTO player_password_vault')) {
+        vaultRows.set(String(params[0]), {
+          ciphertext: String(params[1]),
+          iv: String(params[2]),
+          authTag: String(params[3]),
+          keyVersion: Number(params[4]),
+        });
+        return { rows: [] };
+      }
+      if (sql.includes('INSERT INTO account_audit_logs')) {
+        bootstrapped.add(String(params[0]));
+        return { rows: [] };
+      }
+      throw new Error(`Unexpected SQL in creator bootstrap test: ${sql}`);
+    },
+  };
+
+  const firstRun = await bootstrapCreatorPasswords(fakeClient as any, key);
+  const secondRun = await bootstrapCreatorPasswords(fakeClient as any, key);
+  assertEq(firstRun.join(','), 'creator01,creator02');
+  assertEq(secondRun.length, 0, 'bootstrap must not rotate passwords on restart');
+
+  const creator01Vault = vaultRows.get('creator-01-id')!;
+  const creator02Vault = vaultRows.get('creator-02-id')!;
+  const creator01Password = decryptPlayerPassword('creator-01-id', creator01Vault, key);
+  const creator02Password = decryptPlayerPassword('creator-02-id', creator02Vault, key);
+  assertEq(/^[A-Za-z0-9]{16}$/.test(creator01Password), true, 'creator01 password is usable alphanumeric');
+  assertEq(/^[A-Za-z0-9]{16}$/.test(creator02Password), true, 'creator02 password is usable alphanumeric');
+  assertEq(creator01Password === creator02Password, false, 'creator passwords are independent');
+  assertEq(await bcrypt.compare(creator01Password, players.get('creator01')!.password_hash), true, 'creator01 login hash matches');
+  assertEq(await bcrypt.compare(creator02Password, players.get('creator02')!.password_hash), true, 'creator02 login hash matches');
 });
 
 let failed = 0;

@@ -22,10 +22,18 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse at 50% 35%, rgba(184, 137, 61, 0.06), transparent 50%),
-    radial-gradient(ellipse at 20% 80%, rgba(45, 61, 42, 0.08), transparent 45%),
+    linear-gradient(rgba(6, 7, 9, 0.26), rgba(6, 7, 9, 0.7)),
+    url('/game-art/briefing-desk.jpg') center / cover no-repeat,
     var(--bg-primary);
   pointer-events: none;
+}
+.brief-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 100px 30px rgba(0, 0, 0, 0.82);
+  background: linear-gradient(112deg, transparent 28%, rgba(205, 178, 116, 0.08) 46%, transparent 60%);
+  animation: briefLamp 9s ease-in-out infinite;
 }
 
 /* 信件 / 紙頁容器 — flex column,讓敘事區可內捲、footer 固定底 */
@@ -50,6 +58,7 @@
     radial-gradient(ellipse at top left, rgba(92, 32, 24, 0.05), transparent 50%),
     radial-gradient(ellipse at bottom right, rgba(0, 0, 0, 0.08), transparent 50%),
     repeating-linear-gradient(0deg, transparent 0, transparent 24px, rgba(92, 32, 24, 0.025) 24px, rgba(92, 32, 24, 0.025) 25px);
+  animation: briefPaperIn 0.55s var(--ease-paper) both;
 }
 
 .brief-header { flex: 0 0 auto; }
@@ -189,4 +198,30 @@
 .brief-enter:active {
   transform: translateY(0);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes briefPaperIn {
+  from { opacity: 0; transform: translateY(18px) rotate(-0.35deg); }
+  to { opacity: 1; transform: translateY(0) rotate(0); }
+}
+
+@keyframes briefLamp {
+  0%, 100% { opacity: 0.55; }
+  46% { opacity: 0.7; }
+  48% { opacity: 0.42; }
+  51% { opacity: 0.66; }
+}
+
+@media (max-width: 700px) {
+  .brief-root { padding: 10px 10px calc(10px + env(safe-area-inset-bottom)); }
+  .brief-paper { border-width: 5px; padding: 16px 14px; }
+  .brief-title { font-size: 22px; }
+  .brief-narrative { font-size: 16px; line-height: 1.7; padding: 0 4px; }
+  .brief-back,
+  .brief-enter { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brief-paper,
+  .brief-backdrop::after { animation: none; }
 }

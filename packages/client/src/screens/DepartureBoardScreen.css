@@ -1,4 +1,4 @@
-/* 世界地圖選關 — 程式化羊皮地圖(待委製圖檔替換);全螢幕不溢出 */
+/* 世界地圖選關 — 手繪羊皮地圖 + 互動別針;全螢幕不溢出 */
 .wm-root {
   width: 100vw;
   height: 100vh;
@@ -36,19 +36,31 @@
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
 }
 
-.wm-canvas { flex: 1 1 auto; min-height: 0; position: relative; }
+.wm-canvas { flex: 1 1 auto; min-height: 0; position: relative; isolation: isolate; }
+.wm-canvas::before,
+.wm-canvas::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.wm-canvas::before {
+  box-shadow: inset 0 0 90px 28px rgba(15, 10, 6, 0.78);
+}
+.wm-canvas::after {
+  background: linear-gradient(108deg, transparent 35%, rgba(255, 244, 210, 0.08) 49%, transparent 62%);
+  transform: translateX(-120%);
+  animation: wmLanternSweep 12s ease-in-out infinite;
+}
 .wm-svg { width: 100%; height: 100%; display: block; }
 
-/* 海 + 羊皮底 */
-.wm-sea { fill: #cdbf9c; }
-.wm-grat { fill: none; stroke: rgba(90, 70, 40, 0.18); stroke-width: 1; }
-
-/* 陸塊 */
-.wm-land path { fill: #d8c49a; stroke: rgba(90, 64, 36, 0.55); stroke-width: 2; }
-.wm-land .wm-land-far { fill: #d0bb8e; opacity: 0.85; }
+.wm-map-art { filter: sepia(0.08) contrast(1.06) brightness(0.88); }
+.wm-map-wash { fill: rgba(29, 23, 14, 0.08); }
+.wm-grat { fill: none; stroke: rgba(84, 67, 38, 0.32); stroke-width: 1; }
 
 /* 羅盤 */
-.wm-compass-ring { fill: rgba(232, 220, 192, 0.35); stroke: #5a4a32; stroke-width: 1.5; }
+.wm-compass-ring { fill: rgba(232, 220, 192, 0.52); stroke: #43351f; stroke-width: 1.5; }
 .wm-compass-needle { fill: #8a3b2a; }
 .wm-compass-needle2 { fill: #5a4a32; }
 .wm-compass-n { fill: #5a4a32; font: 700 13px 'Noto Serif TC', serif; }
@@ -56,7 +68,7 @@
 /* 阿卡姆(中心)*/
 .wm-arkham-dot { fill: #8a3b2a; }
 .wm-arkham-ring { fill: none; stroke: #8a3b2a; stroke-width: 1.5; opacity: 0.7; }
-.wm-arkham-label { fill: #6b3a1f; font: 700 15px 'Noto Serif TC', serif; letter-spacing: 0.08em; }
+.wm-arkham-label { fill: #4b2417; font: 700 15px 'Noto Serif TC', serif; letter-spacing: 0.08em; paint-order: stroke; stroke: rgba(232, 220, 192, 0.78); stroke-width: 3px; }
 
 /* 關卡別針 */
 .wm-pin { cursor: pointer; }
@@ -84,6 +96,7 @@
 .wm-pin-recommended .wm-pin-shape {
   fill: #c9a84c;
   stroke-width: 1.8;
+  animation: wmPinPulse 2.2s ease-in-out infinite;
 }
 .wm-pin-recommended .wm-pin-status { fill: #6b1f12; }
 .wm-pin-locked {
@@ -114,6 +127,7 @@
   background: rgba(20, 14, 8, 0.7);
   border: 1px solid var(--border, #6c5a3e);
   border-radius: 4px;
+  min-height: 44px;
   padding: 6px 14px;
   color: #e8dcc0;
   font: 400 12px 'Noto Sans TC', sans-serif;
@@ -124,4 +138,28 @@
   font: 400 11px 'Noto Sans TC', sans-serif;
   color: #c9b894;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+@keyframes wmLanternSweep {
+  0%, 68% { transform: translateX(-120%); opacity: 0; }
+  76% { opacity: 0.6; }
+  92%, 100% { transform: translateX(120%); opacity: 0; }
+}
+
+@keyframes wmPinPulse {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(201, 168, 76, 0.4)); }
+  50% { filter: drop-shadow(0 0 8px rgba(201, 168, 76, 0.9)); }
+}
+
+@media (max-width: 700px) {
+  .wm-title { font-size: 22px; }
+  .wm-sub { font-size: 11px; }
+  .wm-footer { padding: 6px 10px calc(6px + env(safe-area-inset-bottom)); }
+  .wm-tip { max-width: 55vw; text-align: right; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wm-root,
+  .wm-canvas::after,
+  .wm-pin-recommended .wm-pin-shape { animation: none; }
 }

@@ -19,9 +19,7 @@
   --player-3: var(--player-3-moss);
   --player-4: var(--player-4-saffron);
 
-  background:
-    radial-gradient(ellipse at center, #1a1a2e 0%, #0d0d14 70%),
-    repeating-linear-gradient(45deg, transparent 0, transparent 2px, rgba(255,255,255,0.01) 2px, rgba(255,255,255,0.01) 4px);
+  background: #0d0d14;
   color: var(--text-primary);
   font-family: var(--font-body);
   width: 100vw;
@@ -174,6 +172,22 @@
   overflow: hidden;
   z-index: 1;
 }
+.battle-screen::before,
+.battle-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.battle-screen::before {
+  box-shadow: inset 0 0 110px 36px rgba(0, 0, 0, 0.82);
+}
+.battle-screen::after {
+  background: repeating-linear-gradient(106deg, transparent 0 36px, rgba(206, 222, 210, 0.022) 37px 38px);
+  animation: boardRain 1.8s linear infinite;
+  opacity: 0.65;
+}
 
 /* === 共用區塊容器(玻璃透視)=== */
 .block-container {
@@ -325,7 +339,10 @@
   left: 0;
   width: 150px;
   height: 150px;
-  background: linear-gradient(135deg, var(--cipher), var(--world-deep-walnut));
+  background:
+    linear-gradient(140deg, transparent 52%, rgba(13, 13, 20, 0.86)),
+    url('/game-art/investigator-fallback.jpg') 48% 22% / cover no-repeat,
+    var(--world-deep-walnut);
   border-top: 3px solid var(--player-1);
   border-right: 3px solid var(--player-1);
   border-radius: 0 100% 0 0;
@@ -416,7 +433,10 @@
 .map-texture {
   position: absolute;
   inset: 0;
-  background-image: repeating-linear-gradient(0deg, transparent, transparent 10px, rgba(232, 220, 196, 0.02) 10px, rgba(232, 220, 196, 0.02) 11px);
+  background:
+    linear-gradient(rgba(8, 9, 11, 0.08), rgba(8, 9, 11, 0.3)),
+    url('/game-art/game-board.jpg') center / cover no-repeat,
+    #11130f;
   pointer-events: none;
   z-index: 0;
 }
@@ -450,8 +470,8 @@
 .location-card {
   aspect-ratio: 3/4;
   width: 200px;
-  background: var(--bg-card);
-  border: 2px solid var(--world-deep-walnut);
+  background: linear-gradient(180deg, #211b17, #121218);
+  border: 2px solid #6f5b38;
   border-radius: var(--r-soft);
   padding: var(--sp-md);
   cursor: pointer;
@@ -461,13 +481,17 @@
   justify-content: space-between;
   transition: all 0.3s var(--ease-paper);
   z-index: 1;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.58), inset 0 0 0 1px rgba(232, 220, 196, 0.08);
 }
 .location-card:hover {
   border-color: var(--border-hover);
   transform: translateY(-4px);
   box-shadow: 0 8px 24px rgba(201, 168, 76, 0.3);
 }
-.location-card.current-loc { border: 3px solid var(--warning); }
+.location-card.current-loc {
+  border: 3px solid var(--warning);
+  animation: currentLocationGlow 2.4s ease-in-out infinite;
+}
 .location-card.locked { opacity: 0.5; filter: grayscale(0.5); }
 
 .loc-name {
@@ -477,12 +501,28 @@
   color: var(--text-primary);
   text-align: center;
 }
+.loc-lock-mark { color: var(--world-antique-brass); }
 .loc-illustration {
   flex-grow: 1;
-  background: linear-gradient(180deg, var(--world-deep-walnut), var(--bg-card));
+  min-height: 0;
+  background-color: var(--world-deep-walnut);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
   margin: var(--sp-sm) 0;
   border-radius: var(--r-sharp);
+  border: 1px solid rgba(201, 168, 76, 0.38);
+  box-shadow: inset 0 0 26px rgba(0, 0, 0, 0.62);
+  filter: saturate(0.82) contrast(1.08);
+  transition: filter 0.25s ease, transform 0.25s ease;
 }
+.location-card:hover .loc-illustration { filter: saturate(1) contrast(1.08) brightness(1.08); transform: scale(1.015); }
+.loc-art-library { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-library.jpg'); }
+.loc-art-docks { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-docks.jpg'); }
+.loc-art-downtown { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-downtown.jpg'); }
+.loc-art-alley { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-alley.jpg'); }
+.loc-art-brick-wall { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-brick-wall.jpg'); }
+.loc-art-haunt { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-haunt.jpg'); }
 .loc-clues {
   display: flex;
   justify-content: center;
@@ -497,6 +537,8 @@
 .clue-dot.has-clue {
   background: var(--success);
   border-color: var(--success);
+  box-shadow: 0 0 8px rgba(111, 143, 92, 0.8);
+  animation: clueSignal 2s ease-in-out infinite;
 }
 .player-token {
   position: absolute;
@@ -922,6 +964,64 @@
   color: var(--world-aged-paper);
   font-family: var(--font-handwritten);
   font-size: 24px;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--world-deep-walnut);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.7), 0 10px 24px rgba(0, 0, 0, 0.3);
+}
+.modal-art-alley { background-image: linear-gradient(transparent 55%, rgba(7, 8, 9, 0.72)), url('/game-art/location-alley.jpg'); }
+.modal-art-haunt { background-image: linear-gradient(transparent 55%, rgba(7, 8, 9, 0.72)), url('/game-art/location-haunt.jpg'); }
+.modal-art-brick { background-image: linear-gradient(transparent 55%, rgba(7, 8, 9, 0.72)), url('/game-art/location-brick-wall.jpg'); }
+.modal-art-agenda { background-image: linear-gradient(transparent 62%, rgba(7, 8, 9, 0.65)), url('/game-art/keeper-agenda.jpg') !important; }
+.modal-art-act { background-image: linear-gradient(transparent 62%, rgba(7, 8, 9, 0.55)), url('/game-art/act-investigation.jpg') !important; }
+.modal-roll {
+  background:
+    linear-gradient(rgba(9, 10, 12, 0.38), rgba(9, 10, 12, 0.72)),
+    url('/game-art/game-board.jpg') center / cover no-repeat;
+}
+.dice-face {
+  width: 96px;
+  height: 96px;
+  border: 3px solid var(--world-antique-brass);
+  border-radius: 8px;
+  background: rgba(232, 220, 196, 0.88);
+  display: grid;
+  place-items: center;
+  transform: rotate(8deg);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+}
+.dice-face i,
+.dice-face::before,
+.dice-face::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--world-oxblood);
+  position: absolute;
+}
+.dice-face::before { transform: translate(-25px, -25px); }
+.dice-face::after { transform: translate(25px, 25px); }
+.modal-roll.is-rolling .dice-face { animation: diceRoll 0.7s ease-in-out infinite; }
+.modal-result {
+  background:
+    linear-gradient(rgba(232, 220, 196, 0.22), rgba(61, 40, 23, 0.55)),
+    url('/game-art/act-investigation.jpg') center / cover no-repeat;
+}
+.result-seal {
+  width: 84px;
+  height: 84px;
+  border: 4px double var(--world-aged-paper);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(92, 32, 24, 0.86);
+  color: var(--world-aged-paper);
+  font: 700 36px var(--font-headline);
+  box-shadow: 0 0 0 6px rgba(92, 32, 24, 0.25);
 }
 .modal-divider {
   border: none;
@@ -965,7 +1065,7 @@
 .modal-progress-fill { height: 100%; }
 
 .modal-keeper .modal-title { color: var(--world-oxblood); }
-.modal-keeper .modal-illustration { background: linear-gradient(135deg, var(--world-oxblood), var(--world-deep-walnut)); }
+.modal-keeper .modal-illustration { background-color: var(--world-deep-walnut); }
 .modal-keeper .cond-title {
   font-family: var(--font-headline);
   font-size: 16px;
@@ -999,7 +1099,7 @@
 }
 
 .modal-act .modal-title { color: var(--abyss); }
-.modal-act .modal-illustration { background: linear-gradient(135deg, var(--abyss), var(--cipher)); }
+.modal-act .modal-illustration { background-color: var(--cipher); }
 .modal-act .modal-progress-fill { background: linear-gradient(90deg, var(--success), var(--warning)); }
 .modal-act .cond-title {
   font-family: var(--font-headline);
@@ -1123,6 +1223,69 @@
 @media (max-width: 1280px) {
   .top-left-ui { width: 220px; }
   .narrative-log { width: 280px; }
+}
+
+@media (max-width: 900px) {
+  .bg-root { zoom: 1; }
+  .top-left-ui {
+    top: 8px;
+    left: 8px;
+    width: min(44vw, 218px);
+    gap: 6px;
+  }
+  .block-container { padding: 8px; }
+  .keeper-title,
+  .act-title { font-size: 13px; }
+  .badge-energy,
+  .badge-doom { width: 40px; height: 40px; }
+  .narrative-log {
+    top: 6px;
+    right: 6px;
+    bottom: 64px;
+    width: min(42vw, 260px);
+  }
+  .block-3-quarter {
+    width: 205px;
+    height: 205px;
+    transform: scale(0.82);
+    transform-origin: left bottom;
+  }
+  .location-card { width: 168px; }
+  .map-grid { gap: 22px; }
+  .system-fab { min-width: 44px; min-height: 44px; }
+  .modal-frame { width: min(92vw, 720px); max-height: 88vh; }
+  .modal-illustration { width: 190px; height: 253px; }
+}
+
+@media (max-width: 620px) {
+  .top-left-ui { width: 184px; }
+  .keeper-badges { gap: 4px; }
+  .badge-energy,
+  .badge-doom { width: 36px; height: 36px; }
+  .badge-label { display: none; }
+  .narrative-log { width: 190px; max-height: 42vh; bottom: auto; }
+  .log-scroll-area { font-size: 12px; }
+  .location-card { width: 150px; }
+  .modal-title { font-size: 21px; }
+  .modal-narrative { font-size: 17px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battle-screen::after,
+  .location-card.current-loc,
+  .clue-dot.has-clue,
+  .enemy-token,
+  .modal-roll.is-rolling .dice-face,
+  .system-menu,
+  .outcome-backdrop,
+  .modal-act li.active .p-dot {
+    animation: none;
+  }
+  .clickable-block,
+  .quarter-avatar-bg,
+  .location-card,
+  .loc-illustration,
+  .map-grid { transition-duration: 0.01ms; }
 }
 
 /* === 載入殼(bootstrap fetch 中 / 失敗)=== */
@@ -1419,9 +1582,36 @@
 .enemy-token {
   position: absolute;
   top: 8px;
-  font-size: 20px;
-  filter: drop-shadow(0 0 6px rgba(248, 113, 113, 0.8));
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--world-oxblood);
+  background: url('/game-art/slit-mouth-boss.jpg') 50% 24% / 165% auto no-repeat #15151f;
+  filter: drop-shadow(0 0 6px rgba(127, 29, 29, 0.9));
   z-index: 2;
+  animation: enemyThreat 2.5s ease-in-out infinite;
+}
+
+@keyframes boardRain {
+  from { transform: translateY(-38px); }
+  to { transform: translateY(38px); }
+}
+@keyframes currentLocationGlow {
+  0%, 100% { box-shadow: 0 0 10px rgba(201, 168, 76, 0.34), 0 8px 20px rgba(0, 0, 0, 0.58); }
+  50% { box-shadow: 0 0 22px rgba(201, 168, 76, 0.72), 0 8px 20px rgba(0, 0, 0, 0.58); }
+}
+@keyframes clueSignal {
+  0%, 100% { opacity: 0.68; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+@keyframes enemyThreat {
+  0%, 100% { transform: translateY(0); filter: drop-shadow(0 0 5px rgba(127, 29, 29, 0.75)); }
+  50% { transform: translateY(-2px); filter: drop-shadow(0 0 10px rgba(178, 58, 45, 0.95)); }
+}
+@keyframes diceRoll {
+  0% { transform: rotate(8deg) scale(1); }
+  50% { transform: rotate(96deg) scale(0.9); }
+  100% { transform: rotate(188deg) scale(1); }
 }
 
 /* === 結算畫面 === */

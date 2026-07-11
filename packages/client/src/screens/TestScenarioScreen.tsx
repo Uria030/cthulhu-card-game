@@ -113,6 +113,18 @@ import {
 } from '../game/campaignProgressStorage';
 import './TestScenarioScreen.css';
 
+type LocationArtKind = 'library' | 'docks' | 'downtown' | 'alley' | 'brick-wall' | 'haunt';
+
+export function locationArtKind(locationId: string, name?: string): LocationArtKind {
+  const key = `${locationId} ${name ?? ''}`.toLowerCase();
+  if (/library|miskatonic|圖書館|密斯卡塔尼克/.test(key)) return 'library';
+  if (/dock|wharf|harbor|innsmouth|碼頭|港口|印斯茅斯/.test(key)) return 'docks';
+  if (/downtown|city.center|市中心|城中/.test(key)) return 'downtown';
+  if (/brick|wall|磚|牆/.test(key)) return 'brick-wall';
+  if (/haunt|deep.one|深潛|出沒|cellar|地窖/.test(key)) return 'haunt';
+  return 'alley';
+}
+
 /**
  * 戰鬥板 — Mapground V1 框架(滿版地圖 + 5 個浮層 block)
  *
@@ -2039,6 +2051,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               >
                 {scenario.locations.map((loc) => {
                   const meta = locMeta[loc.locationDefinitionId];
+                  const artKind = locationArtKind(loc.locationDefinitionId, meta?.name);
                   const unlocked = isLocationUnlocked(loc.locationDefinitionId);
                   const isCurr = loc.locationDefinitionId === investigator.currentLocationId;
                   const cluesHere = scenario.tokens.filter((t) => t.locationId === loc.locationDefinitionId && t.tokenType === 'clue').reduce((s, t) => s + t.amount, 0);
@@ -2058,7 +2071,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                             style={{ left: -12 + aiIdx * 26, opacity: isDowned(ai) ? 0.45 : 1 }}
                             title={(setup.aiMembers[aiIdx]?.profile.name_zh ?? '') + (isDowned(ai) ? '(瀕死)' : '')}
                           >
-                            {isDowned(ai) ? '🩸' : (setup.aiMembers[aiIdx]?.profile.name_zh ?? 'A').slice(0, 1)}
+                            {isDowned(ai) ? '倒' : (setup.aiMembers[aiIdx]?.profile.name_zh ?? 'A').slice(0, 1)}
                           </div>
                         ) : null,
                       )}
@@ -2070,12 +2083,12 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                             className="enemy-token"
                             style={{ right: 8 + ei * 26 }}
                             title={setup.enemyStats[e.enemyDefinitionId]?.name_zh ?? e.enemyDefinitionId}
-                          >
-                            👹
-                          </div>
+                            role="img"
+                            aria-label={setup.enemyStats[e.enemyDefinitionId]?.name_zh ?? e.enemyDefinitionId}
+                          />
                         ))}
-                      <div className="loc-name">{!unlocked && '🔒 '}{meta?.name ?? loc.locationDefinitionId}</div>
-                      <div className="loc-illustration" />
+                      <div className="loc-name">{!unlocked && <span className="loc-lock-mark">鎖定 · </span>}{meta?.name ?? loc.locationDefinitionId}</div>
+                      <div className={`loc-illustration loc-art-${artKind}`} role="img" aria-label={`${meta?.name ?? loc.locationDefinitionId}地點插畫`} />
                       <div className="loc-clues">
                         {Array.from({ length: maxClues }).map((_, i) => (
                           <div key={i} className={'clue-dot' + (i < cluesHere ? ' has-clue' : '')} />
@@ -2134,11 +2147,11 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             <span className="arc-label">體力</span>
           </div>
           <div className="arc-btn arc-btn-hand" onClick={() => openPanel('hand')} title="開啟手牌">
-            <span className="arc-icon">🂠</span>
+            <span className="arc-icon">牌</span>
             <span className="arc-num">{investigator.hand.length}</span>
           </div>
           <div className="arc-btn arc-btn-bag" onClick={() => openPanel('bag')} title="開啟背包">
-            <span className="arc-icon">🎒</span>
+            <span className="arc-icon">袋</span>
           </div>
         </div>
 
@@ -2560,18 +2573,20 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             <div className="modal-title">{actionPlay.title} · {actionPlay.beat === 1 ? '敘述' : actionPlay.beat === 2 ? '檢定' : '結果'}</div>
             {actionPlay.beat === 1 && (
               <>
-                <div className="modal-illustration">敘事插圖(待美術／資料)</div>
+                <div className="modal-illustration modal-art-alley" role="img" aria-label="雨夜暗巷" />
                 <hr className="modal-divider" />
                 <div className="modal-narrative">{actionPlay.narration}</div>
                 <hr className="modal-divider" />
                 <div className="action-row">
-                  <button onClick={advanceActionPlay}>{actionPlay.hasCheck ? '🎲 擲骰檢定 →' : '繼續 →'}</button>
+                  <button onClick={advanceActionPlay}>{actionPlay.hasCheck ? '開始檢定 →' : '繼續 →'}</button>
                 </div>
               </>
             )}
             {actionPlay.beat === 2 && (
               <>
-                <div className="modal-illustration">{actionPlay.rolling ? '🎲 擲骰中…' : '🎲 擲骰'}</div>
+                <div className={'modal-illustration modal-roll' + (actionPlay.rolling ? ' is-rolling' : '')} aria-label={actionPlay.rolling ? '檢定進行中' : '準備檢定'}>
+                  <span className="dice-face" aria-hidden><i /><i /><i /></span>
+                </div>
                 <hr className="modal-divider" />
                 <div className="modal-narrative">
                   {actionPlay.rolling
@@ -2580,13 +2595,13 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                 </div>
                 <hr className="modal-divider" />
                 <div className="action-row">
-                  <button disabled={actionPlay.rolling} onClick={advanceActionPlay}>👁 看結果 →</button>
+                  <button disabled={actionPlay.rolling} onClick={advanceActionPlay}>查看結果 →</button>
                 </div>
               </>
             )}
             {actionPlay.beat === 3 && (
               <>
-                <div className="modal-illustration">結果</div>
+                <div className="modal-illustration modal-result" aria-hidden><span className="result-seal">結</span></div>
                 <hr className="modal-divider" />
                 <div className="modal-narrative">
                   {actionPlay.resultLines.length > 0
@@ -2609,7 +2624,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             <div className="modal-title">遭遇 · {encounterPlay.card.name_zh} · {encounterPlay.beat === 1 ? '敘事' : encounterPlay.beat === 2 ? '選項' : '結算'}</div>
             {encounterPlay.beat === 1 && (
               <>
-                <div className="modal-illustration">遭遇</div>
+                <div className="modal-illustration modal-art-haunt" role="img" aria-label="深潛者出沒處" />
                 <hr className="modal-divider" />
                 <div className="modal-narrative">
                   <div>{encounterPlay.sourceLabel}</div>
@@ -2623,7 +2638,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             )}
             {encounterPlay.beat === 2 && (
               <>
-                <div className="modal-illustration">選項</div>
+                <div className="modal-illustration modal-art-brick" role="img" aria-label="濕滑磚牆上的異常記號" />
                 <hr className="modal-divider" />
                 <div className="action-row encounter-option-row">
                   {encounterPlay.card.options.map((opt, i) => (
@@ -2648,7 +2663,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             )}
             {encounterPlay.beat === 3 && (
               <>
-                <div className="modal-illustration">結算</div>
+                <div className="modal-illustration modal-result" aria-hidden><span className="result-seal">決</span></div>
                 <hr className="modal-divider" />
                 <div className="modal-narrative">
                   {encounterPlay.resultLines.length > 0
@@ -2694,7 +2709,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           <div className="modal-frame modal-keeper">
             <button className="modal-close" onClick={closeAllOverlays}>✕</button>
             <div className="modal-title">❖ 議程 {agendaIdx + 1} · {currentAgenda?.name ?? '未知議程'} ❖</div>
-            <div className="modal-illustration">議程插畫</div>
+            <div className="modal-illustration modal-art-agenda" role="img" aria-label="城主議程" />
             <hr className="modal-divider" />
             <div className="modal-narrative">
               {currentAgenda?.narrative ?? '(本關卡尚未設定議程敘事)'}
@@ -2752,7 +2767,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           <div className="modal-frame modal-act">
             <button className="modal-close" onClick={closeAllOverlays}>✕</button>
             <div className="modal-title">❖ 幕 {actIdx + 1} · {currentAct?.name ?? '未知目標'} ❖</div>
-            <div className="modal-illustration">幕插畫</div>
+            <div className="modal-illustration modal-art-act" role="img" aria-label="調查幕線索板" />
             <hr className="modal-divider" />
             <div className="modal-narrative">
               {currentAct?.narrative ?? '(本關卡尚未設定幕敘事)'}

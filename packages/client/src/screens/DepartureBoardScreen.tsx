@@ -114,8 +114,16 @@ export function DepartureBoardScreen() {
 
       <div className="wm-canvas">
         <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="wm-svg" preserveAspectRatio="xMidYMid slice">
-          {/* 海 */}
-          <rect x={0} y={0} width={VB_W} height={VB_H} className="wm-sea" />
+          <image
+            href="/game-art/departure-map.jpg"
+            x={0}
+            y={0}
+            width={VB_W}
+            height={VB_H}
+            preserveAspectRatio="xMidYMid slice"
+            className="wm-map-art"
+          />
+          <rect x={0} y={0} width={VB_W} height={VB_H} className="wm-map-wash" />
           {/* 經緯線(世界地圖感)*/}
           <g className="wm-grat">
             {[120, 240, 360, 480, 620, 760, 880].map((x) => (
@@ -124,12 +132,6 @@ export function DepartureBoardScreen() {
             {[90, 180, 270, 360, 450, 540].map((y) => (
               <path key={'h' + y} d={`M 0 ${y} Q ${VB_W / 2} ${y + (y < 310 ? 14 : -14)} ${VB_W} ${y}`} />
             ))}
-          </g>
-          {/* 程式化陸塊(新英格蘭海岸 + 周邊;待委製地圖替換)*/}
-          <g className="wm-land">
-            <path d="M 250 120 C 360 90 470 110 560 150 C 640 185 700 180 760 230 C 800 265 790 330 740 360 C 690 388 640 360 590 392 C 540 422 470 410 410 392 C 350 374 300 392 270 350 C 235 300 250 250 252 210 C 252 175 220 150 250 120 Z" />
-            <path d="M 820 150 C 880 140 930 170 940 220 C 948 270 910 300 860 296 C 818 292 800 250 806 210 C 810 180 790 160 820 150 Z" className="wm-land-far" />
-            <path d="M 120 420 C 175 405 220 430 232 470 C 242 510 205 540 160 534 C 120 528 96 488 104 452 C 108 432 96 430 120 420 Z" className="wm-land-far" />
           </g>
           {/* 羅盤 */}
           <g className="wm-compass" transform="translate(890 520)">

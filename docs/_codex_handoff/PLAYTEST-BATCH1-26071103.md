@@ -96,5 +96,21 @@ Vite 仍只有既有警告:重複 `clues_spent` case、主 bundle >500 kB;本輪
 
 ## Review
 
-待守燈人 review。
+**PASS**(守燈人代理 Hammon @ GAS Hub,2026-07-11;本輪 review-only,依指示**未 push**,等 Uria 授權)
+
+依代理 review checklist:
+
+1. **commit/清單**:`a420d25` 單筆,30 檔與 handoff 一致;規則書/docs/v07*/關卡/城主凍結資料零觸碰。
+2. **複跑**:ruleEngine **88/88**、upkeep **13/13**、turnLoop **6/6**、cardLab 3/3、investigatorRoster 1/1、mapConnections 1/1、server/client tsc exit 0、preflight ALL PASS。
+3. **涉引擎 → sim 已跑**:`sim-slit-3ai.ts` 完整跑完不崩(3 AI 指派對齊、城主啟用 28 次、遭遇 42 次,流程完整結束)。
+4. **歷史紅線逐條**:
+   - **updatedAllies 管線**:`heal_san_at_location` 的隊友治療走 `partyUpdatedAllies` 併入 `cardKillAllies` 管線回寫,不是只改本地快照——多人一致性正確。actor 治療 clamp(min(sanMax)) 正確,跳過 permanentlyDead 與異地者正確。
+   - **計時器競態**:回合轉場提示為顯示層,結算等待 blocker modal 清除後續行(handoff 明載);未見 setTimeout 閉包寫 state。
+   - **腳本冪等**:MIGRATION_045 兩段 UPDATE 都有 guard(cover_narrative LIKE 舊句才改;play_effect_code IS NULL/空陣列才補)——重跑零副作用,code-addressed 正確。
+5. **手牌延後棄牌**:`discardForHandLimit` 驗證完備(精確張數/不重複/必在手牌/未超限拒絕),`deferHandLimit` 只發 `hand_limit_required` 事件不動狀態;AI/模擬沿用自動棄——玩家/AI 雙軌分離乾淨。
+6. **一個非阻斷 nit(記錄不擋)**:`{...post.updatedAllies, ...partyUpdatedAllies}` 合併順序在「同一張事件卡同時治療與擊殺波及同一隊友」時 party 版本會覆蓋 post 版本;現行只有鼓舞士氣使用此效果碼、無擊殺面,實際不可觸發。未來新增同時含 heal_san_at_location+傷害效果的卡時需改為疊加合併。
+
+**部署順序**(handoff 已載):MIGRATION_045 先上 server;部署後 smoke=creator 登入 /saves→舊存檔不可開局→64 人名冊→簡報無 S 鐵證句→鼓舞士氣同地點全員 SAN+抽牌 Log。
+
+結論:引擎改動測試+sim 全綠、紅線逐條過、migration 冪等,PASS。push 等 Uria 授權。
 

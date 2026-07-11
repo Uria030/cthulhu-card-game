@@ -1,8 +1,16 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+import type { PoolClient } from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db/pool.js';
 import { requireAdminRole } from '../middleware/auth.js';
+import {
+  assertPlayerPasswordVaultConfigured,
+  decryptPlayerPassword,
+  encryptPlayerPassword,
+  PlayerPasswordVaultConfigurationError,
+  type PlayerPasswordVaultRecord,
+} from '../services/player-password-vault.js';
 
 const PLAYER_JWT_SECRET = process.env.PLAYER_JWT_SECRET || 'player-fallback-secret-change-me';
 const PLAYER_SESSION_HOURS = Number.parseInt(process.env.PLAYER_SESSION_HOURS || '24', 10);
@@ -209,10 +217,17 @@ async function fetchPlayerSaves(playerId: string) {
   return res.rows;
 }
 
-async function fetchPlayerProfile(playerId: string, options: { includeDisabled?: boolean } = {}) {
+async function fetchPlayerProfile(
+  playerId: string,
+  options: { includeDisabled?: boolean; includePasswordVaultStatus?: boolean } = {},
+) {
+  const vaultStatusSql = options.includePasswordVaultStatus
+    ? ', EXISTS (SELECT 1 FROM player_password_vault v WHERE v.player_id = players.id) AS has_recoverable_password'
+    : '';
   const playerRes = await pool.query(
     `SELECT id, email, username, save_slots_max, dead_count, retired_count,
             is_disabled, created_at, last_login_at
+            ${vaultStatusSql}
        FROM players
       WHERE id = $1`,
     [playerId],
@@ -227,9 +242,10 @@ async function auditAccountAction(
   targetPlayerId: string | null,
   action: string,
   detail: Record<string, unknown> = {},
+  client?: PoolClient,
 ) {
   const adminUserId = (request as any).user?.userId ?? null;
-  await pool.query(
+  await (client ?? pool).query(
     `INSERT INTO account_audit_logs (admin_user_id, target_player_id, action, detail)
      VALUES ($1, $2, $3, $4::jsonb)`,
     [adminUserId, targetPlayerId, action, JSON.stringify(detail)],
@@ -599,6 +615,7 @@ export const playerAccountRoutes: FastifyPluginAsync = async (app) => {
       const result = await pool.query(
         `SELECT p.id, p.email, p.username, p.save_slots_max, p.dead_count, p.retired_count,
                 p.is_disabled, p.created_at, p.last_login_at,
+                EXISTS (SELECT 1 FROM player_password_vault v WHERE v.player_id = p.id) AS has_recoverable_password,
                 COUNT(s.id) FILTER (WHERE s.status = 'active')::int AS active_save_count
            FROM players p
            LEFT JOIN investigator_saves s ON s.player_id = p.id
@@ -630,20 +647,46 @@ export const playerAccountRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ success: false, error: 'save_slots_max 必須為 1-8' });
     }
     try {
+      assertPlayerPasswordVaultConfigured();
+    } catch (error) {
+      if (error instanceof PlayerPasswordVaultConfigurationError) {
+        return reply.status(503).send({ success: false, error: '密碼保管金鑰尚未設定,暫時無法建立帳號' });
+      }
+      throw error;
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
       const hash = await bcrypt.hash(password!, 12);
-      const result = await pool.query(
+      const result = await client.query(
         `INSERT INTO players (email, username, password_hash, save_slots_max)
          VALUES ($1, $2, $3, $4)
          RETURNING id, email, username, save_slots_max, dead_count, retired_count,
                    is_disabled, created_at, last_login_at`,
         [email, username, hash, saveSlotsMax],
       );
-      await auditAccountAction(request, result.rows[0].id, 'player_create', { username, email, save_slots_max: saveSlotsMax });
+      const vault = encryptPlayerPassword(result.rows[0].id, password!);
+      await client.query(
+        `INSERT INTO player_password_vault (player_id, ciphertext, iv, auth_tag, key_version)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [result.rows[0].id, vault.ciphertext, vault.iv, vault.authTag, vault.keyVersion],
+      );
+      await auditAccountAction(
+        request,
+        result.rows[0].id,
+        'player_create',
+        { username, email, save_slots_max: saveSlotsMax, password_vaulted: true },
+        client,
+      );
+      await client.query('COMMIT');
       return reply.status(201).send({ success: true, data: result.rows[0] });
     } catch (error: any) {
+      await client.query('ROLLBACK');
       request.log.error(error, 'admin create player failed');
       if (error.code === '23505') return reply.status(409).send({ success: false, error: 'email 或 username 已存在' });
       return reply.status(500).send({ success: false, error: '建立帳號失敗' });
+    } finally {
+      client.release();
     }
   });
 
@@ -655,6 +698,7 @@ export const playerAccountRoutes: FastifyPluginAsync = async (app) => {
     const vals: unknown[] = [];
     let pi = 1;
     const body = request.body ?? {};
+    let passwordVault: PlayerPasswordVaultRecord | null = null;
     if (body.email !== undefined) {
       const email = normalizeEmail(body.email);
       if (!isValidEmail(email)) return reply.status(400).send({ success: false, error: 'email 格式錯誤' });
@@ -670,6 +714,15 @@ export const playerAccountRoutes: FastifyPluginAsync = async (app) => {
     if (body.password !== undefined) {
       const pErr = passwordError(body.password);
       if (pErr) return reply.status(400).send({ success: false, error: pErr });
+      try {
+        assertPlayerPasswordVaultConfigured();
+        passwordVault = encryptPlayerPassword(request.params.id, body.password);
+      } catch (error) {
+        if (error instanceof PlayerPasswordVaultConfigurationError) {
+          return reply.status(503).send({ success: false, error: '密碼保管金鑰尚未設定,暫時無法重設密碼' });
+        }
+        throw error;
+      }
       sets.push(`password_hash = $${pi++}`);
       vals.push(await bcrypt.hash(body.password, 12));
     }
@@ -688,33 +741,113 @@ export const playerAccountRoutes: FastifyPluginAsync = async (app) => {
     if (sets.length === 0) return reply.status(400).send({ success: false, error: '沒有可更新欄位' });
     sets.push('updated_at = NOW()');
     vals.push(request.params.id);
+    const client = await pool.connect();
     try {
-      const result = await pool.query(
+      await client.query('BEGIN');
+      const result = await client.query(
         `UPDATE players SET ${sets.join(', ')}
           WHERE id = $${pi}
           RETURNING id, email, username, save_slots_max, dead_count, retired_count,
                     is_disabled, created_at, last_login_at`,
         vals,
       );
-      if (result.rows.length === 0) return reply.status(404).send({ success: false, error: '帳號不存在' });
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return reply.status(404).send({ success: false, error: '帳號不存在' });
+      }
+      if (passwordVault) {
+        await client.query(
+          `INSERT INTO player_password_vault (player_id, ciphertext, iv, auth_tag, key_version)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (player_id) DO UPDATE
+             SET ciphertext = EXCLUDED.ciphertext,
+                 iv = EXCLUDED.iv,
+                 auth_tag = EXCLUDED.auth_tag,
+                 key_version = EXCLUDED.key_version,
+                 updated_at = NOW()`,
+          [request.params.id, passwordVault.ciphertext, passwordVault.iv, passwordVault.authTag, passwordVault.keyVersion],
+        );
+      }
       await auditAccountAction(request, request.params.id, 'player_update', {
         fields: Object.keys(body).filter((k) => body[k as keyof typeof body] !== undefined && k !== 'password'),
         password_changed: body.password !== undefined,
-      });
+        password_vaulted: passwordVault !== null,
+      }, client);
+      await client.query('COMMIT');
       return reply.send({ success: true, data: result.rows[0] });
     } catch (error: any) {
+      await client.query('ROLLBACK');
       request.log.error(error, 'admin update player failed');
       if (error.code === '23505') return reply.status(409).send({ success: false, error: 'email 或 username 已存在' });
       return reply.status(500).send({ success: false, error: '更新帳號失敗' });
+    } finally {
+      client.release();
     }
   });
+
+  app.post<{ Params: { id: string } }>(
+    '/api/admin/players/:id/password/reveal',
+    { preHandler: requireAdminRole },
+    async (request, reply) => {
+      try {
+        assertPlayerPasswordVaultConfigured();
+      } catch (error) {
+        if (error instanceof PlayerPasswordVaultConfigurationError) {
+          return reply.status(503).send({ success: false, error: '密碼保管金鑰尚未設定,無法顯示目前密碼' });
+        }
+        throw error;
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const result = await client.query(
+          `SELECT p.id, v.ciphertext, v.iv, v.auth_tag, v.key_version, v.updated_at
+             FROM players p
+             LEFT JOIN player_password_vault v ON v.player_id = p.id
+            WHERE p.id = $1`,
+          [request.params.id],
+        );
+        if (result.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return reply.status(404).send({ success: false, error: '帳號不存在' });
+        }
+        const row = result.rows[0];
+        if (!row.ciphertext) {
+          await client.query('ROLLBACK');
+          return reply.status(409).send({ success: false, error: '舊密碼未納入保管,請先設定新密碼' });
+        }
+        const password = decryptPlayerPassword(request.params.id, {
+          ciphertext: row.ciphertext,
+          iv: row.iv,
+          authTag: row.auth_tag,
+          keyVersion: Number(row.key_version),
+        });
+        await auditAccountAction(request, request.params.id, 'password_reveal', {}, client);
+        await client.query('COMMIT');
+        return reply
+          .header('Cache-Control', 'no-store, max-age=0')
+          .header('Pragma', 'no-cache')
+          .send({ success: true, data: { password, updated_at: row.updated_at } });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        request.log.error(error, 'admin reveal player password failed');
+        return reply.status(500).send({ success: false, error: '目前密碼解密失敗' });
+      } finally {
+        client.release();
+      }
+    },
+  );
 
   app.get<{ Params: { id: string } }>(
     '/api/admin/players/:id/saves',
     { preHandler: requireAdminRole },
     async (request, reply) => {
       try {
-        const player = await fetchPlayerProfile(request.params.id, { includeDisabled: true });
+        const player = await fetchPlayerProfile(request.params.id, {
+          includeDisabled: true,
+          includePasswordVaultStatus: true,
+        });
         if (!player) return reply.status(404).send({ success: false, error: '帳號不存在或已停用' });
         return reply.send({ success: true, data: player });
       } catch (error) {

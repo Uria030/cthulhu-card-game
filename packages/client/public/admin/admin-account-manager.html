@@ -18,6 +18,10 @@
     }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
     .form-row label { display: block; color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 0.35rem; }
+    .form-row-wide { grid-column: 1 / -1; }
+    .password-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.5rem; align-items: stretch; }
+    .password-tools .btn { min-width: 4.5rem; }
+    .password-state { margin: 0.35rem 0 0; min-height: 1.2rem; }
     .btn-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
     .player-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 64vh; overflow-y: auto; }
     .player-card { text-align: left; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); padding: 0.75rem; cursor: pointer; }
@@ -31,6 +35,12 @@
     textarea { min-height: 180px; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; resize: vertical; }
     .danger { color: var(--danger); }
     @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+    @media (max-width: 560px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-row-wide { grid-column: auto; }
+      .password-tools { grid-template-columns: minmax(0, 1fr) auto; }
+      .password-tools #copyPasswordBtn { grid-column: 1 / -1; }
+    }
   </style>
 </head>
 <body>
@@ -60,27 +70,36 @@
         <h2>建帳號 / 編輯帳號</h2>
         <div class="form-grid">
           <div class="form-row">
-            <label>Email</label>
+            <label for="email">Email</label>
             <input id="email" autocomplete="off">
           </div>
           <div class="form-row">
-            <label>Username</label>
+            <label for="username">Username</label>
             <input id="username" autocomplete="off">
           </div>
           <div class="form-row">
-            <label>新密碼(建立時必填;編輯時空白=不改)</label>
+            <label for="password">新密碼(建立時必填;編輯時空白=不改)</label>
             <input id="password" type="password" autocomplete="new-password">
           </div>
           <div class="form-row">
-            <label>存檔格上限</label>
+            <label for="saveSlots">存檔格上限</label>
             <input id="saveSlots" type="number" min="1" max="8" value="2">
           </div>
           <div class="form-row">
-            <label>狀態</label>
+            <label for="disabled">狀態</label>
             <select id="disabled">
               <option value="false">啟用</option>
               <option value="true">停用</option>
             </select>
+          </div>
+          <div class="form-row form-row-wide">
+            <label for="currentPassword">目前密碼</label>
+            <div class="password-tools">
+              <input id="currentPassword" type="password" readonly autocomplete="off" placeholder="選擇帳號後可顯示">
+              <button class="btn" type="button" id="revealPasswordBtn" disabled aria-label="顯示目前密碼">顯示</button>
+              <button class="btn" type="button" id="copyPasswordBtn" disabled aria-label="複製目前密碼">複製</button>
+            </div>
+            <p id="passwordState" class="muted password-state" aria-live="polite">尚未選擇帳號。</p>
           </div>
         </div>
         <div class="btn-row">
@@ -88,7 +107,7 @@
           <button class="btn" id="updateBtn" disabled>儲存變更</button>
           <button class="btn" id="clearBtn">清空表單</button>
         </div>
-        <p id="status" class="muted"></p>
+        <p id="status" class="muted" role="status" aria-live="polite"></p>
 
         <hr style="border-color:var(--border);margin:1rem 0;">
 
@@ -103,6 +122,7 @@
   <script>
     let players = [];
     let selectedPlayer = null;
+    let revealedPassword = '';
 
     const el = (id) => document.getElementById(id);
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -113,6 +133,7 @@
     }
 
     async function loadPlayers() {
+      if (revealedPassword) clearRevealedPassword(selectedPlayer?.player || null);
       const q = el('search').value.trim();
       const res = await adminFetch('/api/admin/players' + (q ? '?search=' + encodeURIComponent(q) : ''));
       const data = await res.json();
@@ -139,9 +160,82 @@
       el('saveSlots').value = player?.save_slots_max || 2;
       el('disabled').value = player?.is_disabled ? 'true' : 'false';
       el('updateBtn').disabled = !player;
+      clearRevealedPassword(player);
+    }
+
+    function clearRevealedPassword(player) {
+      revealedPassword = '';
+      el('currentPassword').value = '';
+      el('currentPassword').type = 'password';
+      el('revealPasswordBtn').textContent = '顯示';
+      el('revealPasswordBtn').setAttribute('aria-label', '顯示目前密碼');
+      el('copyPasswordBtn').disabled = true;
+      if (!player) {
+        el('revealPasswordBtn').disabled = true;
+        el('passwordState').textContent = '尚未選擇帳號。';
+      } else if (player.has_recoverable_password) {
+        el('revealPasswordBtn').disabled = false;
+        el('passwordState').textContent = '目前密碼已加密保管，按顯示後讀取。';
+      } else {
+        el('revealPasswordBtn').disabled = true;
+        el('passwordState').textContent = '舊密碼未納入保管，請在上方設定新密碼。';
+      }
+    }
+
+    async function toggleCurrentPassword() {
+      if (!selectedPlayer) return;
+      if (revealedPassword) {
+        const shouldShow = el('currentPassword').type === 'password';
+        el('currentPassword').type = shouldShow ? 'text' : 'password';
+        el('revealPasswordBtn').textContent = shouldShow ? '隱藏' : '顯示';
+        el('revealPasswordBtn').setAttribute('aria-label', shouldShow ? '隱藏目前密碼' : '顯示目前密碼');
+        return;
+      }
+
+      const button = el('revealPasswordBtn');
+      button.disabled = true;
+      el('passwordState').textContent = '正在讀取目前密碼...';
+      try {
+        const res = await adminFetch('/api/admin/players/' + encodeURIComponent(selectedPlayer.player.id) + '/password/reveal', {
+          method: 'POST'
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || '讀取目前密碼失敗');
+        revealedPassword = String(data.data?.password || '');
+        el('currentPassword').value = revealedPassword;
+        el('currentPassword').type = 'text';
+        button.textContent = '隱藏';
+        button.setAttribute('aria-label', '隱藏目前密碼');
+        el('copyPasswordBtn').disabled = !revealedPassword;
+        el('passwordState').textContent = '目前密碼已顯示；離開此帳號後會自動清除。';
+      } catch (error) {
+        clearRevealedPassword(selectedPlayer.player);
+        setStatus(error.message || '讀取目前密碼失敗', true);
+      } finally {
+        button.disabled = !selectedPlayer?.player?.has_recoverable_password;
+      }
+    }
+
+    async function copyCurrentPassword() {
+      if (!revealedPassword) return;
+      try {
+        await navigator.clipboard.writeText(revealedPassword);
+      } catch {
+        const copySource = document.createElement('textarea');
+        copySource.value = revealedPassword;
+        copySource.setAttribute('readonly', '');
+        copySource.style.position = 'fixed';
+        copySource.style.opacity = '0';
+        document.body.appendChild(copySource);
+        copySource.select();
+        document.execCommand('copy');
+        copySource.remove();
+      }
+      el('passwordState').textContent = '目前密碼已複製。';
     }
 
     async function selectPlayer(id) {
+      clearRevealedPassword(null);
       const res = await adminFetch('/api/admin/players/' + encodeURIComponent(id) + '/saves');
       const data = await res.json();
       if (!data.success) throw new Error(data.error || '讀取帳號失敗');
@@ -262,6 +356,11 @@
     el('createBtn').addEventListener('click', () => createPlayer().catch(e => setStatus(e.message, true)));
     el('updateBtn').addEventListener('click', () => updatePlayer().catch(e => setStatus(e.message, true)));
     el('clearBtn').addEventListener('click', () => { selectedPlayer = null; fillForm(null); renderPlayers(); renderSaves(); setStatus(''); });
+    el('revealPasswordBtn').addEventListener('click', () => toggleCurrentPassword().catch(e => setStatus(e.message, true)));
+    el('copyPasswordBtn').addEventListener('click', () => copyCurrentPassword().catch(e => setStatus(e.message, true)));
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && revealedPassword) clearRevealedPassword(selectedPlayer?.player || null);
+    });
 
     loadPlayers().catch(e => setStatus(e.message, true));
   </script>

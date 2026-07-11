@@ -33,7 +33,7 @@ export async function buildApp() {
         cb(null, true); // Allow all for now during development
       }
     },
-    methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
   });
 

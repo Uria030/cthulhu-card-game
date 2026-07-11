@@ -1,7 +1,16 @@
+import Fastify from 'fastify';
+import jwt from 'jsonwebtoken';
 import { playerAccountTestHelpers } from './player-accounts.js';
-import { MIGRATION_042_SQL } from '../db/migrate.js';
+import { playerAccountRoutes } from './player-accounts.js';
+import { MIGRATION_042_SQL, MIGRATION_043_SQL } from '../db/migrate.js';
+import { pool } from '../db/pool.js';
+import {
+  decryptPlayerPassword,
+  encryptPlayerPassword,
+  PlayerPasswordVaultConfigurationError,
+} from '../services/player-password-vault.js';
 
-type TestFn = () => void;
+type TestFn = () => void | Promise<void>;
 const tests: { name: string; fn: TestFn }[] = [];
 function test(name: string, fn: TestFn): void { tests.push({ name, fn }); }
 function assertEq<T>(actual: T, expected: T, msg?: string): void {
@@ -83,10 +92,131 @@ test('MIGRATION_042 mirrors creator01/creator02 admin users into MOD-15 players'
   assertEq(MIGRATION_042_SQL.includes('legacy_creator_import'), true);
 });
 
+test('MIGRATION_043 stores encrypted password material outside players', () => {
+  assertEq(MIGRATION_043_SQL.includes('CREATE TABLE IF NOT EXISTS player_password_vault'), true);
+  assertEq(MIGRATION_043_SQL.includes('ciphertext'), true);
+  assertEq(MIGRATION_043_SQL.includes('auth_tag'), true);
+  assertEq(MIGRATION_043_SQL.includes('password_plaintext'), false);
+});
+
+test('password vault round-trips independent creator passwords', () => {
+  const key = Buffer.alloc(32, 17).toString('base64');
+  const creator01 = encryptPlayerPassword('creator-01-id', 'CreatorAlpha1207', key);
+  const creator02 = encryptPlayerPassword('creator-02-id', 'CreatorBeta4816', key);
+  assertEq(decryptPlayerPassword('creator-01-id', creator01, key), 'CreatorAlpha1207');
+  assertEq(decryptPlayerPassword('creator-02-id', creator02, key), 'CreatorBeta4816');
+  assertEq(creator01.ciphertext === creator02.ciphertext, false, 'vault entries use independent ciphertext');
+});
+
+test('password vault rejects an invalid key and wrong player binding', () => {
+  let invalidKeyRejected = false;
+  try {
+    encryptPlayerPassword('player-1', 'Password1234', 'not-a-32-byte-key');
+  } catch (error) {
+    invalidKeyRejected = error instanceof PlayerPasswordVaultConfigurationError;
+  }
+  assertEq(invalidKeyRejected, true);
+
+  const key = Buffer.alloc(32, 23).toString('base64');
+  const record = encryptPlayerPassword('player-1', 'Password1234', key);
+  let wrongPlayerRejected = false;
+  try {
+    decryptPlayerPassword('player-2', record, key);
+  } catch {
+    wrongPlayerRejected = true;
+  }
+  assertEq(wrongPlayerRejected, true);
+});
+
+test('MOD-15 resets and reveals two independent creator passwords', async () => {
+  const originalConnect = pool.connect;
+  const originalVaultKey = process.env.PLAYER_PASSWORD_VAULT_KEY;
+  const vaultRows = new Map<string, { ciphertext: string; iv: string; auth_tag: string; key_version: number; updated_at: string }>();
+  const creatorRows = new Map([
+    ['creator-01-id', { id: 'creator-01-id', email: 'creator01@ug.local', username: 'creator01' }],
+    ['creator-02-id', { id: 'creator-02-id', email: 'creator02@ug.local', username: 'creator02' }],
+  ]);
+  const fakeClient = {
+    async query(sql: string, params: unknown[] = []) {
+      if (/^\s*(BEGIN|COMMIT|ROLLBACK)\s*$/i.test(sql)) return { rows: [] };
+      if (sql.includes('UPDATE players SET')) {
+        const id = String(params.at(-1));
+        const player = creatorRows.get(id);
+        return { rows: player ? [{ ...player, save_slots_max: 2, dead_count: 0, retired_count: 0, is_disabled: false }] : [] };
+      }
+      if (sql.includes('INSERT INTO player_password_vault')) {
+        const [id, ciphertext, iv, authTag, keyVersion] = params;
+        vaultRows.set(String(id), {
+          ciphertext: String(ciphertext),
+          iv: String(iv),
+          auth_tag: String(authTag),
+          key_version: Number(keyVersion),
+          updated_at: '2026-07-11T00:00:00.000Z',
+        });
+        return { rows: [] };
+      }
+      if (sql.includes('LEFT JOIN player_password_vault')) {
+        const id = String(params[0]);
+        const player = creatorRows.get(id);
+        const vault = vaultRows.get(id);
+        return { rows: player ? [{ id, ...vault }] : [] };
+      }
+      if (sql.includes('INSERT INTO account_audit_logs')) return { rows: [] };
+      throw new Error(`Unexpected SQL in MOD-15 route test: ${sql}`);
+    },
+    release() {},
+  };
+
+  (pool as any).connect = async () => fakeClient;
+  process.env.PLAYER_PASSWORD_VAULT_KEY = Buffer.alloc(32, 31).toString('base64');
+  const app = Fastify({ logger: false });
+  await app.register(playerAccountRoutes);
+  const adminToken = jwt.sign(
+    { userId: 'admin-id', role: 'admin' },
+    process.env.ADMIN_JWT_SECRET || 'fallback-secret-change-me',
+  );
+  const headers = { authorization: `Bearer ${adminToken}` };
+  const credentials = [
+    { id: 'creator-01-id', password: 'CreatorNorth7319' },
+    { id: 'creator-02-id', password: 'CreatorSouth8642' },
+  ];
+
+  try {
+    for (const credential of credentials) {
+      const reset = await app.inject({
+        method: 'PATCH',
+        url: `/api/admin/players/${credential.id}`,
+        headers,
+        payload: { password: credential.password },
+      });
+      assertEq(reset.statusCode, 200, `reset ${credential.id}`);
+
+      const reveal = await app.inject({
+        method: 'POST',
+        url: `/api/admin/players/${credential.id}/password/reveal`,
+        headers,
+      });
+      assertEq(reveal.statusCode, 200, `reveal ${credential.id}`);
+      assertEq(reveal.json().data.password, credential.password, `round-trip ${credential.id}`);
+      assertEq(reveal.headers['cache-control'], 'no-store, max-age=0', `no-store ${credential.id}`);
+    }
+    assertEq(
+      vaultRows.get('creator-01-id')?.ciphertext === vaultRows.get('creator-02-id')?.ciphertext,
+      false,
+      'creator accounts must not share ciphertext',
+    );
+  } finally {
+    await app.close();
+    (pool as any).connect = originalConnect;
+    if (originalVaultKey === undefined) delete process.env.PLAYER_PASSWORD_VAULT_KEY;
+    else process.env.PLAYER_PASSWORD_VAULT_KEY = originalVaultKey;
+  }
+});
+
 let failed = 0;
 for (const t of tests) {
   try {
-    t.fn();
+    await t.fn();
     console.log('PASS', t.name);
   } catch (e) {
     failed++;

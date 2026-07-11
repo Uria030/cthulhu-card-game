@@ -3557,6 +3557,19 @@ SELECT u.id,
  );
 `;
 
+// Migration 043: MOD-15 recoverable password vault. Login continues to use bcrypt.
+export const MIGRATION_043_SQL = `
+CREATE TABLE IF NOT EXISTS player_password_vault (
+  player_id       UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+  ciphertext      TEXT NOT NULL,
+  iv              VARCHAR(64) NOT NULL,
+  auth_tag        VARCHAR(64) NOT NULL,
+  key_version     SMALLINT NOT NULL DEFAULT 1 CHECK (key_version > 0),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3781,6 +3794,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_040', MIGRATION_040_SQL);
     await runOne('MIGRATION_041', MIGRATION_041_SQL);
     await runOne('MIGRATION_042', MIGRATION_042_SQL);
+    await runOne('MIGRATION_043', MIGRATION_043_SQL);
     try {
       await seedInnsmouthCampaign(client);
     } catch (seedErr) {

@@ -508,6 +508,35 @@ test('play_card:資產進場 + 扣費用(§6.1)', () => {
   assertEq(r.newState?.investigator?.actionPoints, 2);
 });
 
+test('play_card:儲蓄型法器從 0 計量進場,不會預先帶滿充能', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['crystal'], resources: 3 });
+  ctx.cardLookup = {
+    ...ctx.cardLookup,
+    crystal: {
+      name_zh: '預兆水晶', card_type: 'asset', cost: 2,
+      is_talisman: true, break_timing: 'stockpile', break_charge_max: 6,
+      effects: [{ trigger_type: 'round_start', effect_code: 'gain_use', effect_params: { amount: 1 } }],
+    },
+  };
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'crystal' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.assetState?.crystal?.usesLeft, 0);
+});
+
+test('play_card:舊式儲蓄法器未配置結構化充能時維持既有滿充能', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['legacy_crystal'], resources: 3 });
+  ctx.cardLookup = {
+    ...ctx.cardLookup,
+    legacy_crystal: {
+      name_zh: '舊式預兆水晶', card_type: 'asset', cost: 2,
+      is_talisman: true, break_timing: 'stockpile', break_charge_max: 6,
+    },
+  };
+  const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'legacy_crystal' }), ctx);
+  assertEq(r.result.outcome, 'accepted');
+  assertEq(r.newState?.investigator?.assetState?.legacy_crystal?.usesLeft, 6);
+});
+
 test('play_card:資源不足駁回', () => {
   const ctx = makeCardCtx({ roll: 10, hand: ['wpn'], resources: 1 });
   const r = resolveIntent(makeIntent('play_card', { cardInstanceId: 'wpn' }), ctx);

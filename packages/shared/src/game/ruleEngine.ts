@@ -113,6 +113,17 @@ export function cardMaxUses(data: CardData | undefined): number | null {
   if (data.is_talisman && data.break_charge_max != null) return Number(data.break_charge_max);
   return null;
 }
+
+function isStockpileTalisman(data: CardData): boolean {
+  return data.is_talisman === true && String(data.break_timing ?? '').toLowerCase() === 'stockpile';
+}
+
+function hasStockpileTurnStartCharge(data: CardData): boolean {
+  return (data.effects ?? []).some((effect) => {
+    const trigger = String(effect.trigger_type ?? '').toLowerCase();
+    return (trigger === 'round_start' || trigger === 'on_turn_start') && String(effect.effect_code ?? '') === 'gain_use';
+  });
+}
 export type CardDataLookup = Record<string, CardData>;
 
 /** 戰鬥風格卡(§8:攻擊時抽 1 張決定檢定屬性) */
@@ -1332,14 +1343,17 @@ function resolvePlayCard(intent: IntentMessage, ctx: RuleContext): RuleResolveOu
 
   // 資產/武器:進場(有使用次數的初始化彈藥/充能,ch3 §10.1)
   const maxUses = cardMaxUses(data);
+  // s09 §5.4:已配置 round_start 充能的儲蓄型，從 0 開始逐步累積。
+  // 舊資料只有文字規則、尚無結構化效果時保留既有滿充能，避免部署後直接失效。
+  const initialUses = isStockpileTalisman(data) && hasStockpileTurnStartCharge(data) ? 0 : maxUses;
   inv = {
     ...inv,
     assetsInPlay: [...inv.assetsInPlay, cardId],
-    ...(maxUses != null
-      ? { assetState: { ...(inv.assetState ?? {}), [cardId]: { usesLeft: maxUses, exhausted: false } } }
+    ...(initialUses != null
+      ? { assetState: { ...(inv.assetState ?? {}), [cardId]: { usesLeft: initialUses, exhausted: false } } }
       : {}),
   };
-  return accept(intent, [...baseEffects, { type: 'asset_enters_play', params: { cardInstanceId: cardId, name: data.name_zh ?? '', uses: maxUses } }], { investigator: inv });
+  return accept(intent, [...baseEffects, { type: 'asset_enters_play', params: { cardInstanceId: cardId, name: data.name_zh ?? '', uses: initialUses } }], { investigator: inv });
 }
 
 /**

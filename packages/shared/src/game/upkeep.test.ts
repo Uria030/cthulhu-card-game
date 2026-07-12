@@ -2,7 +2,7 @@
  * G-05 回合經濟測試 — ch2 §2.4 + ch6 §3.1/§8
  */
 import { discardForHandLimit, runTurnEndUpkeep, runTurnStartUpkeep, runShortRest, hpMaxFor, sanMaxFor, HAND_LIMIT, STARTING_RESOURCES } from './upkeep';
-import type { InvestigatorState } from './state';
+import type { InvestigatorState, ScenarioState } from './state';
 
 type TestFn = () => void;
 const tests: { name: string; fn: TestFn }[] = [];
@@ -19,6 +19,13 @@ function makeInv(over: Partial<InvestigatorState> = {}): InvestigatorState {
     hp: 9, hpMax: 9, san: 9, sanMax: 9, actionPoints: 0, resources: 0, currentLocationId: 'A',
     engagedWith: [], triggeredHorrorChecks: [], traumas: [], secretTaskState: null, permanentlyDead: false, startingXp: 0,
     ...over,
+  };
+}
+
+function makeScenario(): ScenarioState {
+  return {
+    scenarioId: 's', scenarioDefinitionId: 'sd', campaignId: 'c', locations: [], unlockedLocations: [], enemies: [], tokens: [],
+    agendaProgress: 0, objectiveProgress: 0, chaosBag: [], turnNumber: 1, phase: 'investigator',
   };
 }
 
@@ -119,6 +126,23 @@ test('回合開始:加速 +行動點(§6.3)', () => {
   const r = runTurnStartUpkeep(makeInv({ actionPoints: 3, statusEffects: { haste: 2 } }));
   assertEq(r.investigator.actionPoints, 5);
   assertEq(r.effects.some((e) => e.type === 'status_haste'), true);
+});
+
+test('回合開始:儲蓄型法器經 effectsExecutor 累積計量', () => {
+  const r = runTurnStartUpkeep(
+    makeInv({ assetsInPlay: ['crystal'], assetState: { crystal: { usesLeft: 0, exhausted: false } } }),
+    {
+      scenario: makeScenario(),
+      cardLookup: {
+        crystal: {
+          name_zh: '預兆水晶', card_type: 'asset', is_talisman: true, break_timing: 'stockpile', break_charge_max: 6,
+          effects: [{ trigger_type: 'round_start', effect_code: 'gain_use', effect_params: { amount: 1 } }],
+        },
+      },
+    },
+  );
+  assertEq(r.investigator.assetState?.crystal.usesLeft, 1);
+  assertEq(r.effects.some((effect) => effect.type === 'gain_use'), true);
 });
 
 // ─── runner ─────────────────────────────────

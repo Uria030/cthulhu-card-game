@@ -2064,7 +2064,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setAiActedThisTurn([]);
     setInvestigator((current) => {
       let next = { ...current, actionPoints: 3 };
-      const start = runTurnStartUpkeep(next);
+      const start = runTurnStartUpkeep(next, { scenario, cardLookup: setup.cardLookup });
       for (const eff of start.effects) append('[回合開始] ' + describeEffect(eff, locMeta));
       next = syncDownedState(start.investigator).investigator;
       if (isDowned(next)) {
@@ -2077,7 +2077,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setAiMembers((members) => members.map((ai, idx) => {
       const aiName = setup.aiMembers[idx]?.profile.name_zh ?? 'AI';
       let next = { ...ai, actionPoints: 3 };
-      const start = runTurnStartUpkeep(next);
+      const start = runTurnStartUpkeep(next, { scenario, cardLookup: setup.cardLookup });
       for (const eff of start.effects) append(`[回合開始][${aiName}] ` + describeEffect(eff, locMeta).split('你').join(aiName));
       next = syncDownedState(start.investigator).investigator;
       if (isDowned(next)) {
@@ -2091,7 +2091,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setKeeperEnergy((energy) => Math.min(12, energy + 1));
     setRoundTransition('new_round');
     setLastUpkeepCardName(null);
-  }, [append, locMeta, setup.aiMembers, setup.tutorial, isCardLab]);
+  }, [append, locMeta, setup.aiMembers, setup.cardLookup, setup.tutorial, scenario, isCardLab]);
 
   const toggleHandLimitCard = (cardId: string) => {
     setHandLimitSelection((selection) => selection

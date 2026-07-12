@@ -1,7 +1,7 @@
 /**
  * G-02 卡片效果執行器測試 — add_status / remove_status 接 statusEffects(ch3 §6)
  */
-import { executeCardEffects, passiveTestModifier } from './effectsExecutor';
+import { executeCardEffects, executeStockpileTalismanTurnStartEffects, passiveTestModifier } from './effectsExecutor';
 import type { CardEffectRow } from './effectsExecutor';
 import type { InvestigatorState, ScenarioState, EnemyInstance } from './state';
 
@@ -217,6 +217,27 @@ test('exhaust_card / ready_card:橫置與轉正', () => {
 test('gain_use:資產補充使用次數', () => {
   const r = executeCardEffects([fx('gain_use', { amount: 3 })], makeInv({ assetsInPlay: ['a1'], assetState: { a1: { usesLeft: 2, exhausted: false } } }), makeScenario(), {});
   assertEq(r.investigator.assetState?.a1.usesLeft, 5);
+});
+
+test('儲蓄法器回合開始:只補自身、接受 on_turn_start 別名、且不超過充能上限', () => {
+  const inv = makeInv({
+    assetsInPlay: ['crystal', 'other_asset'],
+    assetState: {
+      crystal: { usesLeft: 2, exhausted: false },
+      other_asset: { usesLeft: 1, exhausted: false },
+    },
+  });
+  const lookup = {
+    crystal: {
+      name_zh: '預兆水晶', card_type: 'asset', is_talisman: true, break_timing: 'stockpile', break_charge_max: 3,
+      effects: [{ trigger_type: 'on_turn_start', effect_code: 'gain_use', effect_params: { amount: 2 } }],
+    },
+    other_asset: { name_zh: '舊式左輪', card_type: 'asset', uses: 6 },
+  };
+  const r = executeStockpileTalismanTurnStartEffects(inv, makeScenario(), lookup);
+  assertEq(r.investigator.assetState?.crystal.usesLeft, 3, '補足後夾在法器上限');
+  assertEq(r.investigator.assetState?.other_asset.usesLeft, 1, '不可誤補第一張其他資產');
+  assertEq((r.effects[0]?.params as { amount?: number }).amount, 1, '回報實際補回量');
 });
 
 // ─── P1 批次2:資源掠奪 + 檢定時機聚合 ─────────────

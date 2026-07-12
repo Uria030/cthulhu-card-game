@@ -9,7 +9,9 @@
  * - 06_rulebook_ch6.md §3.1:HP 上限 = 體質 × 2 + 5;SAN 上限 = 意志 × 2 + 5(範圍 7-25)
  */
 import type { ResultEffect } from './messages';
-import type { InvestigatorState } from './state';
+import type { InvestigatorState, ScenarioState } from './state';
+import type { CardDataLookup } from './ruleEngine';
+import { executeStockpileTalismanTurnStartEffects } from './effectsExecutor';
 import { turnStartTick, turnEndTick, bonusActionPoints } from './statusEffects';
 
 export const HAND_LIMIT = 8;
@@ -29,11 +31,20 @@ export function sanMaxFor(willpower: number): number {
 export interface UpkeepResult {
   investigator: InvestigatorState;
   effects: ResultEffect[];
+  /** 有帶入場景與卡片資料時，回合開始法器效果後的場景。 */
+  scenario?: ScenarioState;
 }
 
 export interface TurnEndUpkeepOptions {
   /** 玩家容器需先讓本人選牌；AI 與模擬仍可沿用自動棄最舊。 */
   deferHandLimit?: boolean;
+}
+
+export interface TurnStartUpkeepOptions {
+  /** 儲蓄型法器的 round_start 效果需要同一份場景與卡片資料。 */
+  scenario?: ScenarioState;
+  cardLookup?: CardDataLookup;
+  rng?: () => number;
 }
 
 export interface HandLimitDiscardResult {
@@ -155,10 +166,11 @@ export function discardForHandLimit(
  * 對單一調查員結算回合開始的狀態效果:燃燒扣 HP、再生回 HP(§6.2/§6.3)。
  * 在新回合調查員階段開頭呼叫(瀕死檢定之前 — 燃燒可能把人打到瀕死)。
  */
-export function runTurnStartUpkeep(inv: InvestigatorState): UpkeepResult {
+export function runTurnStartUpkeep(inv: InvestigatorState, options: TurnStartUpkeepOptions = {}): UpkeepResult {
   if (inv.permanentlyDead) return { investigator: inv, effects: [] };
   const st = turnStartTick(inv);
   let next = st.investigator;
+  let scenario = options.scenario;
   const effects: ResultEffect[] = [...st.effects];
   // §6.3 加速:回合開始額外行動點(在 client 設好本回合 3 點之後呼叫,疊加)
   const haste = bonusActionPoints(next.statusEffects);
@@ -166,7 +178,16 @@ export function runTurnStartUpkeep(inv: InvestigatorState): UpkeepResult {
     next = { ...next, actionPoints: next.actionPoints + haste };
     effects.push({ type: 'status_haste', params: { amount: haste, narrative: '腎上腺素湧現,你動作快了起來(行動點 +' + haste + ')。' }, targetId: next.investigatorId });
   }
-  return { investigator: next, effects };
+  if (scenario && options.cardLookup) {
+    const stockpile = executeStockpileTalismanTurnStartEffects(next, scenario, options.cardLookup, options.rng);
+    next = stockpile.investigator;
+    scenario = stockpile.scenario;
+    effects.push(...stockpile.effects);
+    if (stockpile.unsupported.length > 0) {
+      effects.push({ type: 'effect_unsupported', params: { codes: stockpile.unsupported } });
+    }
+  }
+  return { investigator: next, effects, ...(scenario ? { scenario } : {}) };
 }
 
 // ─── 短休息(ch2 §3.1:個人決定,放棄本回合行動換重洗牌庫)─────

@@ -908,13 +908,18 @@ export class MultiplayerRoomService {
     const game = room.game;
     if (!game) return;
     const investigators = { ...game.investigators };
+    let scenario = game.scenario;
     for (const [id, investigator] of Object.entries(investigators)) {
       const ending = runTurnEndUpkeep(investigator);
-      const started = runTurnStartUpkeep({ ...ending.investigator, actionPoints: 3 });
+      const started = runTurnStartUpkeep(
+        { ...ending.investigator, actionPoints: 3 },
+        { scenario, cardLookup: game.ruleContext?.cardLookup ?? {} },
+      );
       investigators[id] = started.investigator;
+      scenario = started.scenario ?? scenario;
     }
     const nextTurn = game.scenario.turnNumber + 1;
-    game.scenario = { ...game.scenario, phase: 'investigator', turnNumber: nextTurn };
+    game.scenario = { ...scenario, phase: 'investigator', turnNumber: nextTurn };
     game.investigators = investigators;
     game.turn = {
       turnNumber: nextTurn,

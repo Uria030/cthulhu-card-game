@@ -13,7 +13,7 @@
  */
 import type { ResultEffect } from './messages';
 import type { InvestigatorState, ScenarioState, ChaosToken } from './state';
-import type { CardDataLookup } from './ruleEngine';
+import type { CardData, CardDataLookup } from './ruleEngine';
 import { addStatus, removeStatus, NEGATIVE_STATUSES, elementalDamageBonus } from './statusEffects';
 
 export interface CardEffectRow {
@@ -35,6 +35,14 @@ export interface ExecuteResult {
   unsupported: string[];
 }
 
+/**
+ * 執行中的效果若來自場上資產，來源 ID 讓 `gain_use` 能精確補回該資產，
+ * 不再依場上順序誤補到第一張有使用次數的卡。
+ */
+export interface ExecuteCardEffectsOptions {
+  sourceAssetId?: string;
+}
+
 function positiveInt(value: unknown, fallback = 1): number {
   const n = Number(value ?? fallback);
   return Math.max(1, Math.floor(Number.isFinite(n) ? n : fallback));
@@ -45,6 +53,20 @@ function firstString(...values: unknown[]): string | null {
     if (typeof v === 'string' && v.trim()) return v.trim();
   }
   return null;
+}
+
+function cardUseCap(data: CardData | undefined): number | null {
+  if (!data) return null;
+  if (data.ammo != null) return Number(data.ammo);
+  if (data.uses != null) return Number(data.uses);
+  if (data.is_talisman && data.break_charge_max != null) return Number(data.break_charge_max);
+  return null;
+}
+
+function isRoundStartTrigger(trigger: string): boolean {
+  const value = trigger.trim().toLowerCase();
+  // ch3 使用 round_start；h03 較早版本使用 on_turn_start，兩者都接受。
+  return value === 'round_start' || value === 'on_turn_start';
 }
 
 function chaosTokenValue(type: string, rawValue: unknown): number | null {
@@ -117,6 +139,7 @@ export function executeCardEffects(
   scenario: ScenarioState,
   cardLookup: CardDataLookup,
   rng: () => number = Math.random,
+  options: ExecuteCardEffectsOptions = {},
 ): ExecuteResult {
   let inv = investigator;
   let sc = scenario;
@@ -467,14 +490,21 @@ export function executeCardEffects(
         break;
       }
       case 'gain_use': {
-        // 補充消耗次數(ch3 §10.1):給第一張有使用次數的資產 +amount
+        // 補充消耗次數(ch3 §10.1)。場上資產自己的回合觸發優先補回來源，
+        // 既有未指名效果則維持「第一張有使用次數資產」的舊行為。
         const amount = Math.max(1, Number(p.amount ?? 1));
         const st = { ...(inv.assetState ?? {}) };
-        const targetId = inv.assetsInPlay.find((id) => st[id] && st[id].usesLeft !== null);
+        const targetId = options.sourceAssetId && inv.assetsInPlay.includes(options.sourceAssetId)
+          ? options.sourceAssetId
+          : inv.assetsInPlay.find((id) => st[id] && st[id].usesLeft !== null);
         if (!targetId) { unsupported.push('gain_use'); break; }
-        st[targetId] = { usesLeft: (st[targetId].usesLeft ?? 0) + amount, exhausted: st[targetId].exhausted };
+        const current = Math.max(0, Number(st[targetId]?.usesLeft ?? 0));
+        const cap = cardUseCap(cardLookup[targetId]);
+        const left = cap == null ? current + amount : Math.min(cap, current + amount);
+        const gained = Math.max(0, left - current);
+        st[targetId] = { usesLeft: left, exhausted: st[targetId]?.exhausted ?? false };
         inv = { ...inv, assetState: st };
-        out.push({ type: 'gain_use', params: { cardInstanceId: targetId, amount } });
+        out.push({ type: 'gain_use', params: { cardInstanceId: targetId, amount: gained, requestedAmount: amount, left, maxUses: cap } });
         break;
       }
 
@@ -796,6 +826,48 @@ export function executeCardEffects(
     }
   }
   return { investigator: inv, scenario: sc, effects: out, unsupported };
+}
+
+/**
+ * s09 儲蓄型法器在回合開始累積計量。
+ *
+ * 只接 `is_talisman + break_timing=stockpile` 的 `gain_use` 效果，避免尚未
+ * 進入本包範圍的通用 round_start 效果繞過 ruleEngine 的後處理。每張資產
+ * 各自帶入來源 ID，因此不會誤補場上的其他武器或消耗品。
+ */
+export function executeStockpileTalismanTurnStartEffects(
+  investigator: InvestigatorState,
+  scenario: ScenarioState,
+  cardLookup: CardDataLookup,
+  rng: () => number = Math.random,
+): ExecuteResult {
+  let inv = investigator;
+  let sc = scenario;
+  const effects: ResultEffect[] = [];
+  const unsupported: string[] = [];
+
+  for (const cardInstanceId of inv.assetsInPlay) {
+    const card = cardLookup[cardInstanceId];
+    if (!card?.is_talisman || String(card.break_timing ?? '').toLowerCase() !== 'stockpile') continue;
+    const startEffects = (card.effects ?? []).filter((effect) => isRoundStartTrigger(String(effect.trigger_type ?? '')));
+    if (startEffects.length === 0) continue;
+
+    const chargeEffects = startEffects.filter((effect) => String(effect.effect_code ?? '') === 'gain_use');
+    for (const effect of startEffects) {
+      if (String(effect.effect_code ?? '') !== 'gain_use') {
+        unsupported.push('stockpile_round_start:' + String(effect.effect_code ?? 'unknown'));
+      }
+    }
+    if (chargeEffects.length === 0) continue;
+
+    const resolved = executeCardEffects(chargeEffects, inv, sc, cardLookup, rng, { sourceAssetId: cardInstanceId });
+    inv = resolved.investigator;
+    sc = resolved.scenario;
+    effects.push(...resolved.effects);
+    unsupported.push(...resolved.unsupported);
+  }
+
+  return { investigator: inv, scenario: sc, effects, unsupported };
 }
 
 /**

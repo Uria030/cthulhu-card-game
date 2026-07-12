@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { autoComposeParty } from '@cthulhu/shared';
 import { fetchPlayerMe, fetchPlayInvestigators, getPlayerToken } from '../api';
@@ -8,7 +8,6 @@ import { getSelectedSave } from '../game/selectedSave';
 import { setPartyTemplateIds } from '../game/selectedParty';
 import { displayNameFor } from '../game/displayName';
 import { playablePresetInvestigators } from '../game/investigatorRoster';
-import { pawnAssetForInvestigator, playerToneForSlot } from '../game/investigatorVisuals';
 import { InteractiveLobbyProp, LobbyFilmGrain } from './LobbyEffects';
 import type { LobbyPropPosition } from './LobbyEffects';
 import './LobbyScreen.css';
@@ -22,21 +21,14 @@ interface LobbyPropDefinition {
 }
 
 const LOBBY_PROPS: LobbyPropDefinition[] = [
-  { id: 'ledger', label: '調查帳本', detail: '調整下一關牌組', available: false, position: { left: '14%', top: '76%', size: '13%' } },
+  { id: 'ledger', label: '調查帳本', detail: '調整下一關牌組', available: false, position: { left: '45%', top: '83%', size: '13%' } },
   { id: 'scale', label: '銀色天平', detail: '購買與強化', available: false, position: { left: '23%', top: '59%', size: '12%' } },
-  { id: 'censer', label: '黃銅香爐', detail: '團隊精神', available: false, position: { left: '48%', top: '66%', size: '12%' } },
-  { id: 'forge', label: '鐵砧與鎚', detail: '鍛造裝備', available: false, position: { left: '57%', top: '67%', size: '11%' } },
-  { id: 'flask', label: '玻璃藥瓶', detail: '製作道具', available: false, position: { left: '66%', top: '59%', size: '12%' } },
-  { id: 'tomes', label: '研究厚書', detail: '研究與升級', available: false, position: { left: '84%', top: '76%', size: '13%' } },
-  { id: 'parch', label: '封蠟文件', detail: '花費天賦點', available: false, position: { left: '51%', top: '81%', size: '12%' } },
-  { id: 'map', label: '地圖紙', detail: '選擇下一個關卡', available: true, position: { left: '76%', top: '78%', size: '16%' } },
-];
-
-const SEAT_POSITIONS = [
-  { left: '10%', top: '58%' },
-  { left: '36%', top: '49%' },
-  { left: '59%', top: '49%' },
-  { left: '86%', top: '58%' },
+  { id: 'censer', label: '黃銅香爐', detail: '團隊精神', available: false, position: { left: '12%', top: '83%', size: '12%' } },
+  { id: 'forge', label: '鐵砧與鎚', detail: '鍛造裝備', available: false, position: { left: '38%', top: '69%', size: '11%' } },
+  { id: 'flask', label: '玻璃藥瓶', detail: '製作道具', available: false, position: { left: '55%', top: '65%', size: '12%' } },
+  { id: 'tomes', label: '研究厚書', detail: '研究與升級', available: false, position: { left: '89%', top: '80%', size: '13%' } },
+  { id: 'parch', label: '封蠟文件', detail: '花費天賦點', available: false, position: { left: '60%', top: '84%', size: '12%' } },
+  { id: 'map', label: '地圖紙', detail: '選擇下一個關卡', available: true, position: { left: '75%', top: '74%', size: '16%' } },
 ];
 
 function selectedFromSave(save: PlayerSave) {
@@ -130,7 +122,7 @@ export function LobbyScreen() {
 
   return (
     <main className="lobby-root">
-      <img className="lobby-scene" src="/game-art/lobby-v3/investigator-study-empty.png" alt="1930 年代空曠的調查室，桌上擺著可供整備的物件" />
+      <img className="lobby-scene" src="/game-art/lobby-v4/study-base.webp" alt="1930 年代無人的調查書房，桌上擺著可供整備的物件" />
       <LobbyFilmGrain />
 
       <header className="lobby-header">
@@ -149,29 +141,6 @@ export function LobbyScreen() {
             onActivate={() => activateProp(prop)}
           />
         ))}
-      </section>
-
-      <section className="lobby-seats" aria-label="調查隊伍座位">
-        {Array.from({ length: 4 }, (_, slot) => {
-          const member = slot === 0
-            ? { id: selected?.id ?? '', title_zh: selected?.title_zh, label: '玩家' }
-            : partyMembers[slot - 1]
-              ? { id: partyMembers[slot - 1].id, title_zh: partyMembers[slot - 1].title_zh, code: partyMembers[slot - 1].code, label: `隊友 ${slot}` }
-              : { id: '', label: `隊友 ${slot}` };
-          return (
-          <div
-            className="lobby-seat-token"
-            key={`${member.id}-${slot}`}
-            style={{
-              ...SEAT_POSITIONS[slot],
-              '--seat-tone': playerToneForSlot(slot),
-            } as CSSProperties}
-            aria-label={`${member.label}：${displayNameFor(member, '等待組隊')}`}
-          >
-            {member.id && <><img src={pawnAssetForInvestigator(member)} alt="" /><span>{member.label}</span></>}
-          </div>
-          );
-        })}
       </section>
 
       <aside className="lobby-roster" aria-label="調查隊伍">

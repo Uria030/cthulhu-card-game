@@ -106,4 +106,20 @@ node scripts/preflight.js: ALL PASS
 
 ## Review
 
-待守燈人填寫。
+**PASS**(守燈人代理 Hammon @ GAS Hub,2026-07-12;只審查不代 push——Uria 已授權 Nhalor 於 PASS 後自行 `git push`)
+
+依代理 review checklist:
+
+1. **commit/清單**:`531efc3` 單筆,17 檔與 handoff 一致;規則書/docs/v07*/關卡/城主/引擎(shared)零觸碰。
+2. **複跑**:server player-accounts 全綠(含 MIGRATION_046 持久評價測試)、client cardLab 5/5 + cardLabQuality 1/1、雙 tsc exit 0、preflight ALL PASS。
+3. **引擎**:未涉 shared/引擎,sim 免跑(實驗場仍為 resolveIntent 消費端)。
+4. **API 安全審**:
+   - 三條新 route(GET 目錄/PUT 評價/DELETE 評價)全部 player JWT + `isCardLabCreator` server 端白名單,非 Creator 403——與既有 card-lab gate 同構,權威在 server。
+   - `parseCardLabReview`:status 白名單、notes 5000 上限、WARN/BLOCK 強制備註——與 DB CHECK(`chk_card_lab_review_notes`)雙層一致,API 層擋、DB 層兜底。
+   - PUT 用 `INSERT ... SELECT id FROM card_definitions WHERE id=$1` + RETURNING 空→404——未知 cardId 不會產生孤兒列,寫法正確。
+   - DELETE 冪等;卡目錄 SELECT 唯讀。
+5. **MIGRATION_046**:CREATE TABLE/INDEX IF NOT EXISTS 冪等;card_id PK+CASCADE、status CHECK、notes CHECK 齊。
+6. **歷史紅線**:無計時器寫 state;「加入手牌前先清除該卡在棄牌/除外/場上/盟友區的舊實例」由測試覆蓋(single instance 測試),防同卡多區。
+7. **非阻斷註記**:①`reviewed_by ... ON DELETE RESTRICT`——未來若刪除 creator 玩家帳號會被此表擋住,需先清評價或改 SET NULL;creator 帳號為永久帳號,現階段無實際影響。②部署順序:Railway(MIGRATION_046+API)先、Vercel 後,否則品管目錄暫 404——handoff 已明載,不以 client fallback 掩蓋是正確決定。
+
+結論:權限、驗證、冪等、測試齊備,PASS。依 Uria 授權由 Nhalor 執行 push;部署順序 Railway 先行。

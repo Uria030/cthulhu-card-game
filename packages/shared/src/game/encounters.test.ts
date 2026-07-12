@@ -9,6 +9,7 @@ import {
   drawTriggeredEncounter,
   ENCOUNTER_DECK_RESHUFFLED_NARRATIVE,
   normaliseEncounterTriggerConfig,
+  playerActionEncounterContext,
   resolveEncounterOption,
   resolveEncounterWithTalisman,
   talismanTollCost,
@@ -183,6 +184,28 @@ test('觸發:四條路徑都能抽遭遇', () => {
   assertEq(drawTriggeredEncounter([CARD], cfg, { path: 'keeper_mythos', mythosCardCategory: 'encounter' }, roll(1)).triggered, true);
   assertEq(drawTriggeredEncounter([CARD], cfg, { path: 'player_action', locationId: 'B' }, roll(1)).triggered, true);
   assertEq(drawTriggeredEncounter([CARD], cfg, { path: 'player_action', actionType: 'search' }, roll(1)).triggered, true);
+});
+
+test('玩家行動觸發:地點條件只在移動進入時生效,其他動作只看 action 條件', () => {
+  const cfg = normaliseEncounterTriggerConfig({
+    trigger_locations: ['B'],
+    trigger_actions: ['search'],
+  });
+  assertEq(
+    drawTriggeredEncounter([CARD], cfg, playerActionEncounterContext('move', 'B'), roll(1)).triggered,
+    true,
+    '移動進入 B 應觸發地點條件',
+  );
+  assertEq(
+    drawTriggeredEncounter([CARD], cfg, playerActionEncounterContext('take_resource', 'B'), roll(1)).triggered,
+    false,
+    '站在 B 拿資源不應重複觸發地點條件',
+  );
+  assertEq(
+    drawTriggeredEncounter([CARD], cfg, playerActionEncounterContext('search', 'B'), roll(1)).triggered,
+    true,
+    '特定行動仍應由 trigger_actions 觸發',
+  );
 });
 
 test('逐人回合結束:每位調查員各抽 1 張,池空不炸', () => {

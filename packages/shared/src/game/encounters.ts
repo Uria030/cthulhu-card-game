@@ -99,6 +99,21 @@ export interface EncounterTriggerDecision {
   reason: string;
 }
 
+/**
+ * 地點條件只代表「進入該地點」；站在該地點做其他動作時，僅可由 trigger_actions 觸發。
+ * 這讓關卡設定能同時表達「進門遇事」與「特定行動遇事」而不會重複抽卡。
+ */
+export function playerActionEncounterContext(
+  actionType: string,
+  movedToLocationId?: string | null,
+): EncounterTriggerContext {
+  return {
+    path: 'player_action',
+    actionType,
+    locationId: actionType === 'move' ? movedToLocationId ?? null : null,
+  };
+}
+
 function stringList(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }

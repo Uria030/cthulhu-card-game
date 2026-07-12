@@ -39,6 +39,7 @@ import {
   allInvestigatorsDead,
   drawAndAutoResolveEncounter,
   drawTriggeredEncounter,
+  playerActionEncounterContext,
   ENCOUNTER_DECK_RESHUFFLED_NARRATIVE,
   resolveEncounterOption,
   resolveEncounterWithTalisman,
@@ -1605,11 +1606,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           }
         : {
             sourceLabel: actionType === 'move' ? '進入地點' : '行動條件',
-            context: {
-              path: 'player_action',
+            context: playerActionEncounterContext(
               actionType,
-              locationId: moveTo || next.inv.currentLocationId || investigator.currentLocationId,
-            },
+              moveTo || next.inv.currentLocationId || investigator.currentLocationId,
+            ),
           };
       // Phase2 C:玩家自己的動作跳三段演出 Modal(敘述→檢定→結果)。方向 A 完整收斂 —
       // 主效果 + 後續行(cascadeLogs)+ 結局(outcome)全部延到演出「完成」拍才生效:

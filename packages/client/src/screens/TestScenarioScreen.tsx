@@ -117,6 +117,7 @@ import {
 import { latestActionRows } from '../game/battleLogPreview';
 import { autoEncounterTransition, encounterAutoDelay } from '../game/encounterModalFlow';
 import { uniqueLocationConnections } from '../game/mapConnections';
+import { lightingForLocation } from '../game/mapLighting';
 import { pawnAssetForInvestigator, playerToneForSlot } from '../game/investigatorVisuals';
 import { feedbackTargetsLocation } from '../game/locationActionFeedback';
 import { getSelectedSave } from '../game/selectedSave';
@@ -316,6 +317,8 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'keeper_legendary_dispatch': return '🃏 城主傳奇【' + (p.name as string) + '】指定 ' + String(p.targetId ?? '一位調查員') + '(費用 ' + (p.cost as number) + ')';
     case 'keeper_attachment': return '🕸 【' + (p.name as string) + '】的影響附著在這場雨上,揮之不去。';
     case 'visibility_changed': return '🌑 ' + (locMeta[p.location as string]?.name ?? (p.location as string)) + ' 陷入' + (p.visibility === 'darkness' ? '黑暗' : (p.visibility as string)) + '。';
+    case 'light_source_created': return '🕯 ' + (locMeta[p.location as string]?.name ?? (p.location as string)) + '亮起一盞燈(照明半徑 ' + (p.radius as number) + ')。';
+    case 'light_source_extinguished': return '🕯 ' + (locMeta[p.location as string]?.name ?? (p.location as string)) + '的光源熄滅了。';
     case 'attachment_upkeep': return '🕸 ' + (p.narrative as string);
     case 'attachment_released': return '✨ 【' + (p.name as string) + '】' + (p.narrative as string);
     case 'attachment_release_failed': return '🕸 【' + (p.name as string) + '】仍纏著你(意志 ' + (p.total as number) + ' vs DC ' + (p.dc as number) + ')';
@@ -2522,6 +2525,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                   const showMove = !isCurr && (
                     canMoveHere || feedbackTargetsLocation(actionFeedback, 'move', loc.locationDefinitionId)
                   );
+                  const lighting = lightingForLocation(scenario, loc.locationDefinitionId);
+                  const receivesLight = lighting.illuminated && (loc.visibility === 'night' || loc.visibility === 'darkness');
                   const cluesHere = scenario.tokens.filter((t) => t.locationId === loc.locationDefinitionId && t.tokenType === 'clue').reduce((s, t) => s + t.amount, 0);
                   const maxClues = Math.max(2, cluesHere);
                   return (
@@ -2531,7 +2536,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                       onClick={() => onLocationClick(loc.locationDefinitionId)}
                     >
                       <div className="loc-name">{!unlocked && <span className="loc-lock-mark">鎖定 · </span>}{meta?.name ?? loc.locationDefinitionId}</div>
-                      <div className={`loc-illustration loc-art-${artKind}`} role="img" aria-label={`${meta?.name ?? loc.locationDefinitionId}地點插畫`}>
+                      <div className={`loc-illustration loc-art-${artKind}${receivesLight ? ' loc-illuminated' : ''}`} role="img" aria-label={`${meta?.name ?? loc.locationDefinitionId}地點插畫${receivesLight ? '，受到光源照明' : ''}`}>
                         <div className="location-occupants">
                           {isCurr && (
                             <img
@@ -2574,6 +2579,18 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                               );
                             })}
                         </div>
+                        {lighting.sources.map((source) => (
+                          <div
+                            key={source.id}
+                            className="light-source-marker"
+                            role="img"
+                            title={`光源 · 照明半徑 ${source.radius}`}
+                            aria-label={`光源，照明半徑 ${source.radius}`}
+                          >
+                            <span className="light-source-lantern" aria-hidden="true"><span className="light-source-flame" /></span>
+                            <span className="light-source-radius">{source.radius === 0 ? '本格' : `+${source.radius}`}</span>
+                          </div>
+                        ))}
                       </div>
                       <div className="loc-footer">
                         <div className="location-actions" aria-label={`${meta?.name ?? loc.locationDefinitionId}可用動作`}>

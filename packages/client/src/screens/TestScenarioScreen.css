@@ -862,6 +862,10 @@
   filter: saturate(0.82) contrast(1.08);
   transition: filter 0.25s ease, transform 0.25s ease;
 }
+.loc-illustration.loc-illuminated {
+  box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.54), inset 0 0 20px rgba(222, 185, 83, 0.3);
+  filter: saturate(0.92) contrast(1.08) brightness(1.11);
+}
 .location-card:hover .loc-illustration { filter: saturate(1) contrast(1.08) brightness(1.08); transform: scale(1.015); }
 .loc-art-lab-entrance { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-lab-entrance.jpg'); }
 .loc-art-card-lab { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-card-lab.jpg'); }
@@ -872,6 +876,56 @@
 .loc-art-brick-wall { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-brick-wall.jpg'); }
 .loc-art-haunt { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-haunt.jpg'); }
 .location-occupants { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.light-source-marker {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: auto;
+}
+.light-source-lantern {
+  width: 20px;
+  height: 25px;
+  border: 2px solid rgba(229, 200, 117, 0.94);
+  border-radius: 4px 4px 7px 7px;
+  background: rgba(52, 42, 24, 0.92);
+  box-shadow: 0 0 13px rgba(236, 192, 76, 0.74), inset 0 0 7px rgba(239, 203, 112, 0.6);
+  position: relative;
+}
+.light-source-lantern::before {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 6px;
+  left: 2px;
+  top: -8px;
+  border: 2px solid rgba(229, 200, 117, 0.94);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+}
+.light-source-flame {
+  position: absolute;
+  width: 7px;
+  height: 12px;
+  left: 5px;
+  top: 5px;
+  border-radius: 60% 60% 50% 50%;
+  background: #f3d67a;
+  box-shadow: 0 0 7px #f3d67a;
+}
+.light-source-radius {
+  min-width: 20px;
+  padding: 2px 3px;
+  border: 1px solid rgba(229, 200, 117, 0.58);
+  border-radius: 3px;
+  background: rgba(18, 15, 11, 0.86);
+  color: #f2dfad;
+  font: 700 9px/1 var(--font-body);
+  text-align: center;
+}
 .loc-clues {
   position: absolute;
   bottom: 6px;

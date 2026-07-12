@@ -49,6 +49,7 @@ export function LobbyScreen() {
   const [selected, setSelected] = useState(getSelectedInvestigator());
   const [partySeed, setPartySeed] = useState(0);
   const [authChecked, setAuthChecked] = useState(false);
+  const [cardLabCreator, setCardLabCreator] = useState(false);
   const [propMessage, setPropMessage] = useState('地圖紙已攤在桌角，隊伍隨時可以出發。');
 
   useEffect(() => {
@@ -68,6 +69,8 @@ export function LobbyScreen() {
       .then((me) => {
         if (cancelled) return;
         const selectedSaveId = getSelectedSave()?.id;
+        const username = me.player.username.trim().toLowerCase();
+        setCardLabCreator(username === 'creator01' || username === 'creator02');
         const active = me.saves.find((save) => save.status === 'active' && save.id === selectedSaveId) ?? null;
         if (!active) {
           navigate('/saves', { replace: true });
@@ -91,6 +94,11 @@ export function LobbyScreen() {
     [selectedCandidate, candidates, partySeed],
   );
   const partyMembers = autoParty?.members ?? [];
+  const lobbyProps = useMemo(() => LOBBY_PROPS.map((prop) => (
+    prop.id === 'flask' && cardLabCreator
+      ? { ...prop, id: 'card-lab', label: '卡片檢驗所', detail: '檢驗資料庫卡片', available: true }
+      : prop
+  )), [cardLabCreator]);
 
   useEffect(() => {
     if (partyMembers.length === 3) setPartyTemplateIds(partyMembers.map((investigator) => investigator.id));
@@ -99,6 +107,10 @@ export function LobbyScreen() {
   const activateProp = (prop: LobbyPropDefinition) => {
     if (prop.id === 'map') {
       navigate('/departure');
+      return;
+    }
+    if (prop.id === 'card-lab') {
+      navigate('/scenario/card-lab');
       return;
     }
     setPropMessage(`${prop.label}尚未開放；它會在整備系統完成後成為「${prop.detail}」入口。`);
@@ -119,7 +131,7 @@ export function LobbyScreen() {
       </header>
 
       <section className="lobby-props" aria-label="大廳功能入口">
-        {LOBBY_PROPS.map((prop) => (
+        {lobbyProps.map((prop) => (
           <InteractiveLobbyProp
             key={prop.id}
             label={prop.label}

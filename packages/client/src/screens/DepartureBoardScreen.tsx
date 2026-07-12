@@ -34,7 +34,6 @@ export function DepartureBoardScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [progressVersion, setProgressVersion] = useState(0);
-  const [cardLabCreator, setCardLabCreator] = useState(false);
   const selectedInvestigatorId = getSelectedInvestigator()?.id ?? null;
 
   useEffect(() => {
@@ -52,8 +51,6 @@ export function DepartureBoardScreen() {
     fetchPlayerMe()
       .then((me) => {
         if (cancelled) return;
-        const username = me.player.username.trim().toLowerCase();
-        setCardLabCreator(username === 'creator01' || username === 'creator02');
         const save = selectedSaveId
           ? me.saves.find((s) => s.id === selectedSaveId && s.status === 'active')
           : undefined;
@@ -185,24 +182,6 @@ export function DepartureBoardScreen() {
               </g>
             );
           })}
-
-          {cardLabCreator && (
-            <g
-              className="wm-lab-pin"
-              transform="translate(790 438)"
-              onClick={() => navigate('/scenario/card-lab')}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/scenario/card-lab'); }}
-              role="button"
-              tabIndex={0}
-              aria-label="進入卡片效果實驗場"
-            >
-              <rect x={-22} y={-30} width={44} height={44} rx={3} className="wm-lab-door" />
-              <path d="M -11 -21 H 11 V 12 H -11 Z M -4 -21 V 12 M 4 -21 V 12 M -11 -8 H 11" className="wm-lab-grid" />
-              <circle cx={14} cy={-7} r={2.5} className="wm-lab-handle" />
-              <text x={0} y={29} textAnchor="middle" className="wm-lab-name">卡片效果實驗場</text>
-              <text x={0} y={43} textAnchor="middle" className="wm-lab-status">CREATOR ONLY</text>
-            </g>
-          )}
 
           {stages === null && !loadError && <text x={VB_W / 2} y={VB_H / 2} textAnchor="middle" className="wm-loading">正在攤開地圖……</text>}
           {loadError && <text x={VB_W / 2} y={VB_H / 2} textAnchor="middle" className="wm-loading">地圖載入失敗:{loadError}</text>}

@@ -95,6 +95,7 @@ import { applyDamageAllocation, autoAllocateDamage } from '@cthulhu/shared';
 import type { AllocatableTarget } from '@cthulhu/shared';
 import {
   fetchBootstrap,
+  fetchCardLabCatalogue,
   fetchCardLabManifest,
   fetchPlayerMe,
   getPlayerToken,
@@ -110,10 +111,12 @@ import {
   buildCardLabSetup,
   CARD_LAB_DUMMY_INSTANCE_ID,
   CARD_LAB_STAGE_ID,
+  returnCardToLabHand,
 } from '../game/cardLab';
 import { latestActionRows } from '../game/battleLogPreview';
 import { uniqueLocationConnections } from '../game/mapConnections';
 import { getSelectedSave } from '../game/selectedSave';
+import { CardLabWorkbench } from './CardLabWorkbench';
 import {
   ensureCampaignProgressForSetup,
   loadStoredCampaignProgressFromBootstrap,
@@ -633,15 +636,15 @@ export function TestScenarioScreen() {
     const playerTemplateId = selectedInvestigator?.id;
     if (stageId === CARD_LAB_STAGE_ID) {
       if (!getPlayerToken()) {
-        setLoadError('請先使用 Creator 帳號登入,再從世界地圖進入實驗場。');
+        setLoadError('請先使用 Creator 帳號登入，再從調查室進入卡片檢驗所。');
         return;
       }
-      fetchCardLabManifest()
-        .then(async (manifest) => {
+      Promise.all([fetchCardLabManifest(), fetchCardLabCatalogue()])
+        .then(async ([manifest, catalogue]) => {
           const bootstrap = await fetchBootstrap(manifest.baseStageId, playerTemplateId, {
             crossTest: selectedInvestigator?.is_completed === false,
           });
-          if (!cancelled) setSetup(buildCardLabSetup(buildSetupFromBootstrap(bootstrap), manifest));
+          if (!cancelled) setSetup(buildCardLabSetup(buildSetupFromBootstrap(bootstrap), manifest, catalogue));
         })
         .catch((e: unknown) => {
           if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
@@ -785,6 +788,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [teamSpiritPanelOpen, setTeamSpiritPanelOpen] = useState(false);
   const [locationBarId, setLocationBarId] = useState<string | null>(null);
   const [logCollapsed, setLogCollapsed] = useState(!isCardLab);
+  const [cardLabWorkbenchOpen, setCardLabWorkbenchOpen] = useState(false);
   const [logCopied, setLogCopied] = useState(false);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
   const [systemSub, setSystemSub] = useState<null | 'settings' | 'rules'>(null);
@@ -902,8 +906,17 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setPanel(null);
     setPilePanel(null);
     setModal(null);
+    setCardLabWorkbenchOpen(false);
     setLog([...setup.introLog, '[LAB][RESET] 實驗環境、牌組與訓練木人已還原。']);
   }, [setup]);
+
+  const addCardToLabHand = useCallback((cardId: string) => {
+    const card = setup.cardMeta[cardId];
+    if (!card) return;
+    setInvestigator((current) => returnCardToLabHand(current, cardId));
+    append(`[LAB][CATALOGUE] 「${card.name}」已加入手牌。`);
+    showScreenToast(`「${card.name}」已加入手牌`);
+  }, [append, setup.cardMeta, showScreenToast]);
 
   useEffect(() => {
     if (setup.sandbox) return;
@@ -2106,6 +2119,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // ─── 浮層互動 ──────────────────
   const closeAllOverlays = useCallback(() => {
     setModal(null); setPanel(null); setPilePanel(null); setLocationBarId(null);
+    setCardLabWorkbenchOpen(false);
     setSystemMenuOpen(false); setSystemSub(null);
   }, []);
 
@@ -2383,13 +2397,14 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         {isCardLab && (
           <section className="lab-status-strip" aria-label="實驗場狀態">
             <div>
-              <strong>卡片效果實驗場</strong>
+              <strong>卡片良率檢驗所</strong>
               <span>訓練木人 HP {labDummyHp} · 傷害 0 · 恐懼 0</span>
             </div>
             <div className="lab-status-actions">
+              <button onClick={() => setCardLabWorkbenchOpen(true)}>卡片品管目錄</button>
               <button onClick={resetTrainingDummy}>重置木人</button>
               <button onClick={resetCardLab}>重置實驗</button>
-              <button onClick={() => navigate('/departure')}>返回地圖</button>
+              <button onClick={() => navigate('/lobby')}>返回大廳</button>
             </div>
           </section>
         )}
@@ -2595,7 +2610,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             {isCardLab && (
               <div className="lab-log-actions">
                 <button onClick={() => void copyCardLabLog()}>{logCopied ? '已複製' : '複製 Log'}</button>
-                <button onClick={() => setLog(['──── 卡片效果實驗場 Log 已清空 ────'])}>清空</button>
+                <button onClick={() => setLog(['──── 卡片良率檢驗所 Log 已清空 ────'])}>清空</button>
               </div>
             )}
           </div>
@@ -2786,6 +2801,15 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         <div className={`screen-toast ${screenToast.tone}`} role="status" aria-live="assertive" key={screenToast.id}>
           {screenToast.text}
         </div>
+      )}
+
+      {isCardLab && cardLabWorkbenchOpen && (
+        <CardLabWorkbench
+          initialCards={setup.cardLabCatalog ?? []}
+          handIds={investigator.hand}
+          onAddCard={addCardToLabHand}
+          onClose={() => setCardLabWorkbenchOpen(false)}
+        />
       )}
 
       {pilePanel && (

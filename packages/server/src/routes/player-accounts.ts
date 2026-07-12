@@ -10,7 +10,7 @@ import {
   getOrCreatePlayerPasswordVaultKey,
   type PlayerPasswordVaultRecord,
 } from '../services/player-password-vault.js';
-import { CARD_LAB_MANIFEST, isCardLabCreator } from '../services/card-lab.js';
+import { CARD_LAB_MANIFEST, isCardLabCreator, parseCardLabReview } from '../services/card-lab.js';
 
 const PLAYER_JWT_SECRET = process.env.PLAYER_JWT_SECRET || 'player-fallback-secret-change-me';
 const PLAYER_SESSION_HOURS = Number.parseInt(process.env.PLAYER_SESSION_HOURS || '24', 10);
@@ -336,6 +336,102 @@ export const playerAccountRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(500).send({ success: false, error: '實驗場載入失敗' });
     }
   });
+
+  app.get('/api/player/card-lab/cards', { preHandler: requirePlayerAuth }, async (request, reply) => {
+    const player = (request as any).player;
+    if (!isCardLabCreator(player?.username)) {
+      return reply.status(403).send({ success: false, error: '此帳號沒有實驗場權限' });
+    }
+    try {
+      const [cardsResult, styleCardsResult] = await Promise.all([
+        pool.query(`
+          SELECT c.*,
+                 COALESCE(json_agg(e.* ORDER BY e.sort_order)
+                   FILTER (WHERE e.id IS NOT NULL), '[]') AS effects,
+                 review.status AS review_status,
+                 review.notes AS review_notes,
+                 review.updated_at AS reviewed_at,
+                 reviewer.username AS reviewed_by_username
+            FROM card_definitions c
+            LEFT JOIN card_effects e ON e.card_def_id = c.id
+            LEFT JOIN card_lab_reviews review ON review.card_id = c.id
+            LEFT JOIN players reviewer ON reviewer.id = review.reviewed_by
+           GROUP BY c.id, review.card_id, reviewer.id
+           ORDER BY c.code ASC
+        `),
+        pool.query(`
+          SELECT style.code AS style_code, style_card.*
+            FROM combat_style_cards style_card
+            JOIN combat_styles style ON style.id = style_card.style_id
+           ORDER BY style.code, style_card.card_tier, style_card.code
+        `),
+      ]);
+      const stylePools: Record<string, unknown[]> = {};
+      for (const row of styleCardsResult.rows) {
+        const styleCode = String(row.style_code ?? '');
+        if (!styleCode) continue;
+        (stylePools[styleCode] ??= []).push(row);
+      }
+      return reply.send({
+        success: true,
+        data: { cards: cardsResult.rows, style_pools: stylePools },
+      });
+    } catch (error) {
+      request.log.error(error, 'card lab card catalogue failed');
+      return reply.status(500).send({ success: false, error: '讀取卡片品管目錄失敗' });
+    }
+  });
+
+  app.put<{
+    Params: { cardId: string };
+    Body: { status?: string; notes?: string };
+  }>('/api/player/card-lab/cards/:cardId/review', { preHandler: requirePlayerAuth }, async (request, reply) => {
+    const player = (request as any).player;
+    if (!isCardLabCreator(player?.username)) {
+      return reply.status(403).send({ success: false, error: '此帳號沒有實驗場權限' });
+    }
+    const parsed = parseCardLabReview(request.body);
+    if (!parsed.ok) return reply.status(400).send({ success: false, error: parsed.error });
+    try {
+      const result = await pool.query(
+        `INSERT INTO card_lab_reviews (card_id, status, notes, reviewed_by)
+         SELECT id, $2, $3, $4 FROM card_definitions WHERE id = $1
+         ON CONFLICT (card_id) DO UPDATE SET
+           status = EXCLUDED.status,
+           notes = EXCLUDED.notes,
+           reviewed_by = EXCLUDED.reviewed_by,
+           updated_at = NOW()
+         RETURNING card_id, status, notes, reviewed_by, updated_at AS reviewed_at`,
+        [request.params.cardId, parsed.status, parsed.notes, player.playerId],
+      );
+      if (result.rows.length === 0) return reply.status(404).send({ success: false, error: '找不到卡片' });
+      return reply.send({
+        success: true,
+        data: { ...result.rows[0], reviewed_by_username: player.username },
+      });
+    } catch (error) {
+      request.log.error(error, 'save card lab review failed');
+      return reply.status(500).send({ success: false, error: '儲存卡片評價失敗' });
+    }
+  });
+
+  app.delete<{ Params: { cardId: string } }>(
+    '/api/player/card-lab/cards/:cardId/review',
+    { preHandler: requirePlayerAuth },
+    async (request, reply) => {
+      const player = (request as any).player;
+      if (!isCardLabCreator(player?.username)) {
+        return reply.status(403).send({ success: false, error: '此帳號沒有實驗場權限' });
+      }
+      try {
+        await pool.query('DELETE FROM card_lab_reviews WHERE card_id = $1', [request.params.cardId]);
+        return reply.send({ success: true, data: { card_id: request.params.cardId } });
+      } catch (error) {
+        request.log.error(error, 'clear card lab review failed');
+        return reply.status(500).send({ success: false, error: '清除卡片評價失敗' });
+      }
+    },
+  );
 
   app.get('/api/player/saves', { preHandler: requirePlayerAuth }, async (request, reply) => {
     try {

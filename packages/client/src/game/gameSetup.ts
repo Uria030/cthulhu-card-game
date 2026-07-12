@@ -37,6 +37,7 @@ import {
   materializeAIInvestigator,
 } from '@cthulhu/shared';
 import { displayNameFor } from './displayName';
+import type { CardLabCard } from '../api';
 import { normaliseBootstrapCardData } from './cardDataAdapter';
 export { normaliseBootstrapCardData } from './cardDataAdapter';
 
@@ -94,6 +95,8 @@ export interface GameSetup {
   summonPool: Array<{ code: string; name_zh: string; tier: number }>;
   /** 引擎卡片資料(commit_icons/effects/cost/combat_style 等) */
   cardLookup: CardDataLookup;
+  /** Creator 卡片品管目錄；只有實驗場 setup 會帶入。 */
+  cardLabCatalog?: CardLabCard[];
   /** 戰鬥風格卡池(key = style code) */
   stylePools: Record<string, StyleCardData[]>;
   /** 幕/議程原始資料(進度引擎用;display 用 actCards/agendaCards) */

@@ -6,10 +6,29 @@ export function isCardLabCreator(username: unknown): boolean {
   return CARD_LAB_USERNAME_SET.has(String(username ?? '').trim().toLowerCase());
 }
 
+export const CARD_LAB_REVIEW_STATUSES = ['pass', 'warn', 'block'] as const;
+export type CardLabReviewStatus = typeof CARD_LAB_REVIEW_STATUSES[number];
+
+export function parseCardLabReview(input: unknown):
+  | { ok: true; status: CardLabReviewStatus; notes: string }
+  | { ok: false; error: string } {
+  const body = input && typeof input === 'object' ? input as Record<string, unknown> : {};
+  const status = String(body.status ?? '').trim().toLowerCase();
+  const notes = String(body.notes ?? '').trim();
+  if (!CARD_LAB_REVIEW_STATUSES.includes(status as CardLabReviewStatus)) {
+    return { ok: false, error: '評價必須是 PASS、WARN 或 BLOCK' };
+  }
+  if (notes.length > 5000) return { ok: false, error: '評價紀錄不可超過 5000 字' };
+  if ((status === 'warn' || status === 'block') && notes.length === 0) {
+    return { ok: false, error: 'WARN 與 BLOCK 必須填寫紀錄' };
+  }
+  return { ok: true, status: status as CardLabReviewStatus, notes };
+}
+
 export const CARD_LAB_MANIFEST = {
   id: 'card-lab',
-  version: 1,
-  title: '卡片效果實驗場',
+  version: 2,
+  title: '卡片良率檢驗所',
   locations: [
     {
       code: 'card_lab_entrance',
@@ -35,4 +54,3 @@ export const CARD_LAB_MANIFEST = {
     movement_speed: 0,
   },
 } as const;
-

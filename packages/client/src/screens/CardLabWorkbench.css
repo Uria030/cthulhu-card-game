@@ -1,0 +1,97 @@
+.card-lab-workbench-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(11, 10, 9, .8);
+  backdrop-filter: blur(5px);
+  font-family: "Noto Serif TC", serif;
+}
+
+.card-lab-workbench {
+  width: min(1180px, 96vw);
+  height: min(820px, 94vh);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid #9a8153;
+  background: #1d1b19;
+  color: #e8dfcf;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .75);
+}
+
+.clw-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid rgba(154, 129, 83, .45); }
+.clw-header h2 { margin: 0; font-size: 23px; letter-spacing: 0; }
+.clw-header p { margin: 3px 0 0; color: #aaa08f; font-size: 12px; }
+.clw-close { width: 44px; height: 44px; border: 0; background: transparent; color: #e8dfcf; font-size: 30px; cursor: pointer; }
+.clw-header-actions { display: flex; align-items: center; gap: 8px; }
+.clw-header-actions > button:not(.clw-close) { min-height: 40px; border: 1px solid #75664e; background: #28231d; color: #eadbbd; padding: 7px 12px; font: 600 12px "Noto Serif TC", serif; cursor: pointer; }
+
+.clw-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(130px, 180px)); gap: 8px; padding: 10px 14px; border-bottom: 1px solid rgba(154, 129, 83, .32); background: #26231f; }
+.clw-toolbar input,
+.clw-toolbar select,
+.clw-review-editor textarea { min-height: 42px; border: 1px solid #75664e; border-radius: 3px; background: #121211; color: #eee6d8; padding: 8px 10px; font: 400 13px "Noto Serif TC", serif; }
+
+.clw-body { min-height: 0; display: grid; grid-template-columns: minmax(300px, 38%) minmax(0, 1fr); }
+.clw-list { min-height: 0; overflow-y: auto; border-right: 1px solid rgba(154, 129, 83, .42); background: #171615; }
+.clw-result-count { position: sticky; top: 0; z-index: 2; padding: 7px 12px; background: rgba(29, 27, 25, .96); color: #aaa08f; font-size: 11px; }
+.clw-card-row { width: 100%; min-height: 62px; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 8px 11px; border: 0; border-bottom: 1px solid rgba(154, 129, 83, .2); background: transparent; color: #ddd5c8; text-align: left; cursor: pointer; }
+.clw-card-row:hover,
+.clw-card-row.selected { background: #302a22; }
+.clw-card-row.selected { box-shadow: inset 3px 0 #b99d67; }
+.clw-quality { min-width: 43px; padding: 3px 4px; border: 1px solid #665f53; color: #aaa397; font: 700 9px "Noto Sans TC", sans-serif; text-align: center; }
+.clw-quality.pass { border-color: #73856a; color: #b8d0ad; }
+.clw-quality.warn { border-color: #a98848; color: #e1c475; }
+.clw-quality.block { border-color: #9f5149; color: #e7a49d; }
+.clw-card-name { min-width: 0; display: flex; flex-direction: column; }
+.clw-card-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.clw-card-name small { color: #918778; font: 400 10px "Noto Sans TC", sans-serif; }
+.clw-card-tags { color: #aaa08f; font-size: 10px; white-space: nowrap; }
+
+.clw-detail { min-height: 0; overflow-y: auto; padding: 20px 24px 28px; }
+.clw-card-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.clw-card-heading span { color: #9e927f; font: 400 11px "Noto Sans TC", sans-serif; }
+.clw-card-heading h3 { margin: 3px 0; color: #f0e5d1; font-size: 26px; }
+.clw-card-heading p { margin: 0; color: #b7ab98; font-size: 12px; }
+.clw-add-hand,
+.clw-review-actions button { min-height: 42px; border: 1px solid #9a8153; border-radius: 3px; background: #28231d; color: #eadbbd; padding: 8px 14px; font: 600 13px "Noto Serif TC", serif; cursor: pointer; }
+.clw-add-hand:disabled { opacity: .48; cursor: default; }
+.clw-card-copy { margin-top: 18px; padding: 16px; border: 1px solid rgba(154, 129, 83, .32); background: #24211d; }
+.clw-card-copy h4,
+.clw-review-editor h4 { margin: 0 0 8px; color: #c5ab78; font-size: 13px; }
+.clw-card-copy p { margin: 0 0 12px; color: #ddd3c2; font-size: 14px; line-height: 1.7; }
+
+.clw-review-editor { margin-top: 16px; }
+.clw-review-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.clw-review-head span { color: #948a7c; font: 400 10px "Noto Sans TC", sans-serif; }
+.clw-status-control { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+.clw-status-control button { min-height: 42px; border: 1px solid #6d6458; background: #171615; color: #aaa397; font: 700 12px "Noto Sans TC", sans-serif; cursor: pointer; }
+.clw-status-control button.active.pass { border-color: #829477; background: #293126; color: #d4e4cc; }
+.clw-status-control button.active.warn { border-color: #b28c45; background: #392f1d; color: #f0d386; }
+.clw-status-control button.active.block { border-color: #ad554c; background: #3d2220; color: #f0afa8; }
+.clw-review-editor textarea { width: 100%; resize: vertical; box-sizing: border-box; line-height: 1.55; }
+.clw-review-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 8px; }
+.clw-review-actions button.primary { background: #6b542d; border-color: #c0a56e; }
+.clw-message { margin-right: auto; color: #d1bd95; font-size: 12px; }
+.clw-empty { padding: 30px 16px; color: #aaa08f; text-align: center; }
+
+@media (max-width: 820px) {
+  .card-lab-workbench-backdrop { padding: 0; }
+  .card-lab-workbench { width: 100vw; height: 100vh; }
+  .clw-toolbar { grid-template-columns: 1fr 1fr; }
+  .clw-toolbar input { grid-column: 1 / -1; }
+  .clw-body { grid-template-columns: minmax(240px, 42%) minmax(0, 1fr); }
+  .clw-card-tags { display: none; }
+  .clw-card-row { grid-template-columns: 45px minmax(0, 1fr); }
+  .clw-detail { padding: 16px; }
+}
+
+@media (max-width: 620px) {
+  .clw-body { grid-template-columns: 1fr; grid-template-rows: minmax(180px, 36%) minmax(0, 1fr); }
+  .clw-list { border-right: 0; border-bottom: 1px solid rgba(154, 129, 83, .42); }
+  .clw-card-heading { flex-direction: column; }
+  .clw-add-hand { width: 100%; }
+  .clw-review-head { align-items: flex-start; flex-direction: column; }
+}

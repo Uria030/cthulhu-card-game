@@ -1,5 +1,5 @@
-import type { CardLabManifest } from '../api';
-import { buildCardLabSetup, CARD_LAB_STAGE_ID } from './cardLab';
+import type { CardLabCatalogue, CardLabManifest } from '../api';
+import { buildCardLabSetup, CARD_LAB_STAGE_ID, returnCardToLabHand } from './cardLab';
 import type { GameSetup } from './gameSetup';
 import { normaliseBootstrapCardData } from './cardDataAdapter';
 import { bootPreloadPlan } from './preloadPlan';
@@ -13,8 +13,8 @@ function assertEq<T>(actual: T, expected: T, message?: string): void {
 
 const manifest: CardLabManifest = {
   id: 'card-lab',
-  version: 1,
-  title: '卡片效果實驗場',
+  version: 2,
+  title: '卡片良率檢驗所',
   baseStageId: 'stage-base',
   locations: [
     { code: 'card_lab_entrance', name_zh: '實驗場入口', description_zh: '入口', shroud: 0 },
@@ -30,6 +30,22 @@ const manifest: CardLabManifest = {
     fear_value: 0,
     movement_speed: 0,
   },
+};
+
+const catalogue: CardLabCatalogue = {
+  cards: [
+    {
+      id: 'db-card-1', code: 'C-E-01', name_zh: '資料庫事件', card_type: 'event', faction: 'E', cost: 1,
+      rarity: 'common', description_zh: '抽一張卡。', effects: [], review_status: null, review_notes: null,
+      reviewed_at: null, reviewed_by_username: null,
+    },
+    {
+      id: 'db-card-2', code: 'C-I-01', name_zh: '資料庫資產', card_type: 'asset', faction: 'I', cost: 2,
+      rarity: 'uncommon', description_zh: '測試資產。', effects: [], review_status: 'warn', review_notes: '待複測',
+      reviewed_at: '2026-07-12T00:00:00.000Z', reviewed_by_username: 'creator01',
+    },
+  ],
+  style_pools: {},
 };
 
 test('card lab setup uses two locations, a harmless dummy, and no save mode', () => {
@@ -75,7 +91,7 @@ test('card lab setup uses two locations, a harmless dummy, and no save mode', ()
     locMeta: {},
     enemyStats: {},
   } as unknown as GameSetup;
-  const setup = buildCardLabSetup(source, manifest);
+  const setup = buildCardLabSetup(source, manifest, catalogue);
   assertEq(setup.stageId, CARD_LAB_STAGE_ID);
   assertEq(setup.sandbox, true);
   assertEq(setup.scenario.locations.length, 2);
@@ -84,7 +100,9 @@ test('card lab setup uses two locations, a harmless dummy, and no save mode', ()
   assertEq(setup.enemyStats.card_lab_training_dummy?.damage_physical, 0);
   assertEq(setup.enemyStats.card_lab_training_dummy?.damage_horror, 0);
   assertEq(setup.enemyStats.card_lab_training_dummy?.fear_value, 0);
-  assertEq(setup.investigator.hand.join(','), 'c1,c2');
+  assertEq(setup.investigator.hand.length, 0, 'catalogue cards are opt-in, not a fixed hand');
+  assertEq(Object.keys(setup.cardLookup).join(','), 'db-card-1,db-card-2');
+  assertEq(setup.cardLabCatalog?.length, 2);
   assertEq(setup.investigator.resources, 99);
   assertEq(setup.investigator.actionPoints, 99);
   assertEq(setup.bootstrap, null);
@@ -99,6 +117,23 @@ test('boot preload plan separates local shell assets and public server data', ()
   assertEq(plan.some((task) => task.id === 'lobby-door'), true);
   assertEq(plan.some((task) => task.id === 'stages'), true);
   assertEq(plan.some((task) => task.id === 'investigators'), true);
+});
+
+test('adding a catalogue card returns its single instance to hand for retesting', () => {
+  const source = {
+    investigatorId: 'inv-1', investigatorDefinitionId: 'def-1', hp: 9, hpMax: 9, san: 9, sanMax: 9,
+    actionPoints: 99, resources: 99, currentLocationId: 'lab', engagedWith: [],
+    deck: ['other'], hand: [], discardPile: ['db-card-1'], removedPile: ['db-card-1'],
+    assetsInPlay: ['db-card-1'], allies: [{ cardInstanceId: 'db-card-1', name: '測試盟友', hp: 1, hpMax: 1, san: 1, sanMax: 1, attack: 0, exhausted: true }],
+    assetState: { 'db-card-1': { usesLeft: 0 } },
+  } as unknown as GameSetup['investigator'];
+  const next = returnCardToLabHand(source, 'db-card-1');
+  assertEq(next.hand.join(','), 'db-card-1');
+  assertEq(next.discardPile.includes('db-card-1'), false);
+  assertEq(next.removedPile.includes('db-card-1'), false);
+  assertEq(next.assetsInPlay.includes('db-card-1'), false);
+  assertEq(next.allies?.some((ally) => ally.cardInstanceId === 'db-card-1'), false);
+  assertEq(next.assetState?.['db-card-1'], undefined);
 });
 
 test('legacy signature card fields become playable card data', () => {

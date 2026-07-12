@@ -3603,6 +3603,21 @@ UPDATE investigator_signature_cards AS card
    AND (card.play_effect_code IS NULL OR card.play_effect_code = '[]'::jsonb);
 `;
 
+export const MIGRATION_046_SQL = `
+CREATE TABLE IF NOT EXISTS card_lab_reviews (
+  card_id       UUID PRIMARY KEY REFERENCES card_definitions(id) ON DELETE CASCADE,
+  status        VARCHAR(8) NOT NULL CHECK (status IN ('pass', 'warn', 'block')),
+  notes         TEXT NOT NULL DEFAULT '',
+  reviewed_by   UUID NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_card_lab_review_notes CHECK (status = 'pass' OR length(btrim(notes)) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_card_lab_reviews_status ON card_lab_reviews(status);
+CREATE INDEX IF NOT EXISTS idx_card_lab_reviews_updated_at ON card_lab_reviews(updated_at DESC);
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3830,6 +3845,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_043', MIGRATION_043_SQL);
     await runOne('MIGRATION_044', MIGRATION_044_SQL);
     await runOne('MIGRATION_045', MIGRATION_045_SQL);
+    await runOne('MIGRATION_046', MIGRATION_046_SQL);
     try {
       const vaultKey = await getOrCreatePlayerPasswordVaultKey(client);
       const updatedCreators = await bootstrapCreatorPasswords(client, vaultKey);

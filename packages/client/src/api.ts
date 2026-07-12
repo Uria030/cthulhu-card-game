@@ -4,7 +4,7 @@
  * API base 與 admin-shared.js 同策略:固定指向 Railway,
  * 本機開發可用 VITE_API_BASE 覆寫(.env.local)。
  */
-import type { CampaignProgress, StageBootstrap } from '@cthulhu/shared';
+import type { CampaignProgress, StageBootstrap, CardData, StyleCardData } from '@cthulhu/shared';
 
 export const API_BASE: string =
   import.meta.env.VITE_API_BASE ?? 'https://server-production-fc4f.up.railway.app';
@@ -110,6 +110,39 @@ export interface CardLabManifest {
   };
 }
 
+export type CardLabReviewStatus = 'pass' | 'warn' | 'block';
+
+export interface CardLabReview {
+  card_id: string;
+  status: CardLabReviewStatus;
+  notes: string;
+  reviewed_by?: string;
+  reviewed_at: string;
+  reviewed_by_username: string;
+}
+
+export interface CardLabCard extends Record<string, unknown> {
+  id: string;
+  code: string;
+  name_zh: string;
+  name_en?: string | null;
+  card_type: string;
+  faction: string;
+  cost: number;
+  rarity?: string | null;
+  description_zh?: string | null;
+  effects: NonNullable<CardData['effects']>;
+  review_status: CardLabReviewStatus | null;
+  review_notes: string | null;
+  reviewed_at: string | null;
+  reviewed_by_username: string | null;
+}
+
+export interface CardLabCatalogue {
+  cards: CardLabCard[];
+  style_pools: Record<string, StyleCardData[]>;
+}
+
 export interface PlayerMe {
   player: PlayerAccount;
   saves: PlayerSave[];
@@ -143,7 +176,7 @@ async function requestJson<T>(path: string, options: RequestInit = {}, playerAut
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const body = await res.json().catch(() => null);
   if (!res.ok || !body?.success) {
-    throw new Error(`GET ${path} 失敗(${res.status}):${body?.error ?? '未知錯誤'}`);
+    throw new Error(`${options.method ?? 'GET'} ${path} 失敗(${res.status}):${body?.error ?? '未知錯誤'}`);
   }
   return body.data as T;
 }
@@ -200,6 +233,26 @@ export function fetchPlayerMe(): Promise<PlayerMe> {
 
 export function fetchCardLabManifest(): Promise<CardLabManifest> {
   return requestJson<CardLabManifest>('/api/player/card-lab', {}, true);
+}
+
+export function fetchCardLabCatalogue(): Promise<CardLabCatalogue> {
+  return requestJson<CardLabCatalogue>('/api/player/card-lab/cards', {}, true);
+}
+
+export function saveCardLabReview(
+  cardId: string,
+  input: { status: CardLabReviewStatus; notes: string },
+): Promise<CardLabReview> {
+  return requestJson<CardLabReview>(`/api/player/card-lab/cards/${encodeURIComponent(cardId)}/review`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  }, true);
+}
+
+export function clearCardLabReview(cardId: string): Promise<{ card_id: string }> {
+  return requestJson<{ card_id: string }>(`/api/player/card-lab/cards/${encodeURIComponent(cardId)}/review`, {
+    method: 'DELETE',
+  }, true);
 }
 
 export function createPlayerSave(input: {

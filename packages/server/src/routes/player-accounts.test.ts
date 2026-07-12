@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { playerAccountTestHelpers } from './player-accounts.js';
 import { playerAccountRoutes } from './player-accounts.js';
-import { MIGRATION_042_SQL, MIGRATION_043_SQL, MIGRATION_044_SQL } from '../db/migrate.js';
+import { MIGRATION_042_SQL, MIGRATION_043_SQL, MIGRATION_044_SQL, MIGRATION_046_SQL } from '../db/migrate.js';
 import { pool } from '../db/pool.js';
 import {
   decryptPlayerPassword,
@@ -11,7 +11,7 @@ import {
   PlayerPasswordVaultConfigurationError,
 } from '../services/player-password-vault.js';
 import { bootstrapCreatorPasswords } from '../services/creator-password-bootstrap.js';
-import { CARD_LAB_MANIFEST, isCardLabCreator } from '../services/card-lab.js';
+import { CARD_LAB_MANIFEST, isCardLabCreator, parseCardLabReview } from '../services/card-lab.js';
 
 type TestFn = () => void | Promise<void>;
 const tests: { name: string; fn: TestFn }[] = [];
@@ -49,6 +49,18 @@ test('card lab whitelist only admits creator01 and creator02', () => {
   assertEq(CARD_LAB_MANIFEST.enemy.fear_value, 0);
 });
 
+test('card lab quality review accepts PASS and requires notes for WARN/BLOCK', () => {
+  const pass = parseCardLabReview({ status: 'PASS', notes: '' });
+  const warn = parseCardLabReview({ status: 'warn', notes: '敘述與實際效果不一致' });
+  const invalidWarn = parseCardLabReview({ status: 'warn', notes: '  ' });
+  const invalidStatus = parseCardLabReview({ status: 'pending', notes: '' });
+  assertEq(pass.ok, true);
+  assertEq(pass.ok ? pass.status : '', 'pass');
+  assertEq(warn.ok, true);
+  assertEq(invalidWarn.ok, false);
+  assertEq(invalidStatus.ok, false);
+});
+
 test('card lab endpoint rejects other players and returns manifest to creators', async () => {
   const originalQuery = pool.query;
   (pool as any).query = async (sql: string) => {
@@ -76,6 +88,64 @@ test('card lab endpoint rejects other players and returns manifest to creators',
     assertEq(allowed.json().data.baseStageId, 'stage-base-1');
     assertEq(allowed.json().data.locations.length, 2);
     assertEq(allowed.json().data.enemy.name_zh, '訓練木人');
+  } finally {
+    await app.close();
+    (pool as any).query = originalQuery;
+  }
+});
+
+test('card lab catalogue and review routes are creator-only and persist review metadata', async () => {
+  const originalQuery = pool.query;
+  (pool as any).query = async (sql: string, params?: unknown[]) => {
+    if (sql.includes('FROM card_definitions c')) {
+      return { rows: [{
+        id: 'card-1', code: 'C-E-01', name_zh: '測試卡', card_type: 'event', faction: 'E',
+        effects: [], review_status: null, review_notes: null,
+      }] };
+    }
+    if (sql.includes('FROM combat_style_cards')) return { rows: [] };
+    if (sql.includes('INSERT INTO card_lab_reviews')) {
+      return { rows: [{
+        card_id: params?.[0], status: params?.[1], notes: params?.[2], reviewed_by: params?.[3],
+        reviewed_at: '2026-07-12T00:00:00.000Z',
+      }] };
+    }
+    if (sql.includes('DELETE FROM card_lab_reviews')) return { rows: [] };
+    throw new Error(`Unexpected SQL in card lab catalogue route test: ${sql}`);
+  };
+  const app = Fastify({ logger: false });
+  await app.register(playerAccountRoutes);
+  const secret = process.env.PLAYER_JWT_SECRET || 'player-fallback-secret-change-me';
+  const tokenFor = (username: string) => jwt.sign({ playerId: `${username}-id`, username, kind: 'player' }, secret);
+  try {
+    const denied = await app.inject({
+      method: 'GET', url: '/api/player/card-lab/cards',
+      headers: { authorization: `Bearer ${tokenFor('ordinary-player')}` },
+    });
+    assertEq(denied.statusCode, 403);
+
+    const catalogue = await app.inject({
+      method: 'GET', url: '/api/player/card-lab/cards',
+      headers: { authorization: `Bearer ${tokenFor('creator01')}` },
+    });
+    assertEq(catalogue.statusCode, 200);
+    assertEq(catalogue.json().data.cards[0].name_zh, '測試卡');
+
+    const invalid = await app.inject({
+      method: 'PUT', url: '/api/player/card-lab/cards/card-1/review',
+      headers: { authorization: `Bearer ${tokenFor('creator01')}` },
+      payload: { status: 'warn', notes: '' },
+    });
+    assertEq(invalid.statusCode, 400);
+
+    const saved = await app.inject({
+      method: 'PUT', url: '/api/player/card-lab/cards/card-1/review',
+      headers: { authorization: `Bearer ${tokenFor('creator02')}` },
+      payload: { status: 'block', notes: '實際傷害與卡面不一致' },
+    });
+    assertEq(saved.statusCode, 200);
+    assertEq(saved.json().data.status, 'block');
+    assertEq(saved.json().data.reviewed_by_username, 'creator02');
   } finally {
     await app.close();
     (pool as any).query = originalQuery;
@@ -150,6 +220,14 @@ test('MIGRATION_044 persists a server-managed vault key', () => {
   assertEq(MIGRATION_044_SQL.includes('CREATE TABLE IF NOT EXISTS server_secrets'), true);
   assertEq(MIGRATION_044_SQL.includes('secret_name'), true);
   assertEq(MIGRATION_044_SQL.includes('secret_value'), true);
+});
+
+test('MIGRATION_046 creates one durable quality review per database card', () => {
+  assertEq(MIGRATION_046_SQL.includes('CREATE TABLE IF NOT EXISTS card_lab_reviews'), true);
+  assertEq(MIGRATION_046_SQL.includes('card_id       UUID PRIMARY KEY'), true);
+  assertEq(MIGRATION_046_SQL.includes("status IN ('pass', 'warn', 'block')"), true);
+  assertEq(MIGRATION_046_SQL.includes('chk_card_lab_review_notes'), true);
+  assertEq(MIGRATION_046_SQL.includes('reviewed_by'), true);
 });
 
 test('password vault round-trips independent creator passwords', () => {

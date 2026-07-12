@@ -377,6 +377,21 @@ test('attack:DC 來自怪物 + 夜間 -2(§12.1)', () => {
   assertEq((dEff?.params as { outcome: string }).outcome, 'hit');
 });
 
+test('attack / evade:夜間光源覆蓋後取消視線修正(§12.1)', () => {
+  // roll 12 + 力量 3 = 15:夜間未照明時 miss,被照亮後 hit。
+  const attackCtx = makeCombatCtx({ roll: 12, enemyDc: 14, visibility: 'night' });
+  attackCtx.scenario.lightSources = [{ id: 'lamp-a', sourceCardInstanceId: 'lantern-1', locationId: 'loc-a', radius: 0 }];
+  const attack = resolveIntent(makeIntent('attack'), attackCtx);
+  const attackRoll = attack.result.effects?.find((e) => e.type === 'roll_d20');
+  assertEq((attackRoll?.params as { outcome: string }).outcome, 'hit');
+
+  // roll 6 + 反應 3 = 9:黑暗未照明時 +2 可過 DC10;被照亮後不再取得黑暗閃避加成。
+  const evadeCtx = makeCombatCtx({ roll: 6, engaged: true, visibility: 'darkness' });
+  evadeCtx.scenario.lightSources = [{ id: 'lamp-a', sourceCardInstanceId: 'lantern-1', locationId: 'loc-a', radius: 0 }];
+  const evade = resolveIntent(makeIntent('evade'), evadeCtx);
+  assertEq(evade.result.effects?.some((e) => e.type === 'evade_success'), false);
+});
+
 test('attack:自然 20 爆擊 ×2(§7.5)', () => {
   const r = resolveIntent(makeIntent('attack'), makeCombatCtx({ roll: 20, enemyDc: 10, visibility: 'day' }));
   const hit = r.result.effects?.find((e) => e.type === 'attack_hit');

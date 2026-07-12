@@ -78,6 +78,11 @@ export interface ScenarioState {
   enemies: EnemyInstance[];
   /** 場上標記(線索、毀滅、隱藏調查點等,規則書 §13) */
   tokens: TokenInstance[];
+  /**
+   * 場上的光源物件(ch2 §12.1 / h02 §7.3)。環境 visibility 是地點的
+   * 基底狀態；夜間與黑暗中的實際視線由這些物件的照明半徑覆蓋決定。
+   */
+  lightSources?: LightSourceInstance[];
   /** 隱藏調查點(規則書 §13;bootstrap 從地點 hidden_info 載入,純資料層,動態揭露/領取) */
   hiddenPoints?: HiddenPoint[];
   /** 可發現卡片資源池(支柱6 探索 + 支柱8 動態牌組;bootstrap 從地點 discoverable_card_ids 預實例化) */
@@ -121,6 +126,16 @@ export interface LocationInstance {
   connectedTo: string[];
   /** 是否需要障礙物移動(2 行動點) */
   isObstacle: boolean;
+}
+
+export interface LightSourceInstance {
+  id: string;
+  /** 放置光源的卡片實例；事件/場景光源可為 null。 */
+  sourceCardInstanceId: string | null;
+  /** 光源物件所在板塊，照明永遠從這裡而不是調查員位置計算。 */
+  locationId: string;
+  /** 0=自身，1=自身與相鄰板塊。 */
+  radius: number;
 }
 
 export interface EnemyInstance {

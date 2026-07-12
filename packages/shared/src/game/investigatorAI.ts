@@ -21,7 +21,7 @@ import type { ResultEffect, IntentMessage } from './messages';
 import { CURRENT_MESSAGE_SCHEMA_VERSION } from './messages';
 import type { ScenarioState, InvestigatorState, TurnState } from './state';
 import type { AttributeKey } from './checks';
-import { commitValueFor } from './checks';
+import { commitValueFor, visibilityModifierAtLocation } from './checks';
 import { resolveIntent } from './ruleEngine';
 import type { RuleContext, CardDataLookup, StyleCardData } from './ruleEngine';
 import type { EnemyDataLookup } from './monsterActions';
@@ -585,7 +585,7 @@ export function enumerateCandidates(
   for (const enemy of enemiesHere) {
     const stats = enemyStats[enemy.enemyDefinitionId];
     const dc = stats?.dc ?? 10;
-    const vis = here?.visibility === 'night' || here?.visibility === 'darkness' ? -2 : 0;
+    const vis = visibilityModifierAtLocation('attack', scenario, inv.currentLocationId);
     const engagedWithAlly = otherAllies.some((a) => enemy.engagedWith.includes(a.investigatorId));
     const protectBonus = engagedWithAlly ? profile.weights.protectAllies : 0;
     const finishBonus = enemy.hp <= 2 ? 0.8 : 0; // 補刀:差一口氣的怪優先清掉
@@ -666,7 +666,7 @@ export function enumerateCandidates(
   for (const target of engaged) {
     const tt = enemyStats[target.enemyDefinitionId];
     const dc = tt?.dc ?? 10;
-    const vis = here?.visibility === 'night' || here?.visibility === 'darkness' ? 2 : 0;
+    const vis = visibilityModifierAtLocation('evade', scenario, inv.currentLocationId);
     const p = estimateSuccessChance(inv.attributes.reflex + vis, dc);
     const threat = (Number(tt?.damage_physical ?? 0) + Number(tt?.damage_horror ?? 0))
       * Math.max(1, Number(tt?.attacks_per_round ?? 1));

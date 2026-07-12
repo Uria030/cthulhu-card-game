@@ -13,6 +13,8 @@
  * - §12.1 光照:夜間/黑暗無視線攻擊 -2、黑暗中閃避 +2
  */
 import type { ChaosToken } from './state';
+import type { ScenarioState } from './state';
+import { hasLineOfSight } from './lighting';
 
 // ─── 八屬性 key(與 InvestigatorState.attributes 對齊)───
 export type AttributeKey =
@@ -112,6 +114,15 @@ export function visibilityModifier(kind: 'attack' | 'evade', visibility: Visibil
   const noSight = visibility === 'night' || visibility === 'darkness';
   if (kind === 'attack') return noSight ? -2 : 0;
   return noSight ? 2 : 0;
+}
+
+/** Uses board light-source coverage when a full scenario is available. */
+export function visibilityModifierAtLocation(
+  kind: 'attack' | 'evade',
+  scenario: Pick<ScenarioState, 'locations' | 'lightSources'>,
+  locationId: string | null | undefined,
+): number {
+  return hasLineOfSight(scenario, locationId) ? 0 : visibilityModifier(kind, 'night');
 }
 
 // ─── 混沌袋(§5 + supp04)─────────────────────

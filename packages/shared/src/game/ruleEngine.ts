@@ -30,7 +30,7 @@ import type {
 import {
   resolveCheck,
   commitValueFor,
-  visibilityModifier,
+  visibilityModifierAtLocation,
   drawChaosToken,
   resolveSpellSideEffect,
 } from './checks';
@@ -1069,11 +1069,8 @@ function performAttack(intent: IntentMessage, ctx: RuleContext, enemyInstanceId:
   const commit = takeCommit(intent, ctx, 'strength');
   if (commit.error) return reject(intent, commit.error);
 
-  const here = ctx.scenario.locations.find(
-    (l) => l.locationDefinitionId === ctx.investigator.currentLocationId,
-  );
   const cs = applyCheckStatus(ctx.investigator.statusEffects);
-  const situational = (here ? visibilityModifier('attack', here.visibility) : 0)
+  const situational = visibilityModifierAtLocation('attack', ctx.scenario, ctx.investigator.currentLocationId)
     + attackHitModifier(ctx.investigator.statusEffects); // §6.2 黑暗 -2
   const dc = ctx.enemyStats?.[enemy.enemyDefinitionId]?.dc ?? 10;
   const check = resolveCheck(
@@ -1156,10 +1153,7 @@ function resolveEvade(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
     );
   }
   const enemy = ctx.scenario.enemies.find((e) => e.instanceId === enemyId);
-  const here = ctx.scenario.locations.find(
-    (l) => l.locationDefinitionId === ctx.investigator.currentLocationId,
-  );
-  const situational = here ? visibilityModifier('evade', here.visibility) : 0;
+  const situational = visibilityModifierAtLocation('evade', ctx.scenario, ctx.investigator.currentLocationId);
   const dc = enemy ? ctx.enemyStats?.[enemy.enemyDefinitionId]?.dc ?? 10 : 10;
   const cs = applyCheckStatus(ctx.investigator.statusEffects);
   const check = resolveCheck(
@@ -1394,7 +1388,7 @@ function resolveExecuteCardAction(intent: IntentMessage, ctx: RuleContext): Rule
   const spend = spendAssetUse(ctx.investigator, cardId, data);
   if (spend.rejected) return reject(intent, spend.rejected);
   const inv: InvestigatorState = { ...spend.investigator, actionPoints: ctx.investigator.actionPoints - 1 };
-  const exec = executeCardEffects([fx], inv, ctx.scenario, ctx.cardLookup ?? {});
+  const exec = executeCardEffects([fx], inv, ctx.scenario, ctx.cardLookup ?? {}, undefined, { sourceAssetId: cardId });
   const post = postProcessCardEffects(exec.effects, exec.investigator, ctx, exec.scenario);
   const effects: ResultEffect[] = [
     { type: 'spend_action_point', params: { amount: 1 } },
@@ -1459,11 +1453,8 @@ function performWeaponAttack(
   const commit = takeCommit(intent, ctxAfterSpend, attr);
   if (commit.error) return reject(intent, commit.error);
 
-  const here = ctx.scenario.locations.find(
-    (l) => l.locationDefinitionId === ctx.investigator.currentLocationId,
-  );
   const situational =
-    (here ? visibilityModifier('attack', here.visibility) : 0) +
+    visibilityModifierAtLocation('attack', ctx.scenario, ctx.investigator.currentLocationId) +
     attachmentTestModifier(ctx.scenario.keeperAttachments, attr) +
     attackHitModifier(spend.investigator.statusEffects); // §6.2 黑暗 -2
   // §8:武器修正只在對應屬性風格卡被抽到時生效 + 場上被動(瞄準鏡等)

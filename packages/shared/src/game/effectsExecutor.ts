@@ -701,20 +701,52 @@ export function executeCardEffects(
       // ─── P3 環境(光照/火/鬧鬼/連線)— 已被引擎消費的部分 ────
       case 'create_darkness':
       case 'create_fire':
-      case 'create_light':
       case 'extinguish_fire':
-      case 'extinguish_light':
       case 'remove_darkness': {
-        // 改地點視野(§第五章 §7;visibilityModifier 消費):光→day / 暗→darkness / 火→fire / 滅燈→night
+        // 改地點基底環境。光源則是獨立物件，不能把夜晚永久改成白天。
         const loc = (p.location as string) || inv.currentLocationId || '';
         if (!sc.locations.some((l) => l.locationDefinitionId === loc)) { unsupported.push(code); break; }
         const vis: 'day' | 'night' | 'darkness' | 'fire' =
           code === 'create_darkness' ? 'darkness'
             : code === 'create_fire' ? 'fire'
-              : code === 'extinguish_light' ? 'night'
-                : 'day'; // create_light / remove_darkness / extinguish_fire
+              : 'day'; // remove_darkness / extinguish_fire
         sc = { ...sc, locations: sc.locations.map((l) => (l.locationDefinitionId === loc ? { ...l, visibility: vis } : l)) };
         out.push({ type: 'visibility_changed', params: { location: loc, visibility: vis } });
+        break;
+      }
+      case 'create_light': {
+        // ch2 §12.1:光源以物件為中心照亮地圖，不隨調查員移動，也不覆寫夜晚/黑暗環境。
+        const loc = resolveLocationParam(p, inv);
+        if (!sc.locations.some((l) => l.locationDefinitionId === loc)) { unsupported.push(code); break; }
+        const parsedRadius = Number(p.radius ?? 0);
+        const radius = Math.max(0, Math.floor(Number.isFinite(parsedRadius) ? parsedRadius : 0));
+        const sourceCardInstanceId = options.sourceAssetId ?? null;
+        const id = sourceCardInstanceId
+          ? `light:${sourceCardInstanceId}`
+          : `light:${loc}:${sc.turnNumber}:${(sc.lightSources ?? []).length}`;
+        const nextSource = { id, sourceCardInstanceId, locationId: loc, radius };
+        const previous = sc.lightSources ?? [];
+        const existingIndex = previous.findIndex((source) => source.id === id);
+        const lightSources = existingIndex >= 0
+          ? previous.map((source, index) => (index === existingIndex ? nextSource : source))
+          : [...previous, nextSource];
+        sc = { ...sc, lightSources };
+        out.push({ type: 'light_source_created', params: { id, sourceCardInstanceId, location: loc, radius } });
+        break;
+      }
+      case 'extinguish_light': {
+        const loc = resolveLocationParam(p, inv);
+        const sourceId = firstString(p.light_source_id, p.lightSourceId);
+        const existing = sc.lightSources ?? [];
+        const lightSources = existing.filter((source) => {
+          if (sourceId) return source.id !== sourceId;
+          // 來自資產的熄燈只移除自己的光源；場景/事件效果才移除指定地點的所有光源。
+          if (options.sourceAssetId) return source.sourceCardInstanceId !== options.sourceAssetId;
+          return source.locationId !== loc;
+        });
+        if (lightSources.length === existing.length) { unsupported.push(code); break; }
+        sc = { ...sc, lightSources };
+        out.push({ type: 'light_source_extinguished', params: { location: loc, sourceCardInstanceId: options.sourceAssetId ?? null, sourceId } });
         break;
       }
       case 'place_haunting': {

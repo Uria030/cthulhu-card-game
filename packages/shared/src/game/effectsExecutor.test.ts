@@ -4,6 +4,7 @@
 import { executeCardEffects, executeStockpileTalismanTurnStartEffects, passiveTestModifier } from './effectsExecutor';
 import type { CardEffectRow } from './effectsExecutor';
 import type { InvestigatorState, ScenarioState, EnemyInstance } from './state';
+import { hasLineOfSight } from './lighting';
 
 type TestFn = () => void;
 const tests: { name: string; fn: TestFn }[] = [];
@@ -369,13 +370,59 @@ test('add_keyword / remove_keyword:敵人詞綴增減', () => {
 });
 
 // ─── P3 批次1:環境(光照/火/鬧鬼/連線)─────────────
-test('create_darkness / create_fire / create_light:改地點視野', () => {
+test('create_darkness / create_fire / remove_darkness:改地點基底環境', () => {
   assertEq(executeCardEffects([fx('create_darkness')], makeInv(), locScenario(), {}).scenario.locations[0].visibility, 'darkness');
   assertEq(executeCardEffects([fx('create_fire')], makeInv(), locScenario(), {}).scenario.locations[0].visibility, 'fire');
-  assertEq(executeCardEffects([fx('extinguish_light')], makeInv(), locScenario(), {}).scenario.locations[0].visibility, 'night');
   // 還原類 → day
   const dark = { ...locScenario(), locations: [{ locationDefinitionId: 'A', visibility: 'darkness' as const, connectedTo: ['B'], isObstacle: false }, { locationDefinitionId: 'B', visibility: 'day' as const, connectedTo: ['A'], isObstacle: false }] };
   assertEq(executeCardEffects([fx('remove_darkness')], makeInv(), dark, {}).scenario.locations[0].visibility, 'day');
+});
+
+test('create_light / extinguish_light:維護獨立光源物件,不覆寫夜間基底環境', () => {
+  const night: ScenarioState = {
+    ...locScenario(),
+    locations: [
+      { locationDefinitionId: 'A', visibility: 'night', connectedTo: ['B'], isObstacle: false },
+      { locationDefinitionId: 'B', visibility: 'night', connectedTo: ['A'], isObstacle: false },
+    ],
+  };
+  const created = executeCardEffects(
+    [fx('create_light', { radius: 1 })],
+    makeInv(),
+    night,
+    {},
+    Math.random,
+    { sourceAssetId: 'lantern-1' },
+  );
+  assertEq(created.scenario.locations[0].visibility, 'night', '點燈不改寫基底環境');
+  assertEq(created.scenario.lightSources?.length, 1);
+  assertEq(created.scenario.lightSources?.[0]?.id, 'light:lantern-1');
+  assertEq(hasLineOfSight(created.scenario, 'A'), true, '光源照亮自身');
+  assertEq(hasLineOfSight(created.scenario, 'B'), true, 'radius=1 照亮相鄰地點');
+
+  const moved = executeCardEffects(
+    [fx('create_light', { location: 'B', radius: 0 })],
+    makeInv(),
+    created.scenario,
+    {},
+    Math.random,
+    { sourceAssetId: 'lantern-1' },
+  );
+  assertEq(moved.scenario.lightSources?.length, 1, '同一資產重複點燈更新物件,不重複堆疊');
+  assertEq(moved.scenario.lightSources?.[0]?.locationId, 'B');
+  assertEq(hasLineOfSight(moved.scenario, 'A'), false, '半徑 0 不再照到原地點');
+  assertEq(hasLineOfSight(moved.scenario, 'B'), true);
+
+  const extinguished = executeCardEffects(
+    [fx('extinguish_light')],
+    makeInv({ currentLocationId: 'B' }),
+    moved.scenario,
+    {},
+    Math.random,
+    { sourceAssetId: 'lantern-1' },
+  );
+  assertEq(extinguished.scenario.lightSources?.length, 0);
+  assertEq(hasLineOfSight(extinguished.scenario, 'B'), false, '熄燈後恢復夜間無視線');
 });
 
 test('place_haunting / remove_haunting:鬧鬼附著與移除', () => {

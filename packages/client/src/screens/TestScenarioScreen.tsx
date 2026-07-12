@@ -64,6 +64,7 @@ import {
   cardMaxUses,
   discardForHandLimit,
   HAND_LIMIT,
+  normalisePlayerNarrative,
 } from '@cthulhu/shared';
 import type {
   OutcomeData,
@@ -226,13 +227,17 @@ function cardLabDiagnosticLines(input: {
  */
 
 function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDisplay>): string {
+  return normalisePlayerNarrative(describeEffectRaw(eff, locMeta));
+}
+
+function describeEffectRaw(eff: ResultEffect, locMeta: Record<string, LocationDisplay>): string {
   const p = eff.params as Record<string, unknown>;
   switch (eff.type) {
-    case 'spend_action_point': return '扣 ' + (p.amount as number) + ' 行動點';
+    case 'spend_action_point': return '花費 ' + (p.amount as number) + ' 行動點';
     case 'gain_resource': return '獲得 ' + (p.amount as number) + ' 資源';
     case 'spend_resource': return '🪙 花費 ' + (p.amount as number) + ' 資源';
-    case 'heal_hp': return '💚 ' + ((p.narrative as string) || '回復體力') + '(HP +' + (p.amount as number) + ')';
-    case 'heal_san': return '💙 ' + ((p.narrative as string) || '回復理智') + '(SAN +' + (p.amount as number) + ')';
+    case 'heal_hp': return '💚 ' + ((p.narrative as string) || '治癒傷勢') + '（治癒 ' + (p.amount as number) + ' 點傷害）';
+    case 'heal_san': return '💙 ' + ((p.narrative as string) || '安定心神') + '（治癒 ' + (p.amount as number) + ' 點恐懼）';
     case 'draw_card': return '抽 1 張卡 → 手牌';
     case 'deck_empty_horror': return '⚠ 牌庫空,改受 ' + (p.amount as number) + ' 點恐懼(§3.3)';
     case 'move': return '移動 ' + (locMeta[p.from as string]?.name || p.from) + ' → ' + (locMeta[p.to as string]?.name || p.to);
@@ -240,7 +245,7 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'roll_d20': {
       const a = p.attribute as string;
       const attrZh: Record<string, string> = { strength: '力量', agility: '敏捷', perception: '感知' };
-      return '🎲 d20 = ' + (p.roll as number) + ' + ' + (attrZh[a] || a) + ' ' + (p.modifier as number) + ' = ' + (p.total as number) + ' vs DC ' + (p.dc as number) + ' → ' + (p.outcome as string);
+      return '🎲 ' + (attrZh[a] || a) + '檢定：d20 ' + (p.roll as number) + ' + ' + (p.modifier as number) + ' = ' + (p.total as number) + '，檢定目標 ' + (p.dc as number) + '。' + (p.outcome as string);
     }
     case 'investigate_success': return '🔎 ' + (p.narrative as string);
     case 'investigate_fail': return '🔎 ' + (p.narrative as string);
@@ -282,25 +287,25 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'connect_tiles': return '🔗 打通 ' + (locMeta[p.from as string]?.name || p.from) + ' ↔ ' + (locMeta[p.to as string]?.name || p.to);
     case 'disconnect_tiles': return '⛓ 切斷 ' + (locMeta[p.from as string]?.name || p.from) + ' ✕ ' + (locMeta[p.to as string]?.name || p.to);
     case 'effect_unsupported': return 'ℹ 部分卡面效果引擎尚未支援:' + ((p.codes as string[]) ?? []).join('、');
-    case 'fear_check': return '😨 恐懼檢定 vs ' + (p.enemy as string) + ':d20 ' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '穩住了' : '失敗') + ')';
-    case 'fear_damage': return '😱 ' + (p.narrative as string) + '(SAN -' + (p.amount as number) + ')';
-    case 'encounter_check': return '遭遇檢定:' + (p.attribute as string) + ' d20=' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '成功' : '失敗') + ')';
+    case 'fear_check': return '😨 面對「' + (p.enemy as string) + '」進行恐懼檢定：d20 ' + (p.roll as number) + '，總值 ' + (p.total as number) + '，檢定目標 ' + (p.dc as number) + '。' + (p.outcome === 'success' ? '你穩住了。' : '失敗。');
+    case 'fear_damage': return '😱 ' + (p.narrative as string) + '（承受 ' + (p.amount as number) + ' 點恐懼）';
+    case 'encounter_check': return '遭遇檢定：' + (p.attribute as string) + ' d20 ' + (p.roll as number) + '，總值 ' + (p.total as number) + '，檢定目標 ' + (p.dc as number) + '。' + (p.outcome === 'success' ? '成功。' : '失敗。');
     case 'encounter_drawn': return '抽到遭遇「' + (p.name as string) + '」';
     case 'encounter_deck_reshuffled': return String(p.narrative ?? ENCOUNTER_DECK_RESHUFFLED_NARRATIVE);
     case 'encounter_no_options': return '遭遇「' + (p.name as string) + '」尚無可結算選項';
     case 'encounter_narrative': return String(p.narrative ?? '');
-    case 'encounter_damage': return '遭遇傷害:' + ((p.narrative as string) || '') + '(HP -' + (p.amount as number) + ')';
+    case 'encounter_damage': return '遭遇造成傷害：' + ((p.narrative as string) || '') + '（承受 ' + (p.amount as number) + ' 點傷害）';
     case 'talisman_toll_paid': return '法器「' + (p.name as string) + '」支付 ' + (p.cost as number) + ' ' + (p.resource as string) + '(剩 ' + (p.left as number) + ')';
-    case 'talisman_check': return '法器檢定:' + (p.attribute as string) + ' d20=' + (p.roll as number) + ' → ' + (p.total as number) + ' vs DC ' + (p.dc as number) + '(' + (p.outcome === 'success' ? '成功' : '失敗') + ')';
+    case 'talisman_check': return '法器檢定：' + (p.attribute as string) + ' d20 ' + (p.roll as number) + '，總值 ' + (p.total as number) + '，檢定目標 ' + (p.dc as number) + '。' + (p.outcome === 'success' ? '成功。' : '失敗。');
     case 'talisman_break_success': return '法器「' + (p.name as string) + '」破除「' + (p.encounter as string) + '」';
     case 'talisman_break_failed': return '法器「' + (p.name as string) + '」破除失敗,遭遇照常觸發';
     case 'talisman_unavailable': return '法器不可用:' + String(p.reason ?? '');
-    case 'monster_attack': return '👹 ' + (p.enemy as string) + ' 使出【' + (p.move as string) + '】— 你的' + (p.defenseAttribute as string) + '防禦:' + (p.total as number) + ' vs DC ' + (p.dc as number);
-    case 'monster_attack_hit': return '💥 ' + (p.narrative as string) + '(HP -' + (p.physical as number) + (Number(p.horror) > 0 ? ' / SAN -' + (p.horror as number) : '') + ')';
+    case 'monster_attack': return '👹 ' + (p.enemy as string) + '使出【' + (p.move as string) + '】。你的' + (p.defenseAttribute as string) + '防禦總值 ' + (p.total as number) + '，檢定目標 ' + (p.dc as number) + '。';
+    case 'monster_attack_hit': return '💥 ' + (p.narrative as string) + '（承受 ' + (p.physical as number) + ' 點傷害' + (Number(p.horror) > 0 ? '與 ' + (p.horror as number) + ' 點恐懼' : '') + '）';
     case 'monster_attack_missed': return '💨 ' + (p.narrative as string);
     case 'monster_move': return '👣 ' + (p.enemy as string) + ' 朝你逼近';
     case 'monster_engage': return '⚠ ' + (p.enemy as string) + ':' + (p.narrative as string);
-    case 'attack_of_opportunity': return '🩸 藉機攻擊!' + (p.narrative as string) + '(HP -' + (p.physical as number) + ' / SAN -' + (p.horror as number) + ')';
+    case 'attack_of_opportunity': return '🩸 藉機攻擊！' + (p.narrative as string) + '（承受 ' + (p.physical as number) + ' 點傷害與 ' + (p.horror as number) + ' 點恐懼）';
     case 'taunt': return '🗯 ' + (p.narrative as string);
     case 'engagement_broken': return '🏃 ' + (p.narrative as string);
     case 'monster_dazed': return '💫 ' + (p.enemy as string) + ':' + (p.narrative as string);
@@ -321,7 +326,7 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'light_source_extinguished': return '🕯 ' + (locMeta[p.location as string]?.name ?? (p.location as string)) + '的光源熄滅了。';
     case 'attachment_upkeep': return '🕸 ' + (p.narrative as string);
     case 'attachment_released': return '✨ 【' + (p.name as string) + '】' + (p.narrative as string);
-    case 'attachment_release_failed': return '🕸 【' + (p.name as string) + '】仍纏著你(意志 ' + (p.total as number) + ' vs DC ' + (p.dc as number) + ')';
+    case 'attachment_release_failed': return '🕸 【' + (p.name as string) + '】仍纏著你。意志總值 ' + (p.total as number) + '，檢定目標 ' + (p.dc as number) + '。';
     case 'monster_phase_change': return '🔥 ' + (p.enemy as string) + ':' + (p.narrative as string);
     case 'act_advanced': return '📜 【幕推進:' + (p.name as string) + '】' + (p.narrative as string);
     case 'agenda_advanced': return '🕯 【議程翻面:' + (p.name as string) + '】' + (p.narrative as string);
@@ -342,7 +347,7 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'short_rest': return '💤 ' + (p.narrative as string) + '(' + (p.reshuffled as number) + ' 張洗回牌庫)';
     case 'spell_cast': return '🔮 施放「' + (p.name as string) + '」— ' + (p.narrative as string) + '(造成 ' + (p.damage as number) + ' 點傷害)';
     case 'chaos_token_drawn': return '🌑 混沌袋:' + (p.sequence as string);
-    case 'spell_strain': return ((p.delta as number) < 0 ? '😖' : '✨') + ' ' + (p.narrative as string) + '(SAN ' + ((p.delta as number) > 0 ? '+' : '') + (p.delta as number) + ')';
+    case 'spell_strain': return ((p.delta as number) < 0 ? '😖' : '✨') + ' ' + (p.narrative as string) + '（恐懼 ' + ((p.delta as number) > 0 ? '+' : '') + (p.delta as number) + '）';
     case 'chaos_scene_effect': return '🕳 場景效果:' + (p.narrative as string);
     case 'chaos_bag_empty': return 'ℹ ' + (p.narrative as string);
     case 'headline_drawn': return '📰 ' + (p.narrative as string);
@@ -362,14 +367,14 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'status_fatigue': return '😪 ' + (p.narrative as string);
     case 'status_haste': return '⚡ ' + (p.narrative as string);
     case 'status_enemy_tick': return '🔥 ' + (p.narrative as string);
-    case 'crush_damage': return '🪨 ' + (p.narrative as string) + '(HP -' + (p.amount as number) + ')';
-    case 'curse_damage': return '👁 ' + (p.narrative as string) + '(SAN -' + (p.amount as number) + ')';
+    case 'crush_damage': return '🪨 ' + (p.narrative as string) + '（承受 ' + (p.amount as number) + ' 點傷害）';
+    case 'curse_damage': return '👁 ' + (p.narrative as string) + '（承受 ' + (p.amount as number) + ' 點恐懼）';
     case 'death_keyword_evaded': return '🌀 ' + (p.narrative as string);
     case 'monster_apathetic': return '😐 ' + (p.narrative as string);
     case 'monster_fly': return '🦇 ' + (p.narrative as string);
     case 'hunter_strike': return '🐾 ' + (p.narrative as string);
     case 'haunting_revive': return '👻 ' + (p.narrative as string);
-    case 'ally_enters_play': return '🤝 ' + (p.narrative as string) + '(HP ' + (p.hp as number) + '/SAN ' + (p.san as number) + '/攻 ' + (p.attack as number) + ')';
+    case 'ally_enters_play': return '🤝 ' + (p.narrative as string) + '（生命 ' + (p.hp as number) + '／恐懼 ' + (p.san as number) + '／攻擊 ' + (p.attack as number) + '）';
     case 'ally_attack': return '🤝 ' + (p.narrative as string) + '(' + (p.damage as number) + ' 點)';
     case 'ally_readied': return '🤝 盟友轉正(' + (p.count as number) + ' 位回復行動)';
     case 'ally_soak': return '🛡 ' + (p.narrative as string);
@@ -771,7 +776,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // 城主運行時狀態隨 ScenarioState 保存；舊存檔缺欄位時才以空狀態讀取。
   const keeperState: KeeperState = scenario.keeperState ?? initKeeperState(setup.keeperProfile);
   const [keeperEnergy, setKeeperEnergy] = useState(8); // 教學關卡舊顯示用
-  const [log, setLog] = useState<string[]>(setup.introLog);
+  const [log, setLog] = useState<string[]>(() => setup.introLog.map(normalisePlayerNarrative));
   // 開局先說清楚目標與危險；實驗場不屬於戰役流程，不阻擋卡片檢驗。
   const [openingBriefing, setOpeningBriefing] = useState(() => !isCardLab);
 
@@ -825,16 +830,21 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
 
   const appendLines = useCallback((lines: string[]) => {
     if (lines.length === 0) return;
-    setLog((l) => [...l, ...lines].slice(isCardLab ? -300 : -50));
+    setLog((l) => [...l, ...lines.map(normalisePlayerNarrative)].slice(isCardLab ? -300 : -50));
   }, [isCardLab]);
   const append = useCallback((s: string) => appendLines([s]), [appendLines]);
+  // 實驗室的 [LAB] 區塊是創作者回報用原始診斷，不屬於玩家敘事，必須保留效果碼與 state 欄位原文。
+  const appendDiagnosticLines = useCallback((lines: string[]) => {
+    if (lines.length === 0) return;
+    setLog((l) => [...l, ...lines].slice(isCardLab ? -300 : -50));
+  }, [isCardLab]);
   const queueAISteps = useCallback((steps: PendingAIStep[]) => {
     appendLines(steps.flatMap((step) => step.lines));
   }, [appendLines]);
 
   const showScreenToast = useCallback((text: string, tone: ScreenToast['tone'] = 'normal', duration = 1_800) => {
     window.clearTimeout(toastTimerRef.current);
-    setScreenToast({ id: Date.now(), text, tone });
+    setScreenToast({ id: Date.now(), text: normalisePlayerNarrative(text), tone });
     toastTimerRef.current = window.setTimeout(() => setScreenToast(null), duration);
   }, []);
 
@@ -927,7 +937,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setPilePanel(null);
     setModal(null);
     setCardLabWorkbenchOpen(false);
-    setLog([...setup.introLog, '[LAB][RESET] 實驗環境、牌組與訓練木人已還原。']);
+    setLog([...setup.introLog.map(normalisePlayerNarrative), '[LAB][RESET] 實驗環境、牌組與訓練木人已還原。']);
   }, [setup]);
 
   const addCardToLabHand = useCallback((cardId: string) => {
@@ -1498,7 +1508,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         const enemyHere = scenario.enemies.find((e) => e.locationId === 'backdoor' && e.hp > 0);
         if (enemyHere) {
           append('⚠ 你推開門,看見那東西。霧中浮現一個影子,牠開始朝你逼近。');
-          append('⚠ [遭遇怪物] 影潛者(hp ' + enemyHere.hp + ')— 點「攻擊」嘗試擊敗牠。');
+          append('⚠ [遭遇怪物] 影潛者（生命 ' + enemyHere.hp + '）— 點「攻擊」嘗試擊敗牠。');
         }
       }
     }
@@ -1550,7 +1560,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     const out = resolveIntent(intent, ctx);
     bus.publish(out.result);
     if (isCardLab) {
-      appendLines(cardLabDiagnosticLines({
+      appendDiagnosticLines(cardLabDiagnosticLines({
         actionType,
         payload,
         outcome: out.result.outcome,
@@ -1641,7 +1651,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       rejectActionFeedback(actionType, feedbackLabel, feedbackTargetLocationId);
       showScreenToast(out.result.rejection?.narrative ?? '動作無法執行', 'warning', 1_500);
     }
-  }, [actionFeedback, actionPlay, encounterPlay, damageAlloc, holdActionFeedback, rejectActionFeedback, showScreenToast, bus, investigator, scenario, aiMembers, turnNumber, phase, setup, flags, locMeta, triggerEncounter, triggerKeeperLegendaryEncounter, isCardLab, appendLines, cardMeta]);
+  }, [actionFeedback, actionPlay, encounterPlay, damageAlloc, holdActionFeedback, rejectActionFeedback, showScreenToast, bus, investigator, scenario, aiMembers, turnNumber, phase, setup, flags, locMeta, triggerEncounter, triggerKeeperLegendaryEncounter, isCardLab, appendLines, appendDiagnosticLines, cardMeta]);
 
   const iconLabel = (key: string): string => key === 'all'
     ? '萬用'
@@ -2449,7 +2459,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           <section className="lab-status-strip" aria-label="實驗場狀態">
             <div>
               <strong>卡片良率檢驗所</strong>
-              <span>訓練木人 HP {labDummyHp} · 傷害 0 · 恐懼 0</span>
+              <span>訓練木人生命 {labDummyHp} · 傷害 0 · 恐懼 0</span>
             </div>
             <div className="lab-status-actions">
               <button onClick={() => setCardLabWorkbenchOpen(true)}>卡片品管目錄</button>
@@ -2571,10 +2581,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                                   key={e.instanceId}
                                   className="monster-piece"
                                   style={{ '--occupant-offset': `${ei * 26}px` } as CSSProperties}
-                                  title={`${enemyName} · HP ${e.hp}`}
+                                  title={`${enemyName} · 生命 ${e.hp}`}
                                 >
                                   <img src={monsterPieceAsset(e.enemyDefinitionId, Number(enemyData?.tier ?? 1))} alt={`${enemyName}棋子`} />
-                                  <span>HP {e.hp}</span>
+                                  <span>生命 {e.hp}</span>
                                 </div>
                               );
                             })}
@@ -3013,8 +3023,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             ].filter(Boolean)
           : [];
         const allyBits = [
-          d?.ally_hp != null ? `HP ${d.ally_hp}` : '',
-          d?.ally_san != null ? `SAN ${d.ally_san}` : '',
+          d?.ally_hp != null ? `生命 ${d.ally_hp}` : '',
+          d?.ally_san != null ? `恐懼 ${d.ally_san}` : '',
           d?.damage != null && d.card_type === 'ally' ? `攻擊 ${d.damage}` : '',
         ].filter(Boolean);
         const flavor = d?.flavor_text_zh ?? d?.flavor_zh ?? '';
@@ -3101,7 +3111,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               <div className="modal-title">投入加值 · {ACTION_PLAY_TITLE[commitWindow.actionType] ?? commitWindow.actionType}</div>
               <div className="commit-summary">
                 <span>檢定: {commitWindow.attribute ? ATTRIBUTE_LABEL[commitWindow.attribute] : '由卡牌/風格決定'}</span>
-                <span>DC: {commitWindow.dc ?? '未知'}</span>
+                <span>檢定目標：{commitWindow.dc ?? '未知'}</span>
                 {baseModifier != null && <span>基礎修正: +{baseModifier}</span>}
                 {beforeChance && <span>目前估算: {beforeChance}</span>}
                 {afterChance && <span>投入後: {afterChance}</span>}
@@ -3313,7 +3323,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             <div className="action-row">
               {damageAlloc.targets.map((t) => (
                 <button key={t.cardInstanceId} onClick={() => allocateDamageTo(t)}>
-                  🤝 {t.name}（可擋 HP {t.physicalCapacity} / SAN {t.horrorCapacity}）
+                  🤝 {t.name}（可承受 {t.physicalCapacity} 點傷害／{t.horrorCapacity} 點恐懼）
                 </button>
               ))}
               <button onClick={() => setDamageAlloc(null)}>🧍 我自己扛</button>

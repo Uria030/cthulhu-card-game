@@ -22,9 +22,15 @@ const teammate = cinematicFromResolved(targetedEncounter, 'inv-2');
 assertEq(owner?.blocksActor, true, '指定遭遇只暫停被指定的本地玩家');
 assertEq(teammate?.blocksActor, false, '其他 client 的本地演出不可擋住行動');
 assertEq(owner?.hasCheck, true, '檢定效果會進入三段演出');
+assertEq(owner?.lines[1], '檢定 d20=12，總值 15 對 檢定目標 13', '多人演出不得向玩家露出 DC 縮寫');
 const secondBeat = owner ? advanceCinematic(owner) : null;
 const thirdBeat = secondBeat ? advanceCinematic(secondBeat) : null;
 assertEq(secondBeat?.beat, 2, '第一拍可前進至檢定');
 assertEq(thirdBeat?.beat, 3, '檢定可前進至結果');
 assertEq(thirdBeat ? advanceCinematic(thirdBeat) : null, null, '結果拍可被本地關閉，不寫 server state');
-console.log('multiplayer cinematic: 1 passed, 0 failed');
+const unknownEffect = cinematicFromResolved({
+  ...targetedEncounter,
+  result: { ...targetedEncounter.result, effects: [{ type: 'internal_effect_code', params: {} }] },
+}, 'inv-1');
+assertEq(unknownEffect?.lines[0], '效果已結算。', '未知效果碼不可直接露出給玩家');
+console.log('multiplayer cinematic: 2 passed, 0 failed');

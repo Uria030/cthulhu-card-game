@@ -10,6 +10,7 @@ export * from './turnLoop';
 export * from './ruleEngine';
 export * from './bootstrap';
 export * from './checks';
+export * from './narrativeStyle';
 export * from './effectsExecutor';
 export * from './reactions';
 export * from './lighting';

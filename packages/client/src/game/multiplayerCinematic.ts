@@ -1,4 +1,4 @@
-import type { MultiplayerIntentResolvedMessage, ResultEffect } from '@cthulhu/shared';
+import { normalisePlayerNarrative, type MultiplayerIntentResolvedMessage, type ResultEffect } from '@cthulhu/shared';
 
 export interface MultiplayerCinematic {
   id: string;
@@ -22,7 +22,7 @@ function titleFor(effects: ResultEffect[]): string {
   return '行動結果已送達';
 }
 
-function lineFor(effect: ResultEffect): string {
+function rawLineFor(effect: ResultEffect): string {
   const params = effect.params ?? {};
   const name = String(params.name ?? params.enemy ?? params.title ?? '');
   if (effect.type === 'roll_d20') {
@@ -37,7 +37,11 @@ function lineFor(effect: ResultEffect): string {
   if (effect.type === 'damage_dealt' || effect.type === 'enemy_damaged') return `${name || '目標'} 受到 ${String(params.amount ?? params.damage ?? 0)} 傷害`;
   if (effect.type === 'fear_damage') return `承受 ${String(params.amount ?? 0)} 恐懼`;
   if (effect.type === 'spend_action_point') return `花費 ${String(params.amount ?? 1)} 行動點`;
-  return String(params.narrative ?? effect.type);
+  return String(params.narrative ?? '效果已結算。');
+}
+
+function lineFor(effect: ResultEffect): string {
+  return normalisePlayerNarrative(rawLineFor(effect));
 }
 
 export function cinematicFromResolved(

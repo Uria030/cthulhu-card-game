@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { CURRENT_MESSAGE_SCHEMA_VERSION } from '@cthulhu/shared';
+import { CURRENT_MESSAGE_SCHEMA_VERSION, normalisePlayerNarrative } from '@cthulhu/shared';
 import type {
   IntentMessage,
   MultiplayerPrivateState,
@@ -21,7 +21,7 @@ const CHECK_ACTIONS = new Set<IntentMessage['actionType']>([
   'investigate', 'search', 'attack', 'evade', 'execute_card_action',
 ]);
 
-function effectLine(message: MultiplayerServerMessage): string | null {
+function rawEffectLine(message: MultiplayerServerMessage): string | null {
   if (message.type === 'intent_resolved') {
     const effects = message.result.effects ?? [];
     const reactionOpened = effects.find((effect) => effect.type === 'reaction_window_opened');
@@ -29,14 +29,18 @@ function effectLine(message: MultiplayerServerMessage): string | null {
     const reactionPlayed = effects.find((effect) => effect.type === 'reaction_played');
     if (reactionPlayed) return `反應：打出「${String(reactionPlayed.params.name ?? '反應卡')}」。`;
     if (effects.some((effect) => effect.type === 'reaction_passed')) return '反應：你選擇承受這一擊。';
-    return effects.length > 0
-      ? effects.map((effect) => effect.type).join('、')
-      : message.result.rejection?.narrative ?? '行動已由伺服器裁決。';
+    const cinematic = cinematicFromEffects(`log:${message.actorPlayerId}:${message.sequence}`, message.actorPlayerId, effects, null);
+    return cinematic?.lines.join('、') ?? message.result.rejection?.narrative ?? '行動已由伺服器裁決。';
   }
   if (message.type === 'ai_turn_completed') return message.lines.length > 0 ? `AI:${message.lines.join('、')}` : 'AI 已結束本回合。';
   if (message.type === 'phase_changed') return message.phase === 'mythos' ? '有神秘的事情發生了！' : '新的調查員回合開始。';
   if (message.type === 'encounter_triggered') return '遭遇正在逼近指定調查員。';
   return null;
+}
+
+function effectLine(message: MultiplayerServerMessage): string | null {
+  const line = rawEffectLine(message);
+  return line ? normalisePlayerNarrative(line) : null;
 }
 
 function commitLabel(icons: Record<string, number>): string {
@@ -238,7 +242,7 @@ export function MultiplayerScenarioScreen() {
     <aside className="mps-party">
       {Object.values(game.investigators).map((member) => <div className={member.investigatorId === investigator.investigatorId ? 'is-self' : ''} key={member.investigatorId}>
         <strong>{member.investigatorId === investigator.investigatorId ? '你' : member.investigatorId}</strong>
-        <span>HP {member.hp}/{member.hpMax} · SAN {member.san}/{member.sanMax} · AP {member.actionPoints}</span>
+        <span>生命 {member.hp}/{member.hpMax} · 恐懼 {member.san}/{member.sanMax} · 行動點 {member.actionPoints}</span>
         <small>{game.controllerByInvestigator[member.investigatorId] === 'ai' ? 'AI 控制' : '真人控制'}</small>
       </div>)}
     </aside>
@@ -255,7 +259,7 @@ export function MultiplayerScenarioScreen() {
           {isHere && <button disabled={!canAct || investigator.actionPoints < 1} onClick={() => send('investigate')}>調查此地點</button>}
           {canMove && <button disabled={!canAct} onClick={() => send('move', { targetLocationId: location.locationDefinitionId })}>移動到此</button>}
           {isHere && enemiesHere.map((enemy) => <div className="mps-enemy" key={enemy.instanceId}>
-            <span>{enemy.enemyDefinitionId} · HP {enemy.hp}</span>
+            <span>{enemy.enemyDefinitionId} · 生命 {enemy.hp}</span>
             <button disabled={!canAct || investigator.actionPoints < 1} onClick={() => send('attack', { enemyInstanceId: enemy.instanceId })}>攻擊</button>
             {investigator.engagedWith.includes(enemy.instanceId) && <button disabled={!canAct || investigator.actionPoints < 1} onClick={() => send('evade', { enemyInstanceId: enemy.instanceId })}>閃避</button>}
           </div>)}

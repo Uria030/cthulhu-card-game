@@ -32,6 +32,9 @@ function normaliseLegacyEffects(value: unknown): NonNullable<CardData['effects']
       effect_params: item.effect_params && typeof item.effect_params === 'object'
         ? item.effect_params as Record<string, unknown>
         : (item.params && typeof item.params === 'object' ? item.params as Record<string, unknown> : {}),
+      condition: item.condition && typeof item.condition === 'object' ? item.condition as Record<string, unknown> : (item.condition ? String(item.condition) : null),
+      cost: item.cost && typeof item.cost === 'object' ? item.cost as Record<string, unknown> : null,
+      target: item.target ? String(item.target) : null,
       description_zh: item.description_zh ? String(item.description_zh) : null,
     }];
   });
@@ -67,6 +70,7 @@ export function normaliseBootstrapCardData(
     break_charge_max: raw.break_charge_max == null ? null : Number(raw.break_charge_max), break_test_attribute: raw.break_test_attribute as CardData['break_test_attribute'],
     stockpile_accumulation_rule: raw.stockpile_accumulation_rule ? String(raw.stockpile_accumulation_rule) : null,
     consume_enabled: Boolean(raw.consume_enabled), consume_effect: raw.consume_effect && typeof raw.consume_effect === 'object' ? raw.consume_effect as Record<string, unknown> : null,
+    is_extra: Boolean(raw.is_extra),
     effects: standardEffects.length > 0 ? standardEffects : normaliseLegacyEffects(raw.play_effect_code),
   };
 }

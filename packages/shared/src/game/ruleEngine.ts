@@ -94,12 +94,17 @@ export interface CardData {
   /** 三合一消費用途(ch3 §2.2;資料未配置時為 false/null) */
   consume_enabled?: boolean;
   consume_effect?: Record<string, unknown> | null;
+  /** 額外牌組卡只能由 reaction/action 時機使用(ch3 §13b)。 */
+  is_extra?: boolean;
   effects?: Array<{
     trigger_type: string;
     effect_code: string;
     effect_params: Record<string, unknown> | null;
-    /** card_effects.condition(JSONB,§5.2 條件詞彙);引擎目前不評估 */
+    /** card_effects.condition(JSONB,§5.2 條件詞彙)。 */
     condition?: Record<string, unknown> | string | null;
+    /** card_effects.cost(JSONB);reaction 目前支援 resource/uses/ammo/exhaust_self。 */
+    cost?: Record<string, unknown> | null;
+    target?: string | null;
     duration?: string | null;
     description_zh?: string | null;
   }>;

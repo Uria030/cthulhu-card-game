@@ -11,6 +11,7 @@ export * from './ruleEngine';
 export * from './bootstrap';
 export * from './checks';
 export * from './effectsExecutor';
+export * from './reactions';
 export * from './monsterBehavior';
 export * from './monsterActions';
 export * from './gameProgress';

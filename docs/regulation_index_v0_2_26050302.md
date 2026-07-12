@@ -39,6 +39,7 @@ s 專項規範(s01-s14)                   ← 高(s11-s13 V 值公式覆蓋 ch3 
 - **威脅類型**:s14 擴增為四類(mental/physical/ritual + meta),**不採** s09 的三類
 - **encounter_type**:s14 part4 §2.3 擴 13 種(passive/conditional/choice_*/test/chaos_bag + 既有 6),**新建卡採新枚舉**
 - **神話卡 = 攤開選用模型**:全部 mythos_pool 攤在場上,城主每回合「選」啟用,部分卡可重複(reusable / cooldown / max_uses) — 修正「pool 抽牌」舊概念
+- **檢定難度 = d20 絕對刻度**:一律填 10-28 的整數，卡面寫「檢定難度 13」；禁止 `DC 3`、`檢定(3)` 等相對刻度。早期 s14 範例若見小數字，依 `10 + N` 換算後才可入庫。
 
 ---
 

@@ -419,10 +419,10 @@ test('持續附著類回傳 attachments + 檢定修正查詢', () => {
   assertEq(attachmentTestModifier(r.attachments, 'strength'), 0);
 });
 
-test('附著 upkeep:瘋狂攫住強制棄牌,意志檢定過 → 解除', () => {
+test('附著 upkeep:絕對難度的瘋狂攫住強制棄牌,意志檢定過 → 解除', () => {
   const madness: KeeperAttachment = {
     cardId: 'mad', name: '瘋狂攫住', action_code: 'attach_status',
-    action_params: { status: 'madness', upkeep_discard: 1, release_test: 'willpower', release_dc: 3 },
+    action_params: { status: 'madness', upkeep_discard: 1, release_test: 'willpower', release_dc: 13 },
   };
   // roll 15 + 意志 3 = 18 ≥ 13 → 解除
   const pass = runAttachmentUpkeep([madness], makeInv(), () => 14 / 20);
@@ -431,6 +431,16 @@ test('附著 upkeep:瘋狂攫住強制棄牌,意志檢定過 → 解除', () => 
   // roll 2 + 3 = 5 < 13 → 留著
   const fail = runAttachmentUpkeep([madness], makeInv(), () => 1 / 20);
   assertEq(fail.attachments.length, 1);
+});
+
+test('附著 upkeep:舊 release_dc 小數字於交接期仍換算為絕對難度', () => {
+  const legacy: KeeperAttachment = {
+    cardId: 'legacy', name: '舊資料', action_code: 'attach_status',
+    action_params: { status: 'madness', upkeep_discard: 1, release_test: 'willpower', release_dc: 3 },
+  };
+  const result = runAttachmentUpkeep([legacy], makeInv(), () => 1 / 20);
+  const failure = result.effects.find((effect) => effect.type === 'attachment_release_failed');
+  assertEq((failure?.params as { dc: number }).dc, 13);
 });
 
 // ─── runner ─────────────────────────────────

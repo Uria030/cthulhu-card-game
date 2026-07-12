@@ -17,6 +17,7 @@ import { emptyKeeperRuntimeState } from './state';
 import type { ScenarioState, InvestigatorState, KeeperRuntimeState } from './state';
 import { spawnEnemy } from './monsterActions';
 import type { EnemyDataLookup } from './monsterActions';
+import { normaliseCheckDc } from './checks';
 
 // ─── 神話卡資料(bootstrap mythos_cards,MIGRATION_029/037 後含 open-hand 欄位)──
 export interface MythosCardData {
@@ -720,9 +721,9 @@ export function runAttachmentUpkeep(
         };
         effects.push({ type: 'attachment_upkeep', params: { name: a.name, narrative: '瘋狂攫住你的手——你被迫鬆開了 ' + discarded.length + ' 張牌。' } });
       }
-      // 解除檢定(意志,DC = 10 + release_dc;『檢定(3)』解讀為 +3,待 Uria 校準)
+      // 解除檢定使用絕對 d20 難度；僅保留舊資料 N -> 10 + N 的交接相容。
       if (a.action_params.release_test === 'willpower') {
-        const dc = 10 + Number(a.action_params.release_dc ?? 3);
+        const dc = normaliseCheckDc(a.action_params.release_dc, 13);
         const roll = Math.floor(rng() * 20) + 1;
         const total = roll + inv.attributes.willpower;
         if (total >= dc) {

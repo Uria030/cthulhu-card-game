@@ -3670,6 +3670,55 @@ UPDATE mythos_cards AS card
    );
 `;
 
+// Migration 049: R4 unifies every persisted check difficulty on the rulebook d20 scale.
+export const MIGRATION_049_SQL = `
+-- Legacy locations and encounter options stored Arkham-style relative N. Convert N -> 10 + N once.
+UPDATE locations
+   SET shroud = shroud + 10,
+       updated_at = NOW()
+ WHERE shroud BETWEEN 0 AND 9;
+
+UPDATE encounter_card_options
+   SET check_dc = check_dc + 10,
+       updated_at = NOW()
+ WHERE check_dc BETWEEN 0 AND 9;
+
+-- The structured attachment field already used by the engine follows the same conversion.
+UPDATE mythos_card_effects
+   SET action_params = jsonb_set(
+         action_params,
+         '{release_dc}',
+         to_jsonb(((action_params ->> 'release_dc')::INTEGER + 10)),
+         FALSE
+       ),
+       updated_at = NOW()
+ WHERE jsonb_typeof(action_params -> 'release_dc') = 'number'
+   AND (action_params ->> 'release_dc')::INTEGER BETWEEN 0 AND 9;
+
+-- Rewrite every currently shipped shorthand without inventing new content.
+UPDATE mythos_cards
+   SET description_zh = CASE code
+     WHEN 'mc_madness_grip' THEN '啟用 — 將發瘋狀態附著於理智最低的調查員。強制 — 該調查員每回合開始時棄 1 張手牌。如果該調查員通過意志檢定難度 13，解除此狀態。'
+     WHEN 'mc_false_lead' THEN '啟用 — 在你指定的地點放置 1 個假線索標記，該標記的外觀與真線索相同。強制 — 調查員花費假線索結算的效果視為失敗。如果調查員通過智力檢定難度 12，辨認該標記為假並移除之。'
+     WHEN 'mc_npc_betrayal' THEN '啟用 — 將敵意狀態附著於本關場景中的關鍵 NPC，直到通過魅力檢定難度 13 為止。強制 — 在該 NPC 所在地點的調查員無法進行社交類行動，且魅力檢定的難度 +2。'
+     WHEN 'mc_clue_tamper' THEN '啟用 — 將篡改狀態附著於密謀場景。強制 — 在每位調查員下一次發現線索時，該線索的真假狀態被反轉，直到通過智力檢定難度 13 為止。'
+     ELSE description_zh
+   END,
+       updated_at = NOW()
+ WHERE code IN ('mc_madness_grip', 'mc_false_lead', 'mc_npc_betrayal', 'mc_clue_tamper');
+
+ALTER TABLE locations ALTER COLUMN shroud SET DEFAULT 10;
+ALTER TABLE locations DROP CONSTRAINT IF EXISTS locations_shroud_absolute_check;
+ALTER TABLE locations ADD CONSTRAINT locations_shroud_absolute_check
+  CHECK (shroud BETWEEN 10 AND 28) NOT VALID;
+ALTER TABLE locations VALIDATE CONSTRAINT locations_shroud_absolute_check;
+
+ALTER TABLE encounter_card_options DROP CONSTRAINT IF EXISTS encounter_options_check_dc_absolute_check;
+ALTER TABLE encounter_card_options ADD CONSTRAINT encounter_options_check_dc_absolute_check
+  CHECK (check_dc IS NULL OR check_dc BETWEEN 10 AND 28) NOT VALID;
+ALTER TABLE encounter_card_options VALIDATE CONSTRAINT encounter_options_check_dc_absolute_check;
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3900,6 +3949,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_046', MIGRATION_046_SQL);
     await runOne('MIGRATION_047', MIGRATION_047_SQL);
     await runOne('MIGRATION_048', MIGRATION_048_SQL);
+    await runOne('MIGRATION_049', MIGRATION_049_SQL);
     try {
       const vaultKey = await getOrCreatePlayerPasswordVaultKey(client);
       const updatedCreators = await bootstrapCreatorPasswords(client, vaultKey);

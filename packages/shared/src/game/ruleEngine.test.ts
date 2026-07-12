@@ -346,6 +346,15 @@ test('investigate:DC 來自地點 shroud(locationStats)', () => {
   assertEq((rollEff?.params as { outcome: string }).outcome, 'fail');
 });
 
+test('investigate:舊 shroud 小數字快照轉為絕對 d20 難度', () => {
+  const ctx = { ...makeCtx({ actionPoints: 3 }), locationStats: { 'loc-a': { shroud: 3 } }, rng: rngRoll(10) };
+  // 舊刻度 3 = 絕對難度 13；roll 10 + 感知 3 剛好成功。
+  const r = resolveIntent(makeIntent('investigate'), ctx);
+  const rollEff = r.result.effects?.find((e) => e.type === 'roll_d20');
+  assertEq((rollEff?.params as { dc: number }).dc, 13);
+  assertEq((rollEff?.params as { outcome: string }).outcome, 'success');
+});
+
 test('commit:加值生效 + 卡進棄牌堆(ch3 §3)', () => {
   const ctx = {
     ...makeCtx({ actionPoints: 3, hand: ['k1', 'k2'] }),

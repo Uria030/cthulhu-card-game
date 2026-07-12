@@ -13,7 +13,7 @@
  */
 import type { ResultEffect } from './messages';
 import type { ScenarioState, InvestigatorState } from './state';
-import { resolveCheck } from './checks';
+import { normaliseCheckDc, resolveCheck } from './checks';
 import { modifyIncomingDamage, applyCheckStatus } from './statusEffects';
 import { applyIncomingDamageToPlayer } from './ally';
 import type { ReactionOperation } from './reactions';
@@ -796,7 +796,7 @@ export function prepareEncounterOption(
   if (option.requires_check && option.check_attribute) {
     const attr = String(option.check_attribute) as AttributeKey;
     const attrVal = VALID_ATTRS.has(attr) ? investigator.attributes[attr] : 0;
-    const dc = Number(option.check_dc ?? 10);
+    const dc = normaliseCheckDc(option.check_dc);
     // §6 強化取好/弱化取差 + 擲骰後減層
     const cs = applyCheckStatus(investigator.statusEffects);
     const check = resolveCheck(dc, { attribute: attrVal }, rng, cs.rollMode);
@@ -854,7 +854,7 @@ export function chooseEncounterOption(
     if (opt.requires_check && opt.check_attribute) {
       const attr = String(opt.check_attribute) as AttributeKey;
       const attrVal = VALID_ATTRS.has(attr) ? investigator.attributes[attr] : 0;
-      const dc = Number(opt.check_dc ?? 10);
+      const dc = normaliseCheckDc(opt.check_dc);
       const pSuccess = Math.min(0.95, Math.max(0.05, (21 - (dc - attrVal)) / 20));
       evalEffects(opt.success_effects, pSuccess);
       evalEffects(opt.failure_effects, 1 - pSuccess);

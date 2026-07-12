@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { isAbsoluteCheckDc } from '@cthulhu/shared';
 import { pool } from '../db/pool.js';
 import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 
@@ -467,6 +468,13 @@ export const locationRoutes: FastifyPluginAsync = async (app) => {
       if (!body.code || !body.name_zh) {
         return reply.status(400).send({ error: 'missing_required', message: 'code 與 name_zh 為必填' });
       }
+      const shroud = body.shroud ?? 10;
+      if (!isAbsoluteCheckDc(shroud)) {
+        return reply.status(400).send({
+          error: 'shroud_not_absolute',
+          message: '地點隱蔽值必須是 10-28 的整數絕對檢定難度',
+        });
+      }
       const result = await pool.query(`
         INSERT INTO locations (
           code, name_zh, name_en, description_zh, description_en,
@@ -479,7 +487,7 @@ export const locationRoutes: FastifyPluginAsync = async (app) => {
         body.code, body.name_zh, body.name_en || '',
         body.description_zh || null, body.description_en || null,
         body.scale_tag || null,
-        body.shroud ?? 2, body.clues_base ?? 1, body.clues_per_player ?? true,
+        shroud, body.clues_base ?? 1, body.clues_per_player ?? true,
         body.travel_cost ?? 1, body.travel_cost_type || 'action_point',
         body.art_type || 'none',
         body.design_status || 'draft',
@@ -534,6 +542,13 @@ export const locationRoutes: FastifyPluginAsync = async (app) => {
     try {
       const { id } = request.params;
       const body = request.body as any;
+
+      if (body.shroud != null && !isAbsoluteCheckDc(body.shroud)) {
+        return reply.status(400).send({
+          error: 'shroud_not_absolute',
+          message: '地點隱蔽值必須是 10-28 的整數絕對檢定難度',
+        });
+      }
 
       // 若想改為 review/approved，檢查至少一個標籤
       if (body.design_status === 'review' || body.design_status === 'approved') {

@@ -2,11 +2,15 @@
  * G-02 檢定管線單元測試 — 逐條對齊 02_rulebook_ch2.md §4/§5/§12.1
  */
 import {
-  resolveCheck,
+  MAX_ABSOLUTE_CHECK_DC,
+  MIN_ABSOLUTE_CHECK_DC,
   commitValueFor,
-  visibilityModifier,
   drawChaosToken,
+  isAbsoluteCheckDc,
+  normaliseCheckDc,
+  resolveCheck,
   resolveSpellSideEffect,
+  visibilityModifier,
 } from './checks';
 import type { ChaosToken } from './state';
 
@@ -42,6 +46,21 @@ test('total < DC 失敗', () => {
 test('自然 20/1 旗標', () => {
   assertEq(resolveCheck(10, {}, rngForRoll(20)).natural20, true);
   assertEq(resolveCheck(10, {}, rngForRoll(1)).natural1, true);
+});
+
+test('絕對檢定難度只接受規則書 d20 區間', () => {
+  assertEq(isAbsoluteCheckDc(MIN_ABSOLUTE_CHECK_DC), true);
+  assertEq(isAbsoluteCheckDc(MAX_ABSOLUTE_CHECK_DC), true);
+  assertEq(isAbsoluteCheckDc(9), false);
+  assertEq(isAbsoluteCheckDc(29), false);
+  assertEq(isAbsoluteCheckDc(13.5), false);
+});
+
+test('舊相對刻度只在讀取時換算為絕對檢定難度', () => {
+  assertEq(normaliseCheckDc(3), 13);
+  assertEq(normaliseCheckDc(13), 13);
+  assertEq(normaliseCheckDc(undefined), MIN_ABSOLUTE_CHECK_DC);
+  assertEq(normaliseCheckDc(-1, 12), 12);
 });
 
 // ─── §3 加值 commit ──────────────────────────

@@ -23,6 +23,27 @@ export type AttributeKey =
 
 // ─── d20 檢定 ────────────────────────────────
 
+/**
+ * 規則書 ch6 的檢定難度使用 d20 絕對刻度。1-9 僅為早期資料的相對刻度，
+ * 新資料不得再寫入；normaliseCheckDc 保留給部署交接期間的舊快照。
+ */
+export const MIN_ABSOLUTE_CHECK_DC = 10;
+export const MAX_ABSOLUTE_CHECK_DC = 28;
+
+export function isAbsoluteCheckDc(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isInteger(value)
+    && value >= MIN_ABSOLUTE_CHECK_DC
+    && value <= MAX_ABSOLUTE_CHECK_DC;
+}
+
+/** Converts legacy relative N into the canonical d20 DC of 10 + N. */
+export function normaliseCheckDc(value: unknown, fallback = MIN_ABSOLUTE_CHECK_DC): number {
+  const dc = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(dc) || dc < 0) return fallback;
+  return dc < MIN_ABSOLUTE_CHECK_DC ? MIN_ABSOLUTE_CHECK_DC + dc : dc;
+}
+
 export interface CheckModifiers {
   /** 屬性修正(屬性值 1:1,§4.2) */
   attribute: number;

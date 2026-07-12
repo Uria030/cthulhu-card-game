@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { isAbsoluteCheckDc } from '@cthulhu/shared';
 import { pool } from '../db/pool.js';
 import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 
@@ -35,6 +36,22 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
 
   function mythosMaxUsesInput(body: any) {
     return body.max_uses ?? body.max_uses_per_stage ?? null;
+  }
+
+  function invalidEffectCheckDifficulty(actionParams: unknown): string | null {
+    if (!actionParams || typeof actionParams !== 'object') return null;
+    const params = actionParams as Record<string, unknown>;
+    for (const key of ['release_dc', 'check_dc', 'dc']) {
+      if (params[key] != null && !isAbsoluteCheckDc(params[key])) return key;
+    }
+    return null;
+  }
+
+  function rejectNonAbsoluteCheckDifficulty(reply: any, field: string) {
+    return reply.status(400).send({
+      error: 'check_dc_not_absolute',
+      message: `${field} 必須是 10-28 的整數絕對檢定難度`,
+    });
   }
 
   // ════════════════════════════════════════════
@@ -214,6 +231,8 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
     try {
       const { effect_id } = request.params;
       const body = request.body as any;
+      const invalidDifficulty = invalidEffectCheckDifficulty(body.action_params);
+      if (invalidDifficulty) return rejectNonAbsoluteCheckDifficulty(reply, invalidDifficulty);
       const result = await pool.query(`
         UPDATE mythos_card_effects SET
           action_code = COALESCE($2, action_code),
@@ -257,6 +276,8 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
       const { id } = request.params;
       const body = request.body as any;
       if (!body.action_code) return reply.status(400).send({ error: 'missing_action_code' });
+      const invalidDifficulty = invalidEffectCheckDifficulty(body.action_params);
+      if (invalidDifficulty) return rejectNonAbsoluteCheckDifficulty(reply, invalidDifficulty);
 
       const orderRes = await pool.query(
         'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM mythos_card_effects WHERE mythos_card_id = $1',
@@ -545,6 +566,9 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
       const body = request.body as any;
 
       // 檢定欄位驗證
+      if (body.check_dc != null && !isAbsoluteCheckDc(body.check_dc)) {
+        return rejectNonAbsoluteCheckDifficulty(reply, 'check_dc');
+      }
       if (body.requires_check === true) {
         if (!body.check_attribute || body.check_dc == null) {
           return reply.status(400).send({
@@ -623,6 +647,10 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
       const { id } = request.params;
       const body = request.body as any;
 
+      if (body.check_dc != null && !isAbsoluteCheckDc(body.check_dc)) {
+        return rejectNonAbsoluteCheckDifficulty(reply, 'check_dc');
+      }
+
       const countRes = await pool.query('SELECT COUNT(*)::int AS c FROM encounter_card_options WHERE encounter_card_id = $1', [id]);
       const c = (countRes.rows[0] as any).c;
       if (c >= 3) {
@@ -648,7 +676,7 @@ export const keeperRoutes: FastifyPluginAsync = async (app) => {
         RETURNING *
       `, [id, label, body.option_text_zh || '', body.option_text_en || null,
           body.requires_check ?? true,
-          body.check_attribute || null, body.check_dc || null,
+          body.check_attribute || null, body.check_dc ?? null,
           body.success_narrative_zh || null, body.success_narrative_en || null,
           JSON.stringify(body.success_effects || []),
           body.failure_narrative_zh || null, body.failure_narrative_en || null,

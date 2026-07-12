@@ -280,6 +280,14 @@ test('AI 選項:高意志選檢定(賭得過),低意志選繞道避傷', () => {
   assertEq(weak, 1);
 });
 
+test('遭遇選項:舊 check_dc 小數字轉為絕對 d20 難度', () => {
+  const option = { ...CARD.options[0], check_dc: 4 };
+  const result = resolveEncounterOption(option, makeInv(), makeScenario(), ENEMY, roll(11));
+  const check = result.effects.find((effect) => effect.type === 'encounter_check');
+  assertEq((check?.params as { dc: number }).dc, 14);
+  assertEq((check?.params as { outcome: string }).outcome, 'fail');
+});
+
 test('法器即時型:過路費 f(S,N)=ceil(S/2)+N,破除遭遇但不吃通用解懲罰', () => {
   const inv = makeInv({ assetsInPlay: ['instant_amulet'], assetState: { instant_amulet: { usesLeft: 5, exhausted: false } } });
   assertEq(talismanTollCost(TALISMANS.instant_amulet, CARD), 3);

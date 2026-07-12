@@ -29,6 +29,7 @@ import type {
 } from './state';
 import {
   resolveCheck,
+  normaliseCheckDc,
   commitValueFor,
   visibilityModifierAtLocation,
   drawChaosToken,
@@ -694,7 +695,7 @@ function resolveTaunt(intent: IntentMessage, ctx: RuleContext): RuleResolveOutpu
 
 /**
  * 調查 — §6.1 / §13(線索系統)+ §4 檢定管線
- * 感知檢定,DC = 地點 shroud(locationStats 未提供時 fallback 10);支援加值 commit。
+ * 感知檢定,DC = 地點 shroud 的絕對 d20 難度(locationStats 未提供時 fallback 10);支援加值 commit。
  * 隱藏調查點(hidden_info 揭露)後續展開。
  */
 function resolveInvestigate(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
@@ -705,7 +706,7 @@ function resolveInvestigate(intent: IntentMessage, ctx: RuleContext): RuleResolv
   if (commit.error) return reject(intent, commit.error);
 
   const locId = ctx.investigator.currentLocationId || '';
-  const dc = ctx.locationStats?.[locId]?.shroud ?? 10;
+  const dc = normaliseCheckDc(ctx.locationStats?.[locId]?.shroud);
   const cs = applyCheckStatus(ctx.investigator.statusEffects);
   const check = resolveCheck(
     dc,
@@ -802,7 +803,7 @@ function resolveInvestigateHidden(intent: IntentMessage, ctx: RuleContext): Rule
   const commit = takeCommit(intent, ctx, 'perception');
   if (commit.error) return reject(intent, commit.error);
 
-  const dc = ctx.locationStats?.[locId]?.shroud ?? 10;
+  const dc = normaliseCheckDc(ctx.locationStats?.[locId]?.shroud);
   const cs = applyCheckStatus(ctx.investigator.statusEffects);
   const check = resolveCheck(
     dc,
@@ -883,7 +884,7 @@ function resolveSearch(intent: IntentMessage, ctx: RuleContext): RuleResolveOutp
   const commit = takeCommit(intent, ctx, 'perception');
   if (commit.error) return reject(intent, commit.error);
 
-  const dc = ctx.locationStats?.[locId]?.shroud ?? 10;
+  const dc = normaliseCheckDc(ctx.locationStats?.[locId]?.shroud);
   const cs = applyCheckStatus(ctx.investigator.statusEffects);
   const check = resolveCheck(
     dc,

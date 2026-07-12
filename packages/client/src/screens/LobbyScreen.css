@@ -16,7 +16,7 @@
   height: 100%;
   object-fit: cover;
   object-position: center;
-  filter: sepia(.12) saturate(.62) contrast(.96) brightness(1.04);
+  filter: sepia(.18) saturate(.48) contrast(.94) brightness(1.05);
   z-index: -4;
 }
 
@@ -26,60 +26,12 @@
   z-index: -1;
   pointer-events: none;
   opacity: .12;
-  background-image: url('/game-art/lobby-v2/investigator-study.jpg');
+  background-image: url('/game-art/lobby-v3/investigator-study-empty.png');
   background-size: 103% 103%;
   background-position: 49% 51%;
   mix-blend-mode: soft-light;
   animation: lobbyGrain 1.8s steps(2, end) infinite;
 }
-
-.lobby-lightning {
-  position: absolute;
-  left: 15%;
-  top: 0;
-  width: 34%;
-  height: 45%;
-  z-index: -2;
-  background: rgba(245, 238, 214, .72);
-  mix-blend-mode: screen;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 60ms linear;
-}
-.lobby-lightning.flash { opacity: .72; }
-
-.lobby-fireplace {
-  position: absolute;
-  right: 4.5%;
-  top: 42%;
-  width: 9%;
-  height: 22%;
-  z-index: -1;
-  pointer-events: none;
-  filter: sepia(.35) saturate(.72);
-}
-.lobby-fireplace::after {
-  content: '';
-  position: absolute;
-  inset: -30% -40%;
-  background: rgba(184, 137, 61, .16);
-  border-radius: 50%;
-  box-shadow: 0 0 38px rgba(184, 137, 61, .35);
-  animation: hearthLight 1.7s ease-in-out infinite alternate;
-}
-.lobby-flame {
-  position: absolute;
-  bottom: 8%;
-  width: 24%;
-  height: 55%;
-  background: rgba(218, 186, 116, .72);
-  border-radius: 70% 20% 60% 30%;
-  transform-origin: 50% 100%;
-  box-shadow: 0 0 12px rgba(218, 186, 116, .45);
-}
-.flame-a { left: 17%; animation: flameSway 1.1s ease-in-out infinite alternate; }
-.flame-b { left: 42%; height: 72%; animation: flameSway .83s ease-in-out -.3s infinite alternate-reverse; }
-.flame-c { left: 66%; height: 45%; animation: flameSway 1.32s ease-in-out -.5s infinite alternate; }
 
 .lobby-header {
   position: absolute;
@@ -97,6 +49,11 @@
 .lobby-props { position: absolute; inset: 0; z-index: 4; }
 .lobby-prop {
   position: absolute;
+  left: var(--prop-left);
+  top: var(--prop-top);
+  width: var(--prop-size);
+  height: var(--prop-size);
+  transform: translate(-50%, -50%);
   border: 0;
   background: transparent;
   padding: 0;
@@ -109,20 +66,20 @@
 .lobby-prop::before {
   content: '';
   position: absolute;
-  inset: 16%;
-  border: 1px solid transparent;
-  box-shadow: 0 0 0 transparent;
-  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
+  inset: 4%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(232, 220, 196, .16), rgba(232, 220, 196, 0) 68%);
+  opacity: 0;
+  transform: scale(.72);
+  transition: transform .18s ease, opacity .18s ease;
 }
 .lobby-prop:hover::before,
 .lobby-prop:focus-visible::before,
 .lobby-prop:active::before {
-  transform: translateY(-3px) scale(1.04);
-  border-color: rgba(226, 208, 164, .66);
-  background: rgba(232, 220, 196, .08);
-  box-shadow: 0 0 20px rgba(232, 220, 196, .24);
+  opacity: 1;
+  transform: scale(1.07);
 }
-.lobby-prop:focus-visible { outline: 2px solid #d8c69a; outline-offset: 2px; }
+.lobby-prop:focus-visible { outline: none; }
 .lobby-prop.reserved::after {
   content: '';
   position: absolute;
@@ -133,18 +90,19 @@
 .lobby-prop-label {
   position: absolute;
   left: 50%;
-  bottom: -4px;
-  transform: translate(-50%, 12px);
+  bottom: -2px;
+  transform: translate(-50%, 0);
   width: max-content;
   max-width: 170px;
-  padding: 5px 8px;
-  background: rgba(31, 27, 22, .86);
-  border: 1px solid rgba(203, 185, 145, .55);
+  padding: 3px 6px;
+  background: transparent;
+  border: 0;
   color: #ede3cf;
-  opacity: 0;
+  opacity: .88;
   pointer-events: none;
-  transition: opacity .18s ease, transform .18s ease;
+  transition: opacity .18s ease, transform .18s ease, color .18s ease;
   text-align: center;
+  text-shadow: 0 1px 4px rgba(18, 14, 10, .96), 0 0 2px rgba(18, 14, 10, .96);
 }
 .lobby-prop-label strong,
 .lobby-prop-label small { display: block; line-height: 1.35; }
@@ -152,7 +110,44 @@
 .lobby-prop-label small { font-size: 10px; color: #c7baa3; }
 .lobby-prop:hover .lobby-prop-label,
 .lobby-prop:focus-visible .lobby-prop-label,
-.lobby-prop:active .lobby-prop-label { opacity: 1; transform: translate(-50%, 0); }
+.lobby-prop:active .lobby-prop-label { opacity: 1; color: #fff1d5; transform: translate(-50%, -2px); }
+
+.lobby-seats { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.lobby-seat-token {
+  position: absolute;
+  width: clamp(84px, 11vw, 168px);
+  height: clamp(126px, 18vw, 248px);
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  filter: drop-shadow(0 8px 7px rgba(14, 11, 8, .72));
+}
+.lobby-seat-token::before {
+  content: '';
+  position: absolute;
+  inset: 16% 12% 5%;
+  border-radius: 50%;
+  background: var(--seat-tone);
+  opacity: .24;
+  filter: blur(14px);
+}
+.lobby-seat-token img {
+  position: relative;
+  max-width: 94%;
+  max-height: 92%;
+  object-fit: contain;
+  filter: grayscale(.42) sepia(.42) saturate(.76) contrast(.94) drop-shadow(0 0 3px var(--seat-tone));
+}
+.lobby-seat-token span {
+  position: absolute;
+  bottom: -8px;
+  color: #ede1c8;
+  font-size: 11px;
+  font-weight: 700;
+  text-shadow: 0 1px 4px #17120d;
+}
 
 .lobby-roster {
   position: absolute;
@@ -208,20 +203,16 @@
 .lobby-auth-title { padding: 18px 24px; border: 1px solid #8b7958; color: #e6d9bf; font-size: 18px; }
 
 @keyframes lobbyGrain { 0% { transform: translate(0,0); } 50% { transform: translate(.4%, -.3%); } 100% { transform: translate(-.3%, .25%); } }
-@keyframes hearthLight { from { opacity: .42; transform: scale(.94); } to { opacity: .78; transform: scale(1.06); } }
-@keyframes flameSway { from { transform: skewX(-7deg) scaleY(.9); opacity: .48; } to { transform: skewX(8deg) scaleY(1.08); opacity: .82; } }
 
 @media (max-width: 900px) {
   .lobby-roster { top: 10px; left: 10px; width: 228px; }
   .lobby-header { top: 7px; }
   .lobby-title { font-size: 24px; }
   .lobby-prop-label { opacity: .9; transform: translate(-50%, 0); }
+  .lobby-seat-token { width: clamp(58px, 12vw, 104px); height: clamp(90px, 18vw, 150px); }
   .lobby-prop-message { bottom: 45px; max-width: 60vw; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lobby-film-grain,
-  .lobby-fireplace::after,
-  .lobby-flame { animation: none; }
-  .lobby-lightning { display: none; }
+  .lobby-film-grain { animation: none; }
 }

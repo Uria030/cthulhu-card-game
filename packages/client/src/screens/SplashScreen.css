@@ -15,7 +15,7 @@
 .splash-lobby-behind {
   position: absolute;
   inset: 0;
-  background: url('/game-art/lobby-v2/investigator-study.jpg') center / cover no-repeat;
+  background: url('/game-art/lobby-v3/investigator-study-empty.png') center / cover no-repeat;
   filter: sepia(.15) saturate(.62) brightness(1.04);
   transform: scale(1.06);
   transition: transform 1.65s ease-out, filter 1.65s ease-out;

@@ -35,15 +35,25 @@
   padding: 0;
 }
 
-/* === 右下「系統」按鈕 + 浮動選單 === */
-.system-fab {
+/* === 右下資源與系統控制區 === */
+.board-controls {
   position: fixed;
-  bottom: var(--sp-md);
   right: var(--sp-md);
+  bottom: var(--sp-md);
   z-index: 25;
-  background: rgba(19, 19, 31, 0.85);
-  backdrop-filter: blur(4px);
-  color: var(--warning);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.system-fab {
+  position: relative;
+  z-index: 1;
+  min-height: 42px;
+  background:
+    linear-gradient(rgba(55, 38, 23, .9), rgba(29, 20, 13, .94)),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.045) 0 1px, transparent 1px 6px);
+  color: #ead7ad;
   border: 1px solid var(--world-antique-brass);
   border-radius: var(--r-pill);
   padding: var(--sp-sm) var(--sp-md);
@@ -54,7 +64,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(232, 220, 196, .1), 0 4px 12px rgba(0, 0, 0, 0.6);
   transition: all 0.2s var(--ease-paper);
   user-select: none;
 }
@@ -68,7 +78,7 @@
 
 .system-menu {
   position: fixed;
-  bottom: calc(var(--sp-md) + 56px);
+  bottom: calc(var(--sp-md) + 182px);
   right: var(--sp-md);
   z-index: 26;
   background: rgba(19, 19, 31, 0.96);
@@ -375,12 +385,13 @@
   left: 0;
   width: 150px;
   height: 150px;
+  overflow: hidden;
   background:
-    linear-gradient(140deg, transparent 52%, rgba(13, 13, 20, 0.86)),
-    url('/game-art/investigator-fallback.jpg') 48% 22% / cover no-repeat,
+    linear-gradient(140deg, rgba(232,220,196,.08), transparent 48%),
+    repeating-linear-gradient(0deg, rgba(0,0,0,.12) 0 2px, transparent 2px 9px),
     var(--world-deep-walnut);
-  border-top: 3px solid var(--player-1);
-  border-right: 3px solid var(--player-1);
+  border-top: 3px solid var(--world-antique-brass);
+  border-right: 3px solid var(--world-antique-brass);
   border-radius: 0 100% 0 0;
   transition: all 0.3s var(--ease-paper);
   box-shadow: 4px -4px 16px rgba(0, 0, 0, 0.4);
@@ -392,9 +403,10 @@
   left: 0;
   width: 150px;
   height: 32px;
-  background: rgba(26, 26, 46, 0.95);
-  backdrop-filter: blur(4px);
-  border-right: 3px solid var(--player-1);
+  background:
+    linear-gradient(rgba(54, 37, 23, .96), rgba(30, 20, 13, .96)),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0 1px, transparent 1px 5px);
+  border-right: 3px solid var(--world-antique-brass);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
@@ -409,6 +421,14 @@
 .quarter-avatar-area:hover .quarter-avatar-bg {
   filter: brightness(1.15);
   box-shadow: 4px -4px 24px rgba(160, 72, 48, 0.6);
+}
+.quarter-avatar-pawn {
+  position: absolute;
+  inset: 7px 17px 2px;
+  width: calc(100% - 34px);
+  height: calc(100% - 9px);
+  object-fit: contain;
+  filter: grayscale(.34) sepia(.42) saturate(.74) drop-shadow(0 5px 4px rgba(0,0,0,.8));
 }
 .quarter-avatar-area:hover .quarter-name-banner {
   background: var(--bg-card-hover);
@@ -457,20 +477,23 @@
 }
 
 .player-economy {
-  position: fixed;
-  left: var(--sp-md);
-  top: 160px;
-  z-index: 12;
+  position: relative;
+  width: 210px;
   display: grid;
   grid-template-columns: repeat(3, minmax(54px, auto));
-  background: rgba(17, 16, 18, .9);
-  border: 1px solid rgba(201, 168, 76, .48);
-  box-shadow: 0 5px 18px rgba(0, 0, 0, .55);
+  background:
+    linear-gradient(rgba(58, 40, 24, .92), rgba(29, 20, 13, .95)),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, transparent 1px 7px);
+  border: 2px solid #4b321e;
+  outline: 1px solid rgba(201, 168, 76, .55);
+  outline-offset: -5px;
+  box-shadow: inset 0 0 0 5px rgba(28, 18, 11, .38), 0 5px 18px rgba(0, 0, 0, .55);
+  padding: 5px;
 }
 .player-economy > div,
 .player-economy > button {
-  min-width: 58px;
-  min-height: 46px;
+  min-width: 0;
+  min-height: 42px;
   border: 0;
   border-right: 1px solid rgba(201, 168, 76, .22);
   background: transparent;
@@ -529,7 +552,7 @@
 }
 .map-grid {
   display: grid;
-  gap: var(--sp-xl);
+  gap: 48px;
   position: relative;
   transform-origin: center center;
   transition: transform 0.1s ease-out;
@@ -556,12 +579,12 @@
 }
 
 .location-card {
-  aspect-ratio: 3/4;
-  width: 200px;
+  width: 220px;
+  height: 338px;
   background: linear-gradient(180deg, #211b17, #121218);
   border: 2px solid #6f5b38;
   border-radius: var(--r-soft);
-  padding: var(--sp-md);
+  padding: 10px;
   cursor: pointer;
   position: relative;
   display: flex;
@@ -597,7 +620,10 @@
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
-  margin: var(--sp-sm) 0;
+  position: relative;
+  overflow: hidden;
+  min-height: 210px;
+  margin: 8px 0 0;
   border-radius: var(--r-sharp);
   border: 1px solid rgba(201, 168, 76, 0.38);
   box-shadow: inset 0 0 26px rgba(0, 0, 0, 0.62);
@@ -613,51 +639,55 @@
 .loc-art-alley { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-alley.jpg'); }
 .loc-art-brick-wall { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-brick-wall.jpg'); }
 .loc-art-haunt { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-haunt.jpg'); }
+.location-occupants { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 .loc-clues {
   position: absolute;
-  top: 43px;
-  left: 10px;
-  right: 10px;
-  z-index: 4;
+  bottom: 6px;
+  left: 50%;
+  z-index: 3;
+  transform: translateX(-50%);
   display: flex;
   justify-content: center;
   gap: 4px;
 }
 .location-actions {
   position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 12px;
-  z-index: 7;
+  inset: 0 2px 0;
+  z-index: 4;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   pointer-events: none;
 }
 .location-action {
-  width: min(88px, 46%);
-  min-height: 58px;
+  width: 64px;
+  height: 64px;
+  min-height: 64px;
   border: 1px solid rgba(226, 207, 156, 0.78);
-  border-radius: 4px;
-  background: rgba(22, 20, 18, 0.9);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 40% 32%, rgba(128, 99, 59, .9), rgba(25, 20, 16, .96) 68%);
   color: #eee4cd;
-  padding: 4px 5px;
+  padding: 5px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  font: 600 10px/1.25 var(--font-body);
+  gap: 2px;
+  font: 600 8px/1.12 var(--font-body);
   cursor: pointer;
   pointer-events: auto;
   transition: transform .18s ease, filter .18s ease, background .18s ease;
 }
-.location-action img { width: 31px; height: 31px; object-fit: contain; }
+.location-action img { width: 27px; height: 27px; object-fit: contain; }
+.investigate-action { margin-right: auto; }
+.move-action { margin-left: auto; }
 .location-action:hover:not(:disabled) { transform: translateY(-3px); background: rgba(83, 67, 43, .94); }
 .location-action:active:not(:disabled),
 .location-action.processing { transform: translateY(2px) scale(.96); filter: grayscale(.7); background: rgba(20, 20, 20, .94); }
 .location-action.rejected { border-color: #aa4d45; color: #f0b3ad; animation: actionRejected .36s ease; }
-.location-action:disabled { opacity: .42; cursor: not-allowed; }
+.location-action:disabled { cursor: wait; }
+.loc-footer { position: relative; min-height: 68px; margin-top: 2px; }
 .clue-dot {
   width: 8px;
   height: 8px;
@@ -672,23 +702,25 @@
 }
 .investigator-pawn {
   position: absolute;
-  top: -54px;
-  width: 54px;
-  height: 78px;
+  bottom: 3px;
+  width: 34%;
+  height: 80%;
   object-fit: contain;
-  z-index: 5;
-  filter: drop-shadow(0 7px 6px rgba(0, 0, 0, 0.75));
+  z-index: 3;
+  filter: grayscale(.22) sepia(.4) saturate(.72) drop-shadow(0 4px 3px rgba(0, 0, 0, 0.78)) drop-shadow(0 0 3px var(--pawn-tone));
   pointer-events: none;
 }
-.pawn-player { right: -22px; }
-.pawn-companion { right: auto; }
+.pawn-player { left: 2%; }
+.pawn-slot-1 { left: 23%; }
+.pawn-slot-2 { left: 44%; }
+.pawn-slot-3 { left: 65%; }
 
 /* === Block 5 右側敘事 LOG(fixed 對齊 viewport)=== */
 .narrative-log {
   position: fixed;
   top: var(--sp-md);
   right: var(--sp-md);
-  bottom: var(--sp-md);
+  bottom: 178px;
   width: 340px;
   background: transparent;
   border: none;
@@ -1336,14 +1368,16 @@
   height: 76px;
   border-radius: 4px;
   grid-row: span 2;
-  background-position: center;
-  background-size: contain;
-  background-repeat: no-repeat;
+  display: grid;
+  place-items: center;
+  background: rgba(61,40,23,.15);
+  overflow: hidden;
 }
-.ta-1 { background-image: url('/game-art/pawns/pawn-player.png'); border: 3px solid var(--player-1); }
-.ta-2 { background-image: url('/game-art/pawns/pawn-companion-teal.png'); border: 3px solid var(--player-2); }
-.ta-3 { background-image: url('/game-art/pawns/pawn-companion-gold.png'); border: 3px solid var(--player-3); }
-.ta-4 { background-image: url('/game-art/pawns/pawn-companion-violet.png'); border: 3px solid var(--player-4); }
+.team-avatar img { width: 94%; height: 94%; object-fit: contain; filter: grayscale(.24) sepia(.35) saturate(.78); }
+.ta-1 { border: 3px solid var(--player-1); }
+.ta-2 { border: 3px solid var(--player-2); }
+.ta-3 { border: 3px solid var(--player-3); }
+.ta-4 { border: 3px solid var(--player-4); }
 .tc-info {
   display: flex;
   flex-direction: column;
@@ -1409,7 +1443,7 @@
   .narrative-log {
     top: 6px;
     right: 6px;
-    bottom: 64px;
+    bottom: 166px;
     width: min(42vw, 260px);
   }
   .block-3-quarter {
@@ -1418,8 +1452,7 @@
     transform: scale(0.82);
     transform-origin: left bottom;
   }
-  .location-card { width: 168px; }
-  .map-grid { gap: 22px; }
+  .map-grid { gap: 48px; }
   .system-fab { min-width: 44px; min-height: 44px; }
   .modal-frame { width: min(92vw, 720px); max-height: 88vh; }
   .modal-illustration { width: 190px; height: 253px; }
@@ -1445,7 +1478,6 @@
   .badge-label { display: none; }
   .narrative-log { width: 190px; max-height: 42vh; bottom: auto; }
   .log-scroll-area { font-size: 12px; }
-  .location-card { width: 150px; }
   .modal-title { font-size: 21px; }
   .modal-narrative { font-size: 17px; }
   .card-lab-screen .lab-status-strip { align-items: flex-start; }
@@ -1617,6 +1649,31 @@
 .screen-toast.warning { border-color: #a94b45; color: #f0b3ad; }
 @keyframes screenToastIn { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
+.opening-briefing-backdrop { z-index: 92; }
+.opening-briefing { width: min(900px, 92vw); max-height: 88vh; overflow: auto; }
+.opening-eyebrow {
+  color: #725326;
+  font: 700 12px var(--font-headline);
+  letter-spacing: .12em;
+  text-align: center;
+}
+.opening-intro { margin: 8px auto 18px; max-width: 620px; text-align: center; color: #5f5347; font: 400 15px/1.55 var(--font-body); }
+.opening-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.opening-card { min-height: 230px; padding: 16px; border: 1px solid #8a7044; background: rgba(246, 237, 216, .82); display: flex; flex-direction: column; gap: 10px; }
+.opening-act-card { border-top: 4px solid var(--cipher); }
+.opening-agenda-card { border-top: 4px solid var(--world-oxblood); }
+.opening-card-label { color: #775a2f; font: 700 13px var(--font-headline); }
+.opening-card h2 { color: #241b15; font: 700 22px var(--font-headline); }
+.opening-card p { flex-grow: 1; color: #3d3329; font: 400 16px/1.65 var(--font-body); }
+.opening-card strong { color: #5c2018; font: 700 14px/1.45 var(--font-body); }
+.opening-actions { justify-content: center; margin-top: 18px; }
+.opening-actions button { min-width: 152px; }
+
+@media (max-width: 700px) {
+  .opening-columns { grid-template-columns: 1fr; }
+  .opening-card { min-height: 0; }
+}
+
 .pile-panel { width: min(760px, 92vw); max-height: 82vh; position: relative; }
 .pile-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: 58vh; overflow-y: auto; padding: 8px 2px; }
 .pile-card { min-height: 138px; padding: 14px; border: 1px solid rgba(201, 168, 76, .4); background: #e5dcc9; color: #231e19; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
@@ -1639,13 +1696,14 @@
 
 @media (max-width: 700px) {
   .phase-notice strong { font-size: 21px; }
-  .investigator-pawn { width: 46px; height: 66px; top: -46px; }
+  .investigator-pawn { width: 34%; height: 78%; bottom: 3px; }
   .hand-limit-selected button,
   .hand-limit-grid button { width: 96px; min-width: 96px; }
-  .player-economy { left: 8px; top: auto; bottom: 84px; grid-template-columns: repeat(3, 56px); }
+  .board-controls { right: 8px; bottom: 8px; transform: scale(.9); transform-origin: right bottom; }
+  .player-economy { grid-template-columns: repeat(3, 56px); }
   .player-economy > div,
   .player-economy > button { min-height: 38px; }
-  .location-action { min-height: 52px; font-size: 9px; }
+  .location-action { width: 54px; height: 54px; min-height: 54px; font-size: 8px; }
   .location-action img { width: 27px; height: 27px; }
 }
 
@@ -1874,10 +1932,11 @@
 /* === 地圖怪物桌遊棋子 === */
 .monster-piece {
   position: absolute;
-  top: -49px;
-  width: 70px;
-  height: 92px;
-  z-index: 6;
+  top: 6px;
+  right: calc(4px + var(--occupant-offset, 0px));
+  width: 31%;
+  height: 58%;
+  z-index: 4;
   animation: enemyThreat 2.5s ease-in-out infinite;
   pointer-events: none;
 }

@@ -1,7 +1,7 @@
 export type PreloadSource = 'local' | 'server';
 
 export const BOOT_ASSETS = [
-  { id: 'lobby-surface', label: '準備調查室', url: '/game-art/lobby-v2/investigator-study.jpg' },
+  { id: 'lobby-surface', label: '準備調查室', url: '/game-art/lobby-v3/investigator-study-empty.png' },
   { id: 'lobby-door', label: '打開事務所', url: '/game-art/lobby-v2/office-door.jpg' },
   { id: 'departure-map', label: '展開世界地圖', url: '/game-art/departure-map.jpg' },
 ] as const;
@@ -9,7 +9,12 @@ export const BOOT_ASSETS = [
 export const DEFERRED_GAME_ASSETS = [
   '/game-art/briefing-desk.jpg',
   '/game-art/game-board.jpg',
-  '/game-art/investigator-fallback.jpg',
+  '/game-art/pawns/archetypes/archivist.png',
+  '/game-art/pawns/archetypes/healer.png',
+  '/game-art/pawns/archetypes/craftsperson.png',
+  '/game-art/pawns/archetypes/watchman.png',
+  '/game-art/pawns/archetypes/performer.png',
+  '/game-art/pawns/archetypes/mystic.png',
   '/game-art/keeper-agenda.jpg',
   '/game-art/act-investigation.jpg',
   '/game-art/location-library.jpg',

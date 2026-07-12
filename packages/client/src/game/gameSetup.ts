@@ -73,6 +73,9 @@ export interface GameSetup {
   stageId: string;
   title: string;
   investigatorName: string;
+  /** 匿名棋子／大廳座位使用的職業識別；不使用人像或 MBTI。 */
+  investigatorVisualCode: string;
+  investigatorVisualTitle: string;
   factionLabel: string;
   /** 教學模式:解鎖鏈 + 劇本事件 hooks 只在 test 啟用 */
   tutorial: boolean;
@@ -152,6 +155,8 @@ export function makeTestSetup(): GameSetup {
     stageId: 'test',
     title: '三地點教學關卡',
     investigatorName: '范例調查員',
+    investigatorVisualCode: 'test-investigator',
+    investigatorVisualTitle: '調查員',
     factionLabel: 'E 號令陣營',
     tutorial: true,
     investigator: {
@@ -419,6 +424,8 @@ export function buildSetupFromBootstrap(
     stageId: bootstrap.stage.id,
     title: bootstrap.stage.name_zh,
     investigatorName,
+    investigatorVisualCode: String(inv?.code ?? ''),
+    investigatorVisualTitle: String(inv?.title_zh ?? ''),
     factionLabel: FACTION_LABEL[String(inv?.faction_code ?? '')] ?? String(inv?.faction_code ?? ''),
     tutorial: false,
     investigator: built.investigator,

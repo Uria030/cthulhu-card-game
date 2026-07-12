@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback, type CSSProperties } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   createInMemoryMessageBus,
@@ -115,6 +115,8 @@ import {
 } from '../game/cardLab';
 import { latestActionRows } from '../game/battleLogPreview';
 import { uniqueLocationConnections } from '../game/mapConnections';
+import { pawnAssetForInvestigator, playerToneForSlot } from '../game/investigatorVisuals';
+import { feedbackTargetsLocation } from '../game/locationActionFeedback';
 import { getSelectedSave } from '../game/selectedSave';
 import { CardLabWorkbench } from './CardLabWorkbench';
 import {
@@ -126,13 +128,6 @@ import {
 import './TestScenarioScreen.css';
 
 type LocationArtKind = 'lab-entrance' | 'card-lab' | 'library' | 'docks' | 'downtown' | 'alley' | 'brick-wall' | 'haunt';
-
-const INVESTIGATOR_PAWNS = [
-  '/game-art/pawns/pawn-player.png',
-  '/game-art/pawns/pawn-companion-teal.png',
-  '/game-art/pawns/pawn-companion-gold.png',
-  '/game-art/pawns/pawn-companion-violet.png',
-];
 
 export function locationArtKind(locationId: string, name?: string): LocationArtKind {
   const key = `${locationId} ${name ?? ''}`.toLowerCase();
@@ -440,6 +435,7 @@ interface ActionFeedback {
   key: string;
   label: string;
   status: 'processing' | 'rejected';
+  targetLocationId?: string;
 }
 
 interface ScreenToast {
@@ -761,6 +757,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [keeperState, setKeeperState] = useState<KeeperState>(() => initKeeperState(setup.keeperProfile));
   const [keeperEnergy, setKeeperEnergy] = useState(8); // 教學關卡舊顯示用
   const [log, setLog] = useState<string[]>(setup.introLog);
+  // 開局先說清楚目標與危險；實驗場不屬於戰役流程，不阻擋卡片檢驗。
+  const [openingBriefing, setOpeningBriefing] = useState(() => !isCardLab);
 
   // 浮層狀態
   const [modal, setModal] = useState<ModalType>(null);
@@ -819,15 +817,15 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     toastTimerRef.current = window.setTimeout(() => setScreenToast(null), duration);
   }, []);
 
-  const holdActionFeedback = useCallback((key: string, label: string, duration = 1_800) => {
+  const holdActionFeedback = useCallback((key: string, label: string, targetLocationId?: string, duration = 1_800) => {
     window.clearTimeout(actionFeedbackTimerRef.current);
-    setActionFeedback({ key, label, status: 'processing' });
+    setActionFeedback({ key, label, status: 'processing', targetLocationId });
     actionFeedbackTimerRef.current = window.setTimeout(() => setActionFeedback(null), duration);
   }, []);
 
-  const rejectActionFeedback = useCallback((key: string, label: string) => {
+  const rejectActionFeedback = useCallback((key: string, label: string, targetLocationId?: string) => {
     window.clearTimeout(actionFeedbackTimerRef.current);
-    setActionFeedback({ key, label, status: 'rejected' });
+    setActionFeedback({ key, label, status: 'rejected', targetLocationId });
     actionFeedbackTimerRef.current = window.setTimeout(() => setActionFeedback(null), 720);
   }, []);
 
@@ -1477,7 +1475,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   ) => {
     if (actionFeedback || actionPlay || encounterPlay || damageAlloc) return;
     const feedbackLabel = (ACTION_PLAY_TITLE[actionType] ?? actionType).replace(/^[^\p{L}\p{N}]+/u, '');
-    holdActionFeedback(actionType, feedbackLabel);
+    const feedbackTargetLocationId = actionType === 'move' && typeof payload.targetLocationId === 'string'
+      ? payload.targetLocationId
+      : undefined;
+    holdActionFeedback(actionType, feedbackLabel, feedbackTargetLocationId);
     const intent: IntentMessage = {
       id: 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
       timestamp: new Date().toISOString(),
@@ -1591,7 +1592,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         }
       }
     } else {
-      rejectActionFeedback(actionType, feedbackLabel);
+      rejectActionFeedback(actionType, feedbackLabel, feedbackTargetLocationId);
       showScreenToast(out.result.rejection?.narrative ?? '動作無法執行', 'warning', 1_500);
     }
   }, [actionFeedback, actionPlay, encounterPlay, damageAlloc, holdActionFeedback, rejectActionFeedback, showScreenToast, bus, investigator, scenario, aiMembers, turnNumber, phase, setup, flags, locMeta, triggerEncounter, triggerKeeperLegendaryEncounter, isCardLab, appendLines, cardMeta]);
@@ -2284,6 +2285,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
 
   // ─── 衍生資料 ──────────────────────
   const handCards = investigator.hand.map((id) => cardMeta[id]).filter((x): x is CardDisplay => !!x);
+  const playerPawnAsset = pawnAssetForInvestigator({
+    code: setup.investigatorVisualCode,
+    title_zh: setup.investigatorVisualTitle,
+  });
   const enemyHere: EnemyInstance | undefined = scenario.enemies.find((e) => e.locationId === investigator.currentLocationId && e.hp > 0);
   const isLocationUnlocked = (id: string) => scenario.unlockedLocations.includes(id);
   const currentLocInstance = scenario.locations.find((l) => l.locationDefinitionId === investigator.currentLocationId);
@@ -2430,7 +2435,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                 className="map-grid"
                 style={{
                   gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
-                  width: gridCols * 200 + (gridCols - 1) * 40,
+                  width: gridCols * 220 + (gridCols - 1) * 48,
                   transform: `scale(${zoom})`,
                 }}
               >
@@ -2462,7 +2467,18 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                     && !playerShortRested
                     && !isDowned(investigator)
                     && !investigator.dead
+                    && !openingBriefing
                     && !actionFeedback;
+                  const canInvestigateHere = isCurr && canUseMapActions && investigator.actionPoints >= 1;
+                  const canMoveHere = !isCurr
+                    && canUseMapActions
+                    && unlocked
+                    && isMoveTarget
+                    && investigator.actionPoints >= moveCost;
+                  const showInvestigate = isCurr && (canInvestigateHere || actionFeedback?.key === 'investigate');
+                  const showMove = !isCurr && (
+                    canMoveHere || feedbackTargetsLocation(actionFeedback, 'move', loc.locationDefinitionId)
+                  );
                   const cluesHere = scenario.tokens.filter((t) => t.locationId === loc.locationDefinitionId && t.tokenType === 'clue').reduce((s, t) => s + t.amount, 0);
                   const maxClues = Math.max(2, cluesHere);
                   return (
@@ -2471,64 +2487,79 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                       className={'location-card' + (isCurr ? ' current-loc' : '') + (unlocked ? '' : ' locked')}
                       onClick={() => onLocationClick(loc.locationDefinitionId)}
                     >
-                      {isCurr && <img className="investigator-pawn pawn-player" src={INVESTIGATOR_PAWNS[0]} alt="玩家棋子" />}
-                      {aiMembers.map((ai, aiIdx) =>
-                        !ai.dead && !ai.permanentlyDead && ai.currentLocationId === loc.locationDefinitionId ? (
-                          <img
-                            key={ai.investigatorId}
-                            className="investigator-pawn pawn-companion"
-                            src={INVESTIGATOR_PAWNS[aiIdx + 1] ?? INVESTIGATOR_PAWNS[1]}
-                            style={{ left: -20 + aiIdx * 38, opacity: isDowned(ai) ? 0.45 : 1 }}
-                            title={(setup.aiMembers[aiIdx]?.profile.name_zh ?? '') + (isDowned(ai) ? '(瀕死)' : '')}
-                            alt={`${setup.aiMembers[aiIdx]?.profile.name_zh ?? '隊友'}棋子`}
-                          />
-                        ) : null,
-                      )}
-                      {scenario.enemies
-                        .filter((e) => e.hp > 0 && e.locationId === loc.locationDefinitionId)
-                        .map((e, ei) => {
-                          const enemyData = setup.enemyStats[e.enemyDefinitionId];
-                          const enemyName = enemyData?.name_zh ?? e.enemyDefinitionId;
-                          return (
-                          <div
-                            key={e.instanceId}
-                            className="monster-piece"
-                            style={{ right: 2 + ei * 34 }}
-                            title={`${enemyName} · HP ${e.hp}`}
-                          >
-                            <img src={monsterPieceAsset(e.enemyDefinitionId, Number(enemyData?.tier ?? 1))} alt={`${enemyName}棋子`} />
-                            <span>HP {e.hp}</span>
-                          </div>
-                          );
-                        })}
                       <div className="loc-name">{!unlocked && <span className="loc-lock-mark">鎖定 · </span>}{meta?.name ?? loc.locationDefinitionId}</div>
-                      <div className={`loc-illustration loc-art-${artKind}`} role="img" aria-label={`${meta?.name ?? loc.locationDefinitionId}地點插畫`} />
-                      <div className="loc-clues">
-                        {Array.from({ length: maxClues }).map((_, i) => (
-                          <div key={i} className={'clue-dot' + (i < cluesHere ? ' has-clue' : '')} />
-                        ))}
+                      <div className={`loc-illustration loc-art-${artKind}`} role="img" aria-label={`${meta?.name ?? loc.locationDefinitionId}地點插畫`}>
+                        <div className="location-occupants">
+                          {isCurr && (
+                            <img
+                              className="investigator-pawn pawn-player"
+                              src={playerPawnAsset}
+                              style={{ '--pawn-tone': playerToneForSlot(0), opacity: isDowned(investigator) ? 0.45 : 1 } as CSSProperties}
+                              alt="玩家棋子"
+                            />
+                          )}
+                          {aiMembers.map((ai, aiIdx) =>
+                            !ai.dead && !ai.permanentlyDead && ai.currentLocationId === loc.locationDefinitionId ? (
+                              <img
+                                key={ai.investigatorId}
+                                className={`investigator-pawn pawn-companion pawn-slot-${aiIdx + 1}`}
+                                src={pawnAssetForInvestigator({
+                                  code: setup.aiMembers[aiIdx]?.profile.templateCode,
+                                  title_zh: setup.aiMembers[aiIdx]?.profile.title_zh,
+                                })}
+                                style={{ '--pawn-tone': playerToneForSlot(aiIdx + 1), opacity: isDowned(ai) ? 0.45 : 1 } as CSSProperties}
+                                title={(setup.aiMembers[aiIdx]?.profile.name_zh ?? '') + (isDowned(ai) ? '(瀕死)' : '')}
+                                alt={`${setup.aiMembers[aiIdx]?.profile.name_zh ?? '隊友'}棋子`}
+                              />
+                            ) : null,
+                          )}
+                          {scenario.enemies
+                            .filter((e) => e.hp > 0 && e.locationId === loc.locationDefinitionId)
+                            .map((e, ei) => {
+                              const enemyData = setup.enemyStats[e.enemyDefinitionId];
+                              const enemyName = enemyData?.name_zh ?? e.enemyDefinitionId;
+                              return (
+                                <div
+                                  key={e.instanceId}
+                                  className="monster-piece"
+                                  style={{ '--occupant-offset': `${ei * 26}px` } as CSSProperties}
+                                  title={`${enemyName} · HP ${e.hp}`}
+                                >
+                                  <img src={monsterPieceAsset(e.enemyDefinitionId, Number(enemyData?.tier ?? 1))} alt={`${enemyName}棋子`} />
+                                  <span>HP {e.hp}</span>
+                                </div>
+                              );
+                            })}
+                        </div>
                       </div>
-                      <div className="location-actions" aria-label={`${meta?.name ?? loc.locationDefinitionId}可用動作`}>
-                        {isCurr && (
+                      <div className="loc-footer">
+                        <div className="location-actions" aria-label={`${meta?.name ?? loc.locationDefinitionId}可用動作`}>
+                          {showInvestigate && (
                           <button
                             className={'location-action investigate-action' + (actionFeedback?.key === 'investigate' ? ` ${actionFeedback.status}` : '')}
-                            disabled={!canUseMapActions || investigator.actionPoints < 1}
+                            disabled={!canInvestigateHere}
                             onClick={(event) => { event.stopPropagation(); submitCheckIntent('investigate'); }}
                           >
                             <img src="/game-art/ui/investigate-magnifier.png" alt="" />
                             <span>{actionFeedback?.key === 'investigate' ? `${actionFeedback.label}${actionFeedback.status === 'processing' ? '中…' : '失敗'}` : '調查此地點'}</span>
                           </button>
                         )}
-                        {!isCurr && (
+                          {showMove && (
                           <button
                             className={'location-action move-action' + (actionFeedback?.key === 'move' ? ` ${actionFeedback.status}` : '')}
-                            disabled={!canUseMapActions || !unlocked || !isMoveTarget || investigator.actionPoints < moveCost}
+                            disabled={!canMoveHere}
                             onClick={(event) => { event.stopPropagation(); submitIntent('move', { targetLocationId: loc.locationDefinitionId }); }}
                           >
                             <img src="/game-art/ui/move-footsteps.png" alt="" />
-                            <span>{isMoveTarget ? `移動到此 · ${moveCost} AP` : '目前無法抵達'}</span>
+                            <span>{actionFeedback?.key === 'move' ? `${actionFeedback.label}${actionFeedback.status === 'processing' ? '中…' : '失敗'}` : `移動到此 · ${moveCost} AP`}</span>
                           </button>
                         )}
+                        </div>
+                        <div className="loc-clues" aria-label={`此地點有 ${cluesHere} 個線索`}>
+                          {Array.from({ length: maxClues }).map((_, i) => (
+                            <div key={i} className={'clue-dot' + (i < cluesHere ? ' has-clue' : '')} />
+                          ))}
+                        </div>
                       </div>
                     </div>
                   );
@@ -2570,7 +2601,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         {/* === Block 3 左下 1/4 圓玩家 === */}
         <div className="block-3-quarter">
           <div className="quarter-avatar-area" onClick={() => openModal('team')}>
-            <div className="quarter-avatar-bg" />
+            <div className="quarter-avatar-bg">
+              <img className="quarter-avatar-pawn" src={playerPawnAsset} alt="" />
+            </div>
             <div className="quarter-name-banner">{setup.investigatorName}</div>
           </div>
 
@@ -2590,15 +2623,6 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             <span className="arc-icon">袋</span>
           </div>
         </div>
-
-        <section className="player-economy" aria-label="玩家卡牌與資源資訊">
-          <div className="economy-resource"><span>資源</span><strong>{investigator.resources}</strong></div>
-          <button onClick={() => openPanel('hand')}><span>手牌</span><strong>{investigator.hand.length}</strong></button>
-          <div><span>牌庫</span><strong>{investigator.deck.length}</strong></div>
-          <button onClick={() => { closeAllOverlays(); setPilePanel('discard'); }}><span>棄牌</span><strong>{investigator.discardPile.length}</strong></button>
-          <button onClick={() => { closeAllOverlays(); setPilePanel('removed'); }}><span>除外</span><strong>{investigator.removedPile.length}</strong></button>
-          <button onClick={() => { closeAllOverlays(); setPilePanel('extra'); }}><span>額外</span><strong>{investigator.extraDeck?.length ?? 0}</strong></button>
-        </section>
 
         {/* === Block 5 右滿高敘事 LOG === */}
         <aside className={'narrative-log' + (isCardLab ? ' lab-log' : '') + (logCollapsed ? ' collapsed' : '')}>
@@ -3326,15 +3350,50 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         </div>
       )}
 
+      {openingBriefing && (
+        <div className="modal-backdrop active opening-briefing-backdrop" role="dialog" aria-modal="true" aria-label="關卡目標說明">
+          <section className="modal-frame opening-briefing">
+            <div className="opening-eyebrow">關卡開場</div>
+            <div className="modal-title">{setup.title}</div>
+            <p className="opening-intro">在第一個回合開始前，先確認你們必須完成的目標，以及逼近中的危險。</p>
+            <div className="opening-columns">
+              <section className="opening-card opening-act-card">
+                <div className="opening-card-label">幕 {actIdx + 1} · 調查目標</div>
+                <h2>{currentAct?.name ?? '未知目標'}</h2>
+                <p>{currentAct?.narrative ?? '本關卡尚未設定幕敘事。'}</p>
+                <strong>{currentAct?.conditionDesc || `收集 ${objectiveMax} 個線索，推進下一張幕。`}</strong>
+              </section>
+              <section className="opening-card opening-agenda-card">
+                <div className="opening-card-label">議程 {agendaIdx + 1} · 逼近的危險</div>
+                <h2>{currentAgenda?.name ?? '未知議程'}</h2>
+                <p>{currentAgenda?.narrative ?? '本關卡尚未設定議程敘事。'}</p>
+                <strong>累積 {agendaMax} 個毀滅標記時，議程將推進。</strong>
+              </section>
+            </div>
+            <div className="action-row opening-actions"><button onClick={() => setOpeningBriefing(false)}>開始調查</button></div>
+          </section>
+        </div>
+      )}
+
       {/* === 右下系統按鈕 + 浮動選單 === */}
-      <button
-        className="system-fab"
-        onClick={() => setSystemMenuOpen((v) => !v)}
-        title="系統選單"
-      >
-        <span className="system-icon">⚙</span>
-        <span>系統</span>
-      </button>
+      <div className="board-controls">
+        <section className="player-economy" aria-label="玩家卡牌與資源資訊">
+          <div className="economy-resource"><span>資源</span><strong>{investigator.resources}</strong></div>
+          <button onClick={() => openPanel('hand')}><span>手牌</span><strong>{investigator.hand.length}</strong></button>
+          <div><span>牌庫</span><strong>{investigator.deck.length}</strong></div>
+          <button onClick={() => { closeAllOverlays(); setPilePanel('discard'); }}><span>棄牌</span><strong>{investigator.discardPile.length}</strong></button>
+          <button onClick={() => { closeAllOverlays(); setPilePanel('removed'); }}><span>除外</span><strong>{investigator.removedPile.length}</strong></button>
+          <button onClick={() => { closeAllOverlays(); setPilePanel('extra'); }}><span>額外</span><strong>{investigator.extraDeck?.length ?? 0}</strong></button>
+        </section>
+        <button
+          className="system-fab"
+          onClick={() => setSystemMenuOpen((v) => !v)}
+          title="系統選單"
+        >
+          <span className="system-icon">⚙</span>
+          <span>系統</span>
+        </button>
+      </div>
 
       {systemMenuOpen && (
         <>
@@ -3620,9 +3679,15 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               {teamMembers.map((member, idx) => {
                 const inv = member.inv;
                 const locName = locMeta[inv.currentLocationId || '']?.name ?? '未知';
+                const pawnAsset = idx === 0
+                  ? playerPawnAsset
+                  : pawnAssetForInvestigator({
+                    code: setup.aiMembers[idx - 1]?.profile.templateCode,
+                    title_zh: setup.aiMembers[idx - 1]?.profile.title_zh,
+                  });
                 return (
                   <div key={inv.investigatorId} className={'team-card tc-' + (idx + 1)}>
-                    <div className={'team-avatar ta-' + (idx + 1)} />
+                    <div className={'team-avatar ta-' + (idx + 1)}><img src={pawnAsset} alt="" /></div>
                     <div className="tc-info">
                       <div className="tc-name">{member.name}</div>
                       <div className={'tc-faction f' + (idx + 1)}>{member.label}</div>

@@ -16,6 +16,7 @@ import {
 import type { PlayInvestigator, PlayStageListItem, PlayerAccount } from '../api';
 import { openMultiplayerTransport, type MultiplayerTransport } from '../game/multiplayerTransport';
 import { playablePresetInvestigators } from '../game/investigatorRoster';
+import { getSelectedSave } from '../game/selectedSave';
 import './MultiplayerRoomScreen.css';
 
 function roomCodeInput(value: string): string {
@@ -110,7 +111,12 @@ export function MultiplayerRoomScreen() {
   };
   const select = async (templateId: string) => {
     if (!roomCode) return;
-    try { setSnapshot(await selectMultiplayerInvestigator(roomCode, templateId)); }
+    const selectedSave = getSelectedSave();
+    if (!selectedSave || selectedSave.template_id !== templateId) {
+      setNotice('多人結算會寫回目前選定的調查員存檔；請先在存檔管理選擇這位調查員。');
+      return;
+    }
+    try { setSnapshot(await selectMultiplayerInvestigator(roomCode, templateId, selectedSave.id)); }
     catch (error) { setNotice(error instanceof Error ? error.message : String(error)); }
   };
   const ready = async () => {

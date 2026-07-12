@@ -29,6 +29,7 @@ import type {
   AttackCardLookup,
   ActCardData,
   AgendaCardData,
+  OutcomeData,
 } from '@cthulhu/shared';
 
 // @cthulhu/shared is emitted as CommonJS so the production Node server and the
@@ -46,6 +47,7 @@ const {
   activateMonsters,
   runFearChecks,
   progressTick,
+  evaluateOutcome,
   runTurnEndUpkeep,
   runTurnStartUpkeep,
   resolveIntent,
@@ -68,6 +70,8 @@ export interface AuthoritativeGameState {
   turn: TurnState;
   /** playerId -> controlled investigatorId. */
   playerInvestigators: Record<string, string>;
+  /** playerId -> selected active investigator_saves row for server settlement. */
+  playerSaveIds?: Record<string, string>;
   /** Per-investigator controller; a disconnected human is switched to AI. */
   controllerByInvestigator?: Record<string, MultiplayerSeatController>;
   /** Profiles and local AI planner state never leave the server snapshot. */
@@ -82,7 +86,17 @@ export interface AuthoritativeGameState {
     attackCards: AttackCardLookup;
     actCards: ActCardData[];
     agendaCards: AgendaCardData[];
+    outcomes: OutcomeData[];
   };
+  campaignFlags?: Record<string, unknown>;
+  resolution?: { outcomeCode: string; status: 'pending' | 'saved' | 'failed' };
+  /** A server-only transaction callback installed by the N2 route. */
+  onScenarioResolved?: (input: {
+    stageId: string;
+    outcome: OutcomeData;
+    flags: Record<string, unknown>;
+    players: Array<{ playerId: string; saveId: string; investigator: InvestigatorState }>;
+  }) => Promise<void>;
   /** Server-only rule data; it is intentionally absent from snapshots. */
   ruleContext?: Omit<RuleContext, 'scenario' | 'investigator' | 'investigators' | 'turn'>;
 }
@@ -96,6 +110,7 @@ export interface RoomServiceError {
     | 'not_room_host'
     | 'room_already_active'
     | 'selection_required'
+    | 'save_required'
     | 'investigator_taken'
     | 'not_ready'
     | 'requires_two_players'
@@ -178,6 +193,7 @@ export class MultiplayerRoomService {
       connected: false,
       joinedAt: this.now(),
       investigatorTemplateId: null,
+      saveId: null,
       ready: false,
     };
     const room: RoomRecord = {
@@ -212,6 +228,7 @@ export class MultiplayerRoomService {
       connected: connectionCount > 0,
       joinedAt: existing?.joinedAt ?? this.now(),
       investigatorTemplateId: existing?.investigatorTemplateId ?? null,
+      saveId: existing?.saveId ?? null,
       ready: existing?.ready ?? false,
     });
     room.data.connectionCountByPlayer.set(player.playerId, connectionCount);
@@ -286,6 +303,7 @@ export class MultiplayerRoomService {
     codeInput: string,
     playerId: string,
     investigatorTemplateId: string,
+    saveId: string,
   ): RoomServiceResult<MultiplayerRoomSnapshot> {
     const room = this.roomFor(codeInput);
     if (!room.ok) return room;
@@ -298,13 +316,17 @@ export class MultiplayerRoomService {
     if (!selected) {
       return { ok: false, error: { code: 'selection_required', message: '請先選擇一位調查員。', snapshot: this.snapshot(room.data) } };
     }
+    const selectedSave = saveId.trim();
+    if (!selectedSave) {
+      return { ok: false, error: { code: 'save_required', message: '請先選擇要寫入的調查員存檔。', snapshot: this.snapshot(room.data) } };
+    }
     const owner = [...room.data.members.values()].find((seat) =>
       seat.playerId !== playerId && seat.investigatorTemplateId === selected,
     );
     if (owner) {
       return { ok: false, error: { code: 'investigator_taken', message: '這位調查員已被其他席位選走。', snapshot: this.snapshot(room.data) } };
     }
-    room.data.members.set(playerId, { ...member, investigatorTemplateId: selected, ready: false });
+    room.data.members.set(playerId, { ...member, investigatorTemplateId: selected, saveId: selectedSave, ready: false });
     room.data.version += 1;
     const snapshot = this.snapshot(room.data);
     this.broadcast(room.data, { type: 'room_snapshot', snapshot });
@@ -319,7 +341,7 @@ export class MultiplayerRoomService {
     }
     const member = room.data.members.get(playerId);
     if (!member) return this.notMember(room.data);
-    if (ready && !member.investigatorTemplateId) {
+    if (ready && (!member.investigatorTemplateId || !member.saveId)) {
       return { ok: false, error: { code: 'selection_required', message: '選擇調查員後才能 ready。', snapshot: this.snapshot(room.data) } };
     }
     if (member.ready === ready) return { ok: true, data: this.snapshot(room.data) };
@@ -371,11 +393,15 @@ export class MultiplayerRoomService {
       investigators: clone(game.investigators),
       turn: clone(game.turn),
       playerInvestigators: { ...game.playerInvestigators },
+      playerSaveIds: { ...(game.playerSaveIds ?? {}) },
       controllerByInvestigator: { ...(game.controllerByInvestigator ?? Object.fromEntries(Object.values(game.playerInvestigators).map((id) => [id, 'human' as const]))) },
       aiProfilesByInvestigator: { ...(game.aiProfilesByInvestigator ?? {}) },
       aiStatesByInvestigator: { ...(game.aiStatesByInvestigator ?? {}) },
       declaredEndByInvestigator: [...(game.declaredEndByInvestigator ?? [])],
       roundRuntime: game.roundRuntime,
+      campaignFlags: { ...(game.campaignFlags ?? {}) },
+      resolution: game.resolution,
+      onScenarioResolved: game.onScenarioResolved,
       // Rule context may contain an injected RNG for deterministic server tests;
       // it is server-only and must not be JSON-cloned into a snapshot.
       ruleContext: game.ruleContext,
@@ -621,6 +647,7 @@ export class MultiplayerRoomService {
             playerInvestigators: room.game.playerInvestigators,
             controllerByInvestigator: room.game.controllerByInvestigator ?? {},
             declaredEndByInvestigator: room.game.declaredEndByInvestigator ?? [],
+            resolution: room.game.resolution,
           }
         : undefined,
     });
@@ -686,7 +713,7 @@ export class MultiplayerRoomService {
     }
     const progressed = progressTick(
       scenario,
-      {},
+      game.campaignFlags ?? {},
       runtime.actCards,
       runtime.agendaCards,
       game.ruleContext?.enemyStats ?? {},
@@ -694,6 +721,44 @@ export class MultiplayerRoomService {
       investigators,
     );
     scenario = progressed.scenario;
+    game.campaignFlags = progressed.flags;
+    game.investigators = investigators;
+    const outcome = (progressed.victory || progressed.defeat)
+      ? evaluateOutcome(runtime.outcomes, progressed.flags)
+      : null;
+    if (outcome) {
+      game.scenario = { ...scenario, phase: 'turn_end' };
+      game.turn = { ...game.turn, phase: 'turn_end' };
+      game.resolution = { outcomeCode: String(outcome.outcome_code), status: 'pending' };
+      room.version += 1;
+      this.broadcast(room, { type: 'room_snapshot', snapshot: this.snapshot(room) });
+      const players = Object.entries(game.playerInvestigators).flatMap(([playerId, investigatorId]) => {
+        const saveId = game.playerSaveIds?.[playerId];
+        const investigator = game.investigators[investigatorId];
+        return saveId && investigator ? [{ playerId, saveId, investigator }] : [];
+      });
+      if (!game.onScenarioResolved || players.length !== Object.keys(game.playerInvestigators).length) {
+        game.resolution = { ...game.resolution, status: 'failed' };
+        room.version += 1;
+        this.broadcast(room, { type: 'room_snapshot', snapshot: this.snapshot(room) });
+        return;
+      }
+      void game.onScenarioResolved({
+        stageId: game.stageId ?? '', outcome,
+        flags: { ...progressed.flags }, players,
+      }).then(() => {
+        if (room.game !== game || game.resolution?.status !== 'pending') return;
+        game.resolution = { ...game.resolution, status: 'saved' };
+        room.version += 1;
+        this.broadcast(room, { type: 'room_snapshot', snapshot: this.snapshot(room) });
+      }).catch(() => {
+        if (room.game !== game || game.resolution?.status !== 'pending') return;
+        game.resolution = { ...game.resolution, status: 'failed' };
+        room.version += 1;
+        this.broadcast(room, { type: 'room_snapshot', snapshot: this.snapshot(room) });
+      });
+      return;
+    }
     for (const [id, investigator] of Object.entries(investigators)) {
       const ending = runTurnEndUpkeep(investigator);
       const started = runTurnStartUpkeep({ ...ending.investigator, actionPoints: 3 });

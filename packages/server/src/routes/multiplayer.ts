@@ -19,11 +19,15 @@ import {
   buildAuthoritativeMultiplayerGame,
   requiredAiTemplateIds,
 } from '../services/multiplayer-game-factory.js';
+import { pool } from '../db/pool.js';
+import { settleMultiplayerScenario } from '../services/scenario-settlement.js';
 
 interface MultiplayerRouteOptions {
   roomService?: MultiplayerRoomService;
   bootstrapForTemplate?: (stageId: string, templateId: string) => Promise<StageBootstrap>;
   isPlayableTemplate?: (templateId: string) => Promise<boolean>;
+  isActiveSaveForSelection?: (input: { saveId: string; playerId: string; templateId: string }) => Promise<boolean>;
+  settleScenario?: typeof settleMultiplayerScenario;
 }
 
 function sendSocket(socket: { readyState: number; send: (payload: string) => void }, message: MultiplayerServerMessage): void {
@@ -62,6 +66,15 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
     return response.statusCode === 200 && body.success === true && (body.data ?? [])
       .some((row) => row.is_preset !== false && row.id === templateId);
   });
+  const isActiveSaveForSelection = options.isActiveSaveForSelection ?? (async ({ saveId, playerId, templateId }) => {
+    const result = await pool.query(
+      `SELECT 1 FROM investigator_saves
+        WHERE id = $1 AND player_id = $2 AND template_id = $3 AND status = 'active'`,
+      [saveId, playerId, templateId],
+    );
+    return result.rows.length === 1;
+  });
+  const settleScenario = options.settleScenario ?? settleMultiplayerScenario;
 
   app.post('/api/multiplayer/rooms', { preHandler: requirePlayerAuth }, async (request, reply) => {
     const player = playerFromRequest(request);
@@ -92,15 +105,19 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
 
   app.post<{
     Params: { code: string };
-    Body: { investigator_template_id?: string };
+    Body: { investigator_template_id?: string; save_id?: string };
   }>('/api/multiplayer/rooms/:code/select-investigator', { preHandler: requirePlayerAuth }, async (request, reply) => {
     const player = playerFromRequest(request);
     if (!player) return reply.status(401).send({ success: false, error: 'Authentication required' });
     const templateId = String(request.body?.investigator_template_id ?? '').trim();
+    const saveId = String(request.body?.save_id ?? '').trim();
     if (!templateId || !(await isPlayableTemplate(templateId))) {
       return reply.status(400).send({ success: false, error: '調查員不在可選 64 格名冊中。' });
     }
-    const selected = rooms.selectInvestigator(request.params.code, player.playerId, templateId);
+    if (!saveId || !(await isActiveSaveForSelection({ saveId, playerId: player.playerId, templateId }))) {
+      return reply.status(400).send({ success: false, error: '請選擇屬於此調查員的 active 存檔。' });
+    }
+    const selected = rooms.selectInvestigator(request.params.code, player.playerId, templateId, saveId);
     if (!selected.ok) return reply.status(selected.error.code === 'investigator_taken' ? 409 : 400).send({ success: false, error: selected.error.message });
     return reply.send({ success: true, data: selected.data });
   });
@@ -135,6 +152,9 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
         bootstrap: await bootstrapForTemplate(stageId, templateId),
       })));
       const game = buildAuthoritativeMultiplayerGame({ stageId, members: startable.data.members, bootstraps });
+      game.onScenarioResolved = async ({ stageId: resolvedStageId, flags, players }) => {
+        await settleScenario({ stageId: resolvedStageId, flags, players });
+      };
       const activated = rooms.activateGame(request.params.code, player.playerId, game);
       if (!activated.ok) return reply.status(400).send({ success: false, error: activated.error.message });
       // AI vacancies complete their current investigator turn through the same

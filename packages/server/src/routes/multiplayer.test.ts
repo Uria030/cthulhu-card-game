@@ -122,6 +122,7 @@ test('多人 WebSocket:認證後回傳權威房間快照', async () => {
 test('多人 v1 路由:選人互斥、ready 後由 server bootstrap 成四席並填入 AI', async () => {
   const app = await makeApp({
     isPlayableTemplate: async () => true,
+    isActiveSaveForSelection: async () => true,
     bootstrapForTemplate: async (_stageId: string, templateId: string) => bootstrap(templateId),
   });
   const hostToken = token('host-id', 'creator01');
@@ -130,11 +131,11 @@ test('多人 v1 路由:選人互斥、ready 後由 server bootstrap 成四席並
     const created = await app.inject({ method: 'POST', url: '/api/multiplayer/rooms', headers: { authorization: `Bearer ${hostToken}` } });
     const roomCode = created.json().data.roomCode;
     await app.inject({ method: 'POST', url: `/api/multiplayer/rooms/${roomCode}/join`, headers: { authorization: `Bearer ${guestToken}` } });
-    const hostSelect = await app.inject({ method: 'POST', url: `/api/multiplayer/rooms/${roomCode}/select-investigator`, headers: { authorization: `Bearer ${hostToken}` }, payload: { investigator_template_id: 'human-one' } });
+    const hostSelect = await app.inject({ method: 'POST', url: `/api/multiplayer/rooms/${roomCode}/select-investigator`, headers: { authorization: `Bearer ${hostToken}` }, payload: { investigator_template_id: 'human-one', save_id: 'save-one' } });
     assertEq(hostSelect.statusCode, 200);
-    const collision = await app.inject({ method: 'POST', url: `/api/multiplayer/rooms/${roomCode}/select-investigator`, headers: { authorization: `Bearer ${guestToken}` }, payload: { investigator_template_id: 'human-one' } });
+    const collision = await app.inject({ method: 'POST', url: `/api/multiplayer/rooms/${roomCode}/select-investigator`, headers: { authorization: `Bearer ${guestToken}` }, payload: { investigator_template_id: 'human-one', save_id: 'save-two' } });
     assertEq(collision.statusCode, 409);
-    await app.inject({ method: 'POST', url: `/api/multiplayer/rooms/${roomCode}/select-investigator`, headers: { authorization: `Bearer ${guestToken}` }, payload: { investigator_template_id: 'human-two' } });
+    await app.inject({ method: 'POST', url: `/api/multiplayer/rooms/${roomCode}/select-investigator`, headers: { authorization: `Bearer ${guestToken}` }, payload: { investigator_template_id: 'human-two', save_id: 'save-two' } });
     await app.inject({ method: 'POST', url: `/api/multiplayer/rooms/${roomCode}/ready`, headers: { authorization: `Bearer ${hostToken}` }, payload: { ready: true } });
     await app.inject({ method: 'POST', url: `/api/multiplayer/rooms/${roomCode}/ready`, headers: { authorization: `Bearer ${guestToken}` }, payload: { ready: true } });
     const started = await app.inject({ method: 'POST', url: `/api/multiplayer/rooms/${roomCode}/start`, headers: { authorization: `Bearer ${hostToken}` }, payload: { stage_id: 'stage-rain' } });
@@ -142,6 +143,34 @@ test('多人 v1 路由:選人互斥、ready 後由 server bootstrap 成四席並
     assertEq(started.json().data.phase, 'active');
     assertEq(Object.keys(started.json().data.game.investigators).length, 4);
     assertEq(Object.values(started.json().data.game.controllerByInvestigator).filter((value: unknown) => value === 'ai').length, 2);
+  } finally { await app.close(); }
+});
+
+test('多人 v1 路由:選擇存檔必須由 server 驗證玩家與調查員歸屬', async () => {
+  const app = await makeApp({
+    isPlayableTemplate: async () => true,
+    isActiveSaveForSelection: async ({ saveId, playerId, templateId }: { saveId: string; playerId: string; templateId: string }) => (
+      saveId === 'save-owned' && playerId === 'host-id' && templateId === 'human-one'
+    ),
+  });
+  const hostToken = token('host-id', 'creator01');
+  try {
+    const created = await app.inject({ method: 'POST', url: '/api/multiplayer/rooms', headers: { authorization: `Bearer ${hostToken}` } });
+    const roomCode = created.json().data.roomCode;
+    const rejected = await app.inject({
+      method: 'POST',
+      url: `/api/multiplayer/rooms/${roomCode}/select-investigator`,
+      headers: { authorization: `Bearer ${hostToken}` },
+      payload: { investigator_template_id: 'human-one', save_id: 'save-not-owned' },
+    });
+    assertEq(rejected.statusCode, 400, '他人或不相符的存檔不得進入房間狀態');
+    const accepted = await app.inject({
+      method: 'POST',
+      url: `/api/multiplayer/rooms/${roomCode}/select-investigator`,
+      headers: { authorization: `Bearer ${hostToken}` },
+      payload: { investigator_template_id: 'human-one', save_id: 'save-owned' },
+    });
+    assertEq(accepted.statusCode, 200, '自己的 active 存檔才能被綁定');
   } finally { await app.close(); }
 });
 

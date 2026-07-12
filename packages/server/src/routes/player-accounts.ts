@@ -12,6 +12,7 @@ import {
   type PlayerPasswordVaultRecord,
 } from '../services/player-password-vault.js';
 import { CARD_LAB_MANIFEST, isCardLabCreator, parseCardLabReview } from '../services/card-lab.js';
+import { evaluateOutcomeRows, settleProgressOnServer } from '../services/scenario-settlement.js';
 
 const PLAYER_SESSION_HOURS = Number.parseInt(process.env.PLAYER_SESSION_HOURS || '24', 10);
 const PASSWORD_MIN_LENGTH = 8;
@@ -89,101 +90,6 @@ function saveSelectSql(where: string): string {
 
 function objectRecord(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
-}
-
-function evaluateOutcomeRows(outcomes: Array<Record<string, any>>, flags: Record<string, unknown>): Record<string, any> | null {
-  const sorted = [...outcomes].sort((a, b) => String(a.outcome_code).localeCompare(String(b.outcome_code)));
-  for (const outcome of sorted) {
-    const cond = objectRecord(outcome.condition_expression);
-    if (String(cond.type ?? '') !== 'flag_check') continue;
-    const actual = flags[String(cond.flag_code ?? '')] === true;
-    const expected = cond.expected === true;
-    if (actual === expected) return outcome;
-  }
-  return null;
-}
-
-function rewardNumber(rewards: Record<string, any>, keys: string[]): number {
-  for (const key of keys) {
-    const value = Number(rewards[key]);
-    if (Number.isFinite(value)) return value;
-  }
-  return 0;
-}
-
-function emptyProgress(campaignId: string): Record<string, any> {
-  return {
-    campaignId,
-    currentChapterNumber: 1,
-    investigators: {},
-    cohesion: 0,
-    flags: {},
-    teamSpirits: { investments: {}, effectSnapshots: [] },
-  };
-}
-
-function settleProgressOnServer(opts: {
-  previous: Record<string, any>;
-  campaignId: string;
-  chapterNumber: number;
-  templateId: string;
-  investigator: Record<string, any>;
-  outcome: Record<string, any>;
-  stageId: string;
-}): { progress: Record<string, any>; status: 'active' | 'dead' } {
-  const previous = Object.keys(opts.previous).length > 0 ? opts.previous : emptyProgress(opts.campaignId);
-  const progress = {
-    ...previous,
-    campaignId: String(previous.campaignId ?? opts.campaignId),
-    currentChapterNumber: Number(previous.currentChapterNumber ?? opts.chapterNumber),
-    investigators: { ...objectRecord(previous.investigators) },
-    flags: { ...objectRecord(previous.flags) },
-    chapterResults: { ...objectRecord(previous.chapterResults) },
-    cohesion: Math.max(0, Number(previous.cohesion ?? 0)),
-  };
-
-  const existingCarry = objectRecord(progress.investigators[opts.templateId]);
-  const rewards = objectRecord(opts.outcome.rewards);
-  const xp = rewardNumber(rewards, ['xp', 'experience', 'exp']);
-  const talentPoints = rewardNumber(rewards, ['talentPoints', 'talent_points', 'talent_point']);
-  const cohesionReward = rewardNumber(rewards, ['cohesion']);
-  const permanentlyDead = opts.investigator.permanentlyDead === true;
-
-  if (permanentlyDead) {
-    delete progress.investigators[opts.templateId];
-  } else {
-    progress.investigators[opts.templateId] = {
-      investigatorDefinitionId: opts.templateId,
-      hp: Number(opts.investigator.hp ?? existingCarry.hp ?? opts.investigator.hpMax ?? 0),
-      san: Number(opts.investigator.san ?? existingCarry.san ?? opts.investigator.sanMax ?? 0),
-      hpMax: Number(opts.investigator.hpMax ?? existingCarry.hpMax ?? 0),
-      sanMax: Number(opts.investigator.sanMax ?? existingCarry.sanMax ?? 0),
-      traumas: Array.isArray(opts.investigator.traumas) ? opts.investigator.traumas : (Array.isArray(existingCarry.traumas) ? existingCarry.traumas : []),
-      deck: Array.isArray(existingCarry.deck) ? existingCarry.deck : [],
-      combatStyle: String(opts.investigator.combatStyle ?? existingCarry.combatStyle ?? ''),
-      specializations: Array.isArray(opts.investigator.specializations) ? opts.investigator.specializations : (Array.isArray(existingCarry.specializations) ? existingCarry.specializations : []),
-      xp: Math.max(0, Number(existingCarry.xp ?? 0) + xp),
-      talentPoints: Math.max(0, Number(existingCarry.talentPoints ?? 0) + talentPoints),
-      talents: objectRecord(existingCarry.talents),
-      permanentlyDead: false,
-    };
-  }
-
-  for (const set of Array.isArray(opts.outcome.flag_sets) ? opts.outcome.flag_sets : []) {
-    if (set?.flag_code) progress.flags[String(set.flag_code)] = set.value;
-  }
-
-  progress.cohesion = Math.max(0, Number(progress.cohesion ?? 0) + cohesionReward);
-  progress.chapterResults[String(opts.chapterNumber)] = {
-    chapterNumber: opts.chapterNumber,
-    outcomeCode: String(opts.outcome.outcome_code ?? ''),
-    nextChapterVersion: opts.outcome.next_chapter_version ?? null,
-    stageId: opts.stageId,
-    resolvedAt: new Date().toISOString(),
-  };
-  progress.currentChapterNumber = Number(progress.currentChapterNumber ?? opts.chapterNumber) + 1;
-  progress.cohesion += 1;
-  return { progress, status: permanentlyDead ? 'dead' : 'active' };
 }
 
 async function fetchPlayerSaves(playerId: string) {

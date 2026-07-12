@@ -1,8 +1,8 @@
-import { CURRENT_MESSAGE_SCHEMA_VERSION } from '@cthulhu/shared';
+import { CURRENT_MESSAGE_SCHEMA_VERSION, defaultKeeperProfile } from '@cthulhu/shared';
 import type { IntentMessage, InvestigatorState, ScenarioState, TurnState } from '@cthulhu/shared';
 import { MultiplayerRoomService } from './multiplayer-rooms.js';
 
-type TestFn = () => void;
+type TestFn = () => void | Promise<void>;
 const tests: { name: string; fn: TestFn }[] = [];
 function test(name: string, fn: TestFn): void { tests.push({ name, fn }); }
 function assertEq<T>(actual: T, expected: T, msg?: string): void {
@@ -158,11 +158,11 @@ test('多人 v1 大廳:64 選 1 互斥、全員 ready 與兩真人開局門檻�
   assertEq(service.canStart(created.data.roomCode, 'player-1').ok, false, '單人不得開始多人 v1');
   const joined = service.joinRoom(created.data.roomCode, { playerId: 'player-2', username: 'creator02' });
   if (!joined.ok) throw new Error(joined.error.message);
-  assertEq(service.selectInvestigator(created.data.roomCode, 'player-1', 'template-a').ok, true);
-  const duplicate = service.selectInvestigator(created.data.roomCode, 'player-2', 'template-a');
+  assertEq(service.selectInvestigator(created.data.roomCode, 'player-1', 'template-a', 'save-a').ok, true);
+  const duplicate = service.selectInvestigator(created.data.roomCode, 'player-2', 'template-a', 'save-b');
   assertEq(duplicate.ok, false);
   if (!duplicate.ok) assertEq(duplicate.error.code, 'investigator_taken');
-  assertEq(service.selectInvestigator(created.data.roomCode, 'player-2', 'template-b').ok, true);
+  assertEq(service.selectInvestigator(created.data.roomCode, 'player-2', 'template-b', 'save-b').ok, true);
   assertEq(service.setReady(created.data.roomCode, 'player-1', true).ok, true);
   assertEq(service.canStart(created.data.roomCode, 'player-1').ok, false, '另一席尚未 ready');
   assertEq(service.setReady(created.data.roomCode, 'player-2', true).ok, true);
@@ -204,11 +204,58 @@ test('宣告制結束:AP 未歸零也必須明確宣告，兩席都宣告後才�
   assertEq(second.data.snapshot.game?.scenario.phase, 'mythos');
 });
 
+test('關卡結束:兩位真人的存檔結算必須由同一份權威狀態一起送出', async () => {
+  const service = makeService();
+  const created = service.createRoom({ playerId: 'player-1', username: 'creator01' });
+  if (!created.ok) throw new Error(created.error.message);
+  const joined = service.joinRoom(created.data.roomCode, { playerId: 'player-2', username: 'creator02' });
+  if (!joined.ok) throw new Error(joined.error.message);
+
+  const game = makeGame();
+  const settled: Array<{ playerId: string; saveId: string; investigator: InvestigatorState }> = [];
+  const activated = service.activateGame(created.data.roomCode, 'player-1', {
+    ...game,
+    stageId: 'stage-settlement',
+    playerSaveIds: { 'player-1': 'save-1', 'player-2': 'save-2' },
+    roundRuntime: {
+      mythosCards: [],
+      keeperProfile: defaultKeeperProfile(undefined, 2),
+      attackCards: {},
+      actCards: [{
+        card_order: 1,
+        name_zh: '結算驗證幕',
+        front_advance_condition: { type: 'clue_threshold', count: 0 },
+        back_flag_sets: [{ flag_code: 'victory', value: true }],
+        back_resolution_code: 'stage_complete',
+      }],
+      agendaCards: [],
+      outcomes: [{
+        outcome_code: 'victory',
+        condition_expression: { type: 'flag_check', flag_code: 'victory', expected: true },
+      }],
+    },
+    onScenarioResolved: async ({ players }) => { settled.push(...players); },
+  });
+  if (!activated.ok) throw new Error(activated.error.message);
+
+  const first = service.declareActionEnd(created.data.roomCode, 'player-1', 1);
+  const second = service.declareActionEnd(created.data.roomCode, 'player-2', 1);
+  if (!first.ok || !second.ok) throw new Error('human end declaration failed');
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+  assertEq(settled.length, 2, '結算 callback 必須收到兩位真人');
+  assertEq(settled[0]?.saveId, 'save-1', '第一席使用自己選定的存檔');
+  assertEq(settled[1]?.saveId, 'save-2', '第二席使用自己選定的存檔');
+  const snapshot = service.getSnapshot(created.data.roomCode, 'player-1');
+  assertEq(snapshot.ok, true);
+  if (snapshot.ok) assertEq(snapshot.data.game?.resolution?.status, 'saved', '交易成功後才向所有 client 宣告完成');
+});
+
 let passed = 0;
 let failed = 0;
 const failures: string[] = [];
 for (const entry of tests) {
-  try { entry.fn(); console.log('✓ ' + entry.name); passed += 1; }
+  try { await entry.fn(); console.log('✓ ' + entry.name); passed += 1; }
   catch (error: unknown) {
     console.error('✗ ' + entry.name + '\n   ' + (error instanceof Error ? error.message : String(error)));
     failed += 1;

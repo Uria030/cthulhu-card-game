@@ -28,8 +28,8 @@ function bootstrap(templateId: string, code: string): StageBootstrap {
 }
 
 const members: MultiplayerRoomMember[] = [
-  { playerId: 'p1', username: 'creator01', connected: true, joinedAt: 'now', investigatorTemplateId: 'human-1', ready: true },
-  { playerId: 'p2', username: 'creator02', connected: true, joinedAt: 'now', investigatorTemplateId: 'human-2', ready: true },
+  { playerId: 'p1', username: 'creator01', connected: true, joinedAt: 'now', investigatorTemplateId: 'human-1', saveId: 'save-human-1', ready: true },
+  { playerId: 'p2', username: 'creator02', connected: true, joinedAt: 'now', investigatorTemplateId: 'human-2', saveId: 'save-human-2', ready: true },
 ];
 const aiIds = requiredAiTemplateIds(members.map((member) => member.investigatorTemplateId!), 2);
 assertEq(aiIds.length, 2, 'two AI vacancies use E13 roster');

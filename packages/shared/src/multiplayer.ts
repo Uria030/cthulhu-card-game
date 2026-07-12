@@ -17,6 +17,8 @@ export interface MultiplayerRoomMember {
   joinedAt: string;
   /** Server-adjudicated 64-in-1 selection. Null until the player chooses. */
   investigatorTemplateId: string | null;
+  /** The active investigator save selected by this player for server settlement. */
+  saveId: string | null;
   ready: boolean;
 }
 
@@ -31,6 +33,10 @@ export interface MultiplayerGameSnapshot {
   controllerByInvestigator: Record<string, MultiplayerSeatController>;
   /** Explicit end-of-action declarations for the current investigator phase. */
   declaredEndByInvestigator: string[];
+  resolution?: {
+    outcomeCode: string;
+    status: 'pending' | 'saved' | 'failed';
+  };
 }
 
 export interface MultiplayerRoomSnapshot {

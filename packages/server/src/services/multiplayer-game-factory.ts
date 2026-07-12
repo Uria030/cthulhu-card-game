@@ -94,9 +94,10 @@ export function buildAuthoritativeMultiplayerGame(input: {
   const bootstrapByTemplate = new Map(input.bootstraps.map((entry) => [entry.templateId, entry.bootstrap]));
   const humanSeats = input.members.map((member) => {
     const templateId = member.investigatorTemplateId;
+    const saveId = member.saveId;
     const bootstrap = templateId ? bootstrapByTemplate.get(templateId) : null;
-    if (!templateId || !bootstrap?.investigator) throw new Error(`缺少真人席位開局包:${member.playerId}`);
-    return { member, templateId, bootstrap };
+    if (!templateId || !saveId || !bootstrap?.investigator) throw new Error(`缺少真人席位開局包或存檔:${member.playerId}`);
+    return { member, templateId, saveId, bootstrap };
   });
   if (humanSeats.length < 2) throw new Error('多人 v1 至少需要兩位真人席位。');
 
@@ -123,6 +124,7 @@ export function buildAuthoritativeMultiplayerGame(input: {
 
   const investigators: AuthoritativeGameState['investigators'] = {};
   const playerInvestigators: Record<string, string> = {};
+  const playerSaveIds: Record<string, string> = {};
   const controllerByInvestigator: Record<string, 'human' | 'ai'> = {};
   const aiProfilesByInvestigator: Record<string, InvestigatorAIProfile> = {};
 
@@ -131,6 +133,7 @@ export function buildAuthoritativeMultiplayerGame(input: {
     const investigator = { ...built.investigator, ownerPlayerId: seat.member.playerId };
     investigators[investigator.investigatorId] = investigator;
     playerInvestigators[seat.member.playerId] = investigator.investigatorId;
+    playerSaveIds[seat.member.playerId] = seat.saveId;
     controllerByInvestigator[investigator.investigatorId] = 'human';
   }
   for (const [offset, seat] of aiSeats.entries()) {
@@ -157,6 +160,7 @@ export function buildAuthoritativeMultiplayerGame(input: {
       triggeredReactions: [],
     },
     playerInvestigators,
+    playerSaveIds,
     controllerByInvestigator,
     aiProfilesByInvestigator,
     aiStatesByInvestigator: {},
@@ -167,6 +171,7 @@ export function buildAuthoritativeMultiplayerGame(input: {
       attackCards: attackCardsFrom(primary),
       actCards: primary.stage.act_cards as any[],
       agendaCards: primary.stage.agenda_cards as any[],
+      outcomes: (primary.chapter?.outcomes ?? []) as any[],
     },
     ruleContext: {
       cardLookup: cardLookupFrom(allBootstraps, builtStates),

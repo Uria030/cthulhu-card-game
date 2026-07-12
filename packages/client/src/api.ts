@@ -323,10 +323,10 @@ export function joinMultiplayerRoom(roomCode: string): Promise<MultiplayerRoomSn
   return requestJson<MultiplayerRoomSnapshot>(`/api/multiplayer/rooms/${encodeURIComponent(roomCode)}/join`, { method: 'POST' }, true);
 }
 
-export function selectMultiplayerInvestigator(roomCode: string, investigatorTemplateId: string): Promise<MultiplayerRoomSnapshot> {
+export function selectMultiplayerInvestigator(roomCode: string, investigatorTemplateId: string, saveId: string): Promise<MultiplayerRoomSnapshot> {
   return requestJson<MultiplayerRoomSnapshot>(`/api/multiplayer/rooms/${encodeURIComponent(roomCode)}/select-investigator`, {
     method: 'POST',
-    body: JSON.stringify({ investigator_template_id: investigatorTemplateId }),
+    body: JSON.stringify({ investigator_template_id: investigatorTemplateId, save_id: saveId }),
   }, true);
 }
 

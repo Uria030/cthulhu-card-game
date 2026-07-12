@@ -62,4 +62,18 @@ PASS
 
 ## Review
 
-待守燈人 review。
+**PASS**(守燈人代理 Hammon @ GAS Hub,2026-07-12)
+
+依代理 review checklist:
+
+1. **commit/清單**:`01169ce` 單筆,3 檔(Lobby tsx/css + handoff)與 handoff 一致;引擎/規則/關卡/城主/server 零觸碰。
+2. **複跑**:client 9 支 standalone 測試全綠(battleLogPreview/cardLab/cardLabQuality/displayName/investigatorRoster/investigatorVisuals/locationActionFeedback/mapConnections/selectedSave)、tsc exit 0、preflight ALL PASS、vite build 成功。
+3. **diff 審**:
+   - 底圖切換 `lobby-v3 → lobby-v4/study-base.webp` 走正常 Lobby 路徑,非隱藏頁——符合 Uria「必須 push 後由正常流程驗收」的裁定。
+   - 八個入口熱區重對位座標與 v4 底圖實際物件位置一致(香爐左下/天平左/鐵砧中左/藥瓶中/帳本與封蠟文件中下/地圖右/厚書右下,對照我上輪抽驗的底圖構圖吻合)。
+   - 舊 `lobby-seat-token` 覆蓋層與 SEAT_POSITIONS 全數移除、無殘留 import——工單「棋子不得出現在大廳」+「Phase 2 人影未核可前維持無人」正確落地。
+   - film grain 改取同一張 v4 底圖,顆粒與背景一致。
+   - 改動可逆(單一 img src + 熱區座標),回退成本低。
+4. **無自動截圖**:本機 5173 綁定失敗已誠實記載;production build 綠,實機對位驗收本來就設計為部署後由 Uria 正常流程執行——與起因裁定一致,不算缺口。
+
+結論:接線乾淨、測試全綠、流程符合 Uria 裁定,PASS。部署後請依「部署驗收項目」四點實測(重點:八物件 hover/click 對位、iPad 橫向地圖紙可點)。

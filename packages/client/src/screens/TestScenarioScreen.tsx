@@ -2992,7 +2992,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       {zoomCard && (() => {
         const d: CardData | undefined = setup.cardLookup[zoomCard.id];
         const playable = !!(d?.card_type && d.card_type !== 'skill');
-        const consumable = !!d?.consume_enabled;
+        const consumable = d?.consume_enabled === true && !!d.consume_effect;
         const effects = d?.effects ?? [];
         const effectGroups = [
           { key: 'action', title: '行動效果', items: effects.filter((f) => f.trigger_type === 'action') },

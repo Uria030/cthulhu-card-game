@@ -843,14 +843,19 @@ export function executeCardEffects(
       case 'remove_status': {
         // ch3 §6:移除自身狀態。指定 status → 移除該狀態;否則淨化所有負面(驅邪儀式等)
         const specific = String(p.status ?? '');
+        const layers = p.layers ?? p.amount;
         let map = inv.statusEffects ?? {};
         if (specific) {
-          map = removeStatus(map, specific);
+          const numericLayers = Number(layers);
+          const parsedLayers = layers == null || !Number.isFinite(numericLayers)
+            ? undefined
+            : Math.max(1, Math.floor(numericLayers));
+          map = removeStatus(map, specific, parsedLayers);
         } else {
           for (const code of NEGATIVE_STATUSES) map = removeStatus(map, code);
         }
         inv = { ...inv, statusEffects: map };
-        out.push({ type: 'status_cleansed', params: { status: specific || 'all_negative', narrative: '一道淨化掃過你的身體。' }, targetId: inv.investigatorId });
+        out.push({ type: 'status_cleansed', params: { status: specific || 'all_negative', layers: specific ? layers ?? 'all' : 'all', narrative: '一道淨化掃過你的身體。' }, targetId: inv.investigatorId });
         break;
       }
       default:

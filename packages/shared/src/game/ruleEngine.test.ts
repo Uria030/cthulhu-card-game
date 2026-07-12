@@ -623,6 +623,91 @@ test('消費:1 行動點 + 棄掉 → 觸發輔助效果;未配置消費的卡�
   assertEq(resolveIntent(makeIntent('consume', { cardInstanceId: 'plain' }), ctx).result.outcome, 'rejected');
 });
 
+test('消費:後台 effect_type 格式映射到引擎效果,並在扣成本前擋基本動作', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['key', 'walk'], resources: 0 });
+  ctx.cardLookup = {
+    ...ctx.cardLookup,
+    key: { name_zh: '伊斯之鑰', card_type: 'asset', consume_enabled: true, consume_effect: { effect_type: 'gain_resource', amount: 5, value: 5 }, effects: [] },
+    walk: { name_zh: '壞掉的捷徑', card_type: 'event', consume_enabled: true, consume_effect: { effect_type: 'move_investigator', amount: 1, value: 5 }, effects: [] },
+  };
+  const accepted = resolveIntent(makeIntent('consume', { cardInstanceId: 'key' }), ctx);
+  assertEq(accepted.result.outcome, 'accepted');
+  assertEq(accepted.newState?.investigator?.resources, 5, '後台 effect_type=gain_resource 要能結算');
+  assertEq(accepted.newState?.investigator?.actionPoints, 2, '消費仍固定花 1 AP');
+  assertEq(accepted.newState?.investigator?.discardPile.includes('key'), true, '消費卡進棄牌堆');
+
+  const rejected = resolveIntent(makeIntent('consume', { cardInstanceId: 'walk' }), ctx);
+  assertEq(rejected.result.outcome, 'rejected');
+  assertIncludes(rejected.result.rejection?.narrative ?? '', '不是合法的消費', '基本動作不得偷渡為消費效果');
+});
+
+test('消費:正面狀態自動指向自身,負面狀態可按層數移除', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['armor', 'antidote'] });
+  ctx.investigator = { ...ctx.investigator, statusEffects: { poison: 2 } };
+  ctx.investigators = { 'inv-1': ctx.investigator };
+  ctx.cardLookup = {
+    ...ctx.cardLookup,
+    armor: { name_zh: '臨時護甲', card_type: 'event', consume_enabled: true, consume_effect: { effect_type: 'add_status', status: 'armor', layers: 2, value: 6 }, effects: [] },
+    antidote: { name_zh: '解毒劑', card_type: 'event', consume_enabled: true, consume_effect: { effect_type: 'remove_status', status: 'poison', layers: 1, value: 3 }, effects: [] },
+  };
+  const armored = resolveIntent(makeIntent('consume', { cardInstanceId: 'armor' }), ctx);
+  assertEq(armored.newState?.investigator?.statusEffects?.armor, 2);
+  const inv2 = armored.newState!.investigator!;
+  const ctx2: RuleContext = { ...ctx, investigator: inv2, investigators: { 'inv-1': inv2 } };
+  const detoxed = resolveIntent(makeIntent('consume', { cardInstanceId: 'antidote' }), ctx2);
+  assertEq(detoxed.newState?.investigator?.statusEffects?.poison, 1, 'layers=1 只移除一層');
+});
+
+test('消費:補彈藥與取消傷害的後台類型分流正確', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['ammo', 'panic'] });
+  ctx.investigator = {
+    ...ctx.investigator,
+    assetsInPlay: ['gun'],
+    assetState: { gun: { usesLeft: 1, exhausted: false } },
+  };
+  ctx.investigators = { 'inv-1': ctx.investigator };
+  ctx.cardLookup = {
+    ...ctx.cardLookup,
+    gun: { name_zh: '左輪', card_type: 'asset', ammo: 3, effects: [] },
+    ammo: { name_zh: '備用彈藥', card_type: 'event', consume_enabled: true, consume_effect: { effect_type: 'gain_ammo', amount: 2, value: 1 }, effects: [] },
+    panic: { name_zh: '驚魂護符', card_type: 'event', consume_enabled: true, consume_effect: { effect_type: 'cancel_horror', amount: 2, value: 1 }, effects: [] },
+  };
+  const reloaded = resolveIntent(makeIntent('consume', { cardInstanceId: 'ammo' }), ctx);
+  assertEq(reloaded.result.outcome, 'accepted');
+  assertEq(reloaded.newState?.investigator?.assetState?.gun?.usesLeft, 3, 'gain_ammo 映射為場上使用次數補充');
+  const pendingReaction = resolveIntent(makeIntent('consume', { cardInstanceId: 'panic' }), ctx);
+  assertEq(pendingReaction.result.outcome, 'rejected');
+  assertIncludes(pendingReaction.result.rejection?.narrative ?? '', '受傷前反應時機', '取消傷害/恐懼不可冒充一般消費行動');
+});
+
+test('消費:治療 HP/SAN 與抽牌均走同一條第三用途管線', () => {
+  const ctx = makeCardCtx({ roll: 10, hand: ['bandage', 'calm', 'notes'] });
+  ctx.investigator = {
+    ...ctx.investigator,
+    hp: 4,
+    hpMax: 7,
+    san: 3,
+    sanMax: 6,
+    deck: ['drawn-card'],
+  };
+  ctx.investigators = { 'inv-1': ctx.investigator };
+  ctx.cardLookup = {
+    ...ctx.cardLookup,
+    bandage: { name_zh: '繃帶', card_type: 'event', consume_enabled: true, consume_effect: { effect_type: 'heal_hp', amount: 2, value: 3 }, effects: [] },
+    calm: { name_zh: '鎮定劑', card_type: 'event', consume_enabled: true, consume_effect: { effect_type: 'heal_san', amount: 2, value: 3 }, effects: [] },
+    notes: { name_zh: '調查筆記', card_type: 'event', consume_enabled: true, consume_effect: { effect_type: 'draw_card', amount: 1, value: 1 }, effects: [] },
+  };
+  const healedHp = resolveIntent(makeIntent('consume', { cardInstanceId: 'bandage' }), ctx);
+  assertEq(healedHp.newState?.investigator?.hp, 6);
+  const hpInv = healedHp.newState!.investigator!;
+  const healedSan = resolveIntent(makeIntent('consume', { cardInstanceId: 'calm' }), { ...ctx, investigator: hpInv, investigators: { 'inv-1': hpInv } });
+  assertEq(healedSan.newState?.investigator?.san, 5);
+  const sanInv = healedSan.newState!.investigator!;
+  const drawn = resolveIntent(makeIntent('consume', { cardInstanceId: 'notes' }), { ...ctx, investigator: sanInv, investigators: { 'inv-1': sanInv } });
+  assertEq(drawn.newState?.investigator?.hand.includes('drawn-card'), true);
+  assertEq(drawn.newState?.investigator?.actionPoints, 0, '三次消費各自花費 1 AP');
+});
+
 // ─── 混沌袋施法軌(ch2 §5 + §8.4)──────
 function makeSpellCtx(opts: { chaos: Array<{ type: string; value: number | null }>; spellDefense?: number; markers?: Record<string, string> }): RuleContext {
   const sc = makeScenario(['loc-a']);

@@ -41,7 +41,7 @@ import type { EnemyDataLookup, AttackCardLookup } from './monsterActions';
 import { attachmentTestModifier } from './keeperAI';
 import { isDowned, applyStabilize } from './dying';
 import { revealOnEnter, revealOnGeneralSuccess, claimHiddenReward } from './hiddenInvestigation';
-import { modifyIncomingDamage, modifyOutgoingDamage, applyCheckStatus, attackHitModifier, clearStealth, isMeleeStyle, moveCostBonus, canUseAssetAttack, canCastSpell } from './statusEffects';
+import { modifyIncomingDamage, modifyOutgoingDamage, applyCheckStatus, attackHitModifier, clearStealth, isMeleeStyle, moveCostBonus, canUseAssetAttack, canCastSpell, NEGATIVE_STATUSES, normalizeStatusCode } from './statusEffects';
 import { applyIncomingDamageToPlayer } from './ally';
 import type { BreakTestAttribute, BreakTiming, ThreatTypeCode } from '../types/talisman';
 import {
@@ -500,10 +500,72 @@ function resolveMove(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput
 
 /**
  * 消費 — 三合一第三用途(ch3 §2.2/§4):1 行動點,從手牌直接棄掉,觸發輔助效果。
- * 資料側 consume_enabled=true 且 consume_effect 配置時才可用(目前卡池尚未配置,
- * 引擎先把管線鋪通,內容跟上即生效)。
+ * 資料側 consume_enabled=true 且 consume_effect 配置時才可用。管理後台的
+ * 權威格式是 {effect_type, amount/status/layers,value}；早期引擎測試使用的
+ * {effect_code,effect_params} 也保留相容。兩者在扣成本前統一為 effect row。
  * payload: { cardInstanceId }
  */
+const CONSUME_EFFECT_ALIASES: Record<string, string> = {
+  gain_ammo: 'gain_use',
+  gain_charges: 'gain_use',
+};
+const CONSUME_ALLOWED_EFFECTS = new Set([
+  'gain_resource', 'gain_use', 'heal_hp', 'heal_san', 'draw_card', 'add_status', 'remove_status',
+]);
+const CONSUME_POSITIVE_STATUSES = new Set([
+  'empowered', 'armor', 'ward', 'haste', 'regeneration', 'stealth',
+]);
+
+interface NormalizedConsumeEffect {
+  effectCode: string;
+  effectParams: Record<string, unknown>;
+}
+
+function normalizeConsumeEffect(raw: Record<string, unknown>): NormalizedConsumeEffect | { error: string } {
+  const namedCode = typeof raw.effect_code === 'string' ? raw.effect_code : raw.effect_type;
+  const requestedCode = typeof namedCode === 'string' ? namedCode.trim() : '';
+  if (!requestedCode) return { error: '消費效果資料不完整。' };
+  const effectCode = CONSUME_EFFECT_ALIASES[requestedCode] ?? requestedCode;
+  if (effectCode === 'cancel_damage' || effectCode === 'cancel_horror') {
+    return { error: '取消傷害或恐懼必須走受傷前反應時機，不能作為一般消費行動。' };
+  }
+  if (!CONSUME_ALLOWED_EFFECTS.has(effectCode)) {
+    return { error: `「${requestedCode}」不是合法的消費輔助效果。` };
+  }
+
+  const configuredParams = raw.effect_params;
+  const effectParams: Record<string, unknown> = configuredParams && typeof configuredParams === 'object' && !Array.isArray(configuredParams)
+    ? { ...(configuredParams as Record<string, unknown>) }
+    : {};
+  // 後台 consume_effect 的 legacy-flat 欄位，不把 value（品管計算值）誤傳給效果執行器。
+  for (const key of ['amount', 'status', 'layers', 'target']) {
+    if (effectParams[key] === undefined && raw[key] !== undefined) effectParams[key] = raw[key];
+  }
+
+  if (effectCode === 'add_status') {
+    const status = normalizeStatusCode(String(effectParams.status ?? ''));
+    if (!CONSUME_POSITIVE_STATUSES.has(status)) {
+      return { error: '消費的獲得狀態必須是正面狀態。' };
+    }
+    effectParams.status = status;
+    effectParams.target = 'self';
+  }
+  if (effectCode === 'remove_status') {
+    const rawStatus = String(effectParams.status ?? '');
+    if (rawStatus && !NEGATIVE_STATUSES.includes(normalizeStatusCode(rawStatus) as typeof NEGATIVE_STATUSES[number])) {
+      return { error: '消費只能移除負面狀態。' };
+    }
+    if (rawStatus) effectParams.status = normalizeStatusCode(rawStatus);
+  }
+  if (!['add_status', 'remove_status'].includes(effectCode)) {
+    const amount = Number(effectParams.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { error: '消費效果的數量必須是正數。' };
+    }
+  }
+  return { effectCode, effectParams };
+}
+
 function resolveConsume(intent: IntentMessage, ctx: RuleContext): RuleResolveOutput {
   if (ctx.investigator.actionPoints < 1) {
     return reject(intent, '行動點不足:消費需 1,剩 ' + ctx.investigator.actionPoints);
@@ -516,10 +578,8 @@ function resolveConsume(intent: IntentMessage, ctx: RuleContext): RuleResolveOut
   if (!data?.consume_enabled || !data.consume_effect) {
     return reject(intent, '「' + (data?.name_zh ?? cardId) + '」沒有消費用途。');
   }
-  const fx = data.consume_effect as { effect_code?: string; effect_params?: Record<string, unknown> | null };
-  if (!fx.effect_code) {
-    return reject(intent, '「' + (data.name_zh ?? cardId) + '」的消費效果資料不完整。');
-  }
+  const normalized = normalizeConsumeEffect(data.consume_effect);
+  if ('error' in normalized) return reject(intent, '「' + (data.name_zh ?? cardId) + '」' + normalized.error);
   let inv: InvestigatorState = {
     ...ctx.investigator,
     actionPoints: ctx.investigator.actionPoints - 1,
@@ -527,7 +587,7 @@ function resolveConsume(intent: IntentMessage, ctx: RuleContext): RuleResolveOut
     discardPile: [...ctx.investigator.discardPile, cardId],
   };
   const exec = executeCardEffects(
-    [{ trigger_type: 'on_consume', effect_code: String(fx.effect_code), effect_params: fx.effect_params ?? null }],
+    [{ trigger_type: 'on_consume', effect_code: normalized.effectCode, effect_params: normalized.effectParams }],
     inv,
     ctx.scenario,
     ctx.cardLookup ?? {},

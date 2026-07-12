@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db/pool.js';
 import { requireAdminRole } from '../middleware/auth.js';
+import { PLAYER_JWT_SECRET, requirePlayerAuth } from '../middleware/player-auth.js';
 import {
   decryptPlayerPassword,
   encryptPlayerPassword,
@@ -12,17 +13,10 @@ import {
 } from '../services/player-password-vault.js';
 import { CARD_LAB_MANIFEST, isCardLabCreator, parseCardLabReview } from '../services/card-lab.js';
 
-const PLAYER_JWT_SECRET = process.env.PLAYER_JWT_SECRET || 'player-fallback-secret-change-me';
 const PLAYER_SESSION_HOURS = Number.parseInt(process.env.PLAYER_SESSION_HOURS || '24', 10);
 const PASSWORD_MIN_LENGTH = 8;
 
 const loginBuckets = new Map<string, { count: number; resetAt: number }>();
-
-interface PlayerTokenPayload {
-  playerId: string;
-  username: string;
-  kind: 'player';
-}
 
 function normalizeEmail(value: unknown): string {
   return String(value ?? '').trim().toLowerCase();
@@ -63,23 +57,6 @@ function checkRateLimit(key: string, maxCount: number, windowMs: number): boolea
   if (bucket.count >= maxCount) return false;
   bucket.count += 1;
   return true;
-}
-
-async function requirePlayerAuth(request: FastifyRequest, reply: FastifyReply) {
-  const authHeader = request.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return reply.status(401).send({ success: false, error: 'Authentication required' });
-  }
-
-  try {
-    const decoded = jwt.verify(authHeader.substring(7), PLAYER_JWT_SECRET) as Partial<PlayerTokenPayload>;
-    if (decoded.kind !== 'player' || !decoded.playerId) {
-      return reply.status(401).send({ success: false, error: 'Invalid token' });
-    }
-    (request as any).player = decoded;
-  } catch {
-    return reply.status(401).send({ success: false, error: 'Invalid or expired token' });
-  }
 }
 
 function signPlayerToken(player: { id: string; username: string }): string {

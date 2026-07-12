@@ -10,4 +10,5 @@ export { keeperRoutes } from './keeper.js';
 export { investigatorRoutes } from './investigators.js';
 export { forgeCraftRoutes } from './forge-craft.js';
 export { aiConsoleRoutes } from './ai-console.js';
+export { multiplayerRoutes } from './multiplayer.js';
 export { campaignRoutes } from './campaigns.js';

@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import websocket from '@fastify/websocket';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { cardRoutes } from './routes/cards.js';
@@ -20,9 +21,13 @@ import { sandboxConfigRoutes } from './routes/sandbox-configs.js';
 import { calibrationRoutes } from './routes/calibration.js';
 import { playRoutes } from './routes/play.js';
 import { playerAccountRoutes } from './routes/player-accounts.js';
+import { multiplayerRoutes } from './routes/multiplayer.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
+
+  // Must precede all routes so websocket upgrades are intercepted correctly.
+  await app.register(websocket);
 
   await app.register(cors, {
     origin: (origin, cb) => {
@@ -57,6 +62,7 @@ export async function buildApp() {
   await app.register(calibrationRoutes);
   await app.register(playRoutes);
   await app.register(playerAccountRoutes);
+  await app.register(multiplayerRoutes);
 
   return app;
 }

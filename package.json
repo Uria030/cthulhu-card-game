@@ -3,8 +3,11 @@
   "version": "0.21.4",
   "private": true,
   "scripts": {
+    "predev": "pnpm --filter @cthulhu/shared build",
     "dev": "pnpm --parallel -r dev",
+    "predev:client": "pnpm --filter @cthulhu/shared build",
     "dev:client": "pnpm --filter client dev",
+    "predev:server": "pnpm --filter @cthulhu/shared build",
     "dev:server": "pnpm --filter server dev",
     "build": "pnpm -r build",
     "clean": "pnpm -r clean",

@@ -74,4 +74,19 @@ asset verifier
 
 ## Review
 
-待守燈人代理填寫。
+**PASS**(守燈人代理 Hammon @ GAS Hub,2026-07-12;依部署規則 PASS 後由 Nhalor push,交 Uria 實機驗收)
+
+依代理 review checklist:
+
+1. **commit/清單**:`3a4246a` 單筆,278 檔(240 新棋子+24 座位+7 HUD 殼+6 程式檔+handoff)與 handoff 一致;引擎/規則/關卡/城主/server/地點卡/怪物素材零觸碰。
+2. **複跑**:investigatorVisuals **10/10**、其餘 8 支 client game 測試全綠、tsc exit 0、preflight ALL PASS、vite build 成功(既有 586.9kB chunk 警告如實記載)。
+3. **資產機械驗證(我親自跑)**:pawns/v2 共 **256 張全部 512x768 RGBA、零不合格**;座位 24 張(4 席 x 6 原型,统一 650x1100);lobby-v4 = 24 座位 + study-base 共 25 檔。
+4. **程式審**:
+   - `pawnAssetForInvestigator`:嚴格 `CAREER_CODE_PATTERN`(MBTI-1..4)驗證後才走 v2 路徑,`playerSlot` clamp 1..4;不合格 code 退回既有匿名原型素材——**fallback 鏈完整,歷史資料零破壞**(10 測試涵蓋)。
+   - `lobbySeatAssetForInvestigator`:seat clamp 1..4 + 六原型映射;大廳只用匿名座位人影、棋子不進大廳——與工單裁定一致。
+   - 大廳/戰鬥盤共用同一職業→原型映射,兩畫面職業語言一致(註解自證設計意圖)。
+   - HUD 縮放 85/100/115/130% localStorage 持久化,地圖縮放獨立;動態數字保留 HTML 活字(殼與活字分離,Phase 1 校準時定下的原則正確落地)。
+5. **歷史紅線**:純視覺/資產層,無計時器寫遊戲 state、無 migration、無多人一致性面。
+6. **審查註記**:座位 patch 採含陰影裁片(非純 alpha cutout)+3:2 stage 對位計算——設計理由(保留椅面接觸陰影與光向)成立,但 **viewport 漂移風險需實機目視**,handoff 已自知;列入部署後驗收重點。
+
+結論:資產量產配方與接線符合已核准的 Phase 1 語言、fallback 完整、測試全綠,PASS。部署後 Uria 實機驗收重點:①四席座位人影在不同 viewport(iPad 橫向)不漂移;②戰鬥盤棋子四色可辨+48px 清晰;③兩儀表板不遮擋盤面;④HUD 縮放四檔在 iPad 實用。

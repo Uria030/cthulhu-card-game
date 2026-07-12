@@ -128,6 +128,16 @@ import {
 import './TestScenarioScreen.css';
 
 type LocationArtKind = 'lab-entrance' | 'card-lab' | 'library' | 'docks' | 'downtown' | 'alley' | 'brick-wall' | 'haunt';
+type InterfaceScale = 85 | 100 | 115 | 130;
+
+const INTERFACE_SCALES: InterfaceScale[] = [85, 100, 115, 130];
+const INTERFACE_SCALE_KEY = 'ug_interface_scale';
+
+function readInterfaceScale(): InterfaceScale {
+  if (typeof window === 'undefined') return 100;
+  const stored = Number(window.localStorage.getItem(INTERFACE_SCALE_KEY));
+  return INTERFACE_SCALES.includes(stored as InterfaceScale) ? stored as InterfaceScale : 100;
+}
 
 export function locationArtKind(locationId: string, name?: string): LocationArtKind {
   const key = `${locationId} ${name ?? ''}`.toLowerCase();
@@ -790,6 +800,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [logCopied, setLogCopied] = useState(false);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
   const [systemSub, setSystemSub] = useState<null | 'settings' | 'rules'>(null);
+  const [interfaceScale, setInterfaceScale] = useState<InterfaceScale>(readInterfaceScale);
   const deathReportedRef = useRef(false);
   const settlementReportedRef = useRef(false);
   const actionFeedbackTimerRef = useRef(0);
@@ -801,6 +812,10 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const dragRef = useRef<{ x: number; y: number; sl: number; st: number; moved: boolean } | null>(null);
   const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
   const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    window.localStorage.setItem(INTERFACE_SCALE_KEY, String(interfaceScale));
+  }, [interfaceScale]);
 
   const appendLines = useCallback((lines: string[]) => {
     if (lines.length === 0) return;
@@ -2288,7 +2303,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const playerPawnAsset = pawnAssetForInvestigator({
     code: setup.investigatorVisualCode,
     title_zh: setup.investigatorVisualTitle,
-  });
+  }, 0);
   const enemyHere: EnemyInstance | undefined = scenario.enemies.find((e) => e.locationId === investigator.currentLocationId && e.hp > 0);
   const isLocationUnlocked = (id: string) => scenario.unlockedLocations.includes(id);
   const currentLocInstance = scenario.locations.find((l) => l.locationDefinitionId === investigator.currentLocationId);
@@ -2396,7 +2411,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     .slice(0, 33);
 
   return (
-    <div className="bg-root">
+    <div className="bg-root" style={{ '--hud-scale': String(interfaceScale / 100) } as CSSProperties}>
       <div className={'battle-screen' + (isCardLab ? ' card-lab-screen' : '')}>
 
         {isCardLab && (
@@ -2506,7 +2521,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                                 src={pawnAssetForInvestigator({
                                   code: setup.aiMembers[aiIdx]?.profile.templateCode,
                                   title_zh: setup.aiMembers[aiIdx]?.profile.title_zh,
-                                })}
+                                }, aiIdx + 1)}
                                 style={{ '--pawn-tone': playerToneForSlot(aiIdx + 1), opacity: isDowned(ai) ? 0.45 : 1 } as CSSProperties}
                                 title={(setup.aiMembers[aiIdx]?.profile.name_zh ?? '') + (isDowned(ai) ? '(瀕死)' : '')}
                                 alt={`${setup.aiMembers[aiIdx]?.profile.name_zh ?? '隊友'}棋子`}
@@ -2571,7 +2586,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
 
         {/* === 左上 UI 群組(Block 1 + Block 2)=== */}
         <div className="top-left-ui">
-          <section className="block-container clickable-block keeper-info" onClick={() => openModal('keeper')}>
+          <section className="block-container clickable-block keeper-info hud-plaque agenda-plaque" onClick={() => openModal('keeper')}>
             <div className="keeper-title">議程 {agendaIdx + 1}{currentAgenda?.name ? ' · ' + currentAgenda.name : ''}</div>
             <div className="keeper-badges">
               <div className="badge-energy">
@@ -2585,7 +2600,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             </div>
           </section>
 
-          <section className="block-container clickable-block current-act" onClick={() => openModal('act')}>
+          <section className="block-container clickable-block current-act hud-plaque act-plaque" onClick={() => openModal('act')}>
             <div className="act-title">幕 {actIdx + 1}{currentAct?.name ? ' · ' + currentAct.name : ''}</div>
             <div className="act-details">
               <div className="phase-dots">
@@ -2598,31 +2613,28 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           </section>
         </div>
 
-        {/* === Block 3 左下 1/4 圓玩家 === */}
-        <div className="block-3-quarter">
-          <div className="quarter-avatar-area" onClick={() => openModal('team')}>
-            <div className="quarter-avatar-bg">
-              <img className="quarter-avatar-pawn" src={playerPawnAsset} alt="" />
+        {/* 左下：調查員儀表。所有數字皆為 HTML，木質殼只負責外觀。 */}
+        <section className="investigator-dashboard" aria-label="調查員狀態">
+          <button className="dashboard-team-button" onClick={() => openModal('team')} title="檢視調查隊伍">
+            <img src={playerPawnAsset} alt="" />
+            <span>{setup.investigatorName}</span>
+          </button>
+          <div className="dashboard-vitals">
+            <div className="dashboard-meter dashboard-meter-hp" title={`體力 ${investigator.hp}/${investigator.hpMax}`}>
+              <span>體力</span>
+              <div><i style={{ width: `${Math.max(0, Math.min(100, investigator.hp / investigator.hpMax * 100))}%` }} /></div>
+              <strong>{investigator.hp}/{investigator.hpMax}</strong>
             </div>
-            <div className="quarter-name-banner">{setup.investigatorName}</div>
+            <div className="dashboard-meter dashboard-meter-san" title={`理智 ${investigator.san}/${investigator.sanMax}`}>
+              <span>理智</span>
+              <div><i style={{ width: `${Math.max(0, Math.min(100, investigator.san / investigator.sanMax * 100))}%` }} /></div>
+              <strong>{investigator.san}/{investigator.sanMax}</strong>
+            </div>
           </div>
-
-          <div className="arc-btn arc-btn-san" title={`理智 ${investigator.san}/${investigator.sanMax}`}>
-            <span className="arc-num">{investigator.san}</span>
-            <span className="arc-label">理智</span>
-          </div>
-          <div className="arc-btn arc-btn-hp" title={`體力 ${investigator.hp}/${investigator.hpMax}`}>
-            <span className="arc-num">{investigator.hp}</span>
-            <span className="arc-label">體力</span>
-          </div>
-          <div className="arc-btn arc-btn-hand" onClick={() => openPanel('hand')} title="開啟手牌">
-            <span className="arc-icon">牌</span>
-            <span className="arc-num">{investigator.hand.length}</span>
-          </div>
-          <div className="arc-btn arc-btn-bag" onClick={() => openPanel('bag')} title="開啟背包">
-            <span className="arc-icon">袋</span>
-          </div>
-        </div>
+          <button className="dashboard-hand-button" onClick={() => openPanel('hand')} title="開啟手牌">
+            <span>手牌</span><strong>{investigator.hand.length}</strong>
+          </button>
+        </section>
 
         {/* === Block 5 右滿高敘事 LOG === */}
         <aside className={'narrative-log' + (isCardLab ? ' lab-log' : '') + (logCollapsed ? ' collapsed' : '')}>
@@ -3379,18 +3391,18 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       <div className="board-controls">
         <section className="player-economy" aria-label="玩家卡牌與資源資訊">
           <div className="economy-resource"><span>資源</span><strong>{investigator.resources}</strong></div>
-          <button onClick={() => openPanel('hand')}><span>手牌</span><strong>{investigator.hand.length}</strong></button>
-          <div><span>牌庫</span><strong>{investigator.deck.length}</strong></div>
-          <button onClick={() => { closeAllOverlays(); setPilePanel('discard'); }}><span>棄牌</span><strong>{investigator.discardPile.length}</strong></button>
-          <button onClick={() => { closeAllOverlays(); setPilePanel('removed'); }}><span>除外</span><strong>{investigator.removedPile.length}</strong></button>
-          <button onClick={() => { closeAllOverlays(); setPilePanel('extra'); }}><span>額外</span><strong>{investigator.extraDeck?.length ?? 0}</strong></button>
+          <div className="economy-pile"><span>牌庫</span><strong>{investigator.deck.length}</strong></div>
+          <div className="economy-pile"><span>棄牌</span><strong>{investigator.discardPile.length}</strong></div>
+          <div className="economy-pile"><span>除外</span><strong>{investigator.removedPile.length}</strong></div>
+          <div className="economy-pile"><span>額外</span><strong>{investigator.extraDeck?.length ?? 0}</strong></div>
+          <button className="economy-bag" onClick={() => openPanel('bag')} title="開啟背包"><span>背包</span></button>
         </section>
         <button
           className="system-fab"
           onClick={() => setSystemMenuOpen((v) => !v)}
           title="系統選單"
         >
-          <span className="system-icon">⚙</span>
+          <span className="system-icon" aria-hidden="true">⌘</span>
           <span>系統</span>
         </button>
       </div>
@@ -3431,9 +3443,19 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             <button className="close-btn" onClick={() => setSystemSub(null)}>✕</button>
             {systemSub === 'settings' && (
               <>
-                <h3>⚙ 設定</h3>
-                <p>畫面、音效、文字大小、操作偏好等設定 — 待開發。</p>
-                <p style={{ marginTop: 12, color: 'var(--text-tertiary)', fontSize: 12 }}>(M-Settings 里程碑接入)</p>
+                <h3>設定</h3>
+                <p>介面大小只影響固定儀表板、流程控制與戰役紀錄；地圖維持自己的雙指縮放。</p>
+                <div className="interface-scale-options" role="group" aria-label="介面大小">
+                  {INTERFACE_SCALES.map((scale) => (
+                    <button
+                      key={scale}
+                      className={interfaceScale === scale ? 'selected' : ''}
+                      onClick={() => setInterfaceScale(scale)}
+                    >
+                      {scale === 85 ? '小' : scale === 100 ? '標準' : scale === 115 ? '大' : '特大'} {scale}%
+                    </button>
+                  ))}
+                </div>
               </>
             )}
             {systemSub === 'rules' && (
@@ -3684,7 +3706,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                   : pawnAssetForInvestigator({
                     code: setup.aiMembers[idx - 1]?.profile.templateCode,
                     title_zh: setup.aiMembers[idx - 1]?.profile.title_zh,
-                  });
+                  }, idx);
                 return (
                   <div key={inv.investigatorId} className={'team-card tc-' + (idx + 1)}>
                     <div className={'team-avatar ta-' + (idx + 1)}><img src={pawnAsset} alt="" /></div>

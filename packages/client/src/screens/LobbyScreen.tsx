@@ -8,6 +8,7 @@ import { getSelectedSave } from '../game/selectedSave';
 import { setPartyTemplateIds } from '../game/selectedParty';
 import { displayNameFor } from '../game/displayName';
 import { playablePresetInvestigators } from '../game/investigatorRoster';
+import { lobbySeatAssetForInvestigator } from '../game/investigatorVisuals';
 import { InteractiveLobbyProp, LobbyFilmGrain } from './LobbyEffects';
 import type { LobbyPropPosition } from './LobbyEffects';
 import './LobbyScreen.css';
@@ -30,6 +31,13 @@ const LOBBY_PROPS: LobbyPropDefinition[] = [
   { id: 'parch', label: '封蠟文件', detail: '花費天賦點', available: false, position: { left: '60%', top: '84%', size: '12%' } },
   { id: 'map', label: '地圖紙', detail: '選擇下一個關卡', available: true, position: { left: '75%', top: '74%', size: '16%' } },
 ];
+
+const LOBBY_SEAT_PATCHES = [
+  { seat: 1, left: '0%', top: '28.125%', width: '27.083%', height: '68.75%', labelLeft: '8%', labelTop: '78%' },
+  { seat: 2, left: '29.167%', top: '26.875%', width: '20.833%', height: '37.5%', labelLeft: '39%', labelTop: '59%' },
+  { seat: 3, left: '50%', top: '26.875%', width: '20.833%', height: '37.5%', labelLeft: '60%', labelTop: '59%' },
+  { seat: 4, left: '72.5%', top: '28.125%', width: '27.5%', height: '50%', labelLeft: '86%', labelTop: '69%' },
+] as const;
 
 function selectedFromSave(save: PlayerSave) {
   return {
@@ -94,6 +102,14 @@ export function LobbyScreen() {
     [selectedCandidate, candidates, partySeed],
   );
   const partyMembers = autoParty?.members ?? [];
+  const seatedParty = useMemo(() => [
+    selected ? { name: displayNameFor(selected, '玩家'), code: selected.mbti_code, title: selected.title_zh } : null,
+    ...partyMembers.map((investigator) => ({
+      name: displayNameFor(investigator, '等待組隊'),
+      code: investigator.code,
+      title: investigator.title_zh,
+    })),
+  ], [partyMembers, selected]);
   const lobbyProps = useMemo(() => LOBBY_PROPS.map((prop) => (
     prop.id === 'flask' && cardLabCreator
       ? { ...prop, id: 'card-lab', label: '卡片檢驗所', detail: '檢驗資料庫卡片', available: true }
@@ -122,7 +138,24 @@ export function LobbyScreen() {
 
   return (
     <main className="lobby-root">
-      <img className="lobby-scene" src="/game-art/lobby-v4/study-base.webp" alt="1930 年代無人的調查書房，桌上擺著可供整備的物件" />
+      <div className="lobby-stage" aria-hidden="true">
+        <img className="lobby-scene" src="/game-art/lobby-v4/study-base.webp" alt="" />
+        {LOBBY_SEAT_PATCHES.map((patch, index) => {
+          const member = seatedParty[index];
+          if (!member) return null;
+          return (
+            <div key={patch.seat} className="lobby-seat-overlay">
+              <img
+                className="lobby-seat-patch"
+                src={lobbySeatAssetForInvestigator({ code: member.code, title_zh: member.title }, patch.seat)}
+                style={{ left: patch.left, top: patch.top, width: patch.width, height: patch.height }}
+                alt=""
+              />
+              <span className="lobby-seat-label" style={{ left: patch.labelLeft, top: patch.labelTop }}>{member.name}</span>
+            </div>
+          );
+        })}
+      </div>
       <LobbyFilmGrain />
 
       <header className="lobby-header">

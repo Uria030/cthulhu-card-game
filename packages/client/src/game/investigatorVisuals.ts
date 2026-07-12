@@ -20,6 +20,8 @@ const ARCHETYPE_ASSETS: Record<InvestigatorArchetype, string> = {
   mystic: '/game-art/pawns/archetypes/mystic.png',
 };
 
+const CAREER_CODE_PATTERN = /^(?:[EI][NS][FT][JP])-[1-4]$/i;
+
 const ARCHETYPE_RULES: Array<{ archetype: InvestigatorArchetype; pattern: RegExp }> = [
   { archetype: 'healer', pattern: /醫|護|藥|外科|法醫|療|急救|護士/ },
   { archetype: 'watchman', pattern: /警|巡|軍|守衛|偵探|保鑣|治安|執法/ },
@@ -29,16 +31,31 @@ const ARCHETYPE_RULES: Array<{ archetype: InvestigatorArchetype; pattern: RegExp
 ];
 
 /**
- * 調查員模板的職業名稱是穩定的 64 格資料；畫面以它映射有限的匿名棋子原型，
- * 避免把臉孔或 MBTI 當作可辨識的角色肖像。
+ * 大廳只呈現六種匿名座位剪影；戰鬥盤則使用完整的 64 職業棋子。
+ * 兩者共用這張職業到原型映射，避免換人後兩個畫面傳達互相矛盾的職業語言。
  */
 export function archetypeForInvestigator(input: InvestigatorVisualInput): InvestigatorArchetype {
   const title = `${input.title_zh ?? ''} ${input.code ?? ''}`;
   return ARCHETYPE_RULES.find((rule) => rule.pattern.test(title))?.archetype ?? 'archivist';
 }
 
-export function pawnAssetForInvestigator(input: InvestigatorVisualInput): string {
+function careerCodeFor(input: InvestigatorVisualInput): string | null {
+  const code = input.code?.trim().toLowerCase() ?? '';
+  return CAREER_CODE_PATTERN.test(code) ? code : null;
+}
+
+export function pawnAssetForInvestigator(input: InvestigatorVisualInput, playerSlot = 0): string {
+  const code = careerCodeFor(input);
+  if (code) {
+    const color = Math.min(4, Math.max(1, playerSlot + 1));
+    return `/game-art/pawns/v2/${code}-p${color}.webp`;
+  }
   return ARCHETYPE_ASSETS[archetypeForInvestigator(input)];
+}
+
+export function lobbySeatAssetForInvestigator(input: InvestigatorVisualInput, seat: number): string {
+  const safeSeat = Math.min(4, Math.max(1, Math.trunc(seat)));
+  return `/game-art/lobby-v4/seat-${safeSeat}-${archetypeForInvestigator(input)}.webp`;
 }
 
 export function playerToneForSlot(slot: number): string {

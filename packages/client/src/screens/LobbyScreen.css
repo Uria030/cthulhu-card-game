@@ -9,15 +9,55 @@
   isolation: isolate;
 }
 
+.lobby-stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100vw, 150vh);
+  height: max(100vh, 66.6667vw);
+  transform: translate(-50%, -50%);
+  z-index: -4;
+  pointer-events: none;
+}
+
 .lobby-scene {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: center;
+  object-fit: fill;
   filter: sepia(.18) saturate(.48) contrast(.94) brightness(1.05);
-  z-index: -4;
+  z-index: 0;
+}
+
+.lobby-seat-overlay,
+.lobby-seat-patch,
+.lobby-seat-label {
+  position: absolute;
+}
+
+.lobby-seat-overlay { inset: 0; }
+.lobby-seat-patch {
+  z-index: 1;
+  object-fit: fill;
+  pointer-events: none;
+}
+.lobby-seat-label {
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  max-width: 15%;
+  padding: 2px 6px;
+  overflow: hidden;
+  color: #2b221c;
+  background: rgba(232, 220, 196, .86);
+  border: 1px solid rgba(94, 70, 41, .72);
+  box-shadow: 0 1px 4px rgba(32, 24, 16, .46);
+  font-size: clamp(9px, .74vw, 13px);
+  line-height: 1.35;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0;
 }
 
 .lobby-film-grain {

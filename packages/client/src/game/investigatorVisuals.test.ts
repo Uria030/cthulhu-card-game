@@ -1,5 +1,6 @@
 import {
   archetypeForInvestigator,
+  lobbySeatAssetForInvestigator,
   pawnAssetForInvestigator,
 } from './investigatorVisuals';
 
@@ -23,7 +24,25 @@ for (const [title_zh, expected] of cases) {
 assertEq(
   pawnAssetForInvestigator({ title_zh: '社區護士' }),
   '/game-art/pawns/archetypes/healer.png',
-  'archetype asset is deterministic',
+  'missing career code falls back to anonymous archetype',
 );
 
-console.log('7 passed, 0 failed');
+assertEq(
+  pawnAssetForInvestigator({ code: 'ENFJ-1', title_zh: '社區護士' }),
+  '/game-art/pawns/v2/enfj-1-p1.webp',
+  'career code selects the player-one pawn',
+);
+
+assertEq(
+  pawnAssetForInvestigator({ code: 'istp-4' }, 3),
+  '/game-art/pawns/v2/istp-4-p4.webp',
+  'career code and player slot select the fourth pawn color',
+);
+
+assertEq(
+  lobbySeatAssetForInvestigator({ title_zh: '巡警' }, 2),
+  '/game-art/lobby-v4/seat-2-watchman.webp',
+  'lobby seat uses the shared anonymous archetype',
+);
+
+console.log('10 passed, 0 failed');

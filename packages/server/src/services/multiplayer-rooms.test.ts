@@ -1,6 +1,7 @@
 import { CURRENT_MESSAGE_SCHEMA_VERSION, defaultKeeperProfile } from '@cthulhu/shared';
 import type { EncounterTriggerConfig, IntentMessage, InvestigatorState, ScenarioState, TurnState } from '@cthulhu/shared';
 import { MultiplayerRoomService } from './multiplayer-rooms.js';
+import type { AuthoritativeGameState } from './multiplayer-rooms.js';
 
 type TestFn = () => void | Promise<void>;
 const tests: { name: string; fn: TestFn }[] = [];
@@ -47,7 +48,7 @@ function makeGame(p2: InvestigatorState = makeInvestigator('inv-2')) {
   };
 }
 
-function makeEncounterGame() {
+function makeEncounterGame(): AuthoritativeGameState {
   const game = makeGame();
   const encounterTriggerConfig: EncounterTriggerConfig = { trigger_actions: ['gain_resource'] };
   const encounter = {
@@ -61,19 +62,20 @@ function makeEncounterGame() {
       no_check_effects: [{ effect_code: 'discover_clue', amount: 1 }],
     }],
   };
+  const roundRuntime: NonNullable<AuthoritativeGameState['roundRuntime']> = {
+    mythosCards: [],
+    keeperProfile: defaultKeeperProfile(undefined, 2),
+    attackCards: {},
+    actCards: [],
+    agendaCards: [],
+    outcomes: [],
+    encounterDeck: [encounter],
+    encounterSource: [encounter],
+    encounterTriggerConfig,
+  };
   return {
     ...game,
-    roundRuntime: {
-      mythosCards: [],
-      keeperProfile: defaultKeeperProfile(undefined, 2),
-      attackCards: {},
-      actCards: [],
-      agendaCards: [],
-      outcomes: [],
-      encounterDeck: [encounter],
-      encounterSource: [encounter],
-      encounterTriggerConfig,
-    },
+    roundRuntime,
     ruleContext: { enemyStats: {} },
   };
 }
@@ -369,6 +371,67 @@ test('回合結束遭遇:依序等每位真人處置後才補給並開新回合'
   if (!settled.ok) throw new Error(settled.error.message);
   assertEq(settled.data.game?.scenario.phase, 'investigator', '所有回合結束遭遇完成後才開始下一回合');
   assertEq(settled.data.game?.turn.turnNumber, 2, '補給後推進至下一回合');
+});
+
+test('城主遭遇:神話派發會進同一 pending resolver，再進入下一回合', () => {
+  const service = makeService();
+  const created = service.createRoom({ playerId: 'player-1', username: 'creator01' });
+  if (!created.ok) throw new Error(created.error.message);
+  const joined = service.joinRoom(created.data.roomCode, { playerId: 'player-2', username: 'creator02' });
+  if (!joined.ok) throw new Error(joined.error.message);
+  const game = makeEncounterGame();
+  if (!game.roundRuntime) throw new Error('missing encounter runtime');
+  game.scenario = { ...game.scenario, turnNumber: 3 };
+  game.turn = { ...game.turn, turnNumber: 3 };
+  game.roundRuntime.encounterTriggerConfig = { keeper_mythos: true };
+  game.roundRuntime.mythosCards = [{
+    id: 'keeper-encounter', name_zh: '城主的耳語', card_category: 'encounter', action_cost: 0,
+    intensity_tag: 'small', activation_timing: 'keeper_phase', reusable: false, effects: [],
+  }];
+  const active = service.activateGame(created.data.roomCode, 'player-1', game);
+  if (!active.ok) throw new Error(active.error.message);
+  const firstEnd = service.declareActionEnd(created.data.roomCode, 'player-1', 1);
+  const secondEnd = service.declareActionEnd(created.data.roomCode, 'player-2', 1);
+  if (!firstEnd.ok || !secondEnd.ok) throw new Error('human end declaration failed');
+  const pending = service.getPrivateState(created.data.roomCode, 'player-1');
+  if (!pending.ok) throw new Error(pending.error.message);
+  assertEq(pending.data.pendingEncounter?.nameZh, '雨巷裡的低語', '城主 encounter 會抽遭遇池並指定 anchor');
+  const resolved = service.resolveEncounterChoice(created.data.roomCode, 'player-1', 2, pending.data.pendingEncounter?.id ?? '', 0);
+  assertEq(resolved.ok, true);
+  const after = service.getSnapshot(created.data.roomCode, 'player-1');
+  if (!after.ok) throw new Error(after.error.message);
+  assertEq(after.data.game?.scenario.phase, 'investigator', '城主遭遇處置後才進下一回合');
+});
+
+test('混沌頭條:施法抽到 headline 時會開啟同一份 pending encounter', () => {
+  const service = makeService();
+  const created = service.createRoom({ playerId: 'player-1', username: 'creator01' });
+  if (!created.ok) throw new Error(created.error.message);
+  const joined = service.joinRoom(created.data.roomCode, { playerId: 'player-2', username: 'creator02' });
+  if (!joined.ok) throw new Error(joined.error.message);
+  const game = makeEncounterGame();
+  if (!game.roundRuntime) throw new Error('missing encounter runtime');
+  game.roundRuntime.encounterTriggerConfig = { chaos_headline: true };
+  game.investigators['inv-1'] = makeInvestigator('inv-1', { hand: ['spell-1'], resources: 1 });
+  game.scenario = { ...game.scenario, chaosBag: [{ tokenId: 'headline-1', type: 'headline', value: null }] };
+  game.ruleContext = {
+    enemyStats: {},
+    cardLookup: {
+      'spell-1': {
+        name_zh: '霧中的咒語', card_type: 'event', combat_style: 'arcane', cost: 0,
+        effects: [{ trigger_type: 'action', effect_code: 'deal_damage', effect_params: { amount: 1 } }],
+      },
+    },
+  };
+  const active = service.activateGame(created.data.roomCode, 'player-1', game);
+  if (!active.ok) throw new Error(active.error.message);
+  const cast = service.submitIntent(created.data.roomCode, 'player-1', 1, intent('player-1', 'inv-1', 'cast-headline', 'play_card', { cardInstanceId: 'spell-1' }));
+  assertEq(cast.ok, true);
+  if (!cast.ok) return;
+  assertEq(cast.data.snapshot.game?.pendingEncounter?.targetInvestigatorId, 'inv-1', 'headline 由 server 轉成 target pending');
+  const pending = service.getPrivateState(created.data.roomCode, 'player-1');
+  if (!pending.ok) throw new Error(pending.error.message);
+  assertEq(pending.data.pendingEncounter?.nameZh, '雨巷裡的低語', 'headline 不由 client 抽卡');
 });
 
 let passed = 0;

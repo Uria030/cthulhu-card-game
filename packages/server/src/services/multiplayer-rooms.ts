@@ -102,6 +102,7 @@ export interface AuthoritativeGameState {
   campaignFlags?: Record<string, unknown>;
   pendingEncounter?: PendingEncounter;
   pendingTurnEndEncounterInvestigators?: string[];
+  pendingMythosEncounterEntries?: QueuedEncounter[];
   resolution?: { outcomeCode: string; status: 'pending' | 'saved' | 'failed' };
   /** A server-only transaction callback installed by the N2 route. */
   onScenarioResolved?: (input: {
@@ -118,6 +119,11 @@ interface PendingEncounter {
   id: string;
   targetInvestigatorId: string;
   card: EncounterCardData;
+  context: EncounterTriggerContext;
+}
+
+interface QueuedEncounter {
+  targetInvestigatorId: string;
   context: EncounterTriggerContext;
 }
 
@@ -480,6 +486,9 @@ export class MultiplayerRoomService {
       resolution: game.resolution,
       pendingEncounter: game.pendingEncounter ? clone(game.pendingEncounter) : undefined,
       pendingTurnEndEncounterInvestigators: [...(game.pendingTurnEndEncounterInvestigators ?? [])],
+      pendingMythosEncounterEntries: game.pendingMythosEncounterEntries
+        ? game.pendingMythosEncounterEntries.map((entry) => clone(entry))
+        : undefined,
       onScenarioResolved: game.onScenarioResolved,
       // Rule context may contain an injected RNG for deterministic server tests;
       // it is server-only and must not be JSON-cloned into a snapshot.
@@ -595,7 +604,8 @@ export class MultiplayerRoomService {
     if (!room.data.processedByPlayer.has(playerId)) room.data.processedByPlayer.set(playerId, new Map());
     room.data.processedByPlayer.get(playerId)?.set(sequence, clone(message));
     this.broadcast(room.data, message);
-    if (game.pendingTurnEndEncounterInvestigators) this.continueTurnEndEncounters(room.data);
+    if (game.pendingMythosEncounterEntries) this.continueMythosEncounters(room.data);
+    else if (game.pendingTurnEndEncounterInvestigators) this.continueTurnEndEncounters(room.data);
     return { ok: true, data: message };
   }
 
@@ -636,7 +646,8 @@ export class MultiplayerRoomService {
       type: 'intent_resolved', actorPlayerId: playerId, sequence, result, snapshot: this.snapshot(room.data),
     };
     this.broadcast(room.data, message);
-    if (game.pendingTurnEndEncounterInvestigators) this.continueTurnEndEncounters(room.data);
+    if (game.pendingMythosEncounterEntries) this.continueMythosEncounters(room.data);
+    else if (game.pendingTurnEndEncounterInvestigators) this.continueTurnEndEncounters(room.data);
     return { ok: true, data: message };
   }
 
@@ -763,11 +774,14 @@ export class MultiplayerRoomService {
       game.scenario = resolved.newState?.scenario ?? game.scenario;
       game.turn = resolved.newState?.turn ?? game.turn;
       const movedTo = result.effects?.find((effect) => effect.type === 'move')?.params?.to;
-      const encounterEffects = this.triggerEncounter(room.data, expectedInvestigatorId, {
-        path: 'player_action',
-        actionType: intent.actionType,
-        locationId: intent.actionType === 'move' && typeof movedTo === 'string' ? movedTo : null,
-      });
+      const headlineDrawn = result.effects?.some((effect) => effect.type === 'headline_drawn') === true;
+      const encounterEffects = this.triggerEncounter(room.data, expectedInvestigatorId, headlineDrawn
+        ? { path: 'chaos_headline', chaosTokenType: 'headline' }
+        : {
+            path: 'player_action',
+            actionType: intent.actionType,
+            locationId: intent.actionType === 'move' && typeof movedTo === 'string' ? movedTo : null,
+          });
       if (encounterEffects.length > 0) result.effects = [...(result.effects ?? []), ...encounterEffects];
       room.data.version += 1;
     }
@@ -845,6 +859,47 @@ export class MultiplayerRoomService {
       if (game.pendingEncounter) return;
     }
     game.pendingTurnEndEncounterInvestigators = undefined;
+    this.finishTurnEnd(room);
+  }
+
+  /** Runs queued keeper-mythos encounters before the turn-end encounter queue. */
+  private continueMythosEncounters(room: RoomRecord): void {
+    const game = room.game;
+    if (!game || game.pendingEncounter) return;
+    const queue = game.pendingMythosEncounterEntries ?? [];
+    while (queue.length > 0) {
+      const entry = queue.shift();
+      if (!entry) continue;
+      const investigator = game.investigators[entry.targetInvestigatorId];
+      if (!investigator || investigator.dead || investigator.permanentlyDead) continue;
+      const effects = this.triggerEncounter(room, entry.targetInvestigatorId, entry.context);
+      if (effects.length > 0) {
+        room.version += 1;
+        this.broadcast(room, {
+          type: 'encounter_triggered',
+          targetInvestigatorId: entry.targetInvestigatorId,
+          effects,
+          snapshot: this.snapshot(room),
+        });
+      }
+      if (game.pendingEncounter) return;
+    }
+    game.pendingMythosEncounterEntries = undefined;
+    this.beginTurnEndEncounterSequence(room);
+  }
+
+  private beginTurnEndEncounterSequence(room: RoomRecord): void {
+    const game = room.game;
+    const runtime = game?.roundRuntime;
+    if (!game || !runtime) return;
+    const turnEndTargets = Object.values(game.investigators)
+      .filter((investigator) => !investigator.dead && !investigator.permanentlyDead)
+      .map((investigator) => investigator.investigatorId);
+    if (runtime.encounterTriggerConfig?.draw_on_turn_end === true && (runtime.encounterDeck?.length ?? runtime.encounterSource?.length ?? 0) > 0) {
+      game.pendingTurnEndEncounterInvestigators = turnEndTargets;
+      this.continueTurnEndEncounters(room);
+      return;
+    }
     this.finishTurnEnd(room);
   }
 
@@ -991,6 +1046,7 @@ export class MultiplayerRoomService {
       runtime.keeperProfile,
     );
     scenario = { ...scenario, keeperState: selection.state };
+    const keeperEncounterEntries: QueuedEncounter[] = [];
     for (const card of selection.activations) {
       const currentAnchor = investigators[anchor.investigatorId] ?? anchor;
       const resolved = executeMythosCard(card, scenario, currentAnchor, game.ruleContext?.enemyStats ?? {}, Math.random, partySize, investigators);
@@ -1002,6 +1058,12 @@ export class MultiplayerRoomService {
       };
       if (resolved.attachments.length > 0) {
         scenario = { ...scenario, keeperAttachments: [...(scenario.keeperAttachments ?? []), ...resolved.attachments] };
+      }
+      if (String(card.card_category ?? '') === 'encounter') {
+        keeperEncounterEntries.push({
+          targetInvestigatorId: currentAnchor.investigatorId,
+          context: { path: 'keeper_mythos', mythosCardCategory: String(card.card_category ?? '') },
+        });
       }
     }
     const monsters = activateMonsters(
@@ -1065,15 +1127,12 @@ export class MultiplayerRoomService {
       return;
     }
     game.scenario = scenario;
-    const turnEndTargets = Object.values(investigators)
-      .filter((investigator) => !investigator.dead && !investigator.permanentlyDead)
-      .map((investigator) => investigator.investigatorId);
-    if (runtime.encounterTriggerConfig?.draw_on_turn_end === true && (runtime.encounterDeck?.length ?? runtime.encounterSource?.length ?? 0) > 0) {
-      game.pendingTurnEndEncounterInvestigators = turnEndTargets;
-      this.continueTurnEndEncounters(room);
+    if (keeperEncounterEntries.length > 0) {
+      game.pendingMythosEncounterEntries = keeperEncounterEntries;
+      this.continueMythosEncounters(room);
       return;
     }
-    this.finishTurnEnd(room);
+    this.beginTurnEndEncounterSequence(room);
   }
 
   private broadcast(room: RoomRecord, message: MultiplayerServerMessage): void {

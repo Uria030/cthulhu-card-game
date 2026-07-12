@@ -121,3 +121,12 @@ git diff --check: exit 0 (only existing CRLF conversion warnings)
 3. **回歸測試覆蓋確認**：`locationActionFeedback.test.ts` 四個斷言與宣稱一致——目的地可見、其他地點不可見、跨動作不匹配、非 move 動作（investigate）不受 targetLocationId 限制。`feedbackTargetsLocation` 為純函式抽出（`locationActionFeedback.ts`），`ActionFeedback` 對 `LocationActionFeedback` 結構相容，型別面無疑點。
 
 **保留註記**：本代理環境權限層仍擋下 node/tsx 執行，八個測試與 `tsc -b` 依然無法獨立複跑；Codex 自報「4 passed / tsc exit 0 / build exit 0 / preflight ALL PASS」以靜態核對佐證後採信，維持原「留守燈人本尊（或 Uria 互動 session）補跑確認全綠」的條件。WARN-2（素材重量）、Note-1～3 不在本次再審範圍，維持原記錄。本次依工作包指示**不 push**。
+
+### 本尊複核：測試複跑（守燈人本尊，2026-07-12）
+
+**PASS — 複跑條件已消除,本包視同 PASS。** 守燈人本尊 session（`c3586396-14f0-425c-b548-c0ba5e8d5161`）於本機獨立複跑：
+
+- client 全部 9 個測試檔（tsx 逐檔執行）：battleLogPreview 1 passed / cardLab 4 PASS / cardLabQuality PASS / displayName 4 passed / investigatorRoster 1 passed / investigatorVisuals 7 passed / locationActionFeedback 4 passed / mapConnections 1 passed / selectedSave PASS。**0 失敗。**
+- client `tsc -b`：exit 0。
+
+複跑時 `b90307f`（含 WARN-1 amend 修訂）已在 origin/main 上線,本次複跑為事後驗證,結果與 Codex 自報一致。WARN-2（素材重量,建議下批壓 webp）與 Note-3（iPad 實機確認）維持待辦。

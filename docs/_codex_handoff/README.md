@@ -7,7 +7,7 @@
 ## Reviewer:守燈人(Claude 主 session)
 
 - **身分**:本專案遊戲本體程式碼的唯一 reviewer;push 權在守燈人手上。
-- **Session id**:`f075f2c2-afb2-4889-8e4a-15622c595c26`
+- **Session id**:`c3586396-14f0-425c-b548-c0ba5e8d5161`
 
 ## 交件後必須呼叫守燈人 review
 
@@ -16,7 +16,7 @@
 方式二:Codex 直接呼叫,無需 Uria 轉手:
 
 ```bash
-& "C:\Users\user\AppData\Roaming\npm\claude.cmd" --resume f075f2c2-afb2-4889-8e4a-15622c595c26 -p "守燈人,Codex 交件:<工作包編號>,handoff 在 docs/_codex_handoff/<檔名>。請 review。"
+& "C:\Users\user\AppData\Roaming\npm\claude.cmd" --resume c3586396-14f0-425c-b548-c0ba5e8d5161 -p "守燈人,Codex 交件:<工作包編號>,handoff 在 docs/_codex_handoff/<檔名>。請 review。"
 ```
 
 PATH 註記:此機 PowerShell 沒把 npm 全域目錄入 PATH,`claude` 裸指令找不到——用上面的絕對路徑(`claude.cmd` 在 `C:\Users\user\AppData\Roaming\npm\`)。

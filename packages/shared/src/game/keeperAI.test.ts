@@ -98,6 +98,9 @@ test('defaultKeeperProfile:每回合能量=人數+1,上限=6+2×人數(Uria 2026
   const four = defaultKeeperProfile({ keeper_action_per_player: 2 }, 4);
   assertEq(four.baseActionPoints, 5);  // 人數4 + 1
   assertEq(four.maxAccumulation, 14);  // 6 + 2×4
+  assertEq(four.legendaryReserve.targetTurn, 3);
+  assertEq(four.legendaryReserve.prepareTurns, 1);
+  assertEq(four.legendaryReserve.targetDramaTier, 'rising');
 });
 
 // ─── 局勢快照 ───────────────────────────────
@@ -272,6 +275,64 @@ test('人數加成:4 人隊城主在末日推進外還能再放一張(不再 AP 
   const r = selectKeeperActivations([SUMMON, AGENDA, STATUS, AMBIENT], situation({ aliveEnemies: 2, dramaTier: 'climax' }), initKeeperState(p), p, () => 0);
   assertEq(r.activations.length, 2, '末日推進 + 1 張');
   assertEq(r.activations.some((c) => c.id === 'agenda'), true, '末日推進仍每回合強制');
+});
+
+test('傳奇儲蓄:高壓拍點前保留能量,下一個調查員時機窗可派發', () => {
+  const costlyAmbient = card({ id: 'costly-ambient', name_zh: '厚重陰影', action_cost: 2 });
+  const p = defaultKeeperProfile({
+    keeper_action_per_player: 2,
+    keeper_legendary_reserve_enabled: true,
+    keeper_legendary_reserve_target_turn: 3,
+    keeper_legendary_reserve_prepare_turns: 1,
+    keeper_legendary_reserve_target_drama_tier: 'rising',
+  }, 4);
+
+  // T1 尚未進入預備窗:強制議程後仍可照日常邏輯使用一張氛圍卡。
+  const t1 = selectKeeperActivations(
+    [AGENDA, costlyAmbient, LEGENDARY_ENCOUNTER],
+    situation({ turnNumber: 1, dramaTier: 'setup' }),
+    initKeeperState(p),
+    p,
+    () => 0,
+  );
+  assertEq(t1.activations.some((c) => c.id === 'costly-ambient'), true);
+
+  // T2 是 T3 高壓拍點前一回合:議程照推,但日常選卡不得花掉傳奇的 2 AP。
+  const t2 = selectKeeperActivations(
+    [AGENDA, costlyAmbient, LEGENDARY_ENCOUNTER],
+    situation({ turnNumber: 2, dramaTier: 'setup' }),
+    t1.state,
+    p,
+    () => 0,
+  );
+  assertEq(t2.activations.some((c) => c.id === 'agenda'), true, '強制議程不可被儲蓄策略跳過');
+  assertEq(t2.activations.some((c) => c.id === 'costly-ambient'), false, '日常選卡不得吃掉傳奇預算');
+  assertEq(t2.state.actionPoints, 2, '保留傳奇遭遇成本');
+
+  const legendary = selectKeeperLegendaryEncounter([LEGENDARY_ENCOUNTER], [makeInv()], t2.state, () => 0);
+  assertEq(legendary.card?.id, 'legendary-encounter');
+  assertEq(legendary.state.actionPoints, 0);
+
+  const withoutReserve = defaultKeeperProfile({
+    keeper_action_per_player: 2,
+    keeper_legendary_reserve_enabled: false,
+  }, 4);
+  const noReserveT1 = selectKeeperActivations(
+    [AGENDA, costlyAmbient, LEGENDARY_ENCOUNTER],
+    situation({ turnNumber: 1, dramaTier: 'setup' }),
+    initKeeperState(withoutReserve),
+    withoutReserve,
+    () => 0,
+  );
+  const noReserveT2 = selectKeeperActivations(
+    [AGENDA, costlyAmbient, LEGENDARY_ENCOUNTER],
+    situation({ turnNumber: 2, dramaTier: 'setup' }),
+    noReserveT1.state,
+    withoutReserve,
+    () => 0,
+  );
+  assertEq(noReserveT2.activations.some((c) => c.id === 'costly-ambient'), true, '關閉設定後回到日常選卡');
+  assertEq(selectKeeperLegendaryEncounter([LEGENDARY_ENCOUNTER], [makeInv()], noReserveT2.state, () => 0).card, null);
 });
 
 test('選卡:非 reusable 用過即不再選', () => {

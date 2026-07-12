@@ -3618,6 +3618,17 @@ CREATE INDEX IF NOT EXISTS idx_card_lab_reviews_status ON card_lab_reviews(statu
 CREATE INDEX IF NOT EXISTS idx_card_lab_reviews_updated_at ON card_lab_reviews(updated_at DESC);
 `;
 
+// Migration 047: keeper legendary reserve is a style setting, not a hard-coded scenario adjustment.
+export const MIGRATION_047_SQL = `
+INSERT INTO game_balance_settings (setting_key, setting_group, name_zh, description_zh, value, value_type, sort_order) VALUES
+  ('keeper_legendary_reserve_enabled', 'keeper_action_points', '傳奇動作儲蓄', '城主是否在高壓拍點前預留能量給傳奇遭遇派發', '{"value": true}'::jsonb, 'boolean', 9),
+  ('keeper_legendary_reserve_target_turn', 'keeper_action_points', '傳奇動作目標回合', '城主預期傳奇動作開始可派發的回合', '{"value": 3}'::jsonb, 'number', 10),
+  ('keeper_legendary_reserve_prepare_turns', 'keeper_action_points', '傳奇動作提前儲蓄回合', '高壓拍點前幾回合開始保留能量', '{"value": 1}'::jsonb, 'number', 11),
+  ('keeper_legendary_reserve_target_drama_tier', 'keeper_action_points', '傳奇動作目標戲劇段', '戲劇曲線到達此段後持續保留傳奇動作能量', '{"value": "rising"}'::jsonb, 'text', 12),
+  ('keeper_legendary_reserve_minimum_ap', 'keeper_action_points', '傳奇動作最低保留能量', '即使傳奇卡成本較低也至少保留的城主能量', '{"value": 0}'::jsonb, 'number', 13)
+ON CONFLICT (setting_key) DO NOTHING;
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3846,6 +3857,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_044', MIGRATION_044_SQL);
     await runOne('MIGRATION_045', MIGRATION_045_SQL);
     await runOne('MIGRATION_046', MIGRATION_046_SQL);
+    await runOne('MIGRATION_047', MIGRATION_047_SQL);
     try {
       const vaultKey = await getOrCreatePlayerPasswordVaultKey(client);
       const updatedCreators = await bootstrapCreatorPasswords(client, vaultKey);

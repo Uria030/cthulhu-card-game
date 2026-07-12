@@ -57,6 +57,21 @@ export function initKeeperState(_profile: KeeperProfile): KeeperState {
 }
 
 // ─── 風格即資料:城主設定檔 ─────────────────────
+export type KeeperDramaTier = 'setup' | 'rising' | 'climax';
+
+export interface KeeperLegendaryReserveProfile {
+  /** 是否啟用傳奇派發的儲蓄意圖 */
+  enabled: boolean;
+  /** 高壓拍點預計落在第幾回合 */
+  targetTurn: number;
+  /** 高壓拍點前幾回合起開始預留 */
+  prepareTurns: number;
+  /** 戲劇曲線到達此段後持續預留 */
+  targetDramaTier: KeeperDramaTier;
+  /** 即使傳奇卡更便宜，也至少保留的能量 */
+  minimumActionPoints: number;
+}
+
 export interface KeeperProfile {
   /** 每回合基礎能量 = 人數 + 1(Uria 2026-06-18;人數 = 玩家方總人數,含 AI 隊友) */
   baseActionPoints: number;
@@ -70,6 +85,27 @@ export interface KeeperProfile {
   playerWinningPct: number;
   /** 類別額外權重(關卡/城主個性微調;預設空) */
   categoryWeights: Record<string, number>;
+  /** 傳奇派發的儲蓄意圖；由城主設定資料調整，不寫死在選卡行為中。 */
+  legendaryReserve: KeeperLegendaryReserveProfile;
+}
+
+function readBooleanSetting(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    if (value.toLowerCase() === 'true') return true;
+    if (value.toLowerCase() === 'false') return false;
+  }
+  return fallback;
+}
+
+function readPositiveInt(value: unknown, fallback: number, minimum = 0): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(minimum, Math.floor(parsed));
+}
+
+function readDramaTierSetting(value: unknown, fallback: KeeperDramaTier): KeeperDramaTier {
+  return value === 'setup' || value === 'rising' || value === 'climax' ? value : fallback;
 }
 
 export function defaultKeeperProfile(
@@ -89,6 +125,13 @@ export function defaultKeeperProfile(
     sanDangerPct: 50,
     playerWinningPct: 80,
     categoryWeights: {},
+    legendaryReserve: {
+      enabled: readBooleanSetting(settings?.keeper_legendary_reserve_enabled, true),
+      targetTurn: readPositiveInt(settings?.keeper_legendary_reserve_target_turn, 3, 1),
+      prepareTurns: readPositiveInt(settings?.keeper_legendary_reserve_prepare_turns, 1),
+      targetDramaTier: readDramaTierSetting(settings?.keeper_legendary_reserve_target_drama_tier, 'rising'),
+      minimumActionPoints: readPositiveInt(settings?.keeper_legendary_reserve_minimum_ap, 0),
+    },
   };
 }
 
@@ -100,7 +143,7 @@ export interface KeeperSituation {
   /** 玩家幕目標完成度 %(幕一線索 / 幕二頭目剩餘 HP 反向) */
   playerProgressPct: number;
   /** 戲劇節奏期(劇本三層曲線) */
-  dramaTier: 'setup' | 'rising' | 'climax';
+  dramaTier: KeeperDramaTier;
   turnNumber: number;
 }
 
@@ -119,7 +162,7 @@ export function snapshotSituation(
     const boss = scenario.enemies.find((e) => e.hp > 0);
     playerProgressPct = boss ? ((bossMaxHp - boss.hp) / bossMaxHp) * 100 : 100;
   }
-  const dramaTier: KeeperSituation['dramaTier'] =
+  const dramaTier: KeeperDramaTier =
     actIdx >= 1 ? 'climax' : scenario.turnNumber <= 2 ? 'setup' : 'rising';
   return {
     aliveEnemies,
@@ -209,6 +252,36 @@ export function isLegendaryEncounterCard(card: MythosCardData): boolean {
   const response = String(card.response_trigger ?? '').toLowerCase();
   const tags = axisTags(card).map((s) => s.toLowerCase());
   return response === 'legendary_action' || tags.includes('legendary') || tags.includes('legendary_action');
+}
+
+const DRAMA_TIER_ORDER: Record<KeeperDramaTier, number> = {
+  setup: 0,
+  rising: 1,
+  climax: 2,
+};
+
+function reservedLegendaryActionPoints(
+  cards: MythosCardData[],
+  situation: KeeperSituation,
+  state: KeeperState,
+  profile: KeeperProfile,
+): number {
+  const reserve = profile.legendaryReserve;
+  if (!reserve.enabled) return 0;
+
+  const startsOnTurn = Math.max(1, reserve.targetTurn - reserve.prepareTurns);
+  const atHighPressure = DRAMA_TIER_ORDER[situation.dramaTier] >= DRAMA_TIER_ORDER[reserve.targetDramaTier];
+  if (!atHighPressure && situation.turnNumber < startsOnTurn) return 0;
+
+  const availableLegendaryCosts = cards
+    .filter(isLegendaryEncounterCard)
+    .filter(isCardExecutable)
+    .filter((card) => !isMythosOnCooldown(card, state))
+    .filter((card) => !isMythosUsedUp(card, state))
+    .map((card) => card.action_cost);
+  if (availableLegendaryCosts.length === 0) return 0;
+
+  return Math.max(reserve.minimumActionPoints, Math.min(...availableLegendaryCosts));
 }
 
 export function investigatorThreatScore(investigator: InvestigatorState): number {
@@ -396,10 +469,16 @@ export function selectKeeperActivations(
     };
   }
 
+  // 傳奇遭遇在下一個調查員階段才派發；高壓拍點前先從日常選卡預留其成本。
+  // 強制毀滅時鐘已在上方結算，不因儲蓄意圖被取消或延後。
+  const reservedActionPoints = reservedLegendaryActionPoints(cards, situation, state, profile);
+
   for (let i = activations.length; i < profile.maxActivationsPerTurn; i += 1) {
     const scored = cards
       .map((c) => ({ card: c, score: scoreCard(c, situation, state, profile) }))
-      .filter((x): x is { card: MythosCardData; score: number } => x.score !== null);
+      .filter((x): x is { card: MythosCardData; score: number } =>
+        x.score !== null && state.actionPoints - x.card.action_cost >= reservedActionPoints,
+      );
     if (scored.length === 0) break;
     const best = Math.max(...scored.map((x) => x.score));
     const top = scored.filter((x) => x.score >= best - 1e-9);

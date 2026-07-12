@@ -1184,6 +1184,17 @@
   color: white;
 }
 
+.encounter-auto-progress {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--sp-md);
+  color: var(--text-secondary);
+  font: 600 13px var(--font-typewriter);
+  letter-spacing: .02em;
+}
+
 /* === Overlays === */
 
 /* 地點 bar(從上滑下)*/

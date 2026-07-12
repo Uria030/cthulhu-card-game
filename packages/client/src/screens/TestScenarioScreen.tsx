@@ -114,6 +114,7 @@ import {
   returnCardToLabHand,
 } from '../game/cardLab';
 import { latestActionRows } from '../game/battleLogPreview';
+import { autoEncounterTransition, encounterAutoDelay } from '../game/encounterModalFlow';
 import { uniqueLocationConnections } from '../game/mapConnections';
 import { pawnAssetForInvestigator, playerToneForSlot } from '../game/investigatorVisuals';
 import { feedbackTargetsLocation } from '../game/locationActionFeedback';
@@ -780,6 +781,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [screenToast, setScreenToast] = useState<ScreenToast | null>(null);
   const [encounterDeck, setEncounterDeck] = useState<EncounterCardData[]>(() => setup.encounterCards);
   const [encounterPlay, setEncounterPlay] = useState<EncounterPlay | null>(null);
+  const [encounterAutoSignal, setEncounterAutoSignal] = useState<{ cardId: string; beat: EncounterBeat } | null>(null);
   // 手牌放大檢視:點手牌卡 → 放大看內容,下方打出/消耗按鈕
   const [zoomCard, setZoomCard] = useState<CardDisplay | null>(null);
   const [panel, setPanel] = useState<PanelType>(null);
@@ -911,6 +913,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setActionFeedback(null);
     setScreenToast(null);
     setEncounterPlay(null);
+    setEncounterAutoSignal(null);
     setDamageAlloc(null);
     setEnemyResolutionComplete(false);
     setKeeperNoticeVisible(false);
@@ -1292,6 +1295,29 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     if (pendingOutcome) { checkpointVitals(investigator, aiMembers); setOutcome(pendingOutcome); }
     if (pending) setDamageAlloc(pending);
   };
+
+  // Timer only signals a finished presentation beat. The effect below reads committed state before advancing it.
+  useEffect(() => {
+    if (!encounterPlay) return;
+    const delay = encounterAutoDelay(encounterPlay.beat);
+    if (delay === null) return;
+    const { id: cardId } = encounterPlay.card;
+    const beat = encounterPlay.beat;
+    const id = window.setTimeout(() => setEncounterAutoSignal({ cardId, beat }), delay);
+    return () => window.clearTimeout(id);
+  }, [encounterPlay?.beat, encounterPlay?.card.id]);
+
+  useEffect(() => {
+    if (!encounterPlay || !encounterAutoSignal) return;
+    if (encounterAutoSignal.cardId !== encounterPlay.card.id || encounterAutoSignal.beat !== encounterPlay.beat) return;
+    const transition = autoEncounterTransition(encounterPlay.beat);
+    setEncounterAutoSignal(null);
+    if (transition === 'advance') {
+      advanceEncounterPlay();
+      return;
+    }
+    if (transition === 'complete') completeEncounterPlay();
+  }, [encounterAutoSignal, encounterPlay]);
 
   // 跑單一 AI 隊友的一回合(邏輯同 enterMythosPhase ⓪;抽出供「計時器同時行動」與「結束階段補跑」共用)。
   // 純計算式:吃 (idx, sc, inv, aiArr) 回新的三者與待播放 Log,不直接 setState。
@@ -3204,7 +3230,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                 </div>
                 <hr className="modal-divider" />
                 <div className="action-row">
-                  <button onClick={advanceEncounterPlay}>查看選項 →</button>
+                  <span className="encounter-auto-progress">異象正在逼近……</span>
                 </div>
               </>
             )}
@@ -3244,7 +3270,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                 </div>
                 <hr className="modal-divider" />
                 <div className="action-row">
-                  <button onClick={completeEncounterPlay}>✓ 完成</button>
+                  <span className="encounter-auto-progress">結果已記錄，流程即將繼續……</span>
                 </div>
               </>
             )}

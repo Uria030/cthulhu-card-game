@@ -3629,6 +3629,47 @@ INSERT INTO game_balance_settings (setting_key, setting_group, name_zh, descript
 ON CONFLICT (setting_key) DO NOTHING;
 `;
 
+// Migration 048: RB-P2 fixes the R3 open-hand profiles for the original 12 mythos cards.
+// The later E20 legendary encounter draft is deliberately outside this backfill.
+export const MIGRATION_048_SQL = `
+ALTER TABLE mythos_cards
+  ADD COLUMN IF NOT EXISTS reusable BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS cooldown_turns INTEGER,
+  ADD COLUMN IF NOT EXISTS max_uses INTEGER;
+
+WITH desired(code, reusable, cooldown_turns, max_uses) AS (
+  VALUES
+    ('mc_doom_advance'::VARCHAR, TRUE, NULL::INTEGER, NULL::INTEGER),
+    ('mc_deep_call'::VARCHAR, TRUE, 2, NULL::INTEGER),
+    ('G1_myth_revenant_arrives'::VARCHAR, TRUE, 2, 3),
+    ('mc_dread_seizure'::VARCHAR, TRUE, 2, NULL::INTEGER),
+    ('mc_madness_grip'::VARCHAR, TRUE, 3, 2),
+    ('G1_myth_dark_seep'::VARCHAR, TRUE, 1, NULL::INTEGER),
+    ('G1_myth_brine_smell'::VARCHAR, TRUE, 2, NULL::INTEGER),
+    ('G1_myth_rain_intensifies'::VARCHAR, TRUE, 2, NULL::INTEGER),
+    ('mc_ill_omen'::VARCHAR, TRUE, 2, NULL::INTEGER),
+    ('mc_false_lead'::VARCHAR, FALSE, NULL::INTEGER, NULL::INTEGER),
+    ('mc_npc_betrayal'::VARCHAR, FALSE, NULL::INTEGER, NULL::INTEGER),
+    ('mc_clue_tamper'::VARCHAR, FALSE, NULL::INTEGER, NULL::INTEGER)
+)
+UPDATE mythos_cards AS card
+   SET reusable = desired.reusable,
+       cooldown_rounds = desired.cooldown_turns,
+       cooldown_turns = desired.cooldown_turns,
+       max_uses_per_stage = desired.max_uses,
+       max_uses = desired.max_uses,
+       updated_at = NOW()
+  FROM desired
+ WHERE card.code = desired.code
+   AND (
+     card.reusable IS DISTINCT FROM desired.reusable
+     OR card.cooldown_rounds IS DISTINCT FROM desired.cooldown_turns
+     OR card.cooldown_turns IS DISTINCT FROM desired.cooldown_turns
+     OR card.max_uses_per_stage IS DISTINCT FROM desired.max_uses
+     OR card.max_uses IS DISTINCT FROM desired.max_uses
+   );
+`;
+
 // ============================================
 // MOD-06 示範戰役種子（條件式插入，僅在 campaigns 表為空時）
 // ============================================
@@ -3858,6 +3899,7 @@ export async function runMigrations() {
     await runOne('MIGRATION_045', MIGRATION_045_SQL);
     await runOne('MIGRATION_046', MIGRATION_046_SQL);
     await runOne('MIGRATION_047', MIGRATION_047_SQL);
+    await runOne('MIGRATION_048', MIGRATION_048_SQL);
     try {
       const vaultKey = await getOrCreatePlayerPasswordVaultKey(client);
       const updatedCreators = await bootstrapCreatorPasswords(client, vaultKey);

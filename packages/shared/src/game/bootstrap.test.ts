@@ -198,6 +198,14 @@ test('調查員出生點 + 八屬性', () => {
   assertEq(g.investigator.combatStyle, 'shooting');
 });
 
+test('開局含可持久化城主狀態', () => {
+  const g = buildGameFromBootstrap(makeFixture(), { rng: fixedRng });
+  assertEq(g.scenario.keeperState?.actionPoints, 0);
+  assertEq(Object.keys(g.scenario.keeperState?.cooldowns ?? {}).length, 0);
+  assertEq(Object.keys(g.scenario.keeperState?.uses ?? {}).length, 0);
+  assertEq(g.scenario.keeperState?.lastCardId, null);
+});
+
 // ─── 測試 9:initial_enemies 形狀支援 ───────────
 test('initial_enemies 展開含 hp_per_player', () => {
   const fx = makeFixture();

@@ -204,6 +204,7 @@ export function makeTestSetup(): GameSetup {
       chaosBag: [],
       turnNumber: 1,
       phase: 'investigator',
+      keeperState: { actionPoints: 0, cooldowns: {}, uses: {}, lastCategory: null, lastCardId: null },
     },
     locMeta: {
       alley: {

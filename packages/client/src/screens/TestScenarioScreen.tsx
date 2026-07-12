@@ -765,8 +765,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [lastUpkeepCardName, setLastUpkeepCardName] = useState<string | null>(null);
   const [handLimitSelection, setHandLimitSelection] = useState<HandLimitSelection | null>(null);
   const [turnNumber, setTurnNumber] = useState(1);
-  // 城主運行時狀態(行動點/冷卻/使用次數;教學關卡不用)
-  const [keeperState, setKeeperState] = useState<KeeperState>(() => initKeeperState(setup.keeperProfile));
+  // 城主運行時狀態隨 ScenarioState 保存；舊存檔缺欄位時才以空狀態讀取。
+  const keeperState: KeeperState = scenario.keeperState ?? initKeeperState(setup.keeperProfile);
   const [keeperEnergy, setKeeperEnergy] = useState(8); // 教學關卡舊顯示用
   const [log, setLog] = useState<string[]>(setup.introLog);
   // 開局先說清楚目標與危險；實驗場不屬於戰役流程，不阻擋卡片檢驗。
@@ -1136,8 +1136,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     }
   };
 
-  const triggerEncounter = useCallback((pending: PendingEncounterTrigger | null): boolean => {
+  const triggerEncounter = useCallback((pending: PendingEncounterTrigger | null, scenarioOverride?: ScenarioState): boolean => {
     if (!pending || encounterPlay || setup.encounterCards.length === 0) return false;
+    const activeScenario = scenarioOverride ?? scenario;
     const targetId = pending.targetInvestigatorId ?? investigator.investigatorId;
     if (targetId !== investigator.investigatorId) {
       const idx = aiMembers.findIndex((ai) => ai.investigatorId === targetId);
@@ -1148,7 +1149,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
         setup.encounterTriggerConfig,
         pending.context,
         target,
-        scenario,
+        activeScenario,
         setup.enemyStats,
         undefined,
         setup.encounterCards,
@@ -1208,13 +1209,14 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       keeperState,
     );
     if (!selection.card || !selection.target) return false;
-    setKeeperState(selection.state);
+    const scenarioWithKeeper = { ...scenario, keeperState: selection.state };
+    setScenario(scenarioWithKeeper);
     for (const eff of selection.effects) append('[城主傳奇派發] ' + describeEffect(eff, locMeta));
     return triggerEncounter({
       sourceLabel: '城主傳奇派發',
       context: { path: 'keeper_mythos', mythosCardCategory: 'encounter' },
       targetInvestigatorId: selection.target.investigatorId,
-    });
+    }, scenarioWithKeeper);
   }, [aiMembers, damageAlloc, encounterPlay, investigator, keeperState, locMeta, outcome, phase, setup, triggerEncounter]);
 
   const advanceEncounterPlay = () => {
@@ -1866,7 +1868,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       bossCode ? Number(setup.enemyStats[bossCode]?.hp_base ?? 0) : null,
     );
     const selection = selectKeeperActivations(setup.mythosCards, situation, keeperState, setup.keeperProfile);
-    setKeeperState(selection.state);
+    sc = { ...sc, keeperState: selection.state };
     let pendingKeeperEncounter: PendingEncounterTrigger | null = null;
     for (const card of selection.activations) {
       const keeperParty: Record<string, InvestigatorState> = { [inv.investigatorId]: inv };

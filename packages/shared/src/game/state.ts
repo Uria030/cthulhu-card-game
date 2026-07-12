@@ -47,6 +47,25 @@ export interface FallenEvent {
 }
 
 // ─── 場景層 ──────────────────────────────────
+/**
+ * 城主在本場景內的可重用神話卡狀態。
+ *
+ * 與場景一起持久化，確保單人與多人容器重載後仍使用同一份冷卻、使用次數與能量紀錄。
+ */
+export interface KeeperRuntimeState {
+  actionPoints: number;
+  /** cardId → 剩餘冷卻回合 */
+  cooldowns: Record<string, number>;
+  /** cardId → 本場景已用次數 */
+  uses: Record<string, number>;
+  lastCategory: string | null;
+  lastCardId: string | null;
+}
+
+export function emptyKeeperRuntimeState(): KeeperRuntimeState {
+  return { actionPoints: 0, cooldowns: {}, uses: {}, lastCategory: null, lastCardId: null };
+}
+
 export interface ScenarioState {
   scenarioId: string;
   scenarioDefinitionId: string; // 對應後台 MOD-07 場景定義
@@ -82,6 +101,8 @@ export interface ScenarioState {
     action_code: string;
     action_params: Record<string, unknown>;
   }>;
+  /** 城主 open-hand 卡池的能量、冷卻與使用次數；舊存檔讀取時允許缺省並以空狀態補齊。 */
+  keeperState?: KeeperRuntimeState;
   /** 混沌袋當前組成(規則書 §5,動態變動) */
   chaosBag: ChaosToken[];
   /** 當前回合數 */

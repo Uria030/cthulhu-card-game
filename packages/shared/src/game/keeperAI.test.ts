@@ -364,6 +364,26 @@ test('#21 強制毀滅時鐘:不夠費用也放(夾 0),且非 reusable 用完不
   assertEq(r2.activations.some((c) => c.id === 'doomonce'), false, '一次性用完不重放');
 });
 
+test('RB-P2 R3:無冷卻、無上限的末日推進可跨回合重複選用', () => {
+  const p = defaultKeeperProfile(undefined, 1);
+  const doom = card({
+    id: 'doom-repeatable',
+    name_zh: '末日推進',
+    card_category: 'agenda',
+    action_cost: 3,
+    reusable: true,
+    cooldown_turns: null,
+    max_uses: null,
+    effects: [{ action_code: 'advance_agenda', action_params: { doom_tokens: 1 } }],
+  });
+  const r1 = selectKeeperActivations([doom], situation({ dramaTier: 'setup' }), initKeeperState(p), p, () => 0);
+  const r2 = selectKeeperActivations([doom], situation({ dramaTier: 'rising' }), r1.state, p, () => 0);
+  assertEq(r1.activations.some((c) => c.id === doom.id), true, '首回合可用');
+  assertEq(r2.activations.some((c) => c.id === doom.id), true, '下一回合仍可用');
+  assertEq(r2.state.cooldowns[doom.id], undefined, '不寫入冷卻');
+  assertEq(r2.state.uses[doom.id], 2, '使用次數隨 ScenarioState 累積');
+});
+
 // ─── 效果執行 ───────────────────────────────
 test('advance_agenda / horror cap / set_visibility 結算', () => {
   const sc = makeScenario();

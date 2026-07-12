@@ -444,6 +444,23 @@
                   <label>卡片類型</label>
                   <select id="m_card_category" onchange="onCategoryChange()"></select>
                 </div>
+                <div class="stat-box">
+                  <label>可重複使用</label>
+                  <select id="m_reusable" onchange="markDirty()">
+                    <option value="true">可重複使用</option>
+                    <option value="false">單次使用</option>
+                  </select>
+                </div>
+                <div class="stat-box">
+                  <label>冷卻回合</label>
+                  <input id="m_cooldown_turns" type="number" min="0" max="99" placeholder="無" oninput="markDirty()">
+                  <div class="stat-hint">留空表示無冷卻</div>
+                </div>
+                <div class="stat-box">
+                  <label>本關卡使用上限</label>
+                  <input id="m_max_uses" type="number" min="0" max="99" placeholder="無" oninput="markDirty()">
+                  <div class="stat-hint">留空表示不限次數</div>
+                </div>
               </div>
 
               <div style="margin-top:1rem;">
@@ -1305,6 +1322,9 @@
       el('m_action_cost').value = c.action_cost;
       el('m_intensity_tag').value = c.intensity_tag;
       el('m_card_category').value = c.card_category;
+      el('m_reusable').value = c.reusable ? 'true' : 'false';
+      el('m_cooldown_turns').value = c.cooldown_turns ?? c.cooldown_rounds ?? '';
+      el('m_max_uses').value = c.max_uses ?? c.max_uses_per_stage ?? '';
       el('m_art_url').value = c.art_url || '';
       el('m_design_notes').value = c.design_notes || '';
       el('m_response_trigger').value = c.response_trigger || '';
@@ -1985,6 +2005,9 @@
             activation_timing: timing,
             card_category: el('m_card_category').value,
             intensity_tag: el('m_intensity_tag').value,
+            reusable: el('m_reusable').value === 'true',
+            cooldown_turns: el('m_cooldown_turns').value === '' ? null : intVal('m_cooldown_turns'),
+            max_uses: el('m_max_uses').value === '' ? null : intVal('m_max_uses'),
             response_trigger: el('m_response_trigger').value || null,
             flavor_text_zh: el('m_flavor_text_zh').value.trim() || null,
             flavor_text_en: el('m_flavor_text_en').value.trim() || null,

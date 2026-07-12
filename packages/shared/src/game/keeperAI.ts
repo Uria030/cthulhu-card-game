@@ -13,7 +13,8 @@
  * ① 關卡綁定的神話卡池與怪物池(牌組)② KeeperProfile 權重 ③ 怪物行為腳本。
  */
 import type { ResultEffect } from './messages';
-import type { ScenarioState, InvestigatorState } from './state';
+import { emptyKeeperRuntimeState } from './state';
+import type { ScenarioState, InvestigatorState, KeeperRuntimeState } from './state';
 import { spawnEnemy } from './monsterActions';
 import type { EnemyDataLookup } from './monsterActions';
 
@@ -40,20 +41,12 @@ export interface MythosCardData {
   effects?: Array<{ action_code: string; action_params: Record<string, unknown> | null }>;
 }
 
-// ─── 城主運行時狀態(client 持有,引擎進出)─────────
-export interface KeeperState {
-  actionPoints: number;
-  /** cardId → 剩餘冷卻回合 */
-  cooldowns: Record<string, number>;
-  /** cardId → 已用次數 */
-  uses: Record<string, number>;
-  lastCategory: string | null;
-  lastCardId: string | null;
-}
+// ─── 城主運行時狀態(隨 ScenarioState 持久化,引擎進出)─────────
+export type KeeperState = KeeperRuntimeState;
 
 export function initKeeperState(_profile: KeeperProfile): KeeperState {
   // 行動點從 0 起:每回合的回復在 selectKeeperActivations 開頭統一結算(避免首回合雙算)
-  return { actionPoints: 0, cooldowns: {}, uses: {}, lastCategory: null, lastCardId: null };
+  return emptyKeeperRuntimeState();
 }
 
 // ─── 風格即資料:城主設定檔 ─────────────────────

@@ -334,6 +334,7 @@ export function buildGameFromBootstrap(
     chaosBag: buildChaosBag(bootstrap.stage.chaos_bag),
     turnNumber: 1,
     phase: 'investigator',
+    keeperState: { actionPoints: 0, cooldowns: {}, uses: {}, lastCategory: null, lastCardId: null },
   };
 
   // ── 戰役層 ──

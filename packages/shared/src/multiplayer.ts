@@ -8,18 +8,29 @@ import type { IntentMessage, ResultMessage } from './game/messages';
 import type { InvestigatorState, ScenarioState, TurnState } from './game/state';
 
 export type MultiplayerRoomPhase = 'lobby' | 'active' | 'closed';
+export type MultiplayerSeatController = 'human' | 'ai';
 
 export interface MultiplayerRoomMember {
   playerId: string;
   username: string;
   connected: boolean;
   joinedAt: string;
+  /** Server-adjudicated 64-in-1 selection. Null until the player chooses. */
+  investigatorTemplateId: string | null;
+  ready: boolean;
 }
 
 export interface MultiplayerGameSnapshot {
+  stageId: string;
   scenario: ScenarioState;
   investigators: Record<string, InvestigatorState>;
   turn: TurnState;
+  /** Human account -> investigator. The client never supplies this mapping. */
+  playerInvestigators: Record<string, string>;
+  /** A disconnected human seat temporarily changes to AI control. */
+  controllerByInvestigator: Record<string, MultiplayerSeatController>;
+  /** Explicit end-of-action declarations for the current investigator phase. */
+  declaredEndByInvestigator: string[];
 }
 
 export interface MultiplayerRoomSnapshot {
@@ -28,6 +39,8 @@ export interface MultiplayerRoomSnapshot {
   phase: MultiplayerRoomPhase;
   hostPlayerId: string;
   members: MultiplayerRoomMember[];
+  /** Per-player next accepted sequence. Allows a reconnecting client to resume safely. */
+  nextSequenceByPlayer?: Record<string, number>;
   game?: MultiplayerGameSnapshot;
 }
 
@@ -42,7 +55,15 @@ export interface MultiplayerIntentMessage {
   intent: IntentMessage;
 }
 
-export type MultiplayerClientMessage = MultiplayerAuthenticateMessage | MultiplayerIntentMessage;
+export interface MultiplayerDeclareEndMessage {
+  type: 'declare_end';
+  sequence: number;
+}
+
+export type MultiplayerClientMessage =
+  | MultiplayerAuthenticateMessage
+  | MultiplayerIntentMessage
+  | MultiplayerDeclareEndMessage;
 
 export interface MultiplayerRoomSnapshotMessage {
   type: 'room_snapshot';
@@ -63,6 +84,19 @@ export interface MultiplayerRoomClosedMessage {
   roomCode: string;
 }
 
+export interface MultiplayerAiTurnMessage {
+  type: 'ai_turn_completed';
+  investigatorId: string;
+  lines: string[];
+  snapshot: MultiplayerRoomSnapshot;
+}
+
+export interface MultiplayerPhaseChangedMessage {
+  type: 'phase_changed';
+  phase: 'investigator' | 'mythos' | 'turn_end';
+  snapshot: MultiplayerRoomSnapshot;
+}
+
 export interface MultiplayerErrorMessage {
   type: 'error';
   code: string;
@@ -74,4 +108,6 @@ export type MultiplayerServerMessage =
   | MultiplayerRoomSnapshotMessage
   | MultiplayerIntentResolvedMessage
   | MultiplayerRoomClosedMessage
+  | MultiplayerAiTurnMessage
+  | MultiplayerPhaseChangedMessage
   | MultiplayerErrorMessage;

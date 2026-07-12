@@ -13,10 +13,17 @@ import type {
   MultiplayerClientMessage,
   MultiplayerErrorMessage,
   MultiplayerServerMessage,
+  StageBootstrap,
 } from '@cthulhu/shared';
+import {
+  buildAuthoritativeMultiplayerGame,
+  requiredAiTemplateIds,
+} from '../services/multiplayer-game-factory.js';
 
 interface MultiplayerRouteOptions {
   roomService?: MultiplayerRoomService;
+  bootstrapForTemplate?: (stageId: string, templateId: string) => Promise<StageBootstrap>;
+  isPlayableTemplate?: (templateId: string) => Promise<boolean>;
 }
 
 function sendSocket(socket: { readyState: number; send: (payload: string) => void }, message: MultiplayerServerMessage): void {
@@ -38,6 +45,23 @@ function socketError(code: string, message: string): MultiplayerErrorMessage {
 
 export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = async (app, options) => {
   const rooms = options.roomService ?? multiplayerRooms;
+  const bootstrapForTemplate = options.bootstrapForTemplate ?? (async (stageId: string, templateId: string) => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/play/stages/${encodeURIComponent(stageId)}/bootstrap?investigator=${encodeURIComponent(templateId)}&crossTest=true`,
+    });
+    const body = response.json() as { success?: boolean; data?: StageBootstrap; error?: string };
+    if (response.statusCode !== 200 || !body.success || !body.data) {
+      throw new Error(body.error ?? '無法取得多人開局包。');
+    }
+    return body.data;
+  });
+  const isPlayableTemplate = options.isPlayableTemplate ?? (async (templateId: string) => {
+    const response = await app.inject({ method: 'GET', url: '/api/play/investigators?includeDraft=true' });
+    const body = response.json() as { success?: boolean; data?: Array<{ id?: string; is_preset?: boolean }> };
+    return response.statusCode === 200 && body.success === true && (body.data ?? [])
+      .some((row) => row.is_preset !== false && row.id === templateId);
+  });
 
   app.post('/api/multiplayer/rooms', { preHandler: requirePlayerAuth }, async (request, reply) => {
     const player = playerFromRequest(request);
@@ -66,6 +90,66 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
     return reply.send({ success: true, data: joined.data });
   });
 
+  app.post<{
+    Params: { code: string };
+    Body: { investigator_template_id?: string };
+  }>('/api/multiplayer/rooms/:code/select-investigator', { preHandler: requirePlayerAuth }, async (request, reply) => {
+    const player = playerFromRequest(request);
+    if (!player) return reply.status(401).send({ success: false, error: 'Authentication required' });
+    const templateId = String(request.body?.investigator_template_id ?? '').trim();
+    if (!templateId || !(await isPlayableTemplate(templateId))) {
+      return reply.status(400).send({ success: false, error: '調查員不在可選 64 格名冊中。' });
+    }
+    const selected = rooms.selectInvestigator(request.params.code, player.playerId, templateId);
+    if (!selected.ok) return reply.status(selected.error.code === 'investigator_taken' ? 409 : 400).send({ success: false, error: selected.error.message });
+    return reply.send({ success: true, data: selected.data });
+  });
+
+  app.post<{
+    Params: { code: string };
+    Body: { ready?: boolean };
+  }>('/api/multiplayer/rooms/:code/ready', { preHandler: requirePlayerAuth }, async (request, reply) => {
+    const player = playerFromRequest(request);
+    if (!player) return reply.status(401).send({ success: false, error: 'Authentication required' });
+    const ready = request.body?.ready === true;
+    const updated = rooms.setReady(request.params.code, player.playerId, ready);
+    if (!updated.ok) return reply.status(400).send({ success: false, error: updated.error.message });
+    return reply.send({ success: true, data: updated.data });
+  });
+
+  app.post<{
+    Params: { code: string };
+    Body: { stage_id?: string };
+  }>('/api/multiplayer/rooms/:code/start', { preHandler: requirePlayerAuth }, async (request, reply) => {
+    const player = playerFromRequest(request);
+    if (!player) return reply.status(401).send({ success: false, error: 'Authentication required' });
+    const stageId = String(request.body?.stage_id ?? '').trim();
+    if (!stageId) return reply.status(400).send({ success: false, error: '請選擇要開始的關卡。' });
+    const startable = rooms.canStart(request.params.code, player.playerId);
+    if (!startable.ok) return reply.status(startable.error.code === 'not_room_host' ? 403 : 409).send({ success: false, error: startable.error.message });
+    try {
+      const selectedIds = startable.data.members.map((member) => member.investigatorTemplateId).filter((id): id is string => !!id);
+      const aiIds = requiredAiTemplateIds(selectedIds, 4 - selectedIds.length);
+      const bootstraps = await Promise.all([...selectedIds, ...aiIds].map(async (templateId) => ({
+        templateId,
+        bootstrap: await bootstrapForTemplate(stageId, templateId),
+      })));
+      const game = buildAuthoritativeMultiplayerGame({ stageId, members: startable.data.members, bootstraps });
+      const activated = rooms.activateGame(request.params.code, player.playerId, game);
+      if (!activated.ok) return reply.status(400).send({ success: false, error: activated.error.message });
+      // AI vacancies complete their current investigator turn through the same
+      // rule-engine path before humans start issuing intents.
+      for (const [investigatorId, controller] of Object.entries(game.controllerByInvestigator ?? {})) {
+        if (controller === 'ai') rooms.runAiTurn(request.params.code, investigatorId);
+      }
+      const latest = rooms.getSnapshot(request.params.code, player.playerId);
+      return reply.send({ success: true, data: latest.ok ? latest.data : activated.data });
+    } catch (error) {
+      request.log.error(error, 'multiplayer: server bootstrap failed');
+      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : '多人開局失敗。' });
+    }
+  });
+
   app.post<{ Params: { code: string } }>('/api/multiplayer/rooms/:code/leave', { preHandler: requirePlayerAuth }, async (request, reply) => {
     const player = playerFromRequest(request);
     if (!player) return reply.status(401).send({ success: false, error: 'Authentication required' });
@@ -84,6 +168,7 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
 
   app.get<{ Params: { code: string } }>('/api/multiplayer/rooms/:code/ws', { websocket: true }, (socket, request) => {
     let authenticatedPlayerId: string | null = null;
+    let connectionRegistered = false;
     let unsubscribe: (() => void) | null = null;
 
     // Fastify websocket requires this handler to be attached synchronously.
@@ -95,6 +180,10 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
       }
 
       if (message.type === 'authenticate') {
+        if (authenticatedPlayerId) {
+          sendSocket(socket, socketError('already_authenticated', '此連線已完成驗證。'));
+          return;
+        }
         const player = verifyPlayerToken(message.token);
         if (!player) {
           sendSocket(socket, socketError('invalid_token', '登入憑證無效或已過期。'));
@@ -114,6 +203,7 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
           socket.close(1008, 'not room member');
           return;
         }
+        connectionRegistered = true;
         unsubscribe?.();
         const registered = rooms.subscribe(request.params.code, player.playerId, (event) => sendSocket(socket, event));
         if (!registered.ok) {
@@ -130,7 +220,9 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
         sendSocket(socket, socketError('authentication_required', '請先送出 authenticate 訊息。'));
         return;
       }
-      const applied = rooms.submitIntent(request.params.code, authenticatedPlayerId, message.sequence, message.intent);
+      const applied = message.type === 'declare_end'
+        ? rooms.declareActionEnd(request.params.code, authenticatedPlayerId, message.sequence)
+        : rooms.submitIntent(request.params.code, authenticatedPlayerId, message.sequence, message.intent);
       if (!applied.ok) {
         sendSocket(socket, roomErrorMessage(applied.error));
         return;
@@ -140,9 +232,18 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
       if (applied.data.duplicate || applied.data.result.outcome === 'rejected') sendSocket(socket, applied.data);
     });
 
-    socket.on('close', () => {
+    socket.on('close', (code: number) => {
       unsubscribe?.();
-      if (authenticatedPlayerId) rooms.setConnection(request.params.code, authenticatedPlayerId, false);
+      if (authenticatedPlayerId && connectionRegistered) {
+        const disconnected = rooms.setConnection(request.params.code, authenticatedPlayerId, false);
+        const investigatorId = disconnected.ok ? disconnected.data.game?.playerInvestigators[authenticatedPlayerId] : null;
+        // Navigation between the room and board intentionally closes with 1000.
+        // It must not play a human turn through AI during that hand-off. Browser
+        // loss/network failure uses a different close code and is AI-taken over.
+        if (code !== 1000 && investigatorId && disconnected.ok && disconnected.data.game?.controllerByInvestigator[investigatorId] === 'ai') {
+          rooms.runAiTurn(request.params.code, investigatorId);
+        }
+      }
     });
   });
 };

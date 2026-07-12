@@ -9,23 +9,47 @@ import type {
   IntentMessage,
   InvestigatorState,
   MultiplayerErrorMessage,
+  MultiplayerAiTurnMessage,
   MultiplayerIntentResolvedMessage,
+  MultiplayerPhaseChangedMessage,
   MultiplayerRoomClosedMessage,
   MultiplayerRoomMember,
   MultiplayerRoomSnapshot,
   MultiplayerRoomSnapshotMessage,
+  MultiplayerSeatController,
   MultiplayerServerMessage,
   ResultMessage,
   RuleContext,
   ScenarioState,
   TurnState,
+  InvestigatorAIProfile,
+  InvestigatorAIState,
+  MythosCardData,
+  KeeperProfile,
+  AttackCardLookup,
+  ActCardData,
+  AgendaCardData,
 } from '@cthulhu/shared';
 
 // @cthulhu/shared is emitted as CommonJS so the production Node server and the
 // Vite client consume the same compiled engine contract.
 const require = createRequire(import.meta.url);
 const sharedRuntime = require('@cthulhu/shared') as typeof import('@cthulhu/shared');
-const { CURRENT_MESSAGE_SCHEMA_VERSION, resolveIntent } = sharedRuntime;
+const {
+  CURRENT_MESSAGE_SCHEMA_VERSION,
+  initInvestigatorAIState,
+  runInvestigatorAITurn,
+  initKeeperState,
+  snapshotSituation,
+  selectKeeperActivations,
+  executeMythosCard,
+  activateMonsters,
+  runFearChecks,
+  progressTick,
+  runTurnEndUpkeep,
+  runTurnStartUpkeep,
+  resolveIntent,
+} = sharedRuntime;
 
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ROOM_CODE_LENGTH = 6;
@@ -37,11 +61,28 @@ export interface RoomPlayer {
 }
 
 export interface AuthoritativeGameState {
+  /** N2 lobby start writes the stage identity; N1 tests may omit it. */
+  stageId?: string;
   scenario: ScenarioState;
   investigators: Record<string, InvestigatorState>;
   turn: TurnState;
-  /** playerId -> controlled investigatorId. N2 will populate this after role selection. */
+  /** playerId -> controlled investigatorId. */
   playerInvestigators: Record<string, string>;
+  /** Per-investigator controller; a disconnected human is switched to AI. */
+  controllerByInvestigator?: Record<string, MultiplayerSeatController>;
+  /** Profiles and local AI planner state never leave the server snapshot. */
+  aiProfilesByInvestigator?: Record<string, InvestigatorAIProfile>;
+  aiStatesByInvestigator?: Record<string, InvestigatorAIState>;
+  /** Explicit declarations replace the single-player AP-zero auto-end behavior. */
+  declaredEndByInvestigator?: string[];
+  /** Server-only phase data assembled from the trusted bootstrap. */
+  roundRuntime?: {
+    mythosCards: MythosCardData[];
+    keeperProfile: KeeperProfile;
+    attackCards: AttackCardLookup;
+    actCards: ActCardData[];
+    agendaCards: AgendaCardData[];
+  };
   /** Server-only rule data; it is intentionally absent from snapshots. */
   ruleContext?: Omit<RuleContext, 'scenario' | 'investigator' | 'investigators' | 'turn'>;
 }
@@ -53,6 +94,11 @@ export interface RoomServiceError {
     | 'room_full'
     | 'not_room_member'
     | 'not_room_host'
+    | 'room_already_active'
+    | 'selection_required'
+    | 'investigator_taken'
+    | 'not_ready'
+    | 'requires_two_players'
     | 'game_not_active'
     | 'investigator_not_controlled'
     | 'intent_out_of_order'
@@ -77,6 +123,7 @@ interface RoomRecord {
   version: number;
   members: Map<string, MultiplayerRoomMember>;
   game?: AuthoritativeGameState;
+  connectionCountByPlayer: Map<string, number>;
   lastSequenceByPlayer: Map<string, number>;
   processedByPlayer: Map<string, Map<number, MultiplayerIntentResolvedMessage>>;
 }
@@ -128,8 +175,10 @@ export class MultiplayerRoomService {
     const member: MultiplayerRoomMember = {
       playerId: host.playerId,
       username: host.username,
-      connected: true,
+      connected: false,
       joinedAt: this.now(),
+      investigatorTemplateId: null,
+      ready: false,
     };
     const room: RoomRecord = {
       code,
@@ -137,6 +186,7 @@ export class MultiplayerRoomService {
       phase: 'lobby',
       version: 0,
       members: new Map([[host.playerId, member]]),
+      connectionCountByPlayer: new Map([[host.playerId, 0]]),
       lastSequenceByPlayer: new Map(),
       processedByPlayer: new Map(),
     };
@@ -147,17 +197,24 @@ export class MultiplayerRoomService {
   joinRoom(codeInput: string, player: RoomPlayer): RoomServiceResult<MultiplayerRoomSnapshot> {
     const room = this.roomFor(codeInput);
     if (!room.ok) return room;
+    if (room.data.phase === 'active') {
+      return { ok: false, error: { code: 'room_already_active', message: '遊戲已開始，不能再加入新席位。', snapshot: this.snapshot(room.data) } };
+    }
     const existing = room.data.members.get(player.playerId);
     if (!existing && room.data.members.size >= MAX_ROOM_MEMBERS) {
       return { ok: false, error: { code: 'room_full', message: '房間已滿（最多 4 人）。', snapshot: this.snapshot(room.data) } };
     }
-    const changed = !existing || !existing.connected || existing.username !== player.username;
+    const connectionCount = room.data.connectionCountByPlayer.get(player.playerId) ?? 0;
+    const changed = !existing || existing.username !== player.username;
     room.data.members.set(player.playerId, {
       playerId: player.playerId,
       username: player.username,
-      connected: true,
+      connected: connectionCount > 0,
       joinedAt: existing?.joinedAt ?? this.now(),
+      investigatorTemplateId: existing?.investigatorTemplateId ?? null,
+      ready: existing?.ready ?? false,
     });
+    room.data.connectionCountByPlayer.set(player.playerId, connectionCount);
     room.data.version += changed ? 1 : 0;
     const snapshot = this.snapshot(room.data);
     this.broadcast(room.data, { type: 'room_snapshot', snapshot });
@@ -175,6 +232,7 @@ export class MultiplayerRoomService {
     }
 
     room.data.members.delete(playerId);
+    room.data.connectionCountByPlayer.delete(playerId);
     room.data.lastSequenceByPlayer.delete(playerId);
     room.data.processedByPlayer.delete(playerId);
     room.data.version += 1;
@@ -205,12 +263,90 @@ export class MultiplayerRoomService {
     if (!room.ok) return room;
     const member = room.data.members.get(playerId);
     if (!member) return this.notMember(room.data);
-    if (member.connected === connected) return { ok: true, data: this.snapshot(room.data) };
-    room.data.members.set(playerId, { ...member, connected });
+    const currentCount = room.data.connectionCountByPlayer.get(playerId) ?? (member.connected ? 1 : 0);
+    const nextCount = connected ? currentCount + 1 : Math.max(0, currentCount - 1);
+    const nextConnected = nextCount > 0;
+    room.data.connectionCountByPlayer.set(playerId, nextCount);
+    if (member.connected === nextConnected) return { ok: true, data: this.snapshot(room.data) };
+    room.data.members.set(playerId, { ...member, connected: nextConnected });
+    const investigatorId = room.data.game?.playerInvestigators[playerId];
+    if (investigatorId && room.data.game) {
+      room.data.game.controllerByInvestigator = {
+        ...(room.data.game.controllerByInvestigator ?? {}),
+        [investigatorId]: nextConnected ? 'human' : 'ai',
+      };
+    }
     room.data.version += 1;
     const snapshot = this.snapshot(room.data);
     this.broadcast(room.data, { type: 'room_snapshot', snapshot });
     return { ok: true, data: snapshot };
+  }
+
+  selectInvestigator(
+    codeInput: string,
+    playerId: string,
+    investigatorTemplateId: string,
+  ): RoomServiceResult<MultiplayerRoomSnapshot> {
+    const room = this.roomFor(codeInput);
+    if (!room.ok) return room;
+    if (room.data.phase !== 'lobby') {
+      return { ok: false, error: { code: 'room_already_active', message: '遊戲已開始，不能改選調查員。', snapshot: this.snapshot(room.data) } };
+    }
+    const member = room.data.members.get(playerId);
+    if (!member) return this.notMember(room.data);
+    const selected = investigatorTemplateId.trim();
+    if (!selected) {
+      return { ok: false, error: { code: 'selection_required', message: '請先選擇一位調查員。', snapshot: this.snapshot(room.data) } };
+    }
+    const owner = [...room.data.members.values()].find((seat) =>
+      seat.playerId !== playerId && seat.investigatorTemplateId === selected,
+    );
+    if (owner) {
+      return { ok: false, error: { code: 'investigator_taken', message: '這位調查員已被其他席位選走。', snapshot: this.snapshot(room.data) } };
+    }
+    room.data.members.set(playerId, { ...member, investigatorTemplateId: selected, ready: false });
+    room.data.version += 1;
+    const snapshot = this.snapshot(room.data);
+    this.broadcast(room.data, { type: 'room_snapshot', snapshot });
+    return { ok: true, data: snapshot };
+  }
+
+  setReady(codeInput: string, playerId: string, ready: boolean): RoomServiceResult<MultiplayerRoomSnapshot> {
+    const room = this.roomFor(codeInput);
+    if (!room.ok) return room;
+    if (room.data.phase !== 'lobby') {
+      return { ok: false, error: { code: 'room_already_active', message: '遊戲已開始，不能改變 ready 狀態。', snapshot: this.snapshot(room.data) } };
+    }
+    const member = room.data.members.get(playerId);
+    if (!member) return this.notMember(room.data);
+    if (ready && !member.investigatorTemplateId) {
+      return { ok: false, error: { code: 'selection_required', message: '選擇調查員後才能 ready。', snapshot: this.snapshot(room.data) } };
+    }
+    if (member.ready === ready) return { ok: true, data: this.snapshot(room.data) };
+    room.data.members.set(playerId, { ...member, ready });
+    room.data.version += 1;
+    const snapshot = this.snapshot(room.data);
+    this.broadcast(room.data, { type: 'room_snapshot', snapshot });
+    return { ok: true, data: snapshot };
+  }
+
+  canStart(codeInput: string, playerId: string): RoomServiceResult<MultiplayerRoomSnapshot> {
+    const room = this.roomFor(codeInput);
+    if (!room.ok) return room;
+    if (room.data.hostPlayerId !== playerId) {
+      return { ok: false, error: { code: 'not_room_host', message: '只有房主可以開始關卡。', snapshot: this.snapshot(room.data) } };
+    }
+    if (room.data.phase !== 'lobby') {
+      return { ok: false, error: { code: 'room_already_active', message: '此房間已經開始。', snapshot: this.snapshot(room.data) } };
+    }
+    if (room.data.members.size < 2) {
+      return { ok: false, error: { code: 'requires_two_players', message: '多人 v1 需要至少兩位真人調查員。', snapshot: this.snapshot(room.data) } };
+    }
+    const incomplete = [...room.data.members.values()].find((member) => !member.investigatorTemplateId || !member.ready);
+    if (incomplete) {
+      return { ok: false, error: { code: 'not_ready', message: '所有真人席位都必須選人並 ready。', snapshot: this.snapshot(room.data) } };
+    }
+    return { ok: true, data: this.snapshot(room.data) };
   }
 
   /**
@@ -230,10 +366,16 @@ export class MultiplayerRoomService {
     }
     room.data.game = {
       ...game,
+      stageId: game.stageId ?? '',
       scenario: clone(game.scenario),
       investigators: clone(game.investigators),
       turn: clone(game.turn),
       playerInvestigators: { ...game.playerInvestigators },
+      controllerByInvestigator: { ...(game.controllerByInvestigator ?? Object.fromEntries(Object.values(game.playerInvestigators).map((id) => [id, 'human' as const]))) },
+      aiProfilesByInvestigator: { ...(game.aiProfilesByInvestigator ?? {}) },
+      aiStatesByInvestigator: { ...(game.aiStatesByInvestigator ?? {}) },
+      declaredEndByInvestigator: [...(game.declaredEndByInvestigator ?? [])],
+      roundRuntime: game.roundRuntime,
       // Rule context may contain an injected RNG for deterministic server tests;
       // it is server-only and must not be JSON-cloned into a snapshot.
       ruleContext: game.ruleContext,
@@ -243,6 +385,96 @@ export class MultiplayerRoomService {
     const snapshot = this.snapshot(room.data);
     this.broadcast(room.data, { type: 'room_snapshot', snapshot });
     return { ok: true, data: snapshot };
+  }
+
+  declareActionEnd(codeInput: string, playerId: string, sequence: number): RoomServiceResult<MultiplayerIntentResolvedMessage> {
+    const room = this.roomFor(codeInput);
+    if (!room.ok) return room;
+    if (!room.data.members.has(playerId)) return this.notMember(room.data);
+    if (!room.data.game || room.data.phase !== 'active') {
+      return { ok: false, error: { code: 'game_not_active', message: '房間尚未啟動遊戲引擎。', snapshot: this.snapshot(room.data) } };
+    }
+    const game = room.data.game;
+    const investigatorId = game.playerInvestigators[playerId];
+    if (!investigatorId || game.controllerByInvestigator?.[investigatorId] === 'ai') {
+      return { ok: false, error: { code: 'investigator_not_controlled', message: '此席目前由 AI 控制。', snapshot: this.snapshot(room.data) } };
+    }
+    const lastSequence = room.data.lastSequenceByPlayer.get(playerId) ?? 0;
+    const prior = room.data.processedByPlayer.get(playerId)?.get(sequence);
+    if (prior) return { ok: true, data: { ...clone(prior), duplicate: true } };
+    if (!Number.isInteger(sequence) || sequence !== lastSequence + 1) {
+      return { ok: false, error: { code: 'intent_out_of_order', message: `意圖序號失序：預期 ${lastSequence + 1}。`, snapshot: this.snapshot(room.data) } };
+    }
+    const declared = new Set(game.declaredEndByInvestigator ?? []);
+    declared.add(investigatorId);
+    game.declaredEndByInvestigator = [...declared];
+    room.data.lastSequenceByPlayer.set(playerId, sequence);
+    room.data.version += 1;
+    this.advanceWhenEveryoneDeclared(room.data);
+    const result: ResultMessage = {
+      id: `room:${room.data.code}:declare:${playerId}:${sequence}`,
+      timestamp: this.now(),
+      schemaVersion: CURRENT_MESSAGE_SCHEMA_VERSION,
+      source: 'server',
+      kind: 'result',
+      inResponseTo: `declare:${sequence}`,
+      outcome: 'accepted',
+      effects: [{ type: 'action_end_declared', params: { investigatorId } }],
+    };
+    const message: MultiplayerIntentResolvedMessage = {
+      type: 'intent_resolved', actorPlayerId: playerId, sequence, result, snapshot: this.snapshot(room.data),
+    };
+    if (!room.data.processedByPlayer.has(playerId)) room.data.processedByPlayer.set(playerId, new Map());
+    room.data.processedByPlayer.get(playerId)?.set(sequence, clone(message));
+    this.broadcast(room.data, message);
+    return { ok: true, data: message };
+  }
+
+  runAiTurn(codeInput: string, investigatorId: string): RoomServiceResult<MultiplayerAiTurnMessage> {
+    const room = this.roomFor(codeInput);
+    if (!room.ok) return room;
+    if (!room.data.game || room.data.phase !== 'active') {
+      return { ok: false, error: { code: 'game_not_active', message: '房間尚未啟動遊戲引擎。', snapshot: this.snapshot(room.data) } };
+    }
+    const game = room.data.game;
+    if (game.controllerByInvestigator?.[investigatorId] !== 'ai') {
+      return { ok: false, error: { code: 'investigator_not_controlled', message: '此調查員目前不是 AI 控制。', snapshot: this.snapshot(room.data) } };
+    }
+    const investigator = game.investigators[investigatorId];
+    const profile = game.aiProfilesByInvestigator?.[investigatorId];
+    if (!investigator || !profile) {
+      return { ok: false, error: { code: 'investigator_not_controlled', message: 'AI 席位缺少調查員或人格資料。', snapshot: this.snapshot(room.data) } };
+    }
+    const aiState = game.aiStatesByInvestigator?.[investigatorId] ?? initInvestigatorAIState();
+    const run = runInvestigatorAITurn({
+      ...(game.ruleContext ?? {}),
+      scenario: game.scenario,
+      investigator,
+      allies: game.investigators,
+      turnNumber: game.turn.turnNumber,
+      locationStats: game.ruleContext?.locationStats ?? {},
+      enemyStats: game.ruleContext?.enemyStats ?? {},
+      cardLookup: game.ruleContext?.cardLookup ?? {},
+      stylePools: game.ruleContext?.stylePools ?? {},
+    }, profile, aiState);
+    game.investigators = {
+      ...game.investigators,
+      [investigatorId]: run.investigator,
+      ...run.updatedAllies,
+    };
+    game.scenario = run.scenario;
+    game.aiStatesByInvestigator = { ...(game.aiStatesByInvestigator ?? {}), [investigatorId]: run.aiState };
+    game.declaredEndByInvestigator = [...new Set([...(game.declaredEndByInvestigator ?? []), investigatorId])];
+    room.data.version += 1;
+    this.advanceWhenEveryoneDeclared(room.data);
+    const message: MultiplayerAiTurnMessage = {
+      type: 'ai_turn_completed',
+      investigatorId,
+      lines: run.steps.filter((step: any) => step.outcome === 'accepted').map((step: any) => step.intentNarrative),
+      snapshot: this.snapshot(room.data),
+    };
+    this.broadcast(room.data, message);
+    return { ok: true, data: message };
   }
 
   submitIntent(
@@ -266,6 +498,9 @@ export class MultiplayerRoomService {
     const expectedInvestigatorId = room.data.game.playerInvestigators[playerId];
     if (!expectedInvestigatorId || intent.investigatorId !== expectedInvestigatorId) {
       return { ok: false, error: { code: 'investigator_not_controlled', message: '此玩家不控制指定的調查員。', snapshot: this.snapshot(room.data) } };
+    }
+    if (room.data.game.controllerByInvestigator?.[expectedInvestigatorId] === 'ai') {
+      return { ok: false, error: { code: 'investigator_not_controlled', message: '此席目前由 AI 接管，重連後會交還操作權。', snapshot: this.snapshot(room.data) } };
     }
 
     const lastSequence = room.data.lastSequenceByPlayer.get(playerId) ?? 0;
@@ -374,13 +609,112 @@ export class MultiplayerRoomService {
       phase: room.phase,
       hostPlayerId: room.hostPlayerId,
       members: [...room.members.values()],
+      nextSequenceByPlayer: Object.fromEntries(
+        [...room.members.keys()].map((playerId) => [playerId, (room.lastSequenceByPlayer.get(playerId) ?? 0) + 1]),
+      ),
       game: room.game
         ? {
+            stageId: room.game.stageId ?? '',
             scenario: room.game.scenario,
             investigators: room.game.investigators,
             turn: room.game.turn,
+            playerInvestigators: room.game.playerInvestigators,
+            controllerByInvestigator: room.game.controllerByInvestigator ?? {},
+            declaredEndByInvestigator: room.game.declaredEndByInvestigator ?? [],
           }
         : undefined,
+    });
+  }
+
+  private advanceWhenEveryoneDeclared(room: RoomRecord): void {
+    const game = room.game;
+    if (!game || game.scenario.phase !== 'investigator') return;
+    const activeInvestigators = Object.values(game.investigators)
+      .filter((investigator) => !investigator.dead && !investigator.permanentlyDead)
+      .map((investigator) => investigator.investigatorId);
+    const declared = new Set(game.declaredEndByInvestigator ?? []);
+    if (activeInvestigators.length === 0 || !activeInvestigators.every((id) => declared.has(id))) return;
+    game.scenario = { ...game.scenario, phase: 'mythos' };
+    game.turn = { ...game.turn, phase: 'mythos' };
+    room.version += 1;
+    const mythosMessage: MultiplayerPhaseChangedMessage = {
+      type: 'phase_changed',
+      phase: 'mythos',
+      snapshot: this.snapshot(room),
+    };
+    this.broadcast(room, mythosMessage);
+
+    const runtime = game.roundRuntime;
+    if (!runtime) return;
+    const partySize = Object.keys(game.investigators).length;
+    const anchor = Object.values(game.investigators).find((investigator) => !investigator.dead && !investigator.permanentlyDead);
+    if (!anchor) return;
+    let scenario = game.scenario;
+    let investigators = { ...game.investigators };
+    const situation = snapshotSituation(scenario, anchor, null, null);
+    const selection = selectKeeperActivations(
+      runtime.mythosCards,
+      situation,
+      scenario.keeperState ?? initKeeperState(runtime.keeperProfile),
+      runtime.keeperProfile,
+    );
+    scenario = { ...scenario, keeperState: selection.state };
+    for (const card of selection.activations) {
+      const currentAnchor = investigators[anchor.investigatorId] ?? anchor;
+      const resolved = executeMythosCard(card, scenario, currentAnchor, game.ruleContext?.enemyStats ?? {}, Math.random, partySize, investigators);
+      scenario = resolved.scenario;
+      investigators = {
+        ...investigators,
+        [currentAnchor.investigatorId]: resolved.investigator,
+        ...(resolved.updatedInvestigators ?? {}),
+      };
+      if (resolved.attachments.length > 0) {
+        scenario = { ...scenario, keeperAttachments: [...(scenario.keeperAttachments ?? []), ...resolved.attachments] };
+      }
+    }
+    const monsters = activateMonsters(
+      scenario,
+      investigators,
+      game.ruleContext?.enemyStats ?? {},
+      runtime.attackCards,
+    );
+    scenario = monsters.scenario;
+    investigators = monsters.investigators;
+    for (const [id, investigator] of Object.entries(investigators)) {
+      const fear = runFearChecks(investigator, scenario, game.ruleContext?.enemyStats ?? {});
+      investigators[id] = fear.investigator;
+    }
+    const progressed = progressTick(
+      scenario,
+      {},
+      runtime.actCards,
+      runtime.agendaCards,
+      game.ruleContext?.enemyStats ?? {},
+      partySize,
+      investigators,
+    );
+    scenario = progressed.scenario;
+    for (const [id, investigator] of Object.entries(investigators)) {
+      const ending = runTurnEndUpkeep(investigator);
+      const started = runTurnStartUpkeep({ ...ending.investigator, actionPoints: 3 });
+      investigators[id] = started.investigator;
+    }
+    const nextTurn = scenario.turnNumber + 1;
+    game.scenario = { ...scenario, phase: 'investigator', turnNumber: nextTurn };
+    game.investigators = investigators;
+    game.turn = {
+      turnNumber: nextTurn,
+      phase: 'investigator',
+      actionPointsSpent: {},
+      pendingLegendaryActions: [],
+      triggeredReactions: [],
+    };
+    game.declaredEndByInvestigator = [];
+    room.version += 1;
+    this.broadcast(room, {
+      type: 'phase_changed',
+      phase: 'investigator',
+      snapshot: this.snapshot(room),
     });
   }
 

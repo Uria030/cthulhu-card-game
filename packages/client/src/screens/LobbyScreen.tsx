@@ -30,6 +30,7 @@ const LOBBY_PROPS: LobbyPropDefinition[] = [
   { id: 'tomes', label: '研究厚書', detail: '研究與升級', available: false, position: { left: '89%', top: '80%', size: '13%' } },
   { id: 'parch', label: '封蠟文件', detail: '花費天賦點', available: false, position: { left: '60%', top: '84%', size: '12%' } },
   { id: 'map', label: '地圖紙', detail: '選擇下一個關卡', available: true, position: { left: '75%', top: '74%', size: '16%' } },
+  { id: 'telegram', label: '邀請電報', detail: '建立或加入多人房間', available: true, position: { left: '71%', top: '53%', size: '12%' } },
 ];
 
 const LOBBY_SEAT_PATCHES = [
@@ -127,6 +128,10 @@ export function LobbyScreen() {
     }
     if (prop.id === 'card-lab') {
       navigate('/scenario/card-lab');
+      return;
+    }
+    if (prop.id === 'telegram') {
+      navigate('/multiplayer');
       return;
     }
     setPropMessage(`${prop.label}尚未開放；它會在整備系統完成後成為「${prop.detail}」入口。`);

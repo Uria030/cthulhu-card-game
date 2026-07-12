@@ -151,6 +151,59 @@ test('updatedAllies 管線:穩定隊友的變動進入同一份權威 snapshot',
   assertEq(resolved.data.snapshot.game?.investigators['inv-1'].actionPoints, 2);
 });
 
+test('多人 v1 大廳:64 選 1 互斥、全員 ready 與兩真人開局門檻由 server 裁決', () => {
+  const service = makeService();
+  const created = service.createRoom({ playerId: 'player-1', username: 'creator01' });
+  if (!created.ok) throw new Error(created.error.message);
+  assertEq(service.canStart(created.data.roomCode, 'player-1').ok, false, '單人不得開始多人 v1');
+  const joined = service.joinRoom(created.data.roomCode, { playerId: 'player-2', username: 'creator02' });
+  if (!joined.ok) throw new Error(joined.error.message);
+  assertEq(service.selectInvestigator(created.data.roomCode, 'player-1', 'template-a').ok, true);
+  const duplicate = service.selectInvestigator(created.data.roomCode, 'player-2', 'template-a');
+  assertEq(duplicate.ok, false);
+  if (!duplicate.ok) assertEq(duplicate.error.code, 'investigator_taken');
+  assertEq(service.selectInvestigator(created.data.roomCode, 'player-2', 'template-b').ok, true);
+  assertEq(service.setReady(created.data.roomCode, 'player-1', true).ok, true);
+  assertEq(service.canStart(created.data.roomCode, 'player-1').ok, false, '另一席尚未 ready');
+  assertEq(service.setReady(created.data.roomCode, 'player-2', true).ok, true);
+  const ready = service.canStart(created.data.roomCode, 'player-1');
+  assertEq(ready.ok, true);
+  if (ready.ok) {
+    assertEq(ready.data.members[0].investigatorTemplateId, 'template-a');
+    assertEq(ready.data.members[1].ready, true);
+  }
+});
+
+test('斷線代打:控制權切給 AI，重連後交還真人且不改變同一份調查員狀態', () => {
+  const service = makeService();
+  const roomCode = activeTwoPlayerRoom(service);
+  assertEq(service.setConnection(roomCode, 'player-2', true).ok, true);
+  const disconnected = service.setConnection(roomCode, 'player-2', false);
+  assertEq(disconnected.ok, true);
+  if (!disconnected.ok) return;
+  assertEq(disconnected.data.members.find((member) => member.playerId === 'player-2')?.connected, false);
+  assertEq(disconnected.data.game?.controllerByInvestigator['inv-2'], 'ai');
+  const reconnected = service.setConnection(roomCode, 'player-2', true);
+  assertEq(reconnected.ok, true);
+  if (!reconnected.ok) return;
+  assertEq(reconnected.data.game?.controllerByInvestigator['inv-2'], 'human');
+  assertEq(reconnected.data.game?.investigators['inv-2'].investigatorId, 'inv-2');
+});
+
+test('宣告制結束:AP 未歸零也必須明確宣告，兩席都宣告後才進神話階段', () => {
+  const service = makeService();
+  const roomCode = activeTwoPlayerRoom(service);
+  const first = service.declareActionEnd(roomCode, 'player-1', 1);
+  assertEq(first.ok, true);
+  if (!first.ok) return;
+  assertEq(first.data.snapshot.game?.scenario.phase, 'investigator');
+  assertEq(first.data.snapshot.game?.declaredEndByInvestigator.includes('inv-1'), true);
+  const second = service.declareActionEnd(roomCode, 'player-2', 1);
+  assertEq(second.ok, true);
+  if (!second.ok) return;
+  assertEq(second.data.snapshot.game?.scenario.phase, 'mythos');
+});
+
 let passed = 0;
 let failed = 0;
 const failures: string[] = [];

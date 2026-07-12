@@ -4,7 +4,13 @@
  * API base 與 admin-shared.js 同策略:固定指向 Railway,
  * 本機開發可用 VITE_API_BASE 覆寫(.env.local)。
  */
-import type { CampaignProgress, StageBootstrap, CardData, StyleCardData } from '@cthulhu/shared';
+import type {
+  CampaignProgress,
+  StageBootstrap,
+  CardData,
+  StyleCardData,
+  MultiplayerRoomSnapshot,
+} from '@cthulhu/shared';
 
 export const API_BASE: string =
   import.meta.env.VITE_API_BASE ?? 'https://server-production-fc4f.up.railway.app';
@@ -302,6 +308,39 @@ export function settlePlayerSaveScenario(input: {
       flags: input.flags,
       investigator: input.investigator,
     }),
+  }, true);
+}
+
+export function createMultiplayerRoom(): Promise<MultiplayerRoomSnapshot> {
+  return requestJson<MultiplayerRoomSnapshot>('/api/multiplayer/rooms', { method: 'POST' }, true);
+}
+
+export function fetchMultiplayerRoom(roomCode: string): Promise<MultiplayerRoomSnapshot> {
+  return requestJson<MultiplayerRoomSnapshot>(`/api/multiplayer/rooms/${encodeURIComponent(roomCode)}`, {}, true);
+}
+
+export function joinMultiplayerRoom(roomCode: string): Promise<MultiplayerRoomSnapshot> {
+  return requestJson<MultiplayerRoomSnapshot>(`/api/multiplayer/rooms/${encodeURIComponent(roomCode)}/join`, { method: 'POST' }, true);
+}
+
+export function selectMultiplayerInvestigator(roomCode: string, investigatorTemplateId: string): Promise<MultiplayerRoomSnapshot> {
+  return requestJson<MultiplayerRoomSnapshot>(`/api/multiplayer/rooms/${encodeURIComponent(roomCode)}/select-investigator`, {
+    method: 'POST',
+    body: JSON.stringify({ investigator_template_id: investigatorTemplateId }),
+  }, true);
+}
+
+export function setMultiplayerReady(roomCode: string, ready: boolean): Promise<MultiplayerRoomSnapshot> {
+  return requestJson<MultiplayerRoomSnapshot>(`/api/multiplayer/rooms/${encodeURIComponent(roomCode)}/ready`, {
+    method: 'POST',
+    body: JSON.stringify({ ready }),
+  }, true);
+}
+
+export function startMultiplayerRoom(roomCode: string, stageId: string): Promise<MultiplayerRoomSnapshot> {
+  return requestJson<MultiplayerRoomSnapshot>(`/api/multiplayer/rooms/${encodeURIComponent(roomCode)}/start`, {
+    method: 'POST',
+    body: JSON.stringify({ stage_id: stageId }),
   }, true);
 }
 

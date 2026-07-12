@@ -315,7 +315,6 @@ function describeEffect(eff: ResultEffect, locMeta: Record<string, LocationDispl
     case 'flag_set': return '🚩 旗標「' + (p.flag_code as string) + '」= ' + String(p.value);
     case 'enemy_spawned': return '🌊 ' + (p.enemy as string) + ' 出現在 ' + (locMeta[p.location as string]?.name ?? (p.location as string)) + '!';
     case 'penalty_applied': return '⛈ ' + ((p.narrative as string) || (p.penalty as string));
-    case 'clues_spent': return '🔎 花費 ' + (p.amount as number) + ' 個線索拼出真相';
     case 'investigator_downed': return '🩸 ' + (p.narrative as string) + '【瀕死】';
     case 'investigator_revived': return '💚 ' + (p.narrative as string);
     case 'death_save': return '🎲 瀕死檢定 d20=' + (p.roll as number) + ' → ' + (p.outcome === 'success' ? '穩住(' + (p.successes as number) + '/3)' : (p.outcome === 'critical_fail' ? '天 1!雙倍惡化' : '惡化') + '(' + (p.failures as number) + '/3)');
@@ -431,6 +430,21 @@ interface HandLimitSelection {
   selectedIds: string[];
 }
 
+type TurnOpeningChoice = 'pending' | 'actions' | 'rested';
+type PilePanel = null | 'discard' | 'removed' | 'extra';
+
+interface ActionFeedback {
+  key: string;
+  label: string;
+  status: 'processing' | 'rejected';
+}
+
+interface ScreenToast {
+  id: number;
+  text: string;
+  tone: 'normal' | 'warning';
+}
+
 // Phase2 B:AI 隊友計時器同時行動 — AI 起動與單一 action Log 的節奏分開控制。
 const AI_ACTION_INTERVAL_MS = 1100;
 
@@ -444,6 +458,14 @@ const ACTION_PLAY_TITLE: Record<string, string> = {
   evade: '🌀 閃避', move: '👣 移動', taunt: '🗯 嘲諷', stabilize: '🤲 穩定隊友',
   use_shared_action: '📜 揭穿傳說', gain_resource: '拿資源', draw_card: '抽卡',
 };
+
+function monsterPieceAsset(enemyDefinitionId: string, tier = 1): string {
+  if (enemyDefinitionId === 'card_lab_training_dummy') return '/game-art/monsters/training-dummy.png';
+  if (tier >= 3 || /boss|slit|裂嘴|kuchisake/i.test(enemyDefinitionId)) {
+    return '/game-art/monsters/monster-boss.png';
+  }
+  return '/game-art/monsters/monster-common.png';
+}
 
 const ATTRIBUTE_LABEL: Record<AttributeKey, string> = {
   strength: '力量',
@@ -700,6 +722,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const navigate = useNavigate();
   const locMeta = setup.locMeta;
   const cardMeta = setup.cardMeta;
+  const isCardLab = setup.stageId === CARD_LAB_STAGE_ID;
 
   const bus = useMemo(() => createInMemoryMessageBus(), []);
   const turnLoopRef = useRef<ReturnType<typeof createTurnLoop> | null>(null);
@@ -719,12 +742,16 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // AI 計時器「該動了」訊號;executor effect 監聽此值,在 fresh 閉包裡跑一位 AI(競態防護見下方 effect)
   const [aiTick, setAiTick] = useState(0);
   const [phase, setPhase] = useState<TurnPhase>('investigator');
+  const [turnOpeningChoice, setTurnOpeningChoice] = useState<TurnOpeningChoice>(
+    () => (setup.tutorial || isCardLab ? 'actions' : 'pending'),
+  );
   // 本回合玩家是否已選短休息(放棄行動;每回合開頭重置)
   const [playerShortRested, setPlayerShortRested] = useState(false);
   const [turnEndEncounterCheckpoint, setTurnEndEncounterCheckpoint] = useState<'pending' | 'player_done' | 'done'>('pending');
   const [enemyResolutionComplete, setEnemyResolutionComplete] = useState(false);
   const [keeperNoticeVisible, setKeeperNoticeVisible] = useState(false);
   const [roundTransition, setRoundTransition] = useState<RoundTransitionStep>(null);
+  const [lastUpkeepCardName, setLastUpkeepCardName] = useState<string | null>(null);
   const [handLimitSelection, setHandLimitSelection] = useState<HandLimitSelection | null>(null);
   const [turnNumber, setTurnNumber] = useState(1);
   // 城主運行時狀態(行動點/冷卻/使用次數;教學關卡不用)
@@ -738,11 +765,14 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [damageAlloc, setDamageAlloc] = useState<{ physical: number; horror: number; targets: AllocatableTarget[] } | null>(null);
   // Phase2 C:玩家自己動作的三段演出 Modal(敘述→檢定→結果);其他人動作只進 Log
   const [actionPlay, setActionPlay] = useState<ActionPlay | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(null);
+  const [screenToast, setScreenToast] = useState<ScreenToast | null>(null);
   const [encounterDeck, setEncounterDeck] = useState<EncounterCardData[]>(() => setup.encounterCards);
   const [encounterPlay, setEncounterPlay] = useState<EncounterPlay | null>(null);
   // 手牌放大檢視:點手牌卡 → 放大看內容,下方打出/消耗按鈕
   const [zoomCard, setZoomCard] = useState<CardDisplay | null>(null);
   const [panel, setPanel] = useState<PanelType>(null);
+  const [pilePanel, setPilePanel] = useState<PilePanel>(null);
   const [commitWindow, setCommitWindow] = useState<PendingCommitWindow | null>(null);
   const [sharedActionAmount, setSharedActionAmount] = useState(1);
   // 戰役旗標(幕翻面/結局寫入)與結算
@@ -754,13 +784,15 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const [talentPanelOpen, setTalentPanelOpen] = useState(false);
   const [teamSpiritPanelOpen, setTeamSpiritPanelOpen] = useState(false);
   const [locationBarId, setLocationBarId] = useState<string | null>(null);
-  const isCardLab = setup.stageId === CARD_LAB_STAGE_ID;
   const [logCollapsed, setLogCollapsed] = useState(!isCardLab);
   const [logCopied, setLogCopied] = useState(false);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
   const [systemSub, setSystemSub] = useState<null | 'settings' | 'rules'>(null);
   const deathReportedRef = useRef(false);
   const settlementReportedRef = useRef(false);
+  const actionFeedbackTimerRef = useRef(0);
+  const toastTimerRef = useRef(0);
+  const knownEnemyIdsRef = useRef(new Set(setup.scenario.enemies.map((enemy) => enemy.instanceId)));
 
   // 地圖 pan / zoom
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -776,6 +808,29 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const queueAISteps = useCallback((steps: PendingAIStep[]) => {
     appendLines(steps.flatMap((step) => step.lines));
   }, [appendLines]);
+
+  const showScreenToast = useCallback((text: string, tone: ScreenToast['tone'] = 'normal', duration = 1_800) => {
+    window.clearTimeout(toastTimerRef.current);
+    setScreenToast({ id: Date.now(), text, tone });
+    toastTimerRef.current = window.setTimeout(() => setScreenToast(null), duration);
+  }, []);
+
+  const holdActionFeedback = useCallback((key: string, label: string, duration = 1_800) => {
+    window.clearTimeout(actionFeedbackTimerRef.current);
+    setActionFeedback({ key, label, status: 'processing' });
+    actionFeedbackTimerRef.current = window.setTimeout(() => setActionFeedback(null), duration);
+  }, []);
+
+  const rejectActionFeedback = useCallback((key: string, label: string) => {
+    window.clearTimeout(actionFeedbackTimerRef.current);
+    setActionFeedback({ key, label, status: 'rejected' });
+    actionFeedbackTimerRef.current = window.setTimeout(() => setActionFeedback(null), 720);
+  }, []);
+
+  useEffect(() => () => {
+    window.clearTimeout(actionFeedbackTimerRef.current);
+    window.clearTimeout(toastTimerRef.current);
+  }, []);
 
   const copyCardLabLog = useCallback(async () => {
     const text = log.join('\n');
@@ -832,9 +887,12 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setScenario(setup.scenario);
     setAiMembers([]);
     setPhase('investigator');
+    setTurnOpeningChoice('actions');
     setTurnNumber(1);
     setOutcome(null);
     setActionPlay(null);
+    setActionFeedback(null);
+    setScreenToast(null);
     setEncounterPlay(null);
     setDamageAlloc(null);
     setEnemyResolutionComplete(false);
@@ -842,6 +900,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setRoundTransition(null);
     setHandLimitSelection(null);
     setPanel(null);
+    setPilePanel(null);
     setModal(null);
     setLog([...setup.introLog, '[LAB][RESET] 實驗環境、牌組與訓練木人已還原。']);
   }, [setup]);
@@ -1306,7 +1365,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // 連階段判斷都用 fresh 閉包(不靠落後的 ref)。單執行緒下無交錯,故無 lost update。
   const aiHasUnacted = aiMembers.some((ai) =>
     !!ai && !ai.dead && !ai.permanentlyDead && !isDowned(ai) && !aiActedThisTurn.includes(ai.investigatorId));
-  const aiPaused = !!(setup.tutorial || phase !== 'investigator' || outcome || actionPlay || encounterPlay || damageAlloc);
+  const aiPaused = !!(setup.tutorial || phase !== 'investigator' || turnOpeningChoice === 'pending' || outcome || actionPlay || encounterPlay || damageAlloc);
   // 計時器:只發訊號,不碰遊戲狀態。aiActedThisTurn 入 deps → 每位 AI 行動完都重新武裝下一個計時器
   // (否則 aiHasUnacted 仍為 true 時 deps 不變,序列會在第一位之後停住)。
   useEffect(() => {
@@ -1317,7 +1376,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   // 執行:tick 變動 → 用「當下已 commit 的最新 state」跑一位 AI(fresh 閉包,杜絕舊值寫入)
   useEffect(() => {
     if (aiTick === 0) return;
-    if (setup.tutorial || phase !== 'investigator' || outcome || actionPlay || encounterPlay || damageAlloc) return;
+    if (setup.tutorial || phase !== 'investigator' || turnOpeningChoice === 'pending' || outcome || actionPlay || encounterPlay || damageAlloc) return;
     const idx = aiMembers.findIndex((ai) =>
       !!ai && !ai.dead && !ai.permanentlyDead && !isDowned(ai) && !aiActedThisTurn.includes(ai.investigatorId));
     if (idx < 0) return;
@@ -1403,6 +1462,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     actionType: IntentMessage['actionType'],
     payload: Record<string, unknown> = {}
   ) => {
+    if (actionFeedback || actionPlay || encounterPlay || damageAlloc) return;
+    const feedbackLabel = (ACTION_PLAY_TITLE[actionType] ?? actionType).replace(/^[^\p{L}\p{N}]+/u, '');
+    holdActionFeedback(actionType, feedbackLabel);
     const intent: IntentMessage = {
       id: 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
       timestamp: new Date().toISOString(),
@@ -1470,6 +1532,14 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       // 後續行(倒地同步 + 進度/場景/結局敘事):一律排在主效果「之後」。
       const cascadeLogs = [...syncLogs, ...next.logs];
       const effects = out.result.effects ?? [];
+      const drawnNames = effects
+        .filter((effect) => effect.type === 'draw_card')
+        .map((effect) => cardMeta[String((effect.params as { cardInstanceId?: unknown }).cardInstanceId ?? '')]?.name)
+        .filter((name): name is string => Boolean(name));
+      if (drawnNames.length > 0) showScreenToast(`抽到了「${drawnNames.join('」、「')}」`);
+      if (effects.some((effect) => effect.type === 'deck_empty_horror')) {
+        showScreenToast('牌庫已空，受到 1 點恐懼', 'warning');
+      }
       const moveEff = effects.find((e) => e.type === 'move');
       const moveTo = moveEff ? String((moveEff.params as { to?: unknown }).to ?? '') : '';
       const headlinePending = effects.some((e) => e.type === 'headline_drawn');
@@ -1490,6 +1560,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
       // 主效果 + 後續行(cascadeLogs)+ 結局(outcome)全部延到演出「完成」拍才生效:
       // 演出期間 Log 不暴雷、結局畫面不蓋掉沒播完的演出。純記帳動作(取資源/抽卡)不跳,維持輕快。
       if (!ACTION_PLAY_SKIP.has(actionType)) {
+        window.clearTimeout(actionFeedbackTimerRef.current);
+        setActionFeedback(null);
         const locId = investigator.currentLocationId;
         const locName = (locId && setup.locMeta[locId]?.name) || locId || '此地';
         setActionPlay(buildActionPlay(actionType, effects, locName, locMeta, pendingDamageAlloc, cascadeLogs, next.outcome, pendingEncounter));
@@ -1505,8 +1577,11 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           if (!opened) triggerKeeperLegendaryEncounter();
         }
       }
+    } else {
+      rejectActionFeedback(actionType, feedbackLabel);
+      showScreenToast(out.result.rejection?.narrative ?? '動作無法執行', 'warning', 1_500);
     }
-  }, [bus, investigator, scenario, aiMembers, turnNumber, phase, setup, flags, locMeta, triggerEncounter, triggerKeeperLegendaryEncounter, isCardLab, appendLines]);
+  }, [actionFeedback, actionPlay, encounterPlay, damageAlloc, holdActionFeedback, rejectActionFeedback, showScreenToast, bus, investigator, scenario, aiMembers, turnNumber, phase, setup, flags, locMeta, triggerEncounter, triggerKeeperLegendaryEncounter, isCardLab, appendLines, cardMeta]);
 
   const iconLabel = (key: string): string => key === 'all'
     ? '萬用'
@@ -1672,14 +1747,20 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     const r = runShortRest(investigator);
     setInvestigator(r.investigator);
     setPlayerShortRested(true);
+    setTurnOpeningChoice('rested');
     for (const eff of r.effects) append('[短休息] ' + describeEffect(eff, locMeta));
+  };
+
+  const beginPlayerActions = () => {
+    setTurnOpeningChoice('actions');
+    showScreenToast('開始行動');
   };
   /**
    * 神話階段 — 城主 AI v0(keeper_ai_regulation §2.2 sequence):
    * ① 附著卡強制結算 ② 城主選用神話卡(行動點預算+戲劇曲線)③ 怪物啟動 ④ 進度/全滅檢查
    */
   const enterMythosPhase = () => {
-    if (phase !== 'investigator' || investigator.actionPoints > 0) return;
+    if (phase !== 'investigator' || (investigator.actionPoints > 0 && !playerShortRested)) return;
     setEnemyResolutionComplete(false);
     setKeeperNoticeVisible(true);
     let sc = scenario;
@@ -1895,6 +1976,9 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setEnemyResolutionComplete(false);
     if (!setup.tutorial) {
       const playerUpkeep = runTurnEndUpkeep(investigator, { deferHandLimit: true });
+      const upkeepDraw = playerUpkeep.effects.find((effect) => effect.type === 'upkeep_draw');
+      const upkeepCardId = String(upkeepDraw?.params?.cardInstanceId ?? '');
+      setLastUpkeepCardName(upkeepCardId ? (cardMeta[upkeepCardId]?.name ?? upkeepCardId) : null);
       tallyActor(investigator.investigatorId, playerUpkeep.effects);
       setInvestigator(playerUpkeep.investigator);
       for (const eff of playerUpkeep.effects.filter((effect) => effect.type !== 'hand_limit_required')) {
@@ -1918,6 +2002,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const startNextRound = useCallback(() => {
     turnLoopRef.current?.advance();
     setPlayerShortRested(false);
+    setTurnOpeningChoice(setup.tutorial || isCardLab ? 'actions' : 'pending');
     setTurnEndEncounterCheckpoint('pending');
     setAiActedThisTurn([]);
     setInvestigator((current) => {
@@ -1948,7 +2033,8 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
     setScenario((current) => ({ ...current, turnNumber: current.turnNumber + 1 }));
     setKeeperEnergy((energy) => Math.min(12, energy + 1));
     setRoundTransition('new_round');
-  }, [append, locMeta, setup.aiMembers]);
+    setLastUpkeepCardName(null);
+  }, [append, locMeta, setup.aiMembers, setup.tutorial, isCardLab]);
 
   const toggleHandLimitCard = (cardId: string) => {
     setHandLimitSelection((selection) => selection
@@ -1982,6 +2068,12 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   }, [keeperNoticeVisible]);
 
   useEffect(() => {
+    const newlySpawned = scenario.enemies.filter((enemy) => !knownEnemyIdsRef.current.has(enemy.instanceId));
+    for (const enemy of scenario.enemies) knownEnemyIdsRef.current.add(enemy.instanceId);
+    if (newlySpawned.length > 0) setKeeperNoticeVisible(true);
+  }, [scenario.enemies]);
+
+  useEffect(() => {
     if (phase !== 'mythos' || !enemyResolutionComplete || outcome || encounterPlay || damageAlloc || actionPlay || roundTransition) return;
     const id = window.setTimeout(beginTurnEnd, 0);
     return () => window.clearTimeout(id);
@@ -2013,7 +2105,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
 
   // ─── 浮層互動 ──────────────────
   const closeAllOverlays = useCallback(() => {
-    setModal(null); setPanel(null); setLocationBarId(null);
+    setModal(null); setPanel(null); setPilePanel(null); setLocationBarId(null);
     setSystemMenuOpen(false); setSystemSub(null);
   }, []);
 
@@ -2182,6 +2274,18 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
   const isLocationUnlocked = (id: string) => scenario.unlockedLocations.includes(id);
   const currentLocInstance = scenario.locations.find((l) => l.locationDefinitionId === investigator.currentLocationId);
   const moveTargets = currentLocInstance ? currentLocInstance.connectedTo : [];
+  const visiblePile = pilePanel === 'discard'
+    ? investigator.discardPile
+    : pilePanel === 'removed'
+      ? investigator.removedPile
+      : pilePanel === 'extra'
+        ? (investigator.extraDeck ?? [])
+        : [];
+  const visiblePileTitle = pilePanel === 'discard'
+    ? '棄牌堆'
+    : pilePanel === 'removed'
+      ? '除外區'
+      : '額外牌組';
   const encounterTalismanOptions = encounterPlay
     ? availableTalismansForEncounter(investigator, setup.cardLookup, encounterPlay.card)
     : [];
@@ -2336,6 +2440,14 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                   const artKind = locationArtKind(loc.locationDefinitionId, meta?.name);
                   const unlocked = isLocationUnlocked(loc.locationDefinitionId);
                   const isCurr = loc.locationDefinitionId === investigator.currentLocationId;
+                  const isMoveTarget = moveTargets.includes(loc.locationDefinitionId);
+                  const moveCost = (loc.isObstacle ? 2 : 1) + (scenario.globalMoveCostBonus ?? 0);
+                  const canUseMapActions = phase === 'investigator'
+                    && turnOpeningChoice === 'actions'
+                    && !playerShortRested
+                    && !isDowned(investigator)
+                    && !investigator.dead
+                    && !actionFeedback;
                   const cluesHere = scenario.tokens.filter((t) => t.locationId === loc.locationDefinitionId && t.tokenType === 'clue').reduce((s, t) => s + t.amount, 0);
                   const maxClues = Math.max(2, cluesHere);
                   return (
@@ -2359,22 +2471,49 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                       )}
                       {scenario.enemies
                         .filter((e) => e.hp > 0 && e.locationId === loc.locationDefinitionId)
-                        .map((e, ei) => (
+                        .map((e, ei) => {
+                          const enemyData = setup.enemyStats[e.enemyDefinitionId];
+                          const enemyName = enemyData?.name_zh ?? e.enemyDefinitionId;
+                          return (
                           <div
                             key={e.instanceId}
-                            className={'enemy-token' + (e.enemyDefinitionId === 'card_lab_training_dummy' ? ' training-dummy' : '')}
-                            style={{ right: 8 + ei * 26 }}
-                            title={setup.enemyStats[e.enemyDefinitionId]?.name_zh ?? e.enemyDefinitionId}
-                            role="img"
-                            aria-label={setup.enemyStats[e.enemyDefinitionId]?.name_zh ?? e.enemyDefinitionId}
-                          />
-                        ))}
+                            className="monster-piece"
+                            style={{ right: 2 + ei * 34 }}
+                            title={`${enemyName} · HP ${e.hp}`}
+                          >
+                            <img src={monsterPieceAsset(e.enemyDefinitionId, Number(enemyData?.tier ?? 1))} alt={`${enemyName}棋子`} />
+                            <span>HP {e.hp}</span>
+                          </div>
+                          );
+                        })}
                       <div className="loc-name">{!unlocked && <span className="loc-lock-mark">鎖定 · </span>}{meta?.name ?? loc.locationDefinitionId}</div>
                       <div className={`loc-illustration loc-art-${artKind}`} role="img" aria-label={`${meta?.name ?? loc.locationDefinitionId}地點插畫`} />
                       <div className="loc-clues">
                         {Array.from({ length: maxClues }).map((_, i) => (
                           <div key={i} className={'clue-dot' + (i < cluesHere ? ' has-clue' : '')} />
                         ))}
+                      </div>
+                      <div className="location-actions" aria-label={`${meta?.name ?? loc.locationDefinitionId}可用動作`}>
+                        {isCurr && (
+                          <button
+                            className={'location-action investigate-action' + (actionFeedback?.key === 'investigate' ? ` ${actionFeedback.status}` : '')}
+                            disabled={!canUseMapActions || investigator.actionPoints < 1}
+                            onClick={(event) => { event.stopPropagation(); submitCheckIntent('investigate'); }}
+                          >
+                            <img src="/game-art/ui/investigate-magnifier.png" alt="" />
+                            <span>{actionFeedback?.key === 'investigate' ? `${actionFeedback.label}${actionFeedback.status === 'processing' ? '中…' : '失敗'}` : '調查此地點'}</span>
+                          </button>
+                        )}
+                        {!isCurr && (
+                          <button
+                            className={'location-action move-action' + (actionFeedback?.key === 'move' ? ` ${actionFeedback.status}` : '')}
+                            disabled={!canUseMapActions || !unlocked || !isMoveTarget || investigator.actionPoints < moveCost}
+                            onClick={(event) => { event.stopPropagation(); submitIntent('move', { targetLocationId: loc.locationDefinitionId }); }}
+                          >
+                            <img src="/game-art/ui/move-footsteps.png" alt="" />
+                            <span>{isMoveTarget ? `移動到此 · ${moveCost} AP` : '目前無法抵達'}</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -2437,6 +2576,15 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
           </div>
         </div>
 
+        <section className="player-economy" aria-label="玩家卡牌與資源資訊">
+          <div className="economy-resource"><span>資源</span><strong>{investigator.resources}</strong></div>
+          <button onClick={() => openPanel('hand')}><span>手牌</span><strong>{investigator.hand.length}</strong></button>
+          <div><span>牌庫</span><strong>{investigator.deck.length}</strong></div>
+          <button onClick={() => { closeAllOverlays(); setPilePanel('discard'); }}><span>棄牌</span><strong>{investigator.discardPile.length}</strong></button>
+          <button onClick={() => { closeAllOverlays(); setPilePanel('removed'); }}><span>除外</span><strong>{investigator.removedPile.length}</strong></button>
+          <button onClick={() => { closeAllOverlays(); setPilePanel('extra'); }}><span>額外</span><strong>{investigator.extraDeck?.length ?? 0}</strong></button>
+        </section>
+
         {/* === Block 5 右滿高敘事 LOG === */}
         <aside className={'narrative-log' + (isCardLab ? ' lab-log' : '') + (logCollapsed ? ' collapsed' : '')}>
           <div className="log-title">
@@ -2487,11 +2635,14 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               <button onClick={enterMythosPhase}>結束調查員階段 →</button>
             </div>
           )}
-          {phase === 'investigator' && investigator.actionPoints > 0 && !playerShortRested && !isDowned(investigator) && !investigator.dead && (
+          {phase === 'investigator' && turnOpeningChoice === 'pending' && !isDowned(investigator) && !investigator.dead && (
+            <div className="phase-buttons turn-opening-choice">
+              <button onClick={takePlayerShortRest} title="放棄本回合全部行動，將棄牌堆洗回牌庫">進行短休息</button>
+              <button onClick={beginPlayerActions}>開始行動</button>
+            </div>
+          )}
+          {phase === 'investigator' && turnOpeningChoice === 'actions' && investigator.actionPoints > 0 && !playerShortRested && !isDowned(investigator) && !investigator.dead && (
             <div className="phase-buttons">
-              {!setup.tutorial && investigator.actionPoints === 3 && (
-                <button onClick={takePlayerShortRest} title="放棄本回合行動,將棄牌堆洗回牌庫">💤 短休息</button>
-              )}
               {aiMembers.map((ai, idx) =>
                 isDowned(ai) && ai.currentLocationId === investigator.currentLocationId ? (
                   <button
@@ -2503,9 +2654,16 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                   </button>
                 ) : null,
               )}
-              <button onClick={() => submitIntent('gain_resource')}>拿資源</button>
-              <button onClick={() => submitIntent('draw_card')}>抽卡</button>
-              <button onClick={() => submitCheckIntent('investigate')}>調查</button>
+              <button
+                className={actionFeedback?.key === 'gain_resource' ? actionFeedback.status : ''}
+                disabled={Boolean(actionFeedback)}
+                onClick={() => submitIntent('gain_resource')}
+              >{actionFeedback?.key === 'gain_resource' ? `${actionFeedback.label}${actionFeedback.status === 'processing' ? '中…' : '失敗'}` : '拿資源'}</button>
+              <button
+                className={actionFeedback?.key === 'draw_card' ? actionFeedback.status : ''}
+                disabled={Boolean(actionFeedback)}
+                onClick={() => submitIntent('draw_card')}
+              >{actionFeedback?.key === 'draw_card' ? `${actionFeedback.label}${actionFeedback.status === 'processing' ? '中…' : '失敗'}` : '抽卡'}</button>
               {(scenario.discoverablePools ?? []).some(
                 (s) => s.locationId === investigator.currentLocationId && s.takenBy === null,
               ) && (
@@ -2558,17 +2716,6 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
                   </button>
                 </>
               )}
-              {moveTargets.map((tid) => {
-                const meta = locMeta[tid];
-                const target = scenario.locations.find((l) => l.locationDefinitionId === tid);
-                const unlocked = isLocationUnlocked(tid);
-                const cost = (target?.isObstacle ? 2 : 1) + (scenario.globalMoveCostBonus ?? 0);
-                return (
-                  <button key={tid} disabled={!unlocked} onClick={() => submitIntent('move', { targetLocationId: tid })}>
-                    {unlocked ? '' : '🔒 '}移動→{meta?.name ?? tid}({cost} AP)
-                  </button>
-                );
-              })}
               {enemyHere && (
                 <button className="attack" onClick={() => submitCheckIntent('attack', { enemyInstanceId: enemyHere.instanceId })}>
                   ⚔ 徒手攻擊
@@ -2604,7 +2751,7 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
               )}
             </div>
           )}
-          {phase === 'investigator' && investigator.actionPoints === 0 && !playerShortRested && !isDowned(investigator) && !investigator.dead && (
+          {phase === 'investigator' && turnOpeningChoice === 'actions' && investigator.actionPoints === 0 && !playerShortRested && !isDowned(investigator) && !investigator.dead && (
             <div className="phase-buttons phase-buttons-end-only">
               <button onClick={enterMythosPhase}>結束調查員階段 →</button>
             </div>
@@ -2625,11 +2772,40 @@ function BattleBoard({ setup }: { setup: GameSetup }) {
             {keeperNoticeVisible
               ? '有神秘的事情發生了！'
               : roundTransition === 'supply'
-                ? '抽一張牌，獲得一個資源'
+                ? lastUpkeepCardName
+                  ? `抽到了「${lastUpkeepCardName}」，獲得一個資源`
+                  : '抽一張牌，獲得一個資源'
                 : roundTransition === 'ready'
                   ? '所有已橫置的卡片恢復可使用'
                   : '新的回合開始了！'}
           </strong>
+        </div>
+      )}
+
+      {screenToast && (
+        <div className={`screen-toast ${screenToast.tone}`} role="status" aria-live="assertive" key={screenToast.id}>
+          {screenToast.text}
+        </div>
+      )}
+
+      {pilePanel && (
+        <div className="modal-backdrop active" onClick={(event) => { if (event.target === event.currentTarget) setPilePanel(null); }}>
+          <section className="modal-frame pile-panel" aria-label={visiblePileTitle}>
+            <button className="card-detail-close" aria-label="關閉" onClick={() => setPilePanel(null)}>×</button>
+            <div className="modal-title">{visiblePileTitle} · {visiblePile.length} 張</div>
+            <div className="pile-card-grid">
+              {visiblePile.map((id, index) => {
+                const card = cardMeta[id];
+                return (
+                  <article className="pile-card" key={`${id}-${index}`}>
+                    <strong>{card?.name ?? id}</strong>
+                    <small>{card?.desc || '目前沒有可顯示的卡片敘述'}</small>
+                  </article>
+                );
+              })}
+              {visiblePile.length === 0 && <div className="empty-note">此區目前沒有卡片。</div>}
+            </div>
+          </section>
         </div>
       )}
 

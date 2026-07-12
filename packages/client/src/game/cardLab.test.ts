@@ -92,9 +92,11 @@ test('card lab setup uses two locations, a harmless dummy, and no save mode', ()
 
 test('boot preload plan separates local shell assets and public server data', () => {
   const plan = bootPreloadPlan();
-  assertEq(plan.length, 4);
-  assertEq(plan.filter((task) => task.source === 'local').length, 2);
+  assertEq(plan.length, 5);
+  assertEq(plan.filter((task) => task.source === 'local').length, 3);
   assertEq(plan.filter((task) => task.source === 'server').length, 2);
+  assertEq(plan.some((task) => task.id === 'lobby-surface'), true);
+  assertEq(plan.some((task) => task.id === 'lobby-door'), true);
   assertEq(plan.some((task) => task.id === 'stages'), true);
   assertEq(plan.some((task) => task.id === 'investigators'), true);
 });

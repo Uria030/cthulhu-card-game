@@ -1,121 +1,75 @@
-/**
- * 啟動畫面 — 第六章 Part 2 §2.2 視覺規格 + §2.3 動效
- * 純墨黑底 + 碎裂石面紋理 8% + 觸手紋章舊銀色 + 標題思源宋體 64px 煙白
- */
 .splash-root {
-  /* 鎖滿 viewport,不超出(全域守則:遊戲畫面不超過一個螢幕)*/
   width: 100vw;
   height: 100vh;
-  max-height: 100vh;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: var(--sp-xl);
-  background-color: var(--world-ink-black);
-  background-image:
-    linear-gradient(rgba(2, 3, 4, 0.12), rgba(2, 3, 4, 0.44)),
-    url('/game-art/splash-stone.jpg');
-  background-position: center;
-  background-size: cover;
   position: relative;
-  text-align: center;
-  gap: var(--sp-xl);
-  /* 圖騰淡入(§2.3 ease-fade 線性 1.0 秒) */
-  animation: splashFadeIn 1.0s linear both;
-  transition: opacity 0.5s linear;
+  display: grid;
+  place-content: center;
+  gap: 24px;
+  color: #eee5d3;
+  background: #29251f;
+  font-family: "Noto Serif TC", serif;
+  perspective: 1600px;
 }
 
-.splash-root::before,
-.splash-root::after {
-  content: '';
+.splash-lobby-behind {
   position: absolute;
   inset: 0;
-  pointer-events: none;
-}
-.splash-root::before {
-  box-shadow: inset 0 0 120px 32px rgba(0, 0, 0, 0.82);
-}
-.splash-root::after {
-  background: repeating-linear-gradient(104deg, transparent 0 28px, rgba(220, 229, 218, 0.025) 29px 30px);
-  animation: splashRain 1.7s linear infinite;
+  background: url('/game-art/lobby-v2/investigator-study.jpg') center / cover no-repeat;
+  filter: sepia(.15) saturate(.62) brightness(1.04);
+  transform: scale(1.06);
+  transition: transform 1.65s ease-out, filter 1.65s ease-out;
 }
 
-.splash-root.fading-out {
-  opacity: 0;
+.splash-door-stage { position: absolute; inset: 0; transform-style: preserve-3d; }
+.splash-door-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50.08%;
+  background-image: url('/game-art/lobby-v2/office-door.jpg');
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  backface-visibility: hidden;
+  transition: transform 1.65s cubic-bezier(.45, 0, .2, 1), filter .4s ease;
+  box-shadow: 0 0 28px rgba(20, 16, 12, .55);
 }
+.door-left { left: 0; background-position: left center; transform-origin: left center; }
+.door-right { right: 0; background-position: right center; transform-origin: right center; }
+.splash-root.door-open .door-left { transform: rotateY(103deg); }
+.splash-root.door-open .door-right { transform: rotateY(-103deg); }
+.splash-root.door-open .splash-lobby-behind { transform: scale(1); filter: sepia(.1) saturate(.68) brightness(1.08); }
 
-@keyframes splashFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.splash-emblem {
-  /* Yellow Sign 黃色光暈,呼應 Chambers《The King in Yellow》 */
-  filter: drop-shadow(0 0 24px rgba(242, 196, 21, 0.35));
-  position: relative;
-  z-index: 1;
-}
+.splash-emblem,
+.splash-loading { position: relative; z-index: 4; transition: opacity .25s ease, transform .25s ease; }
+.splash-root.door-open .splash-emblem,
+.splash-root.door-open .splash-loading { opacity: 0; transform: scale(.96); pointer-events: none; }
+.splash-emblem { justify-self: center; filter: sepia(.3) drop-shadow(0 2px 8px rgba(35, 27, 17, .72)); }
+.splash-emblem svg { width: 154px; height: 154px; }
 
 .splash-loading {
-  width: min(420px, 78vw);
-  position: relative;
-  z-index: 1;
+  width: min(430px, 78vw);
+  padding: 14px 18px;
+  background: rgba(43, 38, 31, .84);
+  border: 1px solid rgba(215, 196, 153, .64);
   opacity: 0;
   transform: translateY(8px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 .splash-loading.visible { opacity: 1; transform: translateY(0); }
-
-.splash-loading-title {
-  color: var(--world-smoke-white);
-  font: 700 20px 'Noto Serif TC', serif;
-  letter-spacing: 0.18em;
-  text-align: center;
-  margin-bottom: 14px;
-}
-
-.splash-progress-track {
-  height: 8px;
-  border: 1px solid rgba(184, 137, 61, 0.7);
-  background: rgba(7, 8, 10, 0.74);
-  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.8), 0 0 16px rgba(184, 137, 61, 0.1);
-  overflow: hidden;
-}
-
-.splash-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--world-oxblood), var(--world-antique-brass));
-  box-shadow: 0 0 12px rgba(184, 137, 61, 0.5);
-  transition: width 0.24s ease;
-}
-
-.splash-loading-detail {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 9px;
-  color: rgba(217, 210, 197, 0.72);
-  font: 400 11px 'Noto Sans TC', sans-serif;
-}
-
-@keyframes splashRain {
-  from { transform: translateY(-24px); }
-  to { transform: translateY(24px); }
-}
+.splash-loading-title { margin-bottom: 10px; text-align: center; color: #eee2ca; font-size: 18px; font-weight: 700; }
+.splash-progress-track { height: 8px; overflow: hidden; border: 1px solid #8e7d5f; background: #332d25; }
+.splash-progress-fill { height: 100%; background: #c4ad7c; transition: width .24s ease; }
+.splash-loading-detail { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; color: #cbbfa8; font-size: 11px; }
 
 @media (max-width: 768px) {
-  .splash-emblem svg {
-    width: 140px;
-    height: 140px;
-  }
+  .splash-emblem svg { width: 112px; height: 112px; }
+  .splash-loading { width: min(410px, 72vw); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .splash-root,
-  .splash-root::after { animation: none; }
-  .splash-root { transition: none; }
+  .splash-door-panel { transition-duration: .35s; }
+  .splash-root.door-open .door-left { transform: translateX(-100%); }
+  .splash-root.door-open .door-right { transform: translateX(100%); }
+  .splash-lobby-behind,
   .splash-progress-fill { transition: none; }
-  .splash-loading { transition: none; }
 }

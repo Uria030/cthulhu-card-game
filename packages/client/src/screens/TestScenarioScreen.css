@@ -2,7 +2,7 @@
  * 戰鬥板 — Mapground V1 框架樣式
  * 對應 design/Mapground_V1.html(滿版地圖 + 5 浮層 block + 3 modal + 2 panel + location-bar)
  *
- * 字型:Noto Serif TC(headline/body)、Ma Shan Zheng(神祕旁白)、Noto Sans TC(機械感)
+ * 字型:Noto Serif TC(headline/body/敘事)、Noto Sans TC(短標籤)
  * 色彩 token 沿用 src/styles/tokens.css(陣營色 + 玩家色 + 世界觀色都已在)
  */
 
@@ -10,8 +10,8 @@
 .bg-root {
   --font-headline: 'Noto Serif TC', serif;
   --font-body: 'Noto Serif TC', serif;
-  --font-handwritten: 'Ma Shan Zheng', cursive;
-  --font-typewriter: 'Noto Sans TC', sans-serif;
+  --font-handwritten: 'Noto Serif TC', serif;
+  --font-typewriter: 'Noto Serif TC', serif;
 
   /* 玩家色 alias(短名)*/
   --player-1: var(--player-1-russet);
@@ -456,6 +456,38 @@
   transform: translate(-50%, 50%) scale(1.1);
 }
 
+.player-economy {
+  position: fixed;
+  left: var(--sp-md);
+  top: 160px;
+  z-index: 12;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(54px, auto));
+  background: rgba(17, 16, 18, .9);
+  border: 1px solid rgba(201, 168, 76, .48);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, .55);
+}
+.player-economy > div,
+.player-economy > button {
+  min-width: 58px;
+  min-height: 46px;
+  border: 0;
+  border-right: 1px solid rgba(201, 168, 76, .22);
+  background: transparent;
+  color: #e7dfcf;
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body);
+}
+.player-economy > button { cursor: pointer; }
+.player-economy > button:hover { background: rgba(201, 168, 76, .16); }
+.player-economy span { color: #aaa293; font-size: 10px; }
+.player-economy strong { font-size: 17px; line-height: 1.1; }
+.player-economy .economy-resource strong { color: #e1c26e; }
+
 /* === Block 4 滿版地圖 === */
 .location-map {
   position: absolute;
@@ -514,13 +546,13 @@
 }
 .map-connections line {
   stroke: rgba(225, 195, 116, 0.82);
-  stroke-width: 0.035;
+  stroke-width: 4px;
   vector-effect: non-scaling-stroke;
   filter: drop-shadow(0 0 5px rgba(201, 168, 76, 0.72));
 }
 .map-connections line.blocked {
   stroke: rgba(159, 81, 65, 0.88);
-  stroke-dasharray: 0.09 0.055;
+  stroke-dasharray: 10 7;
 }
 
 .location-card {
@@ -582,10 +614,50 @@
 .loc-art-brick-wall { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-brick-wall.jpg'); }
 .loc-art-haunt { background-image: linear-gradient(transparent 58%, rgba(7, 8, 9, 0.72)), url('/game-art/location-haunt.jpg'); }
 .loc-clues {
+  position: absolute;
+  top: 43px;
+  left: 10px;
+  right: 10px;
+  z-index: 4;
   display: flex;
   justify-content: center;
   gap: 4px;
 }
+.location-actions {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 12px;
+  z-index: 7;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  pointer-events: none;
+}
+.location-action {
+  width: min(88px, 46%);
+  min-height: 58px;
+  border: 1px solid rgba(226, 207, 156, 0.78);
+  border-radius: 4px;
+  background: rgba(22, 20, 18, 0.9);
+  color: #eee4cd;
+  padding: 4px 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  font: 600 10px/1.25 var(--font-body);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform .18s ease, filter .18s ease, background .18s ease;
+}
+.location-action img { width: 31px; height: 31px; object-fit: contain; }
+.location-action:hover:not(:disabled) { transform: translateY(-3px); background: rgba(83, 67, 43, .94); }
+.location-action:active:not(:disabled),
+.location-action.processing { transform: translateY(2px) scale(.96); filter: grayscale(.7); background: rgba(20, 20, 20, .94); }
+.location-action.rejected { border-color: #aa4d45; color: #f0b3ad; animation: actionRejected .36s ease; }
+.location-action:disabled { opacity: .42; cursor: not-allowed; }
 .clue-dot {
   width: 8px;
   height: 8px;
@@ -721,7 +793,7 @@
   cursor: pointer;
 }
 .narrative-log.collapsed .log-preview {
-  max-height: 200px;
+  max-height: none;
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
@@ -826,6 +898,16 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+.phase-buttons button.processing {
+  opacity: .72;
+  color: #d8d1c2;
+  border-color: #817969;
+  background: #262521;
+  transform: translateY(2px) scale(.97);
+}
+.phase-buttons button.rejected { animation: actionRejected .36s ease; border-color: #a94b45; color: #f0aaa4; }
+@keyframes actionRejected { 0%, 100% { transform: translateX(0); } 35% { transform: translateX(-5px); } 70% { transform: translateX(5px); } }
+.turn-opening-choice button { min-width: 150px; min-height: 48px; }
 .phase-buttons button.attack {
   border-color: var(--danger);
   color: var(--danger);
@@ -1377,7 +1459,7 @@
   .battle-screen::after,
   .location-card.current-loc,
   .clue-dot.has-clue,
-  .enemy-token,
+  .monster-piece,
   .modal-roll.is-rolling .dice-face,
   .system-menu,
   .outcome-backdrop,
@@ -1515,6 +1597,32 @@
 }
 @keyframes phaseNoticeIn { from { opacity: 0; } to { opacity: 1; } }
 
+.screen-toast {
+  position: fixed;
+  left: 50%;
+  top: 25%;
+  z-index: 96;
+  transform: translateX(-50%);
+  width: min(560px, 82vw);
+  padding: 15px 24px;
+  border: 1px solid rgba(201, 168, 76, .72);
+  background: rgba(20, 18, 19, .94);
+  color: #eee2bf;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, .72);
+  text-align: center;
+  font: 700 20px/1.45 var(--font-body);
+  animation: screenToastIn .24s ease both;
+  pointer-events: none;
+}
+.screen-toast.warning { border-color: #a94b45; color: #f0b3ad; }
+@keyframes screenToastIn { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+.pile-panel { width: min(760px, 92vw); max-height: 82vh; position: relative; }
+.pile-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: 58vh; overflow-y: auto; padding: 8px 2px; }
+.pile-card { min-height: 138px; padding: 14px; border: 1px solid rgba(201, 168, 76, .4); background: #e5dcc9; color: #231e19; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+.pile-card strong { font: 700 16px var(--font-body); }
+.pile-card small { color: #62584d; font: 400 12px/1.55 var(--font-body); }
+
 .hand-limit-modal { width: min(900px, 94vw); max-height: 88vh; display: flex; flex-direction: column; gap: 14px; }
 .hand-limit-modal > p { margin: 0; text-align: center; color: var(--text-secondary); }
 .hand-limit-selected { min-height: 124px; display: flex; justify-content: center; align-items: center; gap: 12px; border: 1px dashed rgba(201,168,76,.55); padding: 12px; overflow-x: auto; }
@@ -1534,6 +1642,11 @@
   .investigator-pawn { width: 46px; height: 66px; top: -46px; }
   .hand-limit-selected button,
   .hand-limit-grid button { width: 96px; min-width: 96px; }
+  .player-economy { left: 8px; top: auto; bottom: 84px; grid-template-columns: repeat(3, 56px); }
+  .player-economy > div,
+  .player-economy > button { min-height: 38px; }
+  .location-action { min-height: 52px; font-size: 9px; }
+  .location-action img { width: 27px; height: 27px; }
 }
 
 .card-detail {
@@ -1758,27 +1871,18 @@
   color: var(--text-tertiary, #9a968c);
 }
 
-/* === 地圖怪物 token === */
-.enemy-token {
+/* === 地圖怪物桌遊棋子 === */
+.monster-piece {
   position: absolute;
-  top: 8px;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 2px solid var(--world-oxblood);
-  background: url('/game-art/slit-mouth-boss.jpg') 50% 24% / 165% auto no-repeat #15151f;
-  filter: drop-shadow(0 0 6px rgba(127, 29, 29, 0.9));
-  z-index: 2;
+  top: -49px;
+  width: 70px;
+  height: 92px;
+  z-index: 6;
   animation: enemyThreat 2.5s ease-in-out infinite;
+  pointer-events: none;
 }
-.enemy-token.training-dummy {
-  border-color: var(--world-antique-brass);
-  background-image: url('/game-art/location-card-lab.jpg');
-  background-position: 50% 39%;
-  background-size: 230% auto;
-  filter: drop-shadow(0 0 5px rgba(184, 137, 61, 0.75));
-  animation: none;
-}
+.monster-piece img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 7px 5px rgba(0, 0, 0, .85)); }
+.monster-piece span { position: absolute; right: 0; bottom: 2px; padding: 1px 4px; background: #541d1d; border: 1px solid #c58b69; color: #fff1df; font: 700 9px var(--font-body); }
 
 @keyframes boardRain {
   from { transform: translateY(-38px); }

@@ -174,6 +174,8 @@ export interface InvestigatorState {
   hand: string[];
   discardPile: string[];
   removedPile: string[];
+  /** 額外牌組（場景外備用、召喚或轉換卡）；未使用時可省略。 */
+  extraDeck?: string[];
   /** 場上資產(武器、護身符、其他持續卡) */
   assetsInPlay: string[];
   /**

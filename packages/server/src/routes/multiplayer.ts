@@ -92,6 +92,19 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
     return reply.send({ success: true, data: room.data });
   });
 
+  app.get<{ Params: { code: string } }>('/api/multiplayer/rooms/:code/private-state', { preHandler: requirePlayerAuth }, async (request, reply) => {
+    const player = playerFromRequest(request);
+    if (!player) return reply.status(401).send({ success: false, error: 'Authentication required' });
+    const state = rooms.getPrivateState(request.params.code, player.playerId);
+    if (!state.ok) {
+      const status = state.error.code === 'room_not_found' ? 404
+        : state.error.code === 'not_room_member' ? 403
+          : state.error.code === 'game_not_active' ? 409 : 400;
+      return reply.status(status).send({ success: false, error: state.error.message });
+    }
+    return reply.send({ success: true, data: state.data });
+  });
+
   app.post<{ Params: { code: string } }>('/api/multiplayer/rooms/:code/join', { preHandler: requirePlayerAuth }, async (request, reply) => {
     const player = playerFromRequest(request);
     if (!player) return reply.status(401).send({ success: false, error: 'Authentication required' });

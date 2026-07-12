@@ -143,6 +143,14 @@ test('多人 v1 路由:選人互斥、ready 後由 server bootstrap 成四席並
     assertEq(started.json().data.phase, 'active');
     assertEq(Object.keys(started.json().data.game.investigators).length, 4);
     assertEq(Object.values(started.json().data.game.controllerByInvestigator).filter((value: unknown) => value === 'ai').length, 2);
+    const privateState = await app.inject({
+      method: 'GET',
+      url: `/api/multiplayer/rooms/${roomCode}/private-state`,
+      headers: { authorization: `Bearer ${hostToken}` },
+    });
+    assertEq(privateState.statusCode, 200, '真人席可取得自己的手牌與場上卡片 view');
+    assertEq(privateState.json().data.investigatorId, started.json().data.game.playerInvestigators['host-id']);
+    assertEq(Array.isArray(privateState.json().data.hand), true);
   } finally { await app.close(); }
 });
 

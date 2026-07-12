@@ -39,6 +39,27 @@ export interface MultiplayerGameSnapshot {
   };
 }
 
+/**
+ * Only the owning player receives this card metadata through the authenticated
+ * private-state endpoint. Card ids remain authoritative server inputs.
+ */
+export interface MultiplayerCardView {
+  instanceId: string;
+  nameZh: string;
+  cardType: string;
+  cost: number;
+  commitIcons: Record<string, number>;
+  canConsume: boolean;
+  actionCount: number;
+  usesLeft: number | null;
+}
+
+export interface MultiplayerPrivateState {
+  investigatorId: string;
+  hand: MultiplayerCardView[];
+  assets: MultiplayerCardView[];
+}
+
 export interface MultiplayerRoomSnapshot {
   roomCode: string;
   version: number;

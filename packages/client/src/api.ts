@@ -9,6 +9,7 @@ import type {
   StageBootstrap,
   CardData,
   StyleCardData,
+  MultiplayerPrivateState,
   MultiplayerRoomSnapshot,
 } from '@cthulhu/shared';
 
@@ -317,6 +318,10 @@ export function createMultiplayerRoom(): Promise<MultiplayerRoomSnapshot> {
 
 export function fetchMultiplayerRoom(roomCode: string): Promise<MultiplayerRoomSnapshot> {
   return requestJson<MultiplayerRoomSnapshot>(`/api/multiplayer/rooms/${encodeURIComponent(roomCode)}`, {}, true);
+}
+
+export function fetchMultiplayerPrivateState(roomCode: string): Promise<MultiplayerPrivateState> {
+  return requestJson<MultiplayerPrivateState>(`/api/multiplayer/rooms/${encodeURIComponent(roomCode)}/private-state`, {}, true);
 }
 
 export function joinMultiplayerRoom(roomCode: string): Promise<MultiplayerRoomSnapshot> {

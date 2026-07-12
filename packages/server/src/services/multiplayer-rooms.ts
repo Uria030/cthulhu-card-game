@@ -16,6 +16,8 @@ import type {
   MultiplayerRoomMember,
   MultiplayerRoomSnapshot,
   MultiplayerRoomSnapshotMessage,
+  MultiplayerCardView,
+  MultiplayerPrivateState,
   MultiplayerSeatController,
   MultiplayerServerMessage,
   ResultMessage,
@@ -273,6 +275,47 @@ export class MultiplayerRoomService {
     if (!room.ok) return room;
     if (!room.data.members.has(playerId)) return this.notMember(room.data);
     return { ok: true, data: this.snapshot(room.data) };
+  }
+
+  /**
+   * Card names and actionable metadata are private to the owning seat. The
+   * shared room snapshot deliberately remains a board-state contract only.
+   */
+  getPrivateState(codeInput: string, playerId: string): RoomServiceResult<MultiplayerPrivateState> {
+    const room = this.roomFor(codeInput);
+    if (!room.ok) return room;
+    if (!room.data.members.has(playerId)) return this.notMember(room.data);
+    const game = room.data.game;
+    if (!game || room.data.phase !== 'active') {
+      return { ok: false, error: { code: 'game_not_active', message: '房間尚未啟動遊戲引擎。', snapshot: this.snapshot(room.data) } };
+    }
+    const investigatorId = game.playerInvestigators[playerId];
+    const investigator = investigatorId ? game.investigators[investigatorId] : undefined;
+    if (!investigator) {
+      return { ok: false, error: { code: 'investigator_not_controlled', message: '找不到此玩家控制的調查員。', snapshot: this.snapshot(room.data) } };
+    }
+    const toCardView = (cardId: string): MultiplayerCardView => {
+      const data = game.ruleContext?.cardLookup?.[cardId];
+      const usesLeft = investigator.assetState?.[cardId]?.usesLeft;
+      return {
+        instanceId: cardId,
+        nameZh: String(data?.name_zh ?? cardId),
+        cardType: String(data?.card_type ?? 'unknown'),
+        cost: Number(data?.cost ?? 0),
+        commitIcons: { ...(data?.commit_icons ?? {}) },
+        canConsume: data?.consume_enabled === true && !!data.consume_effect,
+        actionCount: (data?.effects ?? []).filter((effect) => effect.trigger_type === 'action').length,
+        usesLeft: typeof usesLeft === 'number' ? usesLeft : null,
+      };
+    };
+    return {
+      ok: true,
+      data: {
+        investigatorId,
+        hand: investigator.hand.map(toCardView),
+        assets: investigator.assetsInPlay.map(toCardView),
+      },
+    };
   }
 
   setConnection(codeInput: string, playerId: string, connected: boolean): RoomServiceResult<MultiplayerRoomSnapshot> {

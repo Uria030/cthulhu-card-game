@@ -26,6 +26,11 @@ export interface MultiplayerTransport {
   sendIntent(sequence: number, intent: IntentMessage): boolean;
   declareActionEnd(sequence: number): boolean;
   resolveEncounter(sequence: number, encounterId: string, optionIndex: number): boolean;
+  resolveReaction(
+    sequence: number,
+    reactionId: string,
+    decision: { kind: 'pass' } | { kind: 'play'; cardInstanceId: string; effectIndex: number },
+  ): boolean;
   close(): void;
 }
 
@@ -74,6 +79,16 @@ export function openMultiplayerTransport(options: MultiplayerTransportOptions): 
     resolveEncounter(sequence: number, encounterId: string, optionIndex: number): boolean {
       if (!authenticated || socket.readyState !== 1) return false;
       const message: MultiplayerClientMessage = { type: 'resolve_encounter', sequence, encounterId, optionIndex };
+      socket.send(JSON.stringify(message));
+      return true;
+    },
+    resolveReaction(
+      sequence: number,
+      reactionId: string,
+      decision: { kind: 'pass' } | { kind: 'play'; cardInstanceId: string; effectIndex: number },
+    ): boolean {
+      if (!authenticated || socket.readyState !== 1) return false;
+      const message: MultiplayerClientMessage = { type: 'resolve_reaction', sequence, reactionId, decision };
       socket.send(JSON.stringify(message));
       return true;
     },

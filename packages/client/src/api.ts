@@ -14,7 +14,7 @@ import type {
 } from '@cthulhu/shared';
 
 export const API_BASE: string =
-  import.meta.env.VITE_API_BASE ?? 'https://server-production-fc4f.up.railway.app';
+  import.meta.env?.VITE_API_BASE ?? 'https://server-production-fc4f.up.railway.app';
 
 export interface PlayStageListItem {
   id: string;

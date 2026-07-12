@@ -6,7 +6,7 @@
 .mps-header button, .mps-actions button, .mps-map button, .mps-card button, .mps-cinematic button { border: 1px solid #aa8750; color: #f2e7ce; background: #251f19; padding: 8px 12px; font: inherit; }
 .mps-header button:disabled, .mps-actions button:disabled, .mps-map button:disabled, .mps-card button:disabled { opacity: .46; cursor: not-allowed; }
 .mps-party { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.mps-party > div, .mps-log, .mps-actions, .mps-map article, .mps-hand, .mps-cinematic, .mps-encounter-choice { border: 1px solid rgba(170, 135, 80, .75); background: rgba(22, 20, 18, .92); padding: 10px; }
+.mps-party > div, .mps-log, .mps-actions, .mps-map article, .mps-hand, .mps-cinematic, .mps-encounter-choice, .mps-reaction-choice { border: 1px solid rgba(170, 135, 80, .75); background: rgba(22, 20, 18, .92); padding: 10px; }
 .mps-party > div { display: grid; gap: 5px; }
 .mps-party .is-self { border-color: #d4ab54; }
 .mps-party small { color: #bca372; }
@@ -44,6 +44,14 @@
 .mps-encounter-choice small { color: #d78675; }
 .mps-encounter-choice button { width: 100%; display: grid; gap: 3px; margin-top: 8px; border: 1px solid #aa8750; color: #f2e7ce; background: #34251f; padding: 10px; text-align: left; font: inherit; }
 .mps-encounter-choice button:disabled { opacity: .5; }
+.mps-reaction-choice { position: fixed; z-index: 6; left: 50%; top: 50%; width: min(410px, calc(100vw - 40px)); transform: translate(-50%, -50%); border-color: #d8b05d; box-shadow: 0 18px 42px rgba(0, 0, 0, .6); }
+.mps-reaction-choice h2 { margin: 5px 0 10px; font-size: 21px; }
+.mps-reaction-choice p { color: #dfd1b8; line-height: 1.55; }
+.mps-reaction-choice small { color: #e2c76d; }
+.mps-reaction-options { display: grid; gap: 8px; margin: 12px 0; }
+.mps-reaction-options button, .mps-reaction-pass { width: 100%; display: grid; gap: 3px; border: 1px solid #aa8750; color: #f2e7ce; background: #34251f; padding: 10px; text-align: left; font: inherit; }
+.mps-reaction-options button:disabled, .mps-reaction-pass:disabled { opacity: .5; }
+.mps-reaction-pass { display: block; border-color: rgba(188, 163, 114, .7); background: #251f19; text-align: center; }
 .mps-notice { position: fixed; z-index: 5; left: 50%; bottom: 118px; transform: translateX(-50%); background: #251f19; border: 1px solid #aa8750; padding: 8px 14px; }
 @media (max-width: 800px) {
   .mps-root { padding-bottom: 232px; }
@@ -54,5 +62,6 @@
   .mps-map { margin: 25px auto; }
   .mps-cinematic { bottom: 198px; left: 12px; }
   .mps-encounter-choice { width: min(430px, calc(100vw - 24px)); }
+  .mps-reaction-choice { width: min(410px, calc(100vw - 24px)); }
   .mps-notice { bottom: 198px; max-width: calc(100vw - 36px); }
 }

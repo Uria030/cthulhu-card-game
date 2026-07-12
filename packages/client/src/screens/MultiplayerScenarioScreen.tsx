@@ -24,6 +24,11 @@ const CHECK_ACTIONS = new Set<IntentMessage['actionType']>([
 function effectLine(message: MultiplayerServerMessage): string | null {
   if (message.type === 'intent_resolved') {
     const effects = message.result.effects ?? [];
+    const reactionOpened = effects.find((effect) => effect.type === 'reaction_window_opened');
+    if (reactionOpened) return '反應時機：危險尚未落下。';
+    const reactionPlayed = effects.find((effect) => effect.type === 'reaction_played');
+    if (reactionPlayed) return `反應：打出「${String(reactionPlayed.params.name ?? '反應卡')}」。`;
+    if (effects.some((effect) => effect.type === 'reaction_passed')) return '反應：你選擇承受這一擊。';
     return effects.length > 0
       ? effects.map((effect) => effect.type).join('、')
       : message.result.rejection?.narrative ?? '行動已由伺服器裁決。';
@@ -130,8 +135,9 @@ export function MultiplayerScenarioScreen() {
   const declared = !!(myInvestigatorId && game?.declaredEndByInvestigator.includes(myInvestigatorId));
   const activeCinematic = cinematics[0] ?? null;
   const pendingEncounter = privateState?.pendingEncounter ?? null;
-  const encounterBlocked = !!pendingEncounter || activeCinematic?.blocksActor === true;
-  const canAct = !!game && game.scenario.phase === 'investigator' && !isAiControlled && !declared && !encounterBlocked && pendingSequence === null;
+  const pendingReaction = privateState?.pendingReaction ?? null;
+  const interactionBlocked = !!pendingEncounter || !!pendingReaction || activeCinematic?.blocksActor === true;
+  const canAct = !!game && game.scenario.phase === 'investigator' && !isAiControlled && !declared && !interactionBlocked && pendingSequence === null;
 
   const toggleCommit = (cardId: string) => setCommitIds((current) => (
     current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId]
@@ -180,6 +186,21 @@ export function MultiplayerScenarioScreen() {
     if (!transportRef.current || !playerId || isAiControlled || pendingSequence !== null) return;
     const sequence = sequenceRef.current++;
     if (!transportRef.current.resolveEncounter(sequence, encounterId, optionIndex)) {
+      sequenceRef.current -= 1;
+      setNotice('連線尚未就緒。');
+      return;
+    }
+    setPendingSequence(sequence);
+    pendingSequenceRef.current = sequence;
+  };
+
+  const resolveReaction = (
+    reactionId: string,
+    decision: { kind: 'pass' } | { kind: 'play'; cardInstanceId: string; effectIndex: number },
+  ) => {
+    if (!transportRef.current || isAiControlled || pendingSequence !== null) return;
+    const sequence = sequenceRef.current++;
+    if (!transportRef.current.resolveReaction(sequence, reactionId, decision)) {
       sequenceRef.current -= 1;
       setNotice('連線尚未就緒。');
       return;
@@ -279,6 +300,28 @@ export function MultiplayerScenarioScreen() {
       {pendingEncounter.options.map((option) => <button disabled={pendingSequence !== null} key={option.index} onClick={() => resolveEncounter(pendingEncounter.id, option.index)}>
         <strong>{option.label}</strong>{option.text ? <span>{option.text}</span> : null}
       </button>)}
+    </section>}
+
+    {pendingReaction && <section className="mps-reaction-choice" aria-label="反應時機">
+      <small>反應時機 · 只由你處置</small>
+      <h2>{pendingReaction.operation.kind === 'damage' ? '危險迫近' : '心智受到衝擊'}</h2>
+      <p>即將承受 {pendingReaction.operation.amount} 點{pendingReaction.operation.kind === 'damage' ? '傷害' : '恐懼'}。是否打出反應卡？</p>
+      <div className="mps-reaction-options">
+        {pendingReaction.candidates.map((candidate) => {
+          const costs = [
+            candidate.resourceCost > 0 ? `${candidate.resourceCost} 資源` : '',
+            candidate.useCost > 0 ? `${candidate.useCost} 使用次數` : '',
+            candidate.exhaustSelf ? '橫置' : '',
+          ].filter(Boolean).join(' · ');
+          return <button disabled={pendingSequence !== null} key={`${candidate.cardInstanceId}-${candidate.effectIndex}`} onClick={() => resolveReaction(pendingReaction.id, {
+            kind: 'play', cardInstanceId: candidate.cardInstanceId, effectIndex: candidate.effectIndex,
+          })}>
+            <strong>打出 {candidate.name}</strong>
+            <span>減少 {candidate.preventAmount} 點{pendingReaction.operation.kind === 'damage' ? '傷害' : '恐懼'}{costs ? ` · ${costs}` : ''}</span>
+          </button>;
+        })}
+      </div>
+      <button className="mps-reaction-pass" disabled={pendingSequence !== null} onClick={() => resolveReaction(pendingReaction.id, { kind: 'pass' })}>放棄反應</button>
     </section>}
 
     {activeCinematic && <section className={'mps-cinematic' + (activeCinematic.blocksActor ? ' is-blocking' : '')} aria-live="polite">

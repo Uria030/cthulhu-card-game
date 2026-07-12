@@ -1,6 +1,7 @@
 import type { ResultEffect } from './messages';
 import type { InvestigatorState } from './state';
 import type { CardData, CardDataLookup } from './ruleEngine';
+import { applyIncomingDamageToPlayer } from './ally';
 
 export type ReactionTrigger = 'before_take_damage' | 'before_take_horror';
 
@@ -143,16 +144,27 @@ export function openReactionWindow(
   return { id, targetInvestigatorId: investigator.investigatorId, trigger: reactionTriggerFor(operation), operation, candidates };
 }
 
-function applyOperation(investigator: InvestigatorState, operation: ReactionOperation, effects: ResultEffect[]): InvestigatorState {
+/**
+ * Applies the original operation through the existing ally-allocation path.
+ * A reaction changes the amount first; it must not bypass the shared damage
+ * rules merely because it was opened before the hit lands.
+ */
+export function settleReactionOperation(
+  investigator: InvestigatorState,
+  operation: ReactionOperation,
+  effects: ResultEffect[] = [],
+): InvestigatorState {
   const amount = nonNegative(operation.amount);
+  const applied = operation.kind === 'damage'
+    ? applyIncomingDamageToPlayer(investigator, amount, 0, { direct: operation.direct === true })
+    : applyIncomingDamageToPlayer(investigator, 0, amount, { direct: operation.direct === true });
   if (operation.kind === 'damage') {
-    const hp = Math.max(0, investigator.hp - amount);
     effects.push({ type: 'reaction_damage_applied', params: { amount, source: operation.source ?? '', direct: operation.direct === true }, targetId: investigator.investigatorId });
-    return { ...investigator, hp };
+  } else {
+    effects.push({ type: 'reaction_horror_applied', params: { amount, source: operation.source ?? '', direct: operation.direct === true }, targetId: investigator.investigatorId });
   }
-  const san = Math.max(0, investigator.san - amount);
-  effects.push({ type: 'reaction_horror_applied', params: { amount, source: operation.source ?? '', direct: operation.direct === true }, targetId: investigator.investigatorId });
-  return { ...investigator, san };
+  effects.push(...applied.effects);
+  return applied.investigator;
 }
 
 function removePlayedCard(investigator: InvestigatorState, candidate: ReactionCandidate): InvestigatorState {
@@ -184,7 +196,7 @@ export function resolvePendingReaction(
 ): ReactionResolution {
   const effects: ResultEffect[] = [];
   if (decision.kind === 'pass') {
-    const settled = applyOperation(investigator, pending.operation, effects);
+    const settled = settleReactionOperation(investigator, pending.operation, effects);
     effects.unshift({ type: 'reaction_passed', params: { reactionId: pending.id, trigger: pending.trigger }, targetId: investigator.investigatorId });
     return { investigator: settled, effects, outcome: 'passed' };
   }
@@ -230,6 +242,6 @@ export function resolvePendingReaction(
     targetId: next.investigatorId,
   });
   effects.push({ type: 'reaction_prevented', params: { amount: prevented, kind: pending.operation.kind }, targetId: next.investigatorId });
-  next = applyOperation(next, operation, effects);
+  next = settleReactionOperation(next, operation, effects);
   return { investigator: next, effects, outcome: 'played', triggeredCardInstanceId: candidate.cardInstanceId };
 }

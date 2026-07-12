@@ -21,6 +21,7 @@ import type {
   MultiplayerSeatController,
   MultiplayerServerMessage,
   ResultMessage,
+  ResultEffect,
   RuleContext,
   ScenarioState,
   TurnState,
@@ -33,8 +34,11 @@ import type {
   AgendaCardData,
   OutcomeData,
   EncounterCardData,
+  EncounterEffect,
   EncounterTriggerConfig,
   EncounterTriggerContext,
+  PendingReaction,
+  ReactionDecision,
 } from '@cthulhu/shared';
 
 // @cthulhu/shared is emitted as CommonJS so the production Node server and the
@@ -55,7 +59,12 @@ const {
   evaluateOutcome,
   chooseEncounterOption,
   drawTriggeredEncounter,
-  resolveEncounterOption,
+  prepareEncounterOption,
+  applyEncounterEffects,
+  encounterReactionOperation,
+  openReactionWindow,
+  resolvePendingReaction,
+  settleReactionOperation,
   runTurnEndUpkeep,
   runTurnStartUpkeep,
   resolveIntent,
@@ -101,6 +110,9 @@ export interface AuthoritativeGameState {
   };
   campaignFlags?: Record<string, unknown>;
   pendingEncounter?: PendingEncounter;
+  /** A reaction pauses an already selected encounter-effect queue. */
+  pendingReaction?: PendingReaction;
+  pendingEncounterResolution?: PendingEncounterResolution;
   pendingTurnEndEncounterInvestigators?: string[];
   pendingMythosEncounterEntries?: QueuedEncounter[];
   resolution?: { outcomeCode: string; status: 'pending' | 'saved' | 'failed' };
@@ -120,6 +132,12 @@ interface PendingEncounter {
   targetInvestigatorId: string;
   card: EncounterCardData;
   context: EncounterTriggerContext;
+}
+
+interface PendingEncounterResolution {
+  id: string;
+  targetInvestigatorId: string;
+  remainingEffects: EncounterEffect[];
 }
 
 interface QueuedEncounter {
@@ -147,6 +165,10 @@ export interface RoomServiceError {
     | 'encounter_not_pending'
     | 'encounter_not_target'
     | 'encounter_option_invalid'
+    | 'reaction_pending'
+    | 'reaction_not_pending'
+    | 'reaction_not_target'
+    | 'reaction_decision_invalid'
     | 'invalid_room_code';
   message: string;
   snapshot?: MultiplayerRoomSnapshot;
@@ -354,6 +376,14 @@ export class MultiplayerRoomService {
               })),
             }
           : null,
+        pendingReaction: game.pendingReaction?.targetInvestigatorId === investigatorId
+          ? {
+              id: game.pendingReaction.id,
+              trigger: game.pendingReaction.trigger,
+              operation: clone(game.pendingReaction.operation),
+              candidates: game.pendingReaction.candidates.map((candidate) => ({ ...candidate })),
+            }
+          : null,
       },
     };
   }
@@ -485,6 +515,8 @@ export class MultiplayerRoomService {
       campaignFlags: { ...(game.campaignFlags ?? {}) },
       resolution: game.resolution,
       pendingEncounter: game.pendingEncounter ? clone(game.pendingEncounter) : undefined,
+      pendingReaction: game.pendingReaction ? clone(game.pendingReaction) : undefined,
+      pendingEncounterResolution: game.pendingEncounterResolution ? clone(game.pendingEncounterResolution) : undefined,
       pendingTurnEndEncounterInvestigators: [...(game.pendingTurnEndEncounterInvestigators ?? [])],
       pendingMythosEncounterEntries: game.pendingMythosEncounterEntries
         ? game.pendingMythosEncounterEntries.map((entry) => clone(entry))
@@ -515,6 +547,9 @@ export class MultiplayerRoomService {
     }
     if (game.pendingEncounter?.targetInvestigatorId === investigatorId) {
       return { ok: false, error: { code: 'encounter_pending', message: '眼前的遭遇尚待你選擇處置，不能宣告結束。', snapshot: this.snapshot(room.data) } };
+    }
+    if (game.pendingReaction?.targetInvestigatorId === investigatorId) {
+      return { ok: false, error: { code: 'reaction_pending', message: '你尚未決定是否打出反應卡，不能宣告結束。', snapshot: this.snapshot(room.data) } };
     }
     const lastSequence = room.data.lastSequenceByPlayer.get(playerId) ?? 0;
     const prior = room.data.processedByPlayer.get(playerId)?.get(sequence);
@@ -582,10 +617,7 @@ export class MultiplayerRoomService {
     if (!investigator) {
       return { ok: false, error: { code: 'investigator_not_controlled', message: '找不到遭遇指定的調查員。', snapshot: this.snapshot(room.data) } };
     }
-    const resolved = resolveEncounterOption(option, investigator, game.scenario, game.ruleContext?.enemyStats ?? {});
-    game.investigators = { ...game.investigators, [investigator.investigatorId]: resolved.investigator };
-    game.scenario = resolved.scenario;
-    game.pendingEncounter = undefined;
+    const continued = this.startEncounterResolution(room.data, pending, optionIndex, investigator);
     room.data.lastSequenceByPlayer.set(playerId, sequence);
     room.data.version += 1;
     const result: ResultMessage = {
@@ -596,7 +628,7 @@ export class MultiplayerRoomService {
       kind: 'result',
       inResponseTo: `encounter:${encounterId}`,
       outcome: 'accepted',
-      effects: resolved.effects.map((effect) => effect.targetId ? effect : { ...effect, targetId: investigator.investigatorId }),
+      effects: continued.effects.map((effect) => effect.targetId ? effect : { ...effect, targetId: investigator.investigatorId }),
     };
     const message: MultiplayerIntentResolvedMessage = {
       type: 'intent_resolved', actorPlayerId: playerId, sequence, result, snapshot: this.snapshot(room.data),
@@ -604,8 +636,7 @@ export class MultiplayerRoomService {
     if (!room.data.processedByPlayer.has(playerId)) room.data.processedByPlayer.set(playerId, new Map());
     room.data.processedByPlayer.get(playerId)?.set(sequence, clone(message));
     this.broadcast(room.data, message);
-    if (game.pendingMythosEncounterEntries) this.continueMythosEncounters(room.data);
-    else if (game.pendingTurnEndEncounterInvestigators) this.continueTurnEndEncounters(room.data);
+    if (continued.complete) this.resumeEncounterQueues(room.data);
     return { ok: true, data: message };
   }
 
@@ -628,10 +659,7 @@ export class MultiplayerRoomService {
       return { ok: false, error: { code: 'encounter_not_pending', message: '待處置遭遇資料不完整。', snapshot: this.snapshot(room.data) } };
     }
     const optionIndex = Math.max(0, Math.min(options.length - 1, chooseEncounterOption(pending.card, investigator)));
-    const resolved = resolveEncounterOption(options[optionIndex], investigator, game.scenario, game.ruleContext?.enemyStats ?? {});
-    game.investigators = { ...game.investigators, [investigatorId]: resolved.investigator };
-    game.scenario = resolved.scenario;
-    game.pendingEncounter = undefined;
+    const continued = this.startEncounterResolution(room.data, pending, optionIndex, investigator);
     const sequence = (room.data.lastSequenceByPlayer.get(playerId) ?? 0) + 1;
     room.data.lastSequenceByPlayer.set(playerId, sequence);
     room.data.version += 1;
@@ -640,15 +668,214 @@ export class MultiplayerRoomService {
       timestamp: this.now(), schemaVersion: CURRENT_MESSAGE_SCHEMA_VERSION, source: 'server', kind: 'result',
       inResponseTo: `encounter:${pending.id}`,
       outcome: 'accepted',
-      effects: resolved.effects.map((effect) => effect.targetId ? effect : { ...effect, targetId: investigatorId }),
+      effects: continued.effects.map((effect) => effect.targetId ? effect : { ...effect, targetId: investigatorId }),
     };
     const message: MultiplayerIntentResolvedMessage = {
       type: 'intent_resolved', actorPlayerId: playerId, sequence, result, snapshot: this.snapshot(room.data),
     };
     this.broadcast(room.data, message);
-    if (game.pendingMythosEncounterEntries) this.continueMythosEncounters(room.data);
-    else if (game.pendingTurnEndEncounterInvestigators) this.continueTurnEndEncounters(room.data);
+    if (continued.complete) this.resumeEncounterQueues(room.data);
     return { ok: true, data: message };
+  }
+
+  resolveReactionDecision(
+    codeInput: string,
+    playerId: string,
+    sequence: number,
+    reactionId: string,
+    decision: ReactionDecision,
+  ): RoomServiceResult<MultiplayerIntentResolvedMessage> {
+    const room = this.roomFor(codeInput);
+    if (!room.ok) return room;
+    if (!room.data.members.has(playerId)) return this.notMember(room.data);
+    const game = room.data.game;
+    if (!game || room.data.phase !== 'active') {
+      return { ok: false, error: { code: 'game_not_active', message: '房間尚未啟動遊戲引擎。', snapshot: this.snapshot(room.data) } };
+    }
+    const lastSequence = room.data.lastSequenceByPlayer.get(playerId) ?? 0;
+    const prior = room.data.processedByPlayer.get(playerId)?.get(sequence);
+    if (prior) return { ok: true, data: { ...clone(prior), duplicate: true } };
+    if (!Number.isInteger(sequence) || sequence !== lastSequence + 1) {
+      return { ok: false, error: { code: 'intent_out_of_order', message: `意圖序號失序：預期 ${lastSequence + 1}。`, snapshot: this.snapshot(room.data) } };
+    }
+    const pending = game.pendingReaction;
+    if (!pending || pending.id !== reactionId) {
+      return { ok: false, error: { code: 'reaction_not_pending', message: '這個反應窗口已結束或不再有效。', snapshot: this.snapshot(room.data) } };
+    }
+    if (game.playerInvestigators[playerId] !== pending.targetInvestigatorId) {
+      return { ok: false, error: { code: 'reaction_not_target', message: '這個反應窗口指定由另一位調查員處置。', snapshot: this.snapshot(room.data) } };
+    }
+    const investigator = game.investigators[pending.targetInvestigatorId];
+    if (!investigator) {
+      return { ok: false, error: { code: 'investigator_not_controlled', message: '找不到反應窗口指定的調查員。', snapshot: this.snapshot(room.data) } };
+    }
+    const resolved = resolvePendingReaction(pending, decision, investigator, game.turn.triggeredReactions);
+    // An invalid decision consumes neither the original damage nor this sequence.
+    // The target receives the still-open private window and may retry or pass.
+    if (resolved.outcome === 'invalid') {
+      return { ok: false, error: { code: 'reaction_decision_invalid', message: '這張反應卡目前不能使用，請重新選擇或放棄。', snapshot: this.snapshot(room.data) } };
+    }
+    game.investigators = { ...game.investigators, [investigator.investigatorId]: resolved.investigator };
+    if (resolved.triggeredCardInstanceId) {
+      game.turn = {
+        ...game.turn,
+        triggeredReactions: [...game.turn.triggeredReactions, resolved.triggeredCardInstanceId],
+      };
+    }
+    game.pendingReaction = undefined;
+    const continued = this.continueEncounterResolution(room.data, [...resolved.effects]);
+    room.data.lastSequenceByPlayer.set(playerId, sequence);
+    room.data.version += 1;
+    const result: ResultMessage = {
+      id: `room:${room.data.code}:reaction:${reactionId}:${sequence}`,
+      timestamp: this.now(), schemaVersion: CURRENT_MESSAGE_SCHEMA_VERSION, source: 'server', kind: 'result',
+      inResponseTo: `reaction:${reactionId}`,
+      outcome: 'accepted',
+      effects: continued.effects,
+    };
+    const message: MultiplayerIntentResolvedMessage = {
+      type: 'intent_resolved', actorPlayerId: playerId, sequence, result, snapshot: this.snapshot(room.data),
+    };
+    if (!room.data.processedByPlayer.has(playerId)) room.data.processedByPlayer.set(playerId, new Map());
+    room.data.processedByPlayer.get(playerId)?.set(sequence, clone(message));
+    this.broadcast(room.data, message);
+    if (continued.complete) this.resumeEncounterQueues(room.data);
+    return { ok: true, data: message };
+  }
+
+  /** A disconnected target picks its strongest legal reaction, then resumes the same queue. */
+  resolvePendingReactionForAi(codeInput: string, investigatorId: string): RoomServiceResult<MultiplayerIntentResolvedMessage> {
+    const room = this.roomFor(codeInput);
+    if (!room.ok) return room;
+    const game = room.data.game;
+    const pending = game?.pendingReaction;
+    if (!game || !pending || pending.targetInvestigatorId !== investigatorId) {
+      return { ok: false, error: { code: 'reaction_not_pending', message: '此席沒有待處置的反應窗口。', snapshot: this.snapshot(room.data) } };
+    }
+    if (game.controllerByInvestigator?.[investigatorId] !== 'ai') {
+      return { ok: false, error: { code: 'investigator_not_controlled', message: '此席尚未由 AI 接管。', snapshot: this.snapshot(room.data) } };
+    }
+    const playerId = Object.entries(game.playerInvestigators).find(([, id]) => id === investigatorId)?.[0];
+    const investigator = game.investigators[investigatorId];
+    if (!playerId || !investigator) {
+      return { ok: false, error: { code: 'reaction_not_pending', message: '待處置反應資料不完整。', snapshot: this.snapshot(room.data) } };
+    }
+    const best = [...pending.candidates].sort((a, b) => (b.preventAmount - b.resourceCost - b.useCost) - (a.preventAmount - a.resourceCost - a.useCost))[0];
+    const decision: ReactionDecision = best
+      ? { kind: 'play', cardInstanceId: best.cardInstanceId, effectIndex: best.effectIndex }
+      : { kind: 'pass' };
+    const resolved = resolvePendingReaction(pending, decision, investigator, game.turn.triggeredReactions);
+    if (resolved.outcome === 'invalid') {
+      return { ok: false, error: { code: 'reaction_decision_invalid', message: 'AI 無法使用待處置的反應卡。', snapshot: this.snapshot(room.data) } };
+    }
+    game.investigators = { ...game.investigators, [investigatorId]: resolved.investigator };
+    if (resolved.triggeredCardInstanceId) {
+      game.turn = { ...game.turn, triggeredReactions: [...game.turn.triggeredReactions, resolved.triggeredCardInstanceId] };
+    }
+    game.pendingReaction = undefined;
+    const continued = this.continueEncounterResolution(room.data, [...resolved.effects]);
+    const sequence = (room.data.lastSequenceByPlayer.get(playerId) ?? 0) + 1;
+    room.data.lastSequenceByPlayer.set(playerId, sequence);
+    room.data.version += 1;
+    const message: MultiplayerIntentResolvedMessage = {
+      type: 'intent_resolved', actorPlayerId: playerId, sequence,
+      result: {
+        id: `room:${room.data.code}:reaction-ai:${pending.id}:${sequence}`,
+        timestamp: this.now(), schemaVersion: CURRENT_MESSAGE_SCHEMA_VERSION, source: 'server', kind: 'result',
+        inResponseTo: `reaction:${pending.id}`, outcome: 'accepted', effects: continued.effects,
+      },
+      snapshot: this.snapshot(room.data),
+    };
+    this.broadcast(room.data, message);
+    if (continued.complete) this.resumeEncounterQueues(room.data);
+    return { ok: true, data: message };
+  }
+
+  private startEncounterResolution(
+    room: RoomRecord,
+    pending: PendingEncounter,
+    optionIndex: number,
+    investigator: InvestigatorState,
+  ): { effects: ResultEffect[]; complete: boolean } {
+    const game = room.game;
+    const option = pending.card.options?.[optionIndex];
+    if (!game || !option) return { effects: [], complete: true };
+    const prepared = prepareEncounterOption(option, investigator);
+    game.investigators = { ...game.investigators, [investigator.investigatorId]: prepared.investigator };
+    game.pendingEncounter = undefined;
+    game.pendingEncounterResolution = {
+      id: `encounter-resolution:${pending.id}`,
+      targetInvestigatorId: investigator.investigatorId,
+      remainingEffects: prepared.pendingEffects.map((effect) => ({ ...effect })),
+    };
+    return this.continueEncounterResolution(room, [...prepared.effects]);
+  }
+
+  /** Runs a selected encounter one effect at a time and pauses only at a private reaction window. */
+  private continueEncounterResolution(
+    room: RoomRecord,
+    effects: ResultEffect[],
+  ): { effects: ResultEffect[]; complete: boolean } {
+    const game = room.game;
+    const continuation = game?.pendingEncounterResolution;
+    if (!game || !continuation) return { effects, complete: true };
+    let investigator = game.investigators[continuation.targetInvestigatorId];
+    if (!investigator) {
+      game.pendingEncounterResolution = undefined;
+      return { effects, complete: true };
+    }
+
+    while (continuation.remainingEffects.length > 0) {
+      const effect = continuation.remainingEffects.shift();
+      if (!effect) continue;
+      const operation = encounterReactionOperation(effect, investigator);
+      if (operation && operation.amount > 0) {
+        const pending = openReactionWindow(
+          `reaction:${room.code}:${continuation.id}:${continuation.remainingEffects.length}`,
+          investigator,
+          game.ruleContext?.cardLookup ?? {},
+          operation,
+        );
+        if (pending && game.controllerByInvestigator?.[investigator.investigatorId] !== 'ai') {
+          game.investigators = { ...game.investigators, [investigator.investigatorId]: investigator };
+          game.pendingReaction = pending;
+          effects.push({ type: 'reaction_window_opened', params: { reactionId: pending.id, trigger: pending.trigger }, targetId: investigator.investigatorId });
+          return { effects, complete: false };
+        }
+        if (pending) {
+          const candidate = [...pending.candidates]
+            .sort((a, b) => (b.preventAmount - b.resourceCost - b.useCost) - (a.preventAmount - a.resourceCost - a.useCost))[0];
+          const decision: ReactionDecision = candidate
+            ? { kind: 'play', cardInstanceId: candidate.cardInstanceId, effectIndex: candidate.effectIndex }
+            : { kind: 'pass' };
+          const resolved = resolvePendingReaction(pending, decision, investigator, game.turn.triggeredReactions);
+          if (resolved.outcome !== 'invalid') {
+            investigator = resolved.investigator;
+            if (resolved.triggeredCardInstanceId) {
+              game.turn = { ...game.turn, triggeredReactions: [...game.turn.triggeredReactions, resolved.triggeredCardInstanceId] };
+            }
+            effects.push(...resolved.effects);
+          }
+        } else {
+          investigator = settleReactionOperation(investigator, operation, effects);
+        }
+      } else {
+        const applied = applyEncounterEffects([effect], investigator, game.scenario, game.ruleContext?.enemyStats ?? {});
+        investigator = applied.investigator;
+        game.scenario = applied.scenario;
+        effects.push(...applied.effects);
+      }
+      game.investigators = { ...game.investigators, [investigator.investigatorId]: investigator };
+    }
+    game.pendingEncounterResolution = undefined;
+    return { effects, complete: true };
+  }
+
+  private resumeEncounterQueues(room: RoomRecord): void {
+    const game = room.game;
+    if (!game || game.pendingEncounter || game.pendingReaction || game.pendingEncounterResolution) return;
+    if (game.pendingMythosEncounterEntries) this.continueMythosEncounters(room);
+    else if (game.pendingTurnEndEncounterInvestigators) this.continueTurnEndEncounters(room);
   }
 
   runAiTurn(codeInput: string, investigatorId: string): RoomServiceResult<MultiplayerAiTurnMessage> {
@@ -725,6 +952,9 @@ export class MultiplayerRoomService {
     }
     if (room.data.game.pendingEncounter?.targetInvestigatorId === expectedInvestigatorId) {
       return { ok: false, error: { code: 'encounter_pending', message: '眼前的遭遇尚待你選擇處置，不能執行其他行動。', snapshot: this.snapshot(room.data) } };
+    }
+    if (room.data.game.pendingReaction?.targetInvestigatorId === expectedInvestigatorId) {
+      return { ok: false, error: { code: 'reaction_pending', message: '你尚未決定是否打出反應卡，不能執行其他行動。', snapshot: this.snapshot(room.data) } };
     }
 
     const lastSequence = room.data.lastSequenceByPlayer.get(playerId) ?? 0;
@@ -839,7 +1069,7 @@ export class MultiplayerRoomService {
   /** Continues a post-mythos encounter queue until a human choice is needed. */
   private continueTurnEndEncounters(room: RoomRecord): void {
     const game = room.game;
-    if (!game || game.pendingEncounter) return;
+    if (!game || game.pendingEncounter || game.pendingReaction || game.pendingEncounterResolution) return;
     const queue = game.pendingTurnEndEncounterInvestigators ?? [];
     while (queue.length > 0) {
       const investigatorId = queue.shift();
@@ -856,7 +1086,7 @@ export class MultiplayerRoomService {
           snapshot: this.snapshot(room),
         });
       }
-      if (game.pendingEncounter) return;
+      if (game.pendingEncounter || game.pendingReaction || game.pendingEncounterResolution) return;
     }
     game.pendingTurnEndEncounterInvestigators = undefined;
     this.finishTurnEnd(room);
@@ -865,7 +1095,7 @@ export class MultiplayerRoomService {
   /** Runs queued keeper-mythos encounters before the turn-end encounter queue. */
   private continueMythosEncounters(room: RoomRecord): void {
     const game = room.game;
-    if (!game || game.pendingEncounter) return;
+    if (!game || game.pendingEncounter || game.pendingReaction || game.pendingEncounterResolution) return;
     const queue = game.pendingMythosEncounterEntries ?? [];
     while (queue.length > 0) {
       const entry = queue.shift();
@@ -882,7 +1112,7 @@ export class MultiplayerRoomService {
           snapshot: this.snapshot(room),
         });
       }
-      if (game.pendingEncounter) return;
+      if (game.pendingEncounter || game.pendingReaction || game.pendingEncounterResolution) return;
     }
     game.pendingMythosEncounterEntries = undefined;
     this.beginTurnEndEncounterSequence(room);
@@ -945,7 +1175,7 @@ export class MultiplayerRoomService {
   ): NonNullable<ResultMessage['effects']> {
     const game = room.game;
     const runtime = game?.roundRuntime;
-    if (!game || !runtime || game.pendingEncounter || !runtime.encounterDeck || !runtime.encounterSource || !runtime.encounterTriggerConfig) return [];
+    if (!game || !runtime || game.pendingEncounter || game.pendingReaction || game.pendingEncounterResolution || !runtime.encounterDeck || !runtime.encounterSource || !runtime.encounterTriggerConfig) return [];
     const draw = drawTriggeredEncounter(
       runtime.encounterDeck,
       runtime.encounterTriggerConfig,
@@ -976,10 +1206,13 @@ export class MultiplayerRoomService {
     }
     if (game.controllerByInvestigator?.[targetInvestigatorId] === 'ai') {
       const optionIndex = Math.max(0, Math.min(options.length - 1, chooseEncounterOption(draw.card, target)));
-      const resolved = resolveEncounterOption(options[optionIndex], target, game.scenario, game.ruleContext?.enemyStats ?? {});
-      game.investigators = { ...game.investigators, [targetInvestigatorId]: resolved.investigator };
-      game.scenario = resolved.scenario;
-      return [...effects, ...resolved.effects.map((effect) => effect.targetId ? effect : { ...effect, targetId: targetInvestigatorId })];
+      const continued = this.startEncounterResolution(room, {
+        id: `encounter:${room.code}:${room.version + 1}:${targetInvestigatorId}:${draw.card.id}`,
+        targetInvestigatorId,
+        card: draw.card,
+        context,
+      }, optionIndex, target);
+      return [...effects, ...continued.effects.map((effect) => effect.targetId ? effect : { ...effect, targetId: targetInvestigatorId })];
     }
     game.pendingEncounter = {
       id: `encounter:${room.code}:${room.version + 1}:${targetInvestigatorId}:${draw.card.id}`,
@@ -1012,6 +1245,9 @@ export class MultiplayerRoomService {
             resolution: room.game.resolution,
             pendingEncounter: room.game.pendingEncounter
               ? { targetInvestigatorId: room.game.pendingEncounter.targetInvestigatorId }
+              : undefined,
+            pendingReaction: room.game.pendingReaction
+              ? { targetInvestigatorId: room.game.pendingReaction.targetInvestigatorId }
               : undefined,
           }
         : undefined,

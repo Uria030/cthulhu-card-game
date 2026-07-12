@@ -16,6 +16,7 @@ import type { ScenarioState, InvestigatorState } from './state';
 import { resolveCheck } from './checks';
 import { modifyIncomingDamage, applyCheckStatus } from './statusEffects';
 import { applyIncomingDamageToPlayer } from './ally';
+import type { ReactionOperation } from './reactions';
 import type { AttributeKey, CheckResult } from './checks';
 import { spawnEnemy } from './monsterActions';
 import type { EnemyDataLookup } from './monsterActions';
@@ -360,7 +361,8 @@ interface TalismanEvaluation {
   testAttribute?: BreakTestAttribute;
 }
 
-function applyEncounterEffects(
+/** Apply a supplied sequence; server pending windows may call this one effect at a time. */
+export function applyEncounterEffects(
   list: EncounterEffect[] | undefined,
   investigator: InvestigatorState,
   scenario: ScenarioState,
@@ -376,7 +378,7 @@ function applyEncounterEffects(
       case 'deal_horror':
       case 'san_damage': {
         const dmg = modifyIncomingDamage(inv.statusEffects, 0, amount).horror; // §6 發瘋/標記 + / 護盾 −
-        const ad = applyIncomingDamageToPlayer(inv, 0, dmg); // §11 盟友先吸
+        const ad = applyIncomingDamageToPlayer(inv, 0, dmg, { direct: fx.direct === true }); // §11 盟友先吸
         inv = ad.investigator;
         effects.push({ type: 'fear_damage', params: { amount: dmg, narrative: '某種東西擦過了你的神智。' }, targetId: inv.investigatorId });
         effects.push(...ad.effects);
@@ -385,7 +387,7 @@ function applyEncounterEffects(
       case 'deal_damage':
       case 'hp_damage': {
         const dmg = modifyIncomingDamage(inv.statusEffects, amount, 0).physical; // §6 脆弱/標記 + / 護甲 −
-        const ad = applyIncomingDamageToPlayer(inv, dmg, 0); // §11 盟友先吸
+        const ad = applyIncomingDamageToPlayer(inv, dmg, 0, { direct: fx.direct === true }); // §11 盟友先吸
         inv = ad.investigator;
         effects.push({ type: 'encounter_damage', params: { amount: dmg, narrative: '你受了傷。' }, targetId: inv.investigatorId });
         effects.push(...ad.effects);
@@ -421,6 +423,27 @@ function applyEncounterEffects(
     }
   }
   return { investigator: inv, scenario: sc, effects };
+}
+
+/**
+ * Returns the damage operation before it lands, after existing status modifiers.
+ * The caller owns whether a reaction window is opened and must settle the same
+ * operation exactly once through the normal incoming-damage path.
+ */
+export function encounterReactionOperation(
+  effect: EncounterEffect,
+  investigator: InvestigatorState,
+): ReactionOperation | null {
+  const code = String(effect.effect_code ?? effect.type ?? '');
+  const amount = Number(effect.amount ?? 1);
+  const direct = effect.direct === true;
+  if (code === 'deal_horror' || code === 'san_damage') {
+    return { kind: 'horror', amount: modifyIncomingDamage(investigator.statusEffects, 0, amount).horror, source: 'encounter', direct };
+  }
+  if (code === 'deal_damage' || code === 'hp_damage') {
+    return { kind: 'damage', amount: modifyIncomingDamage(investigator.statusEffects, amount, 0).physical, source: 'encounter', direct };
+  }
+  return null;
 }
 
 function listFromUnknown(value: unknown): string[] {
@@ -753,13 +776,21 @@ export function resolveEncounterWithTalisman(
  * 結算一個遭遇卡選項。requires_check 時跑檢定,成功施 success_effects、
  * 失敗施 failure_effects;不需檢定施 no_check_effects。
  */
-export function resolveEncounterOption(
+export interface PreparedEncounterOption {
+  investigator: InvestigatorState;
+  effects: ResultEffect[];
+  pendingEffects: EncounterEffect[];
+}
+
+/**
+ * Resolves the choice/check prelude but deliberately leaves card effects as a
+ * serializable queue. Multiplayer can pause that queue at a reaction window.
+ */
+export function prepareEncounterOption(
   option: EncounterOption,
   investigator: InvestigatorState,
-  scenario: ScenarioState,
-  enemyData: EnemyDataLookup,
   rng: () => number = Math.random,
-): EncounterResolveResult {
+): PreparedEncounterOption {
   const effects: ResultEffect[] = [];
 
   if (option.requires_check && option.check_attribute) {
@@ -776,14 +807,28 @@ export function resolveEncounterOption(
     });
     const narrative = success ? option.success_narrative_zh : option.failure_narrative_zh;
     if (narrative) effects.push({ type: 'encounter_narrative', params: { narrative } });
-    const applied = applyEncounterEffects(success ? option.success_effects : option.failure_effects, { ...investigator, statusEffects: cs.statusEffects }, scenario, enemyData);
-    return { investigator: applied.investigator, scenario: applied.scenario, effects: [...effects, ...applied.effects] };
+    return {
+      investigator: { ...investigator, statusEffects: cs.statusEffects },
+      effects,
+      pendingEffects: [...((success ? option.success_effects : option.failure_effects) ?? [])],
+    };
   }
 
   // 無檢定選項
   if (option.no_check_narrative_zh) effects.push({ type: 'encounter_narrative', params: { narrative: option.no_check_narrative_zh } });
-  const applied = applyEncounterEffects(option.no_check_effects, investigator, scenario, enemyData);
-  return { investigator: applied.investigator, scenario: applied.scenario, effects: [...effects, ...applied.effects] };
+  return { investigator, effects, pendingEffects: [...(option.no_check_effects ?? [])] };
+}
+
+export function resolveEncounterOption(
+  option: EncounterOption,
+  investigator: InvestigatorState,
+  scenario: ScenarioState,
+  enemyData: EnemyDataLookup,
+  rng: () => number = Math.random,
+): EncounterResolveResult {
+  const prepared = prepareEncounterOption(option, investigator, rng);
+  const applied = applyEncounterEffects(prepared.pendingEffects, prepared.investigator, scenario, enemyData);
+  return { investigator: applied.investigator, scenario: applied.scenario, effects: [...prepared.effects, ...applied.effects] };
 }
 
 /**

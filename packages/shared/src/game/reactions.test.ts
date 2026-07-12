@@ -103,6 +103,22 @@ test('額外牌組 reaction:可零 AP 打出、付費後離開額外牌組', () 
   assertEq(r.investigator.actionPoints, 3);
 });
 
+test('reaction 結算沿用盟友分傷，direct 仍不可分配', () => {
+  const ally = { cardInstanceId: 'ally-1', name: '肉盾', hp: 2, hpMax: 2, san: 1, sanMax: 1, attack: 1, exhausted: false };
+  const ordinary = resolvePendingReaction(
+    { id: 'r-ally', targetInvestigatorId: 'i1', trigger: 'before_take_damage', operation: { kind: 'damage', amount: 2 }, candidates: [] },
+    { kind: 'pass' },
+    makeInv({ allies: [ally] }),
+  );
+  assertEq(ordinary.effects.some((effect) => effect.type === 'damage_allocatable'), true, '非 direct 傷害保留分傷提示');
+  const direct = resolvePendingReaction(
+    { id: 'r-direct', targetInvestigatorId: 'i1', trigger: 'before_take_damage', operation: { kind: 'damage', amount: 2, direct: true }, candidates: [] },
+    { kind: 'pass' },
+    makeInv({ allies: [ally] }),
+  );
+  assertEq(direct.effects.some((effect) => effect.type === 'damage_allocatable'), false, 'direct 不可分配');
+});
+
 test('pass 與重送防護:pass 完整結算，已觸發卡不可重複使用', () => {
   const inv = makeInv({ hand: ['bandage'] });
   const pending = openReactionWindow('r3', inv, LOOKUP, { kind: 'damage', amount: 3 });

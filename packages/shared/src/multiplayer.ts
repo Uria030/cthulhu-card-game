@@ -6,6 +6,7 @@
  */
 import type { IntentMessage, ResultEffect, ResultMessage } from './game/messages';
 import type { InvestigatorState, ScenarioState, TurnState } from './game/state';
+import type { ReactionCandidate, ReactionOperation, ReactionTrigger } from './game/reactions';
 
 export type MultiplayerRoomPhase = 'lobby' | 'active' | 'closed';
 export type MultiplayerSeatController = 'human' | 'ai';
@@ -41,6 +42,10 @@ export interface MultiplayerGameSnapshot {
   pendingEncounter?: {
     targetInvestigatorId: string;
   };
+  /** Card candidates stay in MultiplayerPrivateState for this target only. */
+  pendingReaction?: {
+    targetInvestigatorId: string;
+  };
 }
 
 /**
@@ -67,6 +72,12 @@ export interface MultiplayerPrivateState {
     nameZh: string;
     scenarioText: string;
     options: Array<{ index: number; label: string; text: string }>;
+  } | null;
+  pendingReaction?: {
+    id: string;
+    trigger: ReactionTrigger;
+    operation: ReactionOperation;
+    candidates: ReactionCandidate[];
   } | null;
 }
 
@@ -104,11 +115,19 @@ export interface MultiplayerResolveEncounterMessage {
   optionIndex: number;
 }
 
+export interface MultiplayerResolveReactionMessage {
+  type: 'resolve_reaction';
+  sequence: number;
+  reactionId: string;
+  decision: { kind: 'pass' } | { kind: 'play'; cardInstanceId: string; effectIndex: number };
+}
+
 export type MultiplayerClientMessage =
   | MultiplayerAuthenticateMessage
   | MultiplayerIntentMessage
   | MultiplayerDeclareEndMessage
-  | MultiplayerResolveEncounterMessage;
+  | MultiplayerResolveEncounterMessage
+  | MultiplayerResolveReactionMessage;
 
 export interface MultiplayerRoomSnapshotMessage {
   type: 'room_snapshot';

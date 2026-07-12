@@ -263,6 +263,14 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
               message.encounterId,
               message.optionIndex,
             )
+          : message.type === 'resolve_reaction'
+            ? rooms.resolveReactionDecision(
+                request.params.code,
+                authenticatedPlayerId,
+                message.sequence,
+                message.reactionId,
+                message.decision,
+              )
           : rooms.submitIntent(request.params.code, authenticatedPlayerId, message.sequence, message.intent);
       if (!applied.ok) {
         sendSocket(socket, roomErrorMessage(applied.error));
@@ -283,6 +291,7 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
         // loss/network failure uses a different close code and is AI-taken over.
         if (code !== 1000 && investigatorId && disconnected.ok && disconnected.data.game?.controllerByInvestigator[investigatorId] === 'ai') {
           rooms.resolvePendingEncounterForAi(request.params.code, investigatorId);
+          rooms.resolvePendingReactionForAi(request.params.code, investigatorId);
           rooms.runAiTurn(request.params.code, investigatorId);
         }
       }

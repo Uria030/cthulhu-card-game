@@ -80,6 +80,30 @@ function makeEncounterGame(): AuthoritativeGameState {
   };
 }
 
+function makeReactionEncounterGame(): AuthoritativeGameState {
+  const game = makeEncounterGame();
+  if (!game.roundRuntime) throw new Error('missing encounter runtime');
+  const encounter = game.roundRuntime.encounterDeck?.[0];
+  if (!encounter) throw new Error('missing encounter card');
+  encounter.options = [{
+    option_label: '硬闖窄巷',
+    option_text_zh: '你踏進濕冷的黑暗裡。',
+    no_check_narrative_zh: '某種力量撲面而來。',
+    no_check_effects: [{ effect_code: 'deal_damage', amount: 2 }],
+  }];
+  game.investigators['inv-1'] = makeInvestigator('inv-1', { hand: ['guard-1'], resources: 1 });
+  game.ruleContext = {
+    enemyStats: {},
+    cardLookup: {
+      'guard-1': {
+        name_zh: '緊急格擋', card_type: 'event', cost: 1,
+        effects: [{ trigger_type: 'reaction', condition: 'before_take_damage', effect_code: 'heal_hp', effect_params: { amount: 1 } }],
+      },
+    },
+  };
+  return game;
+}
+
 function intent(playerId: string, investigatorId: string, id: string, actionType: IntentMessage['actionType'], payload: Record<string, unknown> = {}): IntentMessage {
   return {
     id,
@@ -339,6 +363,69 @@ test('指定遭遇斷線:AI 接管後會結算 pending，房間不會卡住', ()
   if (fallback.ok) {
     assertEq(fallback.data.snapshot.game?.pendingEncounter, undefined, 'AI 結算後不保留 pending');
     assertEq(fallback.data.snapshot.game?.scenario.objectiveProgress, 1, 'AI 使用 shared encounter resolver 寫入結果');
+  }
+});
+
+test('遭遇傷害 reaction:私有候選、隊友自由、invalid 不吞傷害且 pass 才續跑', () => {
+  const service = makeService();
+  const created = service.createRoom({ playerId: 'player-1', username: 'creator01' });
+  if (!created.ok) throw new Error(created.error.message);
+  if (!service.joinRoom(created.data.roomCode, { playerId: 'player-2', username: 'creator02' }).ok) throw new Error('join failed');
+  if (!service.activateGame(created.data.roomCode, 'player-1', makeReactionEncounterGame()).ok) throw new Error('activate failed');
+  const drawn = service.submitIntent(created.data.roomCode, 'player-1', 1, intent('player-1', 'inv-1', 'reaction-draw', 'gain_resource'));
+  if (!drawn.ok) throw new Error(drawn.error.message);
+  const encounter = service.getPrivateState(created.data.roomCode, 'player-1');
+  if (!encounter.ok) throw new Error(encounter.error.message);
+  const selected = service.resolveEncounterChoice(created.data.roomCode, 'player-1', 2, encounter.data.pendingEncounter?.id ?? '', 0);
+  if (!selected.ok) throw new Error(selected.error.message);
+  assertEq(selected.data.snapshot.game?.pendingReaction?.targetInvestigatorId, 'inv-1', '選項傷害先開 reaction window');
+  assertEq(selected.data.snapshot.game?.investigators['inv-1']?.hp, 7, '傷害尚未落地');
+  const owner = service.getPrivateState(created.data.roomCode, 'player-1');
+  const teammate = service.getPrivateState(created.data.roomCode, 'player-2');
+  if (!owner.ok || !teammate.ok) throw new Error('private state failed');
+  assertEq(owner.data.pendingReaction?.candidates[0]?.name, '緊急格擋', '只有 target 看見候選卡');
+  assertEq(teammate.data.pendingReaction, null, '隊友私有資料不含候選卡');
+  const blocked = service.submitIntent(created.data.roomCode, 'player-1', 3, intent('player-1', 'inv-1', 'reaction-blocked', 'gain_resource'));
+  assertEq(blocked.ok, false);
+  if (!blocked.ok) assertEq(blocked.error.code, 'reaction_pending');
+  const teammateAction = service.submitIntent(created.data.roomCode, 'player-2', 1, intent('player-2', 'inv-2', 'reaction-teammate-free', 'gain_resource'));
+  assertEq(teammateAction.ok, true, '隊友不被別人的 reaction window 鎖住');
+  const reactionId = owner.data.pendingReaction?.id ?? '';
+  const invalid = service.resolveReactionDecision(created.data.roomCode, 'player-1', 3, reactionId, { kind: 'play', cardInstanceId: 'guard-1', effectIndex: 9 });
+  assertEq(invalid.ok, false);
+  if (!invalid.ok) assertEq(invalid.error.code, 'reaction_decision_invalid');
+  const afterInvalid = service.getSnapshot(created.data.roomCode, 'player-1');
+  if (!afterInvalid.ok) throw new Error(afterInvalid.error.message);
+  assertEq(afterInvalid.data.game?.pendingReaction?.targetInvestigatorId, 'inv-1', 'invalid 保留同一窗口');
+  assertEq(afterInvalid.data.game?.investigators['inv-1']?.hp, 7, 'invalid 不結算原傷害');
+  const passed = service.resolveReactionDecision(created.data.roomCode, 'player-1', 3, reactionId, { kind: 'pass' });
+  assertEq(passed.ok, true, 'invalid 不消耗 sequence，可用同序號重試');
+  if (passed.ok) {
+    assertEq(passed.data.snapshot.game?.pendingReaction, undefined, 'pass 後清除窗口');
+    assertEq(passed.data.snapshot.game?.investigators['inv-1']?.hp, 5, 'pass 才結算原傷害');
+  }
+});
+
+test('遭遇傷害 reaction:斷線後 AI 使用合法反應並完成續作', () => {
+  const service = makeService();
+  const created = service.createRoom({ playerId: 'player-1', username: 'creator01' });
+  if (!created.ok) throw new Error(created.error.message);
+  if (!service.joinRoom(created.data.roomCode, { playerId: 'player-2', username: 'creator02' }).ok) throw new Error('join failed');
+  if (!service.activateGame(created.data.roomCode, 'player-1', makeReactionEncounterGame()).ok) throw new Error('activate failed');
+  service.setConnection(created.data.roomCode, 'player-1', true);
+  const drawn = service.submitIntent(created.data.roomCode, 'player-1', 1, intent('player-1', 'inv-1', 'reaction-ai-draw', 'gain_resource'));
+  if (!drawn.ok) throw new Error(drawn.error.message);
+  const encounter = service.getPrivateState(created.data.roomCode, 'player-1');
+  if (!encounter.ok) throw new Error(encounter.error.message);
+  const selected = service.resolveEncounterChoice(created.data.roomCode, 'player-1', 2, encounter.data.pendingEncounter?.id ?? '', 0);
+  if (!selected.ok) throw new Error(selected.error.message);
+  if (!service.setConnection(created.data.roomCode, 'player-1', false).ok) throw new Error('disconnect failed');
+  const fallback = service.resolvePendingReactionForAi(created.data.roomCode, 'inv-1');
+  assertEq(fallback.ok, true, 'AI 接管可處置 reaction window');
+  if (fallback.ok) {
+    assertEq(fallback.data.snapshot.game?.pendingReaction, undefined, 'AI 完成後不保留 reaction');
+    assertEq(fallback.data.snapshot.game?.investigators['inv-1']?.hp, 6, 'AI 使用格擋，2 傷害減為 1');
+    assertEq(fallback.data.snapshot.game?.investigators['inv-1']?.discardPile.includes('guard-1'), true, 'AI 付款後照常棄牌');
   }
 });
 

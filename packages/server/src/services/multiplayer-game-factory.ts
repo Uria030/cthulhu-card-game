@@ -9,6 +9,8 @@ import { createRequire } from 'node:module';
 import type {
   CardDataLookup,
   EnemyDataLookup,
+  EncounterCardData,
+  EncounterTriggerConfig,
   InvestigatorAIProfile,
   MultiplayerRoomMember,
   StageBootstrap,
@@ -21,7 +23,9 @@ const {
   AI_INVESTIGATOR_ROSTER,
   buildGameFromBootstrap,
   defaultKeeperProfile,
+  mergeEncounterTriggerConfigs,
   materializeAIInvestigator,
+  normaliseEncounterTriggerConfig,
 } = runtime;
 
 export interface MultiplayerBootstrapSource {
@@ -148,6 +152,14 @@ export function buildAuthoritativeMultiplayerGame(input: {
   }
 
   const primary = allBootstraps[0];
+  const stageEncounterConfig = normaliseEncounterTriggerConfig(
+    (primary.stage as Record<string, unknown>).encounter_trigger_config,
+  );
+  const scenarioEncounterConfig = normaliseEncounterTriggerConfig(
+    (primary.stage.scenarios[0] as Record<string, unknown> | undefined)?.encounter_trigger_config,
+  );
+  const encounterTriggerConfig: EncounterTriggerConfig = mergeEncounterTriggerConfigs(stageEncounterConfig, scenarioEncounterConfig);
+  const encounterCards = primary.encounter_cards as unknown as EncounterCardData[];
   return {
     stageId: input.stageId,
     scenario,
@@ -172,6 +184,9 @@ export function buildAuthoritativeMultiplayerGame(input: {
       actCards: primary.stage.act_cards as any[],
       agendaCards: primary.stage.agenda_cards as any[],
       outcomes: (primary.chapter?.outcomes ?? []) as any[],
+      encounterDeck: [...encounterCards],
+      encounterSource: [...encounterCards],
+      encounterTriggerConfig,
     },
     ruleContext: {
       cardLookup: cardLookupFrom(allBootstraps, builtStates),

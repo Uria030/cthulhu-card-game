@@ -13,7 +13,7 @@ import {
   fetchPlayerMe,
   getPlayerToken,
 } from '../api';
-import { cinematicFromResolved, advanceCinematic, type MultiplayerCinematic } from '../game/multiplayerCinematic';
+import { cinematicFromEffects, cinematicFromResolved, advanceCinematic, type MultiplayerCinematic } from '../game/multiplayerCinematic';
 import { openMultiplayerTransport, type MultiplayerTransport } from '../game/multiplayerTransport';
 import './MultiplayerScenarioScreen.css';
 
@@ -30,6 +30,7 @@ function effectLine(message: MultiplayerServerMessage): string | null {
   }
   if (message.type === 'ai_turn_completed') return message.lines.length > 0 ? `AI:${message.lines.join('、')}` : 'AI 已結束本回合。';
   if (message.type === 'phase_changed') return message.phase === 'mythos' ? '有神秘的事情發生了！' : '新的調查員回合開始。';
+  if (message.type === 'encounter_triggered') return '遭遇正在逼近指定調查員。';
   return null;
 }
 
@@ -89,7 +90,13 @@ export function MultiplayerScenarioScreen() {
           setPendingSequence(null);
         }
       }
-      if (message.type === 'room_snapshot' || message.type === 'intent_resolved' || message.type === 'ai_turn_completed' || message.type === 'phase_changed') {
+      if (message.type === 'encounter_triggered') {
+        const currentPlayerId = playerIdRef.current;
+        const viewerId = currentPlayerId ? message.snapshot.game?.playerInvestigators[currentPlayerId] ?? null : null;
+        const cinematic = cinematicFromEffects(`encounter:${message.targetInvestigatorId}:${message.snapshot.version}`, 'server', message.effects, viewerId);
+        if (cinematic) setCinematics((current) => current.some((item) => item.id === cinematic.id) ? current : [...current, cinematic]);
+      }
+      if (message.type === 'room_snapshot' || message.type === 'intent_resolved' || message.type === 'ai_turn_completed' || message.type === 'phase_changed' || message.type === 'encounter_triggered') {
         adopt(message.snapshot);
       } else if (message.type === 'room_closed') {
         navigate('/multiplayer', { replace: true });
@@ -122,7 +129,8 @@ export function MultiplayerScenarioScreen() {
   const isAiControlled = !!(myInvestigatorId && game?.controllerByInvestigator[myInvestigatorId] === 'ai');
   const declared = !!(myInvestigatorId && game?.declaredEndByInvestigator.includes(myInvestigatorId));
   const activeCinematic = cinematics[0] ?? null;
-  const encounterBlocked = activeCinematic?.blocksActor === true;
+  const pendingEncounter = privateState?.pendingEncounter ?? null;
+  const encounterBlocked = !!pendingEncounter || activeCinematic?.blocksActor === true;
   const canAct = !!game && game.scenario.phase === 'investigator' && !isAiControlled && !declared && !encounterBlocked && pendingSequence === null;
 
   const toggleCommit = (cardId: string) => setCommitIds((current) => (
@@ -160,6 +168,18 @@ export function MultiplayerScenarioScreen() {
     if (!transportRef.current || !canAct) return;
     const sequence = sequenceRef.current++;
     if (!transportRef.current.declareActionEnd(sequence)) {
+      sequenceRef.current -= 1;
+      setNotice('連線尚未就緒。');
+      return;
+    }
+    setPendingSequence(sequence);
+    pendingSequenceRef.current = sequence;
+  };
+
+  const resolveEncounter = (encounterId: string, optionIndex: number) => {
+    if (!transportRef.current || !playerId || isAiControlled || pendingSequence !== null) return;
+    const sequence = sequenceRef.current++;
+    if (!transportRef.current.resolveEncounter(sequence, encounterId, optionIndex)) {
       sequenceRef.current -= 1;
       setNotice('連線尚未就緒。');
       return;
@@ -252,6 +272,14 @@ export function MultiplayerScenarioScreen() {
     </section>
 
     <aside className="mps-log"><h2>戰役紀錄</h2>{log.length === 0 ? <p>等待第一個權威事件。</p> : log.map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}</aside>
+
+    {pendingEncounter && <section className="mps-encounter-choice" aria-label="待處置遭遇">
+      <small>指定由你處置</small><h2>{pendingEncounter.nameZh}</h2>
+      {pendingEncounter.scenarioText && <p>{pendingEncounter.scenarioText}</p>}
+      {pendingEncounter.options.map((option) => <button disabled={pendingSequence !== null} key={option.index} onClick={() => resolveEncounter(pendingEncounter.id, option.index)}>
+        <strong>{option.label}</strong>{option.text ? <span>{option.text}</span> : null}
+      </button>)}
+    </section>}
 
     {activeCinematic && <section className={'mps-cinematic' + (activeCinematic.blocksActor ? ' is-blocking' : '')} aria-live="polite">
       <small>{activeCinematic.actorPlayerId === playerId ? '你的行動演出' : '隊友的行動演出'} · 第 {activeCinematic.beat} 幕</small>

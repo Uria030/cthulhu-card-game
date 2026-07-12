@@ -25,6 +25,7 @@ export interface MultiplayerTransportOptions {
 export interface MultiplayerTransport {
   sendIntent(sequence: number, intent: IntentMessage): boolean;
   declareActionEnd(sequence: number): boolean;
+  resolveEncounter(sequence: number, encounterId: string, optionIndex: number): boolean;
   close(): void;
 }
 
@@ -67,6 +68,12 @@ export function openMultiplayerTransport(options: MultiplayerTransportOptions): 
     declareActionEnd(sequence: number): boolean {
       if (!authenticated || socket.readyState !== 1) return false;
       const message: MultiplayerClientMessage = { type: 'declare_end', sequence };
+      socket.send(JSON.stringify(message));
+      return true;
+    },
+    resolveEncounter(sequence: number, encounterId: string, optionIndex: number): boolean {
+      if (!authenticated || socket.readyState !== 1) return false;
+      const message: MultiplayerClientMessage = { type: 'resolve_encounter', sequence, encounterId, optionIndex };
       socket.send(JSON.stringify(message));
       return true;
     },

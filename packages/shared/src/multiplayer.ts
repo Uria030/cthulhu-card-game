@@ -4,7 +4,7 @@
  * Server 是唯一權威；client 只送意圖、接收完整快照與演出效果。
  * 此檔只放可序列化契約，伺服器的 RuleContext 與房間記憶體實作留在 server package。
  */
-import type { IntentMessage, ResultMessage } from './game/messages';
+import type { IntentMessage, ResultEffect, ResultMessage } from './game/messages';
 import type { InvestigatorState, ScenarioState, TurnState } from './game/state';
 
 export type MultiplayerRoomPhase = 'lobby' | 'active' | 'closed';
@@ -37,6 +37,10 @@ export interface MultiplayerGameSnapshot {
     outcomeCode: string;
     status: 'pending' | 'saved' | 'failed';
   };
+  /** Only the target receives card/options through MultiplayerPrivateState. */
+  pendingEncounter?: {
+    targetInvestigatorId: string;
+  };
 }
 
 /**
@@ -58,6 +62,12 @@ export interface MultiplayerPrivateState {
   investigatorId: string;
   hand: MultiplayerCardView[];
   assets: MultiplayerCardView[];
+  pendingEncounter?: {
+    id: string;
+    nameZh: string;
+    scenarioText: string;
+    options: Array<{ index: number; label: string; text: string }>;
+  } | null;
 }
 
 export interface MultiplayerRoomSnapshot {
@@ -87,10 +97,18 @@ export interface MultiplayerDeclareEndMessage {
   sequence: number;
 }
 
+export interface MultiplayerResolveEncounterMessage {
+  type: 'resolve_encounter';
+  sequence: number;
+  encounterId: string;
+  optionIndex: number;
+}
+
 export type MultiplayerClientMessage =
   | MultiplayerAuthenticateMessage
   | MultiplayerIntentMessage
-  | MultiplayerDeclareEndMessage;
+  | MultiplayerDeclareEndMessage
+  | MultiplayerResolveEncounterMessage;
 
 export interface MultiplayerRoomSnapshotMessage {
   type: 'room_snapshot';
@@ -124,6 +142,13 @@ export interface MultiplayerPhaseChangedMessage {
   snapshot: MultiplayerRoomSnapshot;
 }
 
+export interface MultiplayerEncounterTriggeredMessage {
+  type: 'encounter_triggered';
+  targetInvestigatorId: string;
+  effects: ResultEffect[];
+  snapshot: MultiplayerRoomSnapshot;
+}
+
 export interface MultiplayerErrorMessage {
   type: 'error';
   code: string;
@@ -137,4 +162,5 @@ export type MultiplayerServerMessage =
   | MultiplayerRoomClosedMessage
   | MultiplayerAiTurnMessage
   | MultiplayerPhaseChangedMessage
+  | MultiplayerEncounterTriggeredMessage
   | MultiplayerErrorMessage;

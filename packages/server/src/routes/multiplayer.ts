@@ -255,7 +255,15 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
       }
       const applied = message.type === 'declare_end'
         ? rooms.declareActionEnd(request.params.code, authenticatedPlayerId, message.sequence)
-        : rooms.submitIntent(request.params.code, authenticatedPlayerId, message.sequence, message.intent);
+        : message.type === 'resolve_encounter'
+          ? rooms.resolveEncounterChoice(
+              request.params.code,
+              authenticatedPlayerId,
+              message.sequence,
+              message.encounterId,
+              message.optionIndex,
+            )
+          : rooms.submitIntent(request.params.code, authenticatedPlayerId, message.sequence, message.intent);
       if (!applied.ok) {
         sendSocket(socket, roomErrorMessage(applied.error));
         return;
@@ -274,6 +282,7 @@ export const multiplayerRoutes: FastifyPluginAsync<MultiplayerRouteOptions> = as
         // It must not play a human turn through AI during that hand-off. Browser
         // loss/network failure uses a different close code and is AI-taken over.
         if (code !== 1000 && investigatorId && disconnected.ok && disconnected.data.game?.controllerByInvestigator[investigatorId] === 'ai') {
+          rooms.resolvePendingEncounterForAi(request.params.code, investigatorId);
           rooms.runAiTurn(request.params.code, investigatorId);
         }
       }

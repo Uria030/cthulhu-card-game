@@ -12,7 +12,7 @@ export interface MultiplayerCinematic {
 
 function titleFor(effects: ResultEffect[]): string {
   const types = new Set(effects.map((effect) => effect.type));
-  if (types.has('encounter_drawn') || types.has('encounter_narrative')) return '遭遇正在展開';
+  if (types.has('encounter_drawn') || types.has('encounter_narrative') || types.has('encounter_check')) return '遭遇正在展開';
   if (types.has('play_card') || types.has('card_action') || types.has('card_consumed')) return '卡片的力量被喚醒';
   if (types.has('attack') || types.has('style_card_drawn') || types.has('enemy_damaged')) return '戰鬥爆發';
   if (types.has('move')) return '你踏入了新的地點';
@@ -45,15 +45,28 @@ export function cinematicFromResolved(
   viewerInvestigatorId: string | null,
 ): MultiplayerCinematic | null {
   if (message.result.outcome !== 'accepted') return null;
-  const effects = message.result.effects ?? [];
+  return cinematicFromEffects(
+    `${message.actorPlayerId}:${message.sequence}:${message.result.inResponseTo}`,
+    message.actorPlayerId,
+    message.result.effects ?? [],
+    viewerInvestigatorId,
+  );
+}
+
+export function cinematicFromEffects(
+  id: string,
+  actorPlayerId: string,
+  effects: ResultEffect[],
+  viewerInvestigatorId: string | null,
+): MultiplayerCinematic | null {
   if (effects.length === 0) return null;
   const encounterTargets = effects
     .filter((effect) => effect.type === 'encounter_drawn' || effect.type === 'encounter_narrative')
     .map((effect) => effect.targetId)
     .filter((targetId): targetId is string => typeof targetId === 'string');
   return {
-    id: `${message.actorPlayerId}:${message.sequence}:${message.result.inResponseTo}`,
-    actorPlayerId: message.actorPlayerId,
+    id,
+    actorPlayerId,
     title: titleFor(effects),
     beat: 1,
     hasCheck: effects.some((effect) => effect.type === 'roll_d20'),

@@ -1,5 +1,5 @@
 import { CURRENT_MESSAGE_SCHEMA_VERSION, defaultKeeperProfile } from '@cthulhu/shared';
-import type { IntentMessage, InvestigatorState, ScenarioState, TurnState } from '@cthulhu/shared';
+import type { EncounterTriggerConfig, IntentMessage, InvestigatorState, ScenarioState, TurnState } from '@cthulhu/shared';
 import { MultiplayerRoomService } from './multiplayer-rooms.js';
 
 type TestFn = () => void | Promise<void>;
@@ -44,6 +44,37 @@ function makeGame(p2: InvestigatorState = makeInvestigator('inv-2')) {
     investigators: { 'inv-1': makeInvestigator('inv-1'), 'inv-2': p2 },
     turn,
     playerInvestigators: { 'player-1': 'inv-1', 'player-2': 'inv-2' },
+  };
+}
+
+function makeEncounterGame() {
+  const game = makeGame();
+  const encounterTriggerConfig: EncounterTriggerConfig = { trigger_actions: ['gain_resource'] };
+  const encounter = {
+    id: 'enc-1',
+    name_zh: '雨巷裡的低語',
+    scenario_text_zh: '潮濕的磚牆後傳來不該存在的呼吸聲。',
+    options: [{
+      option_label: '直視陰影',
+      option_text_zh: '你握緊手中的燈，逼自己向前一步。',
+      no_check_narrative_zh: '陰影退去，地上留下了一張線索。',
+      no_check_effects: [{ effect_code: 'discover_clue', amount: 1 }],
+    }],
+  };
+  return {
+    ...game,
+    roundRuntime: {
+      mythosCards: [],
+      keeperProfile: defaultKeeperProfile(undefined, 2),
+      attackCards: {},
+      actCards: [],
+      agendaCards: [],
+      outcomes: [],
+      encounterDeck: [encounter],
+      encounterSource: [encounter],
+      encounterTriggerConfig,
+    },
+    ruleContext: { enemyStats: {} },
   };
 }
 
@@ -249,6 +280,95 @@ test('關卡結束:兩位真人的存檔結算必須由同一份權威狀態一�
   const snapshot = service.getSnapshot(created.data.roomCode, 'player-1');
   assertEq(snapshot.ok, true);
   if (snapshot.ok) assertEq(snapshot.data.game?.resolution?.status, 'saved', '交易成功後才向所有 client 宣告完成');
+});
+
+test('指定遭遇:只鎖 target，隊友仍可行動且只有 target 能回應選項', () => {
+  const service = makeService();
+  const created = service.createRoom({ playerId: 'player-1', username: 'creator01' });
+  if (!created.ok) throw new Error(created.error.message);
+  const joined = service.joinRoom(created.data.roomCode, { playerId: 'player-2', username: 'creator02' });
+  if (!joined.ok) throw new Error(joined.error.message);
+  const active = service.activateGame(created.data.roomCode, 'player-1', makeEncounterGame());
+  if (!active.ok) throw new Error(active.error.message);
+
+  const drawn = service.submitIntent(created.data.roomCode, 'player-1', 1, intent('player-1', 'inv-1', 'draw-encounter', 'gain_resource'));
+  assertEq(drawn.ok, true);
+  if (!drawn.ok) return;
+  assertEq(drawn.data.snapshot.game?.pendingEncounter?.targetInvestigatorId, 'inv-1', '遭遇指定觸發者');
+  const ownerView = service.getPrivateState(created.data.roomCode, 'player-1');
+  const teammateView = service.getPrivateState(created.data.roomCode, 'player-2');
+  assertEq(ownerView.ok, true);
+  assertEq(teammateView.ok, true);
+  if (ownerView.ok) assertEq(ownerView.data.pendingEncounter?.nameZh, '雨巷裡的低語', '只有 target 收到選項卡面');
+  if (teammateView.ok) assertEq(teammateView.data.pendingEncounter, null, '隊友私有 view 不含他人的選項');
+
+  const blocked = service.submitIntent(created.data.roomCode, 'player-1', 2, intent('player-1', 'inv-1', 'blocked', 'gain_resource'));
+  assertEq(blocked.ok, false);
+  if (!blocked.ok) assertEq(blocked.error.code, 'encounter_pending', 'target 未選擇前不能偷做其他 action');
+  const teammateAction = service.submitIntent(created.data.roomCode, 'player-2', 1, intent('player-2', 'inv-2', 'teammate-free', 'gain_resource'));
+  assertEq(teammateAction.ok, true, '另一位真人不會被 target 的 Modal 卡住');
+  const encounterId = ownerView.ok ? ownerView.data.pendingEncounter?.id ?? '' : '';
+  const wrongSeat = service.resolveEncounterChoice(created.data.roomCode, 'player-2', 2, encounterId, 0);
+  assertEq(wrongSeat.ok, false);
+  if (!wrongSeat.ok) assertEq(wrongSeat.error.code, 'encounter_not_target', '隊友不可替 target 選選項');
+  const resolved = service.resolveEncounterChoice(created.data.roomCode, 'player-1', 2, encounterId, 0);
+  assertEq(resolved.ok, true);
+  if (resolved.ok) {
+    assertEq(resolved.data.snapshot.game?.pendingEncounter, undefined, '選項結算後清除 pending state');
+    assertEq(resolved.data.snapshot.game?.scenario.objectiveProgress, 1, '遭遇選項效果由 server 寫入共享局面');
+  }
+});
+
+test('指定遭遇斷線:AI 接管後會結算 pending，房間不會卡住', () => {
+  const service = makeService();
+  const created = service.createRoom({ playerId: 'player-1', username: 'creator01' });
+  if (!created.ok) throw new Error(created.error.message);
+  const joined = service.joinRoom(created.data.roomCode, { playerId: 'player-2', username: 'creator02' });
+  if (!joined.ok) throw new Error(joined.error.message);
+  const active = service.activateGame(created.data.roomCode, 'player-1', makeEncounterGame());
+  if (!active.ok) throw new Error(active.error.message);
+  service.setConnection(created.data.roomCode, 'player-1', true);
+  const drawn = service.submitIntent(created.data.roomCode, 'player-1', 1, intent('player-1', 'inv-1', 'draw-then-drop', 'gain_resource'));
+  if (!drawn.ok) throw new Error(drawn.error.message);
+  const disconnected = service.setConnection(created.data.roomCode, 'player-1', false);
+  if (!disconnected.ok) throw new Error(disconnected.error.message);
+  const fallback = service.resolvePendingEncounterForAi(created.data.roomCode, 'inv-1');
+  assertEq(fallback.ok, true, 'AI 接管可選擇既有遭遇選項');
+  if (fallback.ok) {
+    assertEq(fallback.data.snapshot.game?.pendingEncounter, undefined, 'AI 結算後不保留 pending');
+    assertEq(fallback.data.snapshot.game?.scenario.objectiveProgress, 1, 'AI 使用 shared encounter resolver 寫入結果');
+  }
+});
+
+test('回合結束遭遇:依序等每位真人處置後才補給並開新回合', () => {
+  const service = makeService();
+  const created = service.createRoom({ playerId: 'player-1', username: 'creator01' });
+  if (!created.ok) throw new Error(created.error.message);
+  const joined = service.joinRoom(created.data.roomCode, { playerId: 'player-2', username: 'creator02' });
+  if (!joined.ok) throw new Error(joined.error.message);
+  const game = makeEncounterGame();
+  if (!game.roundRuntime) throw new Error('missing encounter runtime');
+  game.roundRuntime.encounterTriggerConfig = { draw_on_turn_end: true };
+  const active = service.activateGame(created.data.roomCode, 'player-1', game);
+  if (!active.ok) throw new Error(active.error.message);
+
+  const firstEnd = service.declareActionEnd(created.data.roomCode, 'player-1', 1);
+  const secondEnd = service.declareActionEnd(created.data.roomCode, 'player-2', 1);
+  if (!firstEnd.ok || !secondEnd.ok) throw new Error('human end declaration failed');
+  const firstPending = service.getPrivateState(created.data.roomCode, 'player-1');
+  if (!firstPending.ok) throw new Error(firstPending.error.message);
+  assertEq(firstPending.data.pendingEncounter?.nameZh, '雨巷裡的低語', '第一席先收到回合結束遭遇');
+  const firstResolved = service.resolveEncounterChoice(created.data.roomCode, 'player-1', 2, firstPending.data.pendingEncounter?.id ?? '', 0);
+  assertEq(firstResolved.ok, true);
+  const secondPending = service.getPrivateState(created.data.roomCode, 'player-2');
+  if (!secondPending.ok) throw new Error(secondPending.error.message);
+  assertEq(secondPending.data.pendingEncounter?.nameZh, '雨巷裡的低語', '第一席完成後才輪到第二席');
+  const secondResolved = service.resolveEncounterChoice(created.data.roomCode, 'player-2', 2, secondPending.data.pendingEncounter?.id ?? '', 0);
+  assertEq(secondResolved.ok, true);
+  const settled = service.getSnapshot(created.data.roomCode, 'player-1');
+  if (!settled.ok) throw new Error(settled.error.message);
+  assertEq(settled.data.game?.scenario.phase, 'investigator', '所有回合結束遭遇完成後才開始下一回合');
+  assertEq(settled.data.game?.turn.turnNumber, 2, '補給後推進至下一回合');
 });
 
 let passed = 0;

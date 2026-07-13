@@ -1,0 +1,55 @@
+﻿{
+    "id":  "seat-3A",
+    "source":  {
+                   "path":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\silhouette-overlays\\chroma-source\\seat-3A-chroma-v2.png",
+                   "sha256":  "3E5B7A9C9F17AFECD27A02C97CEA3BE805D366C9749ABAA188C9691697EE1D0B",
+                   "width":  1536,
+                   "height":  1024,
+                   "sampledKeyRgb":  [
+                                         4,
+                                         248,
+                                         18
+                                     ]
+               },
+    "base":  {
+                 "path":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\A-study-v1.png",
+                 "sha256":  "E8B0675980EC8ED5EAC05A576C71C4EA67C828A658532312DF412BE81AD18ED5"
+             },
+    "person":  {
+                   "asset":  "seat-3A-person.png",
+                   "sourceCrop":  {
+                                      "x":  602,
+                                      "y":  117,
+                                      "width":  486,
+                                      "height":  826
+                                  },
+                   "placement":  {
+                                     "x":  1100,
+                                     "y":  255,
+                                     "width":  353,
+                                     "height":  600
+                                 },
+                   "alphaPixels":  200882,
+                   "coverage":  0.500409,
+                   "greenSpillPixels":  0,
+                   "cornersTransparent":  true
+               },
+    "foregroundLayer":  {
+                            "scope":  "shared",
+                            "asset":  "board-foreground.png",
+                            "mask":  "board-foreground-mask.png",
+                            "source":  "derived-from-base",
+                            "polygon":  "0,630;250,615;500,565;700,520;860,540;1080,600;1300,680;1535,780;1535,1023;0,1023"
+                        },
+    "compositeOrder":  [
+                           "base",
+                           "person",
+                           "foregroundOcclusion"
+                       ],
+    "occlusionCoupledToPlacement":  true,
+    "qa":  {
+               "basePlusForegroundEqualsBase":  true,
+               "foregroundDerivedFromBaseExact":  true
+           },
+    "binding":  "Changing base SHA-256, canvas size, foreground polygon, or placement invalidates this calibration."
+}

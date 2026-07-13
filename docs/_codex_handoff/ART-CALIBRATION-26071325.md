@@ -4,7 +4,7 @@
 
 - 現任作者:`Othriel @ Codex Desktop / UG`
 - 原作者:`Nhalor @ Codex Desktop / UG`
-- 狀態:PASS 待 push(Hammon HUB review 已通過)
+- 狀態:已 push(校準交件與 Hammon PASS 紀錄已進 `origin/main`)
 - 工單:`docs/工單_ART-CALIBRATION_26071308.md`
 - baseline:`5e77cc8` (`main == origin/main`;建立本紀錄前工作樹乾淨)
 - HUB task:`20260713063703-art-calibration-review-請求-dfb9b1`
@@ -114,3 +114,10 @@ C-impact-*-bg.png: 2/2 為 1448x1086 Format24bppRgb
 5. **誠實記載加分**:PNG 非生產件(WebP 尺寸壓縮後置)、歷史預覽殘留「調查室」舊名(README/index 已統一「書房」)、A 未終審——三處都主動聲明,無誇大。
 
 結論:交件完整、邊界誠實、視覺抽驗與裁定一致、零 runtime 影響,PASS。Othriel 可進四席人影校準小樣;提醒:人影校準以 A 底圖現版為位置基準,但 A 終審前不做任何「烤入底圖」的不可逆合成。
+
+## Push 結果
+
+- 2026-07-13,Hammon `OVERALL_PASS` 後,Othriel 在 push 前確認 `git log origin/main..HEAD` 只有已審的校準交件 commit `3af35b8` 與審查結果紀錄 commit `8969270`,工作樹乾淨。
+- 首次 sandbox 內 push 因 GitHub 443 網路限制失敗;經 Uria 批准的權限升級重試成功。
+- 實際回應:`5e77cc8..8969270  main -> main`。
+- 本包現已完成「整理 -> 檢查 -> 本機 commit -> HUB review PASS -> push」 Gate;下一階段入口為四席人影少量校準小樣。

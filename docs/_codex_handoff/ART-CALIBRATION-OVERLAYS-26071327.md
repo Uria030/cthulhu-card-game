@@ -150,3 +150,5 @@ Othriel 先以 `seat-3A-fullscene.png` 施工，並補上每席 include polygon�
 - 目視：無綠邊、白邊、矩形接縫、桌面洞、壁爐鬼影或左膝突出；人物、椅背與桌面遮擋關係成立。
 
 狀態：3A A 路徑試點本機 PASS，待 Hammon intermediate Review；Review PASS 前不展開其餘七張、不 push。
+
+首次 review task `20260713115916-art-calibration-3a-transparent-overlay-p-69c705` 被秘書誤派 Raviel（非指定 Hammon），回 `BLOCK`：成品視覺／遮擋可接受，但工具預設 threshold 與實際定案值不同，無法保證照 handoff 重現同一 crop／metadata。Othriel 接受此技術 blocker：將預設改為 `48/132`、metadata 明記 threshold，並補完整重現命令與 hash 對照；修復後才送 Hammon 再審。

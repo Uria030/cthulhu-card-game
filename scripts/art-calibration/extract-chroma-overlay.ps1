@@ -7,8 +7,8 @@ param(
   [Parameter(Mandatory = $true)][int]$TargetY,
   [Parameter(Mandatory = $true)][int]$TargetHeight,
   [Parameter(Mandatory = $true)][string]$ForegroundPolygon,
-  [int]$KeyDistanceLow = 14,
-  [int]$KeyDistanceHigh = 92
+  [int]$KeyDistanceLow = 48,
+  [int]$KeyDistanceHigh = 132
 )
 
 $ErrorActionPreference = 'Stop'
@@ -232,6 +232,8 @@ $report = [ordered]@{
     width = $result.SourceWidth
     height = $result.SourceHeight
     sampledKeyRgb = @($result.KeyR, $result.KeyG, $result.KeyB)
+    keyDistanceLow = $KeyDistanceLow
+    keyDistanceHigh = $KeyDistanceHigh
   }
   base = [ordered]@{
     path = $baseResolved

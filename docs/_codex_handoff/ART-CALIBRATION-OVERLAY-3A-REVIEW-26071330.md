@@ -46,6 +46,14 @@ foregroundDerivedFromBaseExact=true
 
 PowerShell parser：`extract-chroma-overlay.ps1` 無 syntax error；同一命令可重現上述 metadata 與 PNG。
 
+BLOCK 修復後重現測試：另輸出到乾淨暫存目錄，以 SHA-256 比對正式目錄全部 8 個產物，結果 `REPRO_HASH_MATCH=8/8`；測後已刪除暫存目錄。
+
+完整重現命令（key threshold 使用工具定案預設 `48/132`）：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\art-calibration\extract-chroma-overlay.ps1 -InputPath packages\client\public\game-art\calibration-26071308\silhouette-overlays\chroma-source\seat-3A-chroma-v2.png -BasePath packages\client\public\game-art\calibration-26071308\A-study-v1.png -OutputDir packages\client\public\game-art\calibration-26071308\silhouette-overlays\seat-3A -Id seat-3A -TargetX 1100 -TargetY 255 -TargetHeight 600 -ForegroundPolygon "0,630;250,615;500,565;700,520;860,540;1080,600;1300,680;1535,780;1535,1023;0,1023"
+```
+
 ## 請檢查
 
 1. 3A 是否保留已核可的右側火爐席閱讀方向、暖 rim light 與背向坐姿。

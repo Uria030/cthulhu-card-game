@@ -9,7 +9,9 @@
                                          4,
                                          248,
                                          18
-                                     ]
+                                     ],
+                   "keyDistanceLow":  48,
+                   "keyDistanceHigh":  132
                },
     "base":  {
                  "path":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\A-study-v1.png",

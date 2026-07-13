@@ -152,3 +152,5 @@ Othriel 先以 `seat-3A-fullscene.png` 施工，並補上每席 include polygon�
 狀態：3A A 路徑試點本機 PASS，待 Hammon intermediate Review；Review PASS 前不展開其餘七張、不 push。
 
 首次 review task `20260713115916-art-calibration-3a-transparent-overlay-p-69c705` 被秘書誤派 Raviel（非指定 Hammon），回 `BLOCK`：成品視覺／遮擋可接受，但工具預設 threshold 與實際定案值不同，無法保證照 handoff 重現同一 crop／metadata。Othriel 接受此技術 blocker：將預設改為 `48/132`、metadata 明記 threshold，並補完整重現命令與 hash 對照；修復後才送 Hammon 再審。
+
+Hammon 再審 task `20260713122257-art-calibration-3a-reproducibility-re-re-af3538` 已 `OVERALL_PASS`。他獨立驗證 foreground 635,435 pixels 對 base mismatch=0、人物 alpha 200,826、`greenSpill=0`、透明四角與 `REPRO_HASH_MATCH=8/8`，並目視確認桌面遮擋與火爐席構圖。依 intermediate Gate，現在可展開其餘七張；仍不可 push。

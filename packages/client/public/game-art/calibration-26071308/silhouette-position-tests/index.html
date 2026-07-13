@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>四席人影校準｜ART-CALIBRATION</title>
+  <style>
+    :root { color-scheme: dark; --bg:#100e0b; --panel:#1d1914; --paper:#dfd0ad; --muted:#a99b7e; --line:#6f5d3e; --pass:#6f9b58; --warn:#c38a36; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--paper); font-family:"Noto Serif TC","Microsoft JhengHei",serif; }
+    header, main { width:min(1500px, calc(100% - 32px)); margin:auto; }
+    header { padding:36px 0 24px; border-bottom:1px solid var(--line); }
+    h1,h2,h3,p { margin:0; }
+    header p, .note { margin-top:8px; color:var(--muted); line-height:1.65; }
+    section { padding:30px 0; border-bottom:1px solid #352d22; }
+    h2 { margin-bottom:8px; font-size:22px; }
+    .compare { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:18px; }
+    figure { margin:0; padding:10px; background:var(--panel); border:1px solid var(--line); }
+    figure img { display:block; width:100%; height:auto; background:#090806; }
+    figcaption { padding:10px 4px 2px; color:var(--muted); line-height:1.5; }
+    figcaption strong { color:var(--paper); }
+    .reference { display:block; width:100%; margin-top:18px; border:1px solid var(--line); }
+    .status { display:inline-block; margin-left:8px; padding:2px 7px; border:1px solid currentColor; font:700 12px "Microsoft JhengHei",sans-serif; }
+    .pass { color:var(--pass); } .warn { color:var(--warn); }
+    .asset-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:18px; }
+    .asset-grid figure img { height:280px; object-fit:contain; }
+    .impact-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:18px; }
+    .impact { position:relative; overflow:hidden; aspect-ratio:4/3; border:8px solid #17130f; }
+    .impact img { width:100%; height:100%; object-fit:cover; }
+    .impact span { position:absolute; inset:0; display:grid; place-items:center; color:#17120d; font:900 clamp(64px,9vw,140px) "Microsoft JhengHei",sans-serif; -webkit-text-stroke:5px #efe2bd; paint-order:stroke fill; text-shadow:9px 9px #8d2a1d; transform:rotate(-5deg); }
+    @media (max-width:850px) { .compare,.impact-grid { grid-template-columns:1fr; } .asset-grid { grid-template-columns:repeat(2,1fr); } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>四席人影位置／光影校準</h1>
+    <p>每席兩個候選，共八個。只用來選姿勢、比例、透視與局部光影；不是透明量產素材，也沒有接入 runtime。</p>
+  </header>
+  <main>
+    <section>
+      <h2>固定背景基準</h2>
+      <p class="note">所有候選都從同一張無人書房出發；比較時請看人物是否真的坐進原椅、是否保留桌面入口，以及光源有沒有接續。</p>
+      <img class="reference" src="../A-study-v1.png" alt="無人書房背景基準">
+    </section>
+
+    <section><h2>座位 1｜左側窗邊</h2><p class="note">重點：窗冷灰 rim、檯燈暖 fill、左側裁切後仍看得懂坐姿。</p><div class="compare">
+      <figure><img src="seat-1A-fullscene.png" alt="座位一候選 A"><figcaption><strong>1A｜無帽、微前傾</strong><br>較像正在聽講，輪廓柔和。</figcaption></figure>
+      <figure><img src="seat-1B-fullscene.png" alt="座位一候選 B"><figcaption><strong>1B｜軟呢帽、直坐</strong><br>職業輪廓較明確，帽沿吃掉部分窗光。</figcaption></figure>
+    </div></section>
+
+    <section><h2>座位 2｜後方中央</h2><p class="note">重點：桌面遮擋合理、檯燈頂光、正面座位仍不能出現具象臉孔或黑洞臉。</p><div class="compare">
+      <figure><img src="seat-2C-fullscene.png" alt="座位二候選 C"><figcaption><strong>2C｜寬帽沿、低頭</strong><br>用帽沿完整遮臉，姿勢集中於桌面。</figcaption></figure>
+      <figure><img src="seat-2D-fullscene.png" alt="座位二候選 D"><figcaption><strong>2D｜短髮、背向窗景</strong><br>不靠黑臉處理匿名性，肩線與披肩層次較清楚。</figcaption></figure>
+    </div></section>
+
+    <section><h2>座位 3｜右側火爐</h2><p class="note">重點：火爐暖 rim、椅臂接觸、人物不得和火光黏成一團。</p><div class="compare">
+      <figure><img src="seat-3A-fullscene.png" alt="座位三候選 A"><figcaption><strong>3A｜工作者、背向</strong><br>接縫最自然，衣褶中間調清楚。</figcaption></figure>
+      <figure><img src="seat-3B-fullscene.png" alt="座位三候選 B"><figcaption><strong>3B｜表演者、側坐交腿</strong><br>姿勢差異較大，側面仍偏暗，供比較匿名程度。</figcaption></figure>
+    </div></section>
+
+    <section><h2>座位 4｜右下前景</h2><p class="note">重點：前景比例、不要遮掉主要桌面資訊、椅背與人物的前後關係。</p><div class="compare">
+      <figure><img src="seat-4A-fullscene.png" alt="座位四候選 A"><figcaption><strong>4A｜私家偵探、前傾看圖</strong><br>存在感強，但遮擋面積較大。</figcaption></figure>
+      <figure><img src="seat-4B-fullscene.png" alt="座位四候選 B"><figcaption><strong>4B｜學者、直坐</strong><br>留出較多地圖與桌面，前景負擔較低。</figcaption></figure>
+    </div></section>
+
+    <section>
+      <h2>上一輪主角素材 <span class="status pass">PASS</span></h2>
+      <p class="note">棋子直接重用，不花生成額度重做；此列只確認人影方向不會推翻已通過的高彩主角層。</p>
+      <div class="asset-grid">
+        <figure><img src="../B-intj1-russet-cutout.png" alt="赤褐棋子"><figcaption>赤褐</figcaption></figure>
+        <figure><img src="../B-intj1-indigo-cutout.png" alt="靛藍棋子"><figcaption>靛藍</figcaption></figure>
+        <figure><img src="../B-intj1-moss-cutout.png" alt="苔綠棋子"><figcaption>苔綠</figcaption></figure>
+        <figure><img src="../B-intj1-saffron-cutout.png" alt="藏紅棋子"><figcaption>藏紅</figcaption></figure>
+      </div>
+    </section>
+
+    <section>
+      <h2>上一輪特效方向 <span class="status warn">WARN</span></h2>
+      <p class="note">本輪不修改。正式上線前必須去除矩形邊界，成為獨立去背素材。</p>
+      <div class="impact-grid"><div class="impact"><img src="../C-impact-red-bg.png" alt="紅色字卡"><span>轟！</span></div><div class="impact"><img src="../C-impact-teal-bg.png" alt="藍綠字卡"><span>碰！</span></div></div>
+    </section>
+  </main>
+</body>
+</html>

@@ -4,7 +4,7 @@
 
 - 作者：`Othriel @ Codex Desktop / UG`
 - 上一步：`ART-CALIBRATION-SILHOUETTES`，Hammon `OVERALL_PASS`
-- 狀態：討論拍已收斂；Uria 裁定八張全數保留；3A 差分試點因全圖漂移 Gate 失敗，依定案退到 A 純色幕隔離試點；未送審、未 push
+- 狀態：八席透明覆蓋層與兩組四席組裝已完成本機 Gate；待 Hammon Review；未 push
 
 ## Uria 裁定（2026-07-13）
 
@@ -154,3 +154,52 @@ Othriel 先以 `seat-3A-fullscene.png` 施工，並補上每席 include polygon�
 首次 review task `20260713115916-art-calibration-3a-transparent-overlay-p-69c705` 被秘書誤派 Raviel（非指定 Hammon），回 `BLOCK`：成品視覺／遮擋可接受，但工具預設 threshold 與實際定案值不同，無法保證照 handoff 重現同一 crop／metadata。Othriel 接受此技術 blocker：將預設改為 `48/132`、metadata 明記 threshold，並補完整重現命令與 hash 對照；修復後才送 Hammon 再審。
 
 Hammon 再審 task `20260713122257-art-calibration-3a-reproducibility-re-re-af3538` 已 `OVERALL_PASS`。他獨立驗證 foreground 635,435 pixels 對 base mismatch=0、人物 alpha 200,826、`greenSpill=0`、透明四角與 `REPRO_HASH_MATCH=8/8`，並目視確認桌面遮擋與火爐席構圖。依 intermediate Gate，現在可展開其餘七張；仍不可 push。
+
+## 八席展開與四席組裝（2026-07-19，Othriel）
+
+### 討論拍
+
+展開後發現 4A/4B 位於桌面前景，不能套用後席的固定遮擋順序。Othriel 先向 Hammon 作第一層輕量詢問；30 秒內無完整回覆，遂依流程升級兩回合正式 discussion。
+
+- 紀錄：`ART-CALIBRATION-SEAT-LAYERS-DISCUSSION-26071901.md`
+- Task：`20260719053410-art-calibration-seat-depth-layer-contrac-e98f40`
+- 結論：`seatLayer` 二值 fail-closed；1/2/3 席在 shared foreground 後，4 席在前；合成器依 metadata 排序，不寫死座位特例。
+
+### 撰寫拍
+
+1. 新增其餘七席 chroma source，保留先前已審的 3A source。
+2. 抽取器加入必填 `SeatLayer`、驗證過的 `CanvasExitEdges`、shared foreground 單一輸出、overlap 與 z-order mismatch Gate。
+3. 新增八席批次腳本與 metadata fail-closed 檢查。
+4. 新增全局 compositor，產生：
+   - A：`1A + 2C + 3A + 4A`
+   - B：`1B + 2D + 3B + 4B`
+5. 新增同頁校準入口 `silhouette-overlays/index.html`；兩張組裝之外，保留既有 PASS 棋子與 WARN「轟！」，沒有修改或重生它們。
+6. 3A 的 shared foreground 產物移至 `shared/`，刪除舊的 per-seat 重複檔；歷史 3A handoff 不改寫，本紀錄說明新位置取代舊位置。
+
+3B 第一次批次執行因人物跨過未宣告的右畫布邊而安全失敗。依 full-scene 參考把 placement 從 `x=1035,height=610` 收斂為 `x=1020,height=560`，第二次八席全數通過；沒有用新增 canvas exit 例外掩蓋錯位。
+
+### 本機 Gate
+
+八席全部：`greenSpill=0`、四角透明、shared foreground 與 base 逐像素一致、foreground derived exact、person/foreground overlap > 0、z-order mismatch=0。
+
+| seat | layer | placement | overlap | mismatch |
+|---|---|---:|---:|---:|
+| 1A | behind | `-180,250,532,900` | 101017 | 0 |
+| 1B | behind | `-260,240,639,900` | 110127 | 0 |
+| 2C | behind | `755,220,370,650` | 65527 | 0 |
+| 2D | behind | `790,215,321,620` | 47011 | 0 |
+| 3A | behind | `1100,255,353,600` | 26331 | 0 |
+| 3B | behind | `1020,250,478,560` | 20890 | 0 |
+| 4A | front | `940,230,620,900` | 162836 | 0 |
+| 4B | front | `1030,250,538,900` | 111669 | 0 |
+
+重跑抽取與組裝後 `REPRO_HASH_MATCH=47/47`、`REPRO_MISSING=0`。兩組輸出：
+
+- A SHA-256：`F0702D257D72C3C89ED233D09C4D28F87B7B6C3EAA2FC1B0265B38C4D1EAB588`
+- B SHA-256：`EE7F1D2A1F8BBECFBEECCE090B501EB54C550F546FB51D7E96AFE0CF86B471C3`
+
+目視：八席個別 QA 無綠邊、白邊、矩形接縫或錯誤桌切；A 組人物遮掩與壓迫感較強，B 組較安靜清楚。這是保留兩端視覺節奏的校準證據，不替 Uria 決定正式輪替規則。
+
+### Review 拍
+
+待本地 commit 後送 Hammon；Review PASS 前不進下一步、不 push。

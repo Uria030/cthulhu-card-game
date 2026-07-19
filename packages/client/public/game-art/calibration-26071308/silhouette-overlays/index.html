@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ART-CALIBRATION｜四席透明覆蓋層組裝</title>
+  <style>
+    :root { color-scheme: dark; background:#100e0b; color:#d8c8a5; font-family:"Microsoft JhengHei",sans-serif; }
+    body { margin:0; padding:32px; background:radial-gradient(circle at top,#292116,#100e0b 55%); }
+    main { max-width:1500px; margin:auto; }
+    h1,h2,p { margin:0 0 14px; }
+    .note { color:#ad9c7d; }
+    .sets,.assets { display:grid; gap:24px; margin-top:24px; }
+    .sets { grid-template-columns:repeat(auto-fit,minmax(480px,1fr)); }
+    article { border:1px solid #6d5a3b; background:#17130f; box-shadow:0 18px 40px #0009; }
+    article h2 { padding:16px 18px 0; }
+    article p { padding:0 18px; }
+    .scene { display:block; width:100%; height:auto; border-top:1px solid #3a3022; }
+    .assets { grid-template-columns:2fr 1fr; align-items:start; }
+    .pawn-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; padding:18px; }
+    .pawn-grid img { width:100%; height:160px; object-fit:contain; filter:drop-shadow(0 10px 6px #000c); }
+    .impact { position:relative; margin:18px; overflow:hidden; transform:rotate(1.5deg); border:5px solid #221b12; }
+    .impact img { display:block; width:100%; }
+    .impact span { position:absolute; inset:0; display:grid; place-items:center; color:#17120d; font:900 clamp(48px,8vw,100px) "Microsoft JhengHei",sans-serif; -webkit-text-stroke:4px #efe2bd; paint-order:stroke fill; text-shadow:8px 8px #8d2a1d; }
+    .tag { display:inline-block; margin-left:8px; padding:3px 8px; border:1px solid currentColor; font-size:12px; }
+    .pass { color:#82ad78; } .warn { color:#d8a54d; }
+    @media(max-width:800px){ body{padding:16px}.assets{grid-template-columns:1fr}.pawn-grid{grid-template-columns:repeat(2,1fr)} }
+  </style>
+</head>
+<body>
+<main>
+  <h1>四席透明人物覆蓋層｜整體校準</h1>
+  <p class="note">每個通過的姿勢變體各使用一次；本頁只做視覺與疊層校準，尚未接入 runtime。</p>
+  <section class="sets">
+    <article>
+      <h2>組合 A</h2><p>1A・2C・3A・4A</p>
+      <img class="scene" src="assemblies/set-A-four-seat.png" alt="組合 A 四席人物組裝">
+    </article>
+    <article>
+      <h2>組合 B</h2><p>1B・2D・3B・4B</p>
+      <img class="scene" src="assemblies/set-B-four-seat.png" alt="組合 B 四席人物組裝">
+    </article>
+  </section>
+  <section class="assets">
+    <article>
+      <h2>既有棋子 <span class="tag pass">Uria PASS</span></h2>
+      <p>沿用上一批換色素材，不重複生成。</p>
+      <div class="pawn-grid">
+        <img src="../B-intj1-russet-cutout.png" alt="赤褐私家偵探">
+        <img src="../B-intj1-indigo-cutout.png" alt="靛藍私家偵探">
+        <img src="../B-infj2-moss-cutout.png" alt="苔綠先知">
+        <img src="../B-infj2-saffron-cutout.png" alt="藏紅先知">
+      </div>
+    </article>
+    <article>
+      <h2>「轟！」字卡 <span class="tag warn">Uria WARN</span></h2>
+      <p>本輪不修改；正式上線前須去除矩形邊界並做成獨立透明素材。</p>
+      <div class="impact"><img src="../C-impact-red-bg.png" alt="轟字卡暫用底圖"><span>轟！</span></div>
+    </article>
+  </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,70 @@
+﻿[
+    {
+        "setId":  "set-A",
+        "output":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\silhouette-overlays\\assemblies\\set-A-four-seat.png",
+        "sha256":  "F0702D257D72C3C89ED233D09C4D28F87B7B6C3EAA2FC1B0265B38C4D1EAB588",
+        "compositeOrder":  [
+                               "base",
+                               "behind-foreground seats",
+                               "shared foreground",
+                               "front-of-foreground seats"
+                           ],
+        "seats":  [
+                      {
+                          "seatId":  "seat-1A",
+                          "seatLayer":  "behind-foreground",
+                          "personAsset":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\silhouette-overlays\\seat-1A\\seat-1A-person-placed.png"
+                      },
+                      {
+                          "seatId":  "seat-2C",
+                          "seatLayer":  "behind-foreground",
+                          "personAsset":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\silhouette-overlays\\seat-2C\\seat-2C-person-placed.png"
+                      },
+                      {
+                          "seatId":  "seat-3A",
+                          "seatLayer":  "behind-foreground",
+                          "personAsset":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\silhouette-overlays\\seat-3A\\seat-3A-person-placed.png"
+                      },
+                      {
+                          "seatId":  "seat-4A",
+                          "seatLayer":  "front-of-foreground",
+                          "personAsset":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\silhouette-overlays\\seat-4A\\seat-4A-person-placed.png"
+                      }
+                  ],
+        "gate":  "PASS"
+    },
+    {
+        "setId":  "set-B",
+        "output":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\silhouette-overlays\\assemblies\\set-B-four-seat.png",
+        "sha256":  "EE7F1D2A1F8BBECFBEECCE090B501EB54C550F546FB51D7E96AFE0CF86B471C3",
+        "compositeOrder":  [
+                               "base",
+                               "behind-foreground seats",
+                               "shared foreground",
+                               "front-of-foreground seats"
+                           ],
+        "seats":  [
+                      {
+                          "seatId":  "seat-1B",
+                          "seatLayer":  "behind-foreground",
+                          "personAsset":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\silhouette-overlays\\seat-1B\\seat-1B-person-placed.png"
+                      },
+                      {
+                          "seatId":  "seat-2D",
+                          "seatLayer":  "behind-foreground",
+                          "personAsset":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\silhouette-overlays\\seat-2D\\seat-2D-person-placed.png"
+                      },
+                      {
+                          "seatId":  "seat-3B",
+                          "seatLayer":  "behind-foreground",
+                          "personAsset":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\silhouette-overlays\\seat-3B\\seat-3B-person-placed.png"
+                      },
+                      {
+                          "seatId":  "seat-4B",
+                          "seatLayer":  "front-of-foreground",
+                          "personAsset":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\silhouette-overlays\\seat-4B\\seat-4B-person-placed.png"
+                      }
+                  ],
+        "gate":  "PASS"
+    }
+]

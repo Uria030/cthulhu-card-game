@@ -3,10 +3,12 @@ param(
   [Parameter(Mandatory = $true)][string]$BasePath,
   [Parameter(Mandatory = $true)][string]$OutputDir,
   [Parameter(Mandatory = $true)][string]$Id,
+  [Parameter(Mandatory = $true)][ValidateSet('behind-foreground', 'front-of-foreground')][string]$SeatLayer,
   [Parameter(Mandatory = $true)][int]$TargetX,
   [Parameter(Mandatory = $true)][int]$TargetY,
   [Parameter(Mandatory = $true)][int]$TargetHeight,
   [Parameter(Mandatory = $true)][string]$ForegroundPolygon,
+  [ValidateSet('left', 'right', 'top', 'bottom')][string[]]$CanvasExitEdges = @(),
   [int]$KeyDistanceLow = 48,
   [int]$KeyDistanceHigh = 132
 )
@@ -17,6 +19,7 @@ Add-Type -AssemblyName System.Drawing
 if (-not ('ArtCalibration.ChromaOverlayExtractor' -as [type])) {
   Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -32,6 +35,8 @@ namespace ArtCalibration {
     public bool CornersTransparent;
     public bool BasePlusForegroundEqualsBase;
     public bool ForegroundDerivedFromBaseExact;
+    public long PersonForegroundOverlapPixels;
+    public long OverlapOrderMismatchPixels;
   }
 
   public static class ChromaOverlayExtractor {
@@ -117,8 +122,15 @@ namespace ArtCalibration {
       return true;
     }
 
-    public static ChromaResult Run(string inputPath, string basePath, string outputDir, string id,
-      int targetX, int targetY, int targetHeight, string foregroundPolygon, int low, int high) {
+    private static HashSet<string> ParseEdges(string value) {
+      var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+      if (String.IsNullOrWhiteSpace(value)) return result;
+      foreach (string edge in value.Split(',')) if (!String.IsNullOrWhiteSpace(edge)) result.Add(edge.Trim());
+      return result;
+    }
+
+    public static ChromaResult Run(string inputPath, string basePath, string outputDir, string id, string seatLayer,
+      int targetX, int targetY, int targetHeight, string foregroundPolygon, string canvasExitEdges, int low, int high) {
       using (var input = new Bitmap(inputPath))
       using (var baseImage = new Bitmap(basePath)) {
         Color key = SampleKey(input);
@@ -137,8 +149,15 @@ namespace ArtCalibration {
 
           int targetWidth = (int)Math.Round(crop.Width * targetHeight / (double)crop.Height);
           var targetRect = new Rectangle(targetX, targetY, targetWidth, targetHeight);
-          if (targetRect.Right > baseImage.Width || targetRect.Bottom > baseImage.Height || targetX < 0 || targetY < 0)
-            throw new ArgumentOutOfRangeException("Placed person is outside the base canvas.");
+          var exits = ParseEdges(canvasExitEdges);
+          bool crossesLeft = targetRect.Left < 0, crossesRight = targetRect.Right > baseImage.Width;
+          bool crossesTop = targetRect.Top < 0, crossesBottom = targetRect.Bottom > baseImage.Height;
+          if ((crossesLeft && !exits.Contains("left")) || (crossesRight && !exits.Contains("right")) ||
+              (crossesTop && !exits.Contains("top")) || (crossesBottom && !exits.Contains("bottom")))
+            throw new ArgumentOutOfRangeException("Placed person crosses an undeclared canvas edge.");
+          if ((!crossesLeft && exits.Contains("left")) || (!crossesRight && exits.Contains("right")) ||
+              (!crossesTop && exits.Contains("top")) || (!crossesBottom && exits.Contains("bottom")))
+            throw new ArgumentException("canvasExitEdges declares an edge that the placed person does not cross.");
 
           using (var placed = new Bitmap(baseImage.Width, baseImage.Height, PixelFormat.Format32bppArgb))
           using (var foreground = new Bitmap(baseImage.Width, baseImage.Height, PixelFormat.Format32bppArgb))
@@ -146,6 +165,7 @@ namespace ArtCalibration {
           using (var basePlusPerson = new Bitmap(baseImage.Width, baseImage.Height, PixelFormat.Format32bppArgb))
           using (var basePlusForeground = new Bitmap(baseImage.Width, baseImage.Height, PixelFormat.Format32bppArgb))
           using (var finalComposite = new Bitmap(baseImage.Width, baseImage.Height, PixelFormat.Format32bppArgb)) {
+            string sharedOutputDir = Path.Combine(Directory.GetParent(outputDir).FullName, "shared");
             foreach (Bitmap canvas in new [] { placed, foreground, foregroundMask, basePlusPerson, basePlusForeground, finalComposite })
               canvas.SetResolution(baseImage.HorizontalResolution, baseImage.VerticalResolution);
 
@@ -178,19 +198,35 @@ namespace ArtCalibration {
             }
             using (var g = Graphics.FromImage(finalComposite)) {
               g.DrawImageUnscaled(baseImage, 0, 0);
-              g.DrawImageUnscaled(placed, 0, 0);
-              g.DrawImageUnscaled(foreground, 0, 0);
+              if (seatLayer == "behind-foreground") {
+                g.DrawImageUnscaled(placed, 0, 0);
+                g.DrawImageUnscaled(foreground, 0, 0);
+              } else if (seatLayer == "front-of-foreground") {
+                g.DrawImageUnscaled(foreground, 0, 0);
+                g.DrawImageUnscaled(placed, 0, 0);
+              } else {
+                throw new ArgumentException("Unknown seatLayer: " + seatLayer);
+              }
             }
 
             Save(placed, Path.Combine(outputDir, id + "-person-placed.png"));
-            Save(foreground, Path.Combine(outputDir, "board-foreground.png"));
-            Save(foregroundMask, Path.Combine(outputDir, "board-foreground-mask.png"));
+            Save(foreground, Path.Combine(sharedOutputDir, "board-foreground.png"));
+            Save(foregroundMask, Path.Combine(sharedOutputDir, "board-foreground-mask.png"));
             Save(basePlusPerson, Path.Combine(outputDir, id + "-base-plus-person.png"));
-            Save(basePlusForeground, Path.Combine(outputDir, "base-plus-foreground.png"));
-            Save(finalComposite, Path.Combine(outputDir, id + "-qa-composite.png"));
+            Save(basePlusForeground, Path.Combine(sharedOutputDir, "base-plus-foreground.png"));
+            Save(finalComposite, Path.Combine(outputDir, "qa_" + id + "_" + seatLayer + ".png"));
 
             bool basePlusForegroundEqualsBase = RgbEqual(basePlusForeground, baseImage);
             bool foregroundDerivedExact = ForegroundMatchesBase(foreground, baseImage);
+            long overlapPixels = 0, overlapMismatch = 0;
+            for (int y = 0; y < baseImage.Height; y++) for (int x = 0; x < baseImage.Width; x++) {
+              Color pc = placed.GetPixel(x, y), fc = foreground.GetPixel(x, y);
+              if (pc.A == 0 || fc.A == 0) continue;
+              overlapPixels++;
+              Color actual = finalComposite.GetPixel(x, y);
+              Color expected = seatLayer == "behind-foreground" ? baseImage.GetPixel(x, y) : basePlusPerson.GetPixel(x, y);
+              if (actual.R != expected.R || actual.G != expected.G || actual.B != expected.B) overlapMismatch++;
+            }
 
             return new ChromaResult {
               SourceWidth = input.Width, SourceHeight = input.Height,
@@ -202,7 +238,9 @@ namespace ArtCalibration {
               GreenSpillPixels = greenSpillPixels,
               CornersTransparent = cornersTransparent,
               BasePlusForegroundEqualsBase = basePlusForegroundEqualsBase,
-              ForegroundDerivedFromBaseExact = foregroundDerivedExact
+              ForegroundDerivedFromBaseExact = foregroundDerivedExact,
+              PersonForegroundOverlapPixels = overlapPixels,
+              OverlapOrderMismatchPixels = overlapMismatch
             };
           }
         }
@@ -219,13 +257,15 @@ $outputResolved = [IO.Path]::GetFullPath((Join-Path (Get-Location) $OutputDir))
 [IO.Directory]::CreateDirectory($outputResolved) | Out-Null
 
 $result = [ArtCalibration.ChromaOverlayExtractor]::Run(
-  $inputResolved, $baseResolved, $outputResolved, $Id,
-  $TargetX, $TargetY, $TargetHeight, $ForegroundPolygon,
+  $inputResolved, $baseResolved, $outputResolved, $Id, $SeatLayer,
+  $TargetX, $TargetY, $TargetHeight, $ForegroundPolygon, ($CanvasExitEdges -join ','),
   $KeyDistanceLow, $KeyDistanceHigh
 )
 
 $report = [ordered]@{
   id = $Id
+  seatId = $Id
+  seatLayer = $SeatLayer
   source = [ordered]@{
     path = $inputResolved
     sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $inputResolved).Hash
@@ -250,16 +290,19 @@ $report = [ordered]@{
   }
   foregroundLayer = [ordered]@{
     scope = 'shared'
-    asset = 'board-foreground.png'
-    mask = 'board-foreground-mask.png'
+    asset = '../shared/board-foreground.png'
+    mask = '../shared/board-foreground-mask.png'
     source = 'derived-from-base'
     polygon = $ForegroundPolygon
   }
-  compositeOrder = @('base', 'person', 'foregroundOcclusion')
+  canvasExitEdges = @($CanvasExitEdges)
+  compositeOrder = if ($SeatLayer -eq 'behind-foreground') { @('base', 'person', 'foregroundOcclusion') } else { @('base', 'foregroundOcclusion', 'person') }
   occlusionCoupledToPlacement = $true
   qa = [ordered]@{
     basePlusForegroundEqualsBase = $result.BasePlusForegroundEqualsBase
     foregroundDerivedFromBaseExact = $result.ForegroundDerivedFromBaseExact
+    personForegroundOverlapPixels = $result.PersonForegroundOverlapPixels
+    overlapOrderMismatchPixels = $result.OverlapOrderMismatchPixels
   }
   binding = 'Changing base SHA-256, canvas size, foreground polygon, or placement invalidates this calibration.'
 }

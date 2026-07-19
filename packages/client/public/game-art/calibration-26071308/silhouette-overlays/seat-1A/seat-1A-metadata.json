@@ -1,16 +1,16 @@
 ﻿{
-    "id":  "seat-3A",
-    "seatId":  "seat-3A",
+    "id":  "seat-1A",
+    "seatId":  "seat-1A",
     "seatLayer":  "behind-foreground",
     "source":  {
-                   "path":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\silhouette-overlays\\chroma-source\\seat-3A-chroma-v2.png",
-                   "sha256":  "3E5B7A9C9F17AFECD27A02C97CEA3BE805D366C9749ABAA188C9691697EE1D0B",
-                   "width":  1536,
-                   "height":  1024,
+                   "path":  "C:\\Ug\\cthulhu-card-game\\packages\\client\\public\\game-art\\calibration-26071308\\silhouette-overlays\\chroma-source\\seat-1A-chroma.png",
+                   "sha256":  "49A15D440DCD4E4CB22A9B7251E1571937327CDDBAB0F47E2297E92E2623AFD2",
+                   "width":  1024,
+                   "height":  1536,
                    "sampledKeyRgb":  [
-                                         4,
-                                         248,
-                                         18
+                                         3,
+                                         249,
+                                         13
                                      ],
                    "keyDistanceLow":  48,
                    "keyDistanceHigh":  132
@@ -20,21 +20,21 @@
                  "sha256":  "E8B0675980EC8ED5EAC05A576C71C4EA67C828A658532312DF412BE81AD18ED5"
              },
     "person":  {
-                   "asset":  "seat-3A-person.png",
+                   "asset":  "seat-1A-person.png",
                    "sourceCrop":  {
-                                      "x":  602,
-                                      "y":  117,
-                                      "width":  486,
-                                      "height":  826
+                                      "x":  126,
+                                      "y":  192,
+                                      "width":  665,
+                                      "height":  1125
                                   },
                    "placement":  {
-                                     "x":  1100,
-                                     "y":  255,
-                                     "width":  353,
-                                     "height":  600
+                                     "x":  -180,
+                                     "y":  250,
+                                     "width":  532,
+                                     "height":  900
                                  },
-                   "alphaPixels":  200882,
-                   "coverage":  0.500409,
+                   "alphaPixels":  385394,
+                   "coverage":  0.515147,
                    "greenSpillPixels":  0,
                    "cornersTransparent":  true
                },
@@ -46,7 +46,8 @@
                             "polygon":  "0,630;250,615;500,565;700,520;860,540;1080,600;1300,680;1535,780;1535,1023;0,1023"
                         },
     "canvasExitEdges":  [
-
+                            "left",
+                            "bottom"
                         ],
     "compositeOrder":  [
                            "base",
@@ -57,7 +58,7 @@
     "qa":  {
                "basePlusForegroundEqualsBase":  true,
                "foregroundDerivedFromBaseExact":  true,
-               "personForegroundOverlapPixels":  26331,
+               "personForegroundOverlapPixels":  101017,
                "overlapOrderMismatchPixels":  0
            },
     "binding":  "Changing base SHA-256, canvas size, foreground polygon, or placement invalidates this calibration."

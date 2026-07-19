@@ -1,0 +1,90 @@
+﻿[
+    {
+        "seatId":  "seat-1A",
+        "seatLayer":  "behind-foreground",
+        "placement":  "-180,250,532,900",
+        "canvasExitEdges":  "left,bottom",
+        "alphaPixels":  385394,
+        "coverage":  0.515147,
+        "overlapPixels":  101017,
+        "overlapMismatch":  0,
+        "gate":  "PASS"
+    },
+    {
+        "seatId":  "seat-1B",
+        "seatLayer":  "behind-foreground",
+        "placement":  "-260,240,639,900",
+        "canvasExitEdges":  "left,bottom",
+        "alphaPixels":  469083,
+        "coverage":  0.501798,
+        "overlapPixels":  110127,
+        "overlapMismatch":  0,
+        "gate":  "PASS"
+    },
+    {
+        "seatId":  "seat-2C",
+        "seatLayer":  "behind-foreground",
+        "placement":  "755,220,370,650",
+        "canvasExitEdges":  "",
+        "alphaPixels":  467831,
+        "coverage":  0.559881,
+        "overlapPixels":  65527,
+        "overlapMismatch":  0,
+        "gate":  "PASS"
+    },
+    {
+        "seatId":  "seat-2D",
+        "seatLayer":  "behind-foreground",
+        "placement":  "790,215,321,620",
+        "canvasExitEdges":  "",
+        "alphaPixels":  288228,
+        "coverage":  0.491635,
+        "overlapPixels":  47011,
+        "overlapMismatch":  0,
+        "gate":  "PASS"
+    },
+    {
+        "seatId":  "seat-3A",
+        "seatLayer":  "behind-foreground",
+        "placement":  "1100,255,353,600",
+        "canvasExitEdges":  "",
+        "alphaPixels":  200882,
+        "coverage":  0.500409,
+        "overlapPixels":  26331,
+        "overlapMismatch":  0,
+        "gate":  "PASS"
+    },
+    {
+        "seatId":  "seat-3B",
+        "seatLayer":  "behind-foreground",
+        "placement":  "1020,250,478,560",
+        "canvasExitEdges":  "",
+        "alphaPixels":  436173,
+        "coverage":  0.412081,
+        "overlapPixels":  20890,
+        "overlapMismatch":  0,
+        "gate":  "PASS"
+    },
+    {
+        "seatId":  "seat-4A",
+        "seatLayer":  "front-of-foreground",
+        "placement":  "940,230,620,900",
+        "canvasExitEdges":  "right,bottom",
+        "alphaPixels":  374561,
+        "coverage":  0.551464,
+        "overlapPixels":  162836,
+        "overlapMismatch":  0,
+        "gate":  "PASS"
+    },
+    {
+        "seatId":  "seat-4B",
+        "seatLayer":  "front-of-foreground",
+        "placement":  "1030,250,538,900",
+        "canvasExitEdges":  "right,bottom",
+        "alphaPixels":  421893,
+        "coverage":  0.460894,
+        "overlapPixels":  111669,
+        "overlapMismatch":  0,
+        "gate":  "PASS"
+    }
+]

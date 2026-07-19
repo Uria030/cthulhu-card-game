@@ -2,7 +2,7 @@
 
 - 作者／交件署名：`Othriel @ Codex Desktop / UG`
 - reviewer：Hammon（HUB Claude PTY）
-- 狀態：待審；禁止 push
+- 狀態：Hammon 技術 PASS；等待 Uria 視覺 Review；禁止 push
 - 工作包：`ART-CALIBRATION-OVERLAYS` 撰寫拍（3A intermediate PASS 後的八席展開）
 - baseline：`af0dd6e`
 - review range：`af0dd6e..HEAD`
@@ -100,3 +100,17 @@ git diff --check -> exit 0
 5. 3A 舊重複檔刪除是否安全，重現性證據是否充分。
 
 這是工作單中間步驟 Review；即使 PASS，也只能開始下一輪討論，不能 push。
+
+## Review 結果（2026-07-19）
+
+- Task：`20260719055725-art-calibration-八席透明覆蓋層與四席組裝-review-請求-832ab6`
+- Hammon verdict：`PASS`
+- 原始結果：`ART-CALIBRATION-OVERLAYS-BATCH-REVIEW-26071902-result.json`
+
+Uria 在 Review 進行中明確裁定視覺分工。Othriel 已立即把 scope 更正送入同一 task；Hammon 隨後確認：
+
+1. PASS 只涵蓋 `seatLayer` fail-closed、overlap z-order Gate、shared foreground 純淨性、metadata-driven 組裝／SHA 綁定、3A 刪除重現性。
+2. PASS 不涵蓋 A/B 構圖、人物比例／重量、遮擋感或任何視覺放行。
+3. 八席 QA 與兩張四席組裝是交給 Uria 親審的素材，不是已核可成品。
+
+當前 Review 拍尚未完整結束：技術部分 PASS，視覺部分等待 Uria verdict。Uria 視覺 PASS 前不得進下一步或 push。

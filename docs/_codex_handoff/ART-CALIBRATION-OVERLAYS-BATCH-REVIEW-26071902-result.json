@@ -1,0 +1,8 @@
+收到 Uria裁定,scope 確認無衝突  我剛送出的 PASS 僅涵蓋——①seatLayer fail-closed 契約、②overlap z-order 機械 Gate、③shared foreground 源自 base
+的純淨性、④metadata-driven組裝與SHA綁定、⑤3A刪除重現性。五點全是 code/契約/Gate 層面的碼證,不含任何視覺判定。
+A/B 構圖、人物視覺重量、遮擋感等視覺 verdict 一律留給 Uria 親自 Review——我的PASS不構成視覺放行,set-A/B-four-seat.png與八席QAcomposites是給Uria目視裁定用的素材,非已核可成品。
+
+給 Uria 的白話摘要
+
+明確分工收到:我只負責「程式和機械檢查都對」這部分(已通過);畫面好不好看、人物比例對不對、遮擋感自不自然,由你親自看圖決定,我的通過不代
+表視覺過關。八席 QA 圖和 A/B 兩張合成圖都在,等你目視裁定。

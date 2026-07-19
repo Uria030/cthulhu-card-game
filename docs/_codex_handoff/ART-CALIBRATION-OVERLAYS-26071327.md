@@ -202,4 +202,8 @@ Hammon 再審 task `20260713122257-art-calibration-3a-reproducibility-re-re-af35
 
 ### Review 拍
 
-待本地 commit 後送 Hammon；Review PASS 前不進下一步、不 push。
+- 本機 commit：`afa56bf ART-CALIBRATION: expand transparent overlays to eight seats`
+- Hammon task：`20260719055725-art-calibration-八席透明覆蓋層與四席組裝-review-請求-832ab6`
+- 技術結論：`PASS`，範圍只含 code、metadata 疊層契約、Gate 與重現性。
+- Uria 於 Review 進行中裁定：構圖、人物視覺重量、遮擋感與畫面是否可放行，必須由 Uria 親自 Review；Hammon 的 PASS 不構成視覺核可。
+- 當前狀態：**技術 PASS／等待 Uria 視覺 Review**。視覺未 PASS 前不進下一步、不 push。
